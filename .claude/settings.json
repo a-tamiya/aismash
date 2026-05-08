@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "unity": {
+      "command": "node",
+      "args": ["C:/Users/23RU071/lab/aismash/mcp-server/server.js"]
+    }
+  }
+}
