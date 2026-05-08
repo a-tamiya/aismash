@@ -1,4 +1,3 @@
-mcp-server/node_modules/
 aismash_unity/Library/
 aismash_unity/Temp/
 aismash_unity/Logs/
@@ -6,3 +5,4 @@ aismash_unity/UserSettings/
 aismash_unity/.vs/
 *.csproj
 *.slnx
+.claude/
