@@ -73,7 +73,7 @@ namespace PromptFighters.UI
                 nameTmp.fontSize          = 10;
                 nameTmp.alignment         = TextAlignmentOptions.Center;
                 nameTmp.color             = Color.white;
-                nameTmp.enableWordWrapping = false;
+                nameTmp.textWrappingMode = TextWrappingModes.NoWrap;
                 nameTmp.overflowMode      = TextOverflowModes.Ellipsis;
                 _skillNames[i] = nameTmp;
 

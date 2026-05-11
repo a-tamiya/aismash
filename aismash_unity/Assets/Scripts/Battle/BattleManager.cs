@@ -1,12 +1,14 @@
 using UnityEngine;
 using PromptFighters.Battle.Skills;
 using PromptFighters.Utils;
+using System.Collections;
 
 namespace PromptFighters.Battle
 {
     public enum BattlePhase
     {
         Setup,      // 名前入力・プリセット選択中
+        Training,   // AI生成待ち・操作確認中
         Countdown,  // 3,2,1,FIGHT!
         Fighting,   // 対戦中
         Ended,      // 勝敗確定
@@ -19,6 +21,7 @@ namespace PromptFighters.Battle
         [Header("Settings")]
         public float battleDuration  = 60f;
         public float countdownLength = 3f;
+        public float trainingRespawnDelay = 1f;
 
         [Header("References")]
         public Fighter fighter1;
@@ -31,7 +34,8 @@ namespace PromptFighters.Battle
         public float       Countdown     { get; private set; }
 
         // 旧 BattleState 互換プロパティ
-        public bool IsFighting => Phase == BattlePhase.Fighting;
+        public bool IsFighting => Phase == BattlePhase.Fighting || Phase == BattlePhase.Training;
+        public bool IsTraining => Phase == BattlePhase.Training;
         public bool IsEnded    => Phase == BattlePhase.Ended;
 
         public CharacterData Character1 { get; private set; }
@@ -40,8 +44,11 @@ namespace PromptFighters.Battle
         public event System.Action<float>        OnTimerChanged;
         public event System.Action<float>        OnCountdownChanged;
         public event System.Action               OnBattleStart;
+        public event System.Action               OnTrainingStart;
         public event System.Action<int>          OnBattleEnd;        // 0=1P wins, 1=2P wins, -1=draw
         public event System.Action               OnReturnedToSetup;  // リトライ時にSetupフェーズへ戻ったとき
+
+        Coroutine _trainingResetRoutine;
 
         void Awake()
         {
@@ -51,8 +58,8 @@ namespace PromptFighters.Battle
 
         void Start()
         {
-            if (fighter1 != null) fighter1.OnDeath += () => EndBattle(1);
-            if (fighter2 != null) fighter2.OnDeath += () => EndBattle(0);
+            if (fighter1 != null) fighter1.OnDeath += () => HandleFighterDeath(1);
+            if (fighter2 != null) fighter2.OnDeath += () => HandleFighterDeath(0);
 
             // 相手参照をセット（AutoFaceOpponent用）
             if (fighter1 != null && fighter2 != null)
@@ -94,24 +101,29 @@ namespace PromptFighters.Battle
         {
             if (Phase != BattlePhase.Setup) return;
 
-            Character1 = data1;
-            Character2 = data2;
-
-            // SkillExecutorにキャラデータを適用
-            fighter1?.GetComponent<SkillExecutor>()?.LoadCharacter(data1);
-            fighter2?.GetComponent<SkillExecutor>()?.LoadCharacter(data2);
-
-            // スプライト読み込み・適用
-            ApplySprite(fighter1, data1);
-            ApplySprite(fighter2, data2);
-
-            // 技情報を反映してからリセット
-            fighter1?.ResetForBattle(fighter1SpawnPos, faceRight: true);
-            fighter2?.ResetForBattle(fighter2SpawnPos, faceRight: false);
+            ApplyCharacters(data1, data2);
 
             Phase     = BattlePhase.Countdown;
             Countdown = countdownLength;
             OnCountdownChanged?.Invoke(Countdown);
+        }
+
+        public void StartTraining(CharacterData data1, CharacterData data2)
+        {
+            if (Phase != BattlePhase.Setup && Phase != BattlePhase.Training) return;
+
+            ApplyCharacters(data1, data2);
+            Phase = BattlePhase.Training;
+            TimeRemaining = 0f;
+            OnTimerChanged?.Invoke(TimeRemaining);
+            OnTrainingStart?.Invoke();
+            Debug.Log("[Battle] Training start");
+        }
+
+        public void ResetTrainingRound()
+        {
+            if (Phase != BattlePhase.Training) return;
+            ResetFightersAndCooldowns();
         }
 
         void BeginFighting()
@@ -133,9 +145,52 @@ namespace PromptFighters.Battle
         void EndBattle(int winnerIndex)
         {
             if (Phase == BattlePhase.Ended) return;
+            if (Phase == BattlePhase.Training) return;
             Phase = BattlePhase.Ended;
             OnBattleEnd?.Invoke(winnerIndex);
             Debug.Log($"[Battle] {(winnerIndex < 0 ? "Draw" : $"{winnerIndex + 1}P Wins")}");
+        }
+
+        void HandleFighterDeath(int winnerIndex)
+        {
+            if (Phase == BattlePhase.Training)
+            {
+                if (_trainingResetRoutine == null)
+                    _trainingResetRoutine = StartCoroutine(ResetTrainingAfterDelay());
+                return;
+            }
+
+            EndBattle(winnerIndex);
+        }
+
+        IEnumerator ResetTrainingAfterDelay()
+        {
+            yield return new WaitForSeconds(trainingRespawnDelay);
+            _trainingResetRoutine = null;
+            if (Phase == BattlePhase.Training)
+                ResetFightersAndCooldowns();
+        }
+
+        void ApplyCharacters(CharacterData data1, CharacterData data2)
+        {
+            Character1 = data1;
+            Character2 = data2;
+
+            fighter1?.GetComponent<SkillExecutor>()?.LoadCharacter(data1);
+            fighter2?.GetComponent<SkillExecutor>()?.LoadCharacter(data2);
+
+            ApplySprite(fighter1, data1);
+            ApplySprite(fighter2, data2);
+
+            ResetFightersAndCooldowns();
+        }
+
+        void ResetFightersAndCooldowns()
+        {
+            fighter1?.ResetForBattle(fighter1SpawnPos, faceRight: true);
+            fighter2?.ResetForBattle(fighter2SpawnPos, faceRight: false);
+            fighter1?.GetComponent<SkillExecutor>()?.ResetCooldowns();
+            fighter2?.GetComponent<SkillExecutor>()?.ResetCooldowns();
         }
 
         static void ApplySprite(Fighter fighter, CharacterData data)
@@ -164,6 +219,12 @@ namespace PromptFighters.Battle
         // リスタート（BattleResultUIから呼ぶ）
         public void ReturnToSetup()
         {
+            if (_trainingResetRoutine != null)
+            {
+                StopCoroutine(_trainingResetRoutine);
+                _trainingResetRoutine = null;
+            }
+
             Phase = BattlePhase.Setup;
             fighter1?.ResetForBattle(fighter1SpawnPos, faceRight: true);
             fighter2?.ResetForBattle(fighter2SpawnPos, faceRight: false);

@@ -24,9 +24,8 @@ namespace PromptFighters.Battle
             if (_fighter.State == FighterState.Dead) return;
 
             var bm = BattleManager.Instance;
-            bool fighting = bm == null || bm.IsFighting;
-            // Endedフェーズは完全ブロック
-            if (bm != null && bm.IsEnded) return;
+            // 対戦中またはトレーニング中だけ操作を受け付ける
+            if (bm != null && !bm.IsFighting) return;
 
             _fighter.Move(ReadMove());
             _fighter.SetGuard(ReadGuard());

@@ -17,6 +17,7 @@ namespace PromptFighters.GameFlow
         TextMeshProUGUI _p2PresetLabel;
 
         GameObject _panel;
+        GameObject _trainingPanel;
 
         void Start()
         {
@@ -25,18 +26,37 @@ namespace PromptFighters.GameFlow
             BuildPanel();
 
             if (BattleManager.Instance != null)
+            {
                 BattleManager.Instance.OnReturnedToSetup += ShowPanel;
+                BattleManager.Instance.OnTrainingStart    += ShowTrainingPanel;
+            }
         }
 
         void Update()
         {
-            // Spaceキーでもバトル開始できるようにする
             if (_panel != null && _panel.activeSelf)
             {
-                if (UnityEngine.InputSystem.Keyboard.current != null &&
-                    UnityEngine.InputSystem.Keyboard.current.spaceKey.wasPressedThisFrame)
+                var kb = UnityEngine.InputSystem.Keyboard.current;
+                if (kb != null && kb.spaceKey.wasPressedThisFrame)
                 {
                     OnStartPressed();
+                }
+                if (kb != null && kb.tKey.wasPressedThisFrame)
+                {
+                    OnTrainingPressed();
+                }
+            }
+
+            if (_trainingPanel != null && _trainingPanel.activeSelf)
+            {
+                var kb = UnityEngine.InputSystem.Keyboard.current;
+                if (kb != null && kb.escapeKey.wasPressedThisFrame)
+                {
+                    BattleManager.Instance?.ReturnToSetup();
+                }
+                if (kb != null && kb.rKey.wasPressedThisFrame)
+                {
+                    BattleManager.Instance?.ResetTrainingRound();
                 }
             }
         }
@@ -100,8 +120,36 @@ namespace PromptFighters.GameFlow
 
             // 開始ボタン
             MakeButton(_panel.transform, "StartBtn", "バトル開始！  (Space)",
-                new Vector2(0, -140), new Vector2(260, 56), OnStartPressed,
+                new Vector2(-150, -150), new Vector2(260, 56), OnStartPressed,
                 new Color(0.15f, 0.6f, 0.15f));
+
+            MakeButton(_panel.transform, "TrainingBtn", "トレーニング  (T)",
+                new Vector2(150, -150), new Vector2(260, 56), OnTrainingPressed,
+                new Color(0.15f, 0.35f, 0.65f));
+
+            MakeLabel(_panel.transform, "TrainingHelp",
+                "API画像生成待ち中は、テストキャラで操作確認できます。",
+                new Vector2(0, -205), new Vector2(700, 30), 13, new Color(0.8f, 0.9f, 1f));
+
+            BuildTrainingPanel();
+        }
+
+        void BuildTrainingPanel()
+        {
+            _trainingPanel = CreateUIObject("TrainingOverlay", transform);
+            StretchFull(_trainingPanel.GetComponent<RectTransform>());
+            _trainingPanel.SetActive(false);
+
+            var cg = _trainingPanel.AddComponent<CanvasGroup>();
+            cg.interactable = false;
+            cg.blocksRaycasts = false;
+
+            MakeLabel(_trainingPanel.transform, "TrainingTitle", "TRAINING",
+                new Vector2(0, 285), new Vector2(280, 46), 28, new Color(0.5f, 0.85f, 1f));
+            MakeLabel(_trainingPanel.transform, "TrainingControls",
+                "1P: WASD / J K L I / LShift    2P: Arrows / Num1 Num2 Num3 Num5 / RShift\n" +
+                "Esc: キャラ選択へ戻る    R: 位置とHPをリセット",
+                new Vector2(0, 235), new Vector2(820, 48), 13, new Color(0.9f, 0.95f, 1f));
         }
 
         void ChangePreset(ref int idx, int delta, TextMeshProUGUI label)
@@ -126,9 +174,28 @@ namespace PromptFighters.GameFlow
             BattleManager.Instance.StartCountdown(data1, data2);
         }
 
+        void OnTrainingPressed()
+        {
+            if (BattleManager.Instance == null) return;
+            if (_presets == null || _presets.Count == 0) return;
+
+            int p2Idx = _presets.Count > 1 ? _p2PresetIdx : _p1PresetIdx;
+            var data1 = CloneData(_presets[_p1PresetIdx]);
+            var data2 = CloneData(_presets[p2Idx]);
+
+            _panel.SetActive(false);
+            BattleManager.Instance.StartTraining(data1, data2);
+        }
+
         void ShowPanel()
         {
+            if (_trainingPanel != null) _trainingPanel.SetActive(false);
             if (_panel != null) _panel.SetActive(true);
+        }
+
+        void ShowTrainingPanel()
+        {
+            if (_trainingPanel != null) _trainingPanel.SetActive(true);
         }
 
         static CharacterData CloneData(CharacterData src)
@@ -178,7 +245,7 @@ namespace PromptFighters.GameFlow
             tmp.fontSize  = fontSize;
             tmp.color     = color;
             tmp.alignment = TextAlignmentOptions.Center;
-            tmp.enableWordWrapping = true;
+            tmp.textWrappingMode = TextWrappingModes.Normal;
             return tmp;
         }
 
