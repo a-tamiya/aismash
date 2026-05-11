@@ -16,7 +16,10 @@ namespace PromptFighters.UI
         {
             if (timerText != null) _normalColor = timerText.color;
             if (BattleManager.Instance != null)
+            {
                 BattleManager.Instance.OnTimerChanged += Refresh;
+                BattleManager.Instance.OnTrainingStart += ShowTraining;
+            }
         }
 
         void Refresh(float seconds)
@@ -24,6 +27,13 @@ namespace PromptFighters.UI
             if (timerText == null) return;
             timerText.text  = Mathf.CeilToInt(seconds).ToString();
             timerText.color = seconds <= urgentThreshold ? urgentColor : _normalColor;
+        }
+
+        void ShowTraining()
+        {
+            if (timerText == null) return;
+            timerText.text = "TRAINING";
+            timerText.color = new Color(0.5f, 0.85f, 1f);
         }
     }
 }

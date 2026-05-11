@@ -16,14 +16,21 @@ namespace PromptFighters.GameFlow
         TextMeshProUGUI _p1PresetLabel;
         TextMeshProUGUI _p2PresetLabel;
 
+        GameObject _titlePanel;
         GameObject _panel;
         GameObject _trainingPanel;
+        Image _titleTopGlow;
+        Image _titleBottomGlow;
+        RectTransform _titleMainRect;
+        RectTransform _startButtonRect;
 
         void Start()
         {
             _presets = PresetCharacterLoader.LoadAll();
             if (_presets.Count < 2) _p2PresetIdx = 0;
+            BuildTitlePanel();
             BuildPanel();
+            ShowTitlePanel();
 
             if (BattleManager.Instance != null)
             {
@@ -34,6 +41,17 @@ namespace PromptFighters.GameFlow
 
         void Update()
         {
+            if (_titlePanel != null && _titlePanel.activeSelf)
+            {
+                AnimateTitle();
+
+                var kb = UnityEngine.InputSystem.Keyboard.current;
+                if (kb != null && (kb.enterKey.wasPressedThisFrame || kb.spaceKey.wasPressedThisFrame))
+                {
+                    ShowCharacterSelect();
+                }
+            }
+
             if (_panel != null && _panel.activeSelf)
             {
                 var kb = UnityEngine.InputSystem.Keyboard.current;
@@ -59,6 +77,65 @@ namespace PromptFighters.GameFlow
                     BattleManager.Instance?.ResetTrainingRound();
                 }
             }
+        }
+
+        void BuildTitlePanel()
+        {
+            _titlePanel = CreateUIObject("TitleOverlay", transform);
+            StretchFull(_titlePanel.GetComponent<RectTransform>());
+
+            var bg = _titlePanel.AddComponent<Image>();
+            bg.sprite = CreateGradientSprite(
+                new Color(0.015f, 0.02f, 0.05f, 1f),
+                new Color(0.08f, 0.0f, 0.18f, 1f),
+                new Color(0.0f, 0.12f, 0.20f, 1f),
+                new Color(0.0f, 0.0f, 0.03f, 1f));
+            bg.type = Image.Type.Simple;
+
+            var cg = _titlePanel.AddComponent<CanvasGroup>();
+            cg.interactable = true;
+            cg.blocksRaycasts = true;
+
+            _titleTopGlow = MakePanel(_titlePanel.transform, "TopGlow",
+                new Vector2(0, 245), new Vector2(900, 120),
+                new Color(0.1f, 0.45f, 1f, 0.22f));
+            _titleBottomGlow = MakePanel(_titlePanel.transform, "BottomGlow",
+                new Vector2(0, -245), new Vector2(920, 140),
+                new Color(1f, 0.2f, 0.55f, 0.18f));
+            MakePanel(_titlePanel.transform, "CenterFrame",
+                new Vector2(0, 4), new Vector2(760, 380),
+                new Color(0.02f, 0.025f, 0.055f, 0.72f));
+            MakeOutline(_titlePanel.transform, "FrameTop", new Vector2(0, 198), new Vector2(760, 3),
+                new Color(0.7f, 0.95f, 1f, 0.75f));
+            MakeOutline(_titlePanel.transform, "FrameBottom", new Vector2(0, -190), new Vector2(760, 3),
+                new Color(1f, 0.65f, 0.2f, 0.75f));
+
+            MakeLabel(_titlePanel.transform, "TitleKicker", "AI PROMPT FIGHTER",
+                new Vector2(0, 120), new Vector2(620, 44), 22, new Color(0.75f, 0.95f, 1f));
+            var title = MakeLabel(_titlePanel.transform, "TitleMain", "PROMPT FIGHTERS",
+                new Vector2(0, 54), new Vector2(760, 92), 58, new Color(1f, 0.92f, 0.46f));
+            title.fontStyle = FontStyles.Bold;
+            title.characterSpacing = 2f;
+            _titleMainRect = title.rectTransform;
+
+            MakeLabel(_titlePanel.transform, "TitleSub",
+                "言葉から生まれるキャラクターで戦う 2D 対戦アクション",
+                new Vector2(0, -12), new Vector2(700, 38), 18, new Color(0.92f, 0.96f, 1f));
+            MakeLabel(_titlePanel.transform, "ApiNote",
+                "API準備中でもテストキャラとトレーニングで操作確認できます",
+                new Vector2(0, -58), new Vector2(700, 28), 13, new Color(0.72f, 0.84f, 1f));
+
+            var startButton = MakeButton(_titlePanel.transform, "GameStartBtn", "GAME START",
+                new Vector2(0, -128), new Vector2(310, 62), ShowCharacterSelect,
+                new Color(0.92f, 0.42f, 0.08f, 1f));
+            SetButtonLabelStyle(startButton, 22f, FontStyles.Bold, new Color(1f, 0.98f, 0.9f));
+            _startButtonRect = startButton.GetComponent<RectTransform>();
+            MakeLabel(_titlePanel.transform, "StartHelp", "Space / Enter",
+                new Vector2(0, -178), new Vector2(240, 24), 12, new Color(0.8f, 0.88f, 1f));
+
+            MakeLabel(_titlePanel.transform, "Footer",
+                "1P: WASD + J/K/L/I    2P: Arrows + Num1/2/3/5",
+                new Vector2(0, -286), new Vector2(760, 28), 12, new Color(0.76f, 0.82f, 0.9f));
         }
 
         void BuildPanel()
@@ -191,11 +268,39 @@ namespace PromptFighters.GameFlow
         {
             if (_trainingPanel != null) _trainingPanel.SetActive(false);
             if (_panel != null) _panel.SetActive(true);
+            if (_titlePanel != null) _titlePanel.SetActive(false);
         }
 
         void ShowTrainingPanel()
         {
             if (_trainingPanel != null) _trainingPanel.SetActive(true);
+        }
+
+        void ShowTitlePanel()
+        {
+            if (_titlePanel != null) _titlePanel.SetActive(true);
+            if (_panel != null) _panel.SetActive(false);
+            if (_trainingPanel != null) _trainingPanel.SetActive(false);
+        }
+
+        void ShowCharacterSelect()
+        {
+            if (_titlePanel != null) _titlePanel.SetActive(false);
+            if (_panel != null) _panel.SetActive(true);
+            if (_trainingPanel != null) _trainingPanel.SetActive(false);
+        }
+
+        void AnimateTitle()
+        {
+            float pulse = (Mathf.Sin(Time.unscaledTime * 2.2f) + 1f) * 0.5f;
+            if (_titleTopGlow != null)
+                _titleTopGlow.color = new Color(0.1f, 0.45f, 1f, Mathf.Lerp(0.16f, 0.30f, pulse));
+            if (_titleBottomGlow != null)
+                _titleBottomGlow.color = new Color(1f, 0.2f, 0.55f, Mathf.Lerp(0.12f, 0.24f, 1f - pulse));
+            if (_titleMainRect != null)
+                _titleMainRect.localScale = Vector3.one * Mathf.Lerp(0.99f, 1.015f, pulse);
+            if (_startButtonRect != null)
+                _startButtonRect.localScale = Vector3.one * Mathf.Lerp(1f, 1.035f, pulse);
         }
 
         static CharacterData CloneData(CharacterData src)
@@ -276,6 +381,61 @@ namespace PromptFighters.GameFlow
             tmp.alignment = TextAlignmentOptions.Center;
 
             return btn;
+        }
+
+        static Image MakePanel(Transform parent, string name, Vector2 pos, Vector2 size, Color color)
+        {
+            var go = CreateUIObject(name, parent);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchoredPosition = pos;
+            rt.sizeDelta = size;
+            return AddImage(go, color);
+        }
+
+        static Image MakeOutline(Transform parent, string name, Vector2 pos, Vector2 size, Color color)
+        {
+            return MakePanel(parent, name, pos, size, color);
+        }
+
+        static Image AddImage(GameObject go, Color color)
+        {
+            var img = go.GetComponent<Image>();
+            if (img == null) img = go.AddComponent<Image>();
+            img.color = color;
+            return img;
+        }
+
+        static void SetButtonLabelStyle(Button button, float fontSize, FontStyles style, Color color)
+        {
+            if (button == null) return;
+            var label = button.GetComponentInChildren<TextMeshProUGUI>();
+            if (label == null) return;
+            label.fontSize = fontSize;
+            label.fontStyle = style;
+            label.color = color;
+        }
+
+        static Sprite CreateGradientSprite(Color topLeft, Color topRight, Color bottomLeft, Color bottomRight)
+        {
+            const int width = 8;
+            const int height = 8;
+            var tex = new Texture2D(width, height, TextureFormat.RGBA32, false);
+            tex.wrapMode = TextureWrapMode.Clamp;
+
+            for (int y = 0; y < height; y++)
+            {
+                float ty = y / (height - 1f);
+                Color left = Color.Lerp(bottomLeft, topLeft, ty);
+                Color right = Color.Lerp(bottomRight, topRight, ty);
+                for (int x = 0; x < width; x++)
+                {
+                    float tx = x / (width - 1f);
+                    tex.SetPixel(x, y, Color.Lerp(left, right, tx));
+                }
+            }
+
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, width, height), new Vector2(0.5f, 0.5f));
         }
     }
 }
