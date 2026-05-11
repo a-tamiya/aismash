@@ -1196,6 +1196,7 @@ GameObject:
   - component: {fileID: 315558354}
   - component: {fileID: 315558351}
   - component: {fileID: 315558353}
+  - component: {fileID: 315558357}
   m_Layer: 0
   m_Name: Fighter2
   m_TagString: Untagged
@@ -1253,6 +1254,24 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PromptFighters.Battle.FighterInput
   playerIndex: 1
+--- !u!114 &315558357
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 315558350}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ae2de95de653a164e8a2e46954bfcc11, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::PromptFighters.Battle.Skills.SkillExecutor
+  skills:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  autoEquipSampleSkills: 1
 --- !u!61 &315558354
 BoxCollider2D:
   m_ObjectHideFlags: 0
@@ -3203,6 +3222,7 @@ GameObject:
   - component: {fileID: 1711540626}
   - component: {fileID: 1711540623}
   - component: {fileID: 1711540625}
+  - component: {fileID: 1711540629}
   m_Layer: 0
   m_Name: Fighter1
   m_TagString: Untagged
@@ -3260,6 +3280,24 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PromptFighters.Battle.FighterInput
   playerIndex: 0
+--- !u!114 &1711540629
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1711540622}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ae2de95de653a164e8a2e46954bfcc11, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::PromptFighters.Battle.Skills.SkillExecutor
+  skills:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  autoEquipSampleSkills: 1
 --- !u!61 &1711540626
 BoxCollider2D:
   m_ObjectHideFlags: 0
