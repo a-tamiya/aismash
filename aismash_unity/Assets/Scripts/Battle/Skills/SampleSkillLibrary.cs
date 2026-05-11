@@ -96,12 +96,30 @@ namespace PromptFighters.Battle.Skills
             },
         };
 
+        public static SkillData ForSlot(SkillSlot slot) => slot switch
+        {
+            SkillSlot.Close    => CloseSlash(),
+            SkillSlot.Ranged   => RangedFireball(),
+            SkillSlot.Special  => SpecialDashStun(),
+            SkillSlot.Ultimate => UltimateFinisher(),
+            _                  => CloseSlash(),
+        };
+
         public static void EquipDefaults(SkillExecutor executor)
         {
             executor.skills[(int)SkillSlot.Close]    = CloseSlash();
             executor.skills[(int)SkillSlot.Ranged]   = RangedFireball();
             executor.skills[(int)SkillSlot.Special]  = SpecialDashStun();
             executor.skills[(int)SkillSlot.Ultimate] = UltimateFinisher();
+        }
+
+        // CharacterData 版（SkillJsonParser のフォールバック用）
+        public static void EquipDefaults(CharacterData data)
+        {
+            data.skills[(int)SkillSlot.Close]    = CloseSlash();
+            data.skills[(int)SkillSlot.Ranged]   = RangedFireball();
+            data.skills[(int)SkillSlot.Special]  = SpecialDashStun();
+            data.skills[(int)SkillSlot.Ultimate] = UltimateFinisher();
         }
     }
 }

@@ -1,10 +1,10 @@
 using System.Collections;
 using UnityEngine;
+using PromptFighters.Battle.Skills.Json;
 
 namespace PromptFighters.Battle.Skills
 {
     // 1つのFighterに付与し、4枠の技を実行する。
-    // SampleSkillLibraryから初期化されるが、Phase 3でJSON読み込み元に差し替え予定。
     [RequireComponent(typeof(Fighter))]
     public class SkillExecutor : MonoBehaviour
     {
@@ -30,6 +30,28 @@ namespace PromptFighters.Battle.Skills
             for (int i = 0; i < skills.Length; i++)
                 if (skills[i] != null) return false;
             return true;
+        }
+
+        // CharacterData を受け取って技一式を差し替える（Phase 4のAI連携で呼ぶ）
+        public void LoadCharacter(CharacterData data)
+        {
+            if (data == null) return;
+            for (int i = 0; i < skills.Length; i++)
+                skills[i] = data.skills[i];
+            ResetCooldowns();
+            Debug.Log($"[SkillExecutor] キャラクター「{data.characterName}」の技をロードしました。");
+        }
+
+        // JSONから直接ロード（フォールバックつき）
+        public void LoadFromJson(string json, string fallbackName = "???")
+        {
+            var data = SkillJsonParser.ParseOrFallback(json, fallbackName);
+            LoadCharacter(data);
+        }
+
+        public void ResetCooldowns()
+        {
+            for (int i = 0; i < _cooldowns.Length; i++) _cooldowns[i] = 0f;
         }
 
         void Update()
