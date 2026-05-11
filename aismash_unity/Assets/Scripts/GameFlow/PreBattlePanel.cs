@@ -7,16 +7,12 @@ using PromptFighters.Battle.Skills;
 
 namespace PromptFighters.GameFlow
 {
-    // バトル前のセットアップパネル（名前入力 + プリセット選択）。
-    // CanvasにアタッチするだけでUI全体をランタイムに生成する。
     public class PreBattlePanel : MonoBehaviour
     {
         List<CharacterData> _presets;
         int _p1PresetIdx = 0;
         int _p2PresetIdx = 1;
 
-        TMP_InputField _p1NameInput;
-        TMP_InputField _p2NameInput;
         TextMeshProUGUI _p1PresetLabel;
         TextMeshProUGUI _p2PresetLabel;
 
@@ -26,74 +22,93 @@ namespace PromptFighters.GameFlow
         {
             _presets = PresetCharacterLoader.LoadAll();
             if (_presets.Count < 2) _p2PresetIdx = 0;
-
             BuildPanel();
 
             if (BattleManager.Instance != null)
                 BattleManager.Instance.OnReturnedToSetup += ShowPanel;
         }
 
+        void Update()
+        {
+            // Spaceキーでもバトル開始できるようにする
+            if (_panel != null && _panel.activeSelf)
+            {
+                if (UnityEngine.InputSystem.Keyboard.current != null &&
+                    UnityEngine.InputSystem.Keyboard.current.spaceKey.wasPressedThisFrame)
+                {
+                    OnStartPressed();
+                }
+            }
+        }
+
         void BuildPanel()
         {
-            // 半透明オーバーレイ
-            _panel = new GameObject("PreBattlePanel");
-            _panel.transform.SetParent(transform, false);
+            _panel = CreateUIObject("PreBattleOverlay", transform);
+            StretchFull(_panel.GetComponent<RectTransform>());
 
             var bg = _panel.AddComponent<Image>();
-            bg.color = new Color(0.05f, 0.05f, 0.1f, 0.93f);
-            var bgRt = _panel.GetComponent<RectTransform>();
-            bgRt.anchorMin = Vector2.zero;
-            bgRt.anchorMax = Vector2.one;
-            bgRt.offsetMin = bgRt.offsetMax = Vector2.zero;
+            bg.color = new Color(0.05f, 0.05f, 0.1f, 0.95f);
+
+            // CanvasGroupでレイキャスト対象に
+            var cg = _panel.AddComponent<CanvasGroup>();
+            cg.interactable = true;
+            cg.blocksRaycasts = true;
 
             // タイトル
-            AddLabel(_panel.transform, "タイトル", "プロンプトファイターズ",
-                new Vector2(0, 140), new Vector2(500, 60), 36, Color.yellow);
-            AddLabel(_panel.transform, "Sub", "キャラクターを選んでください",
-                new Vector2(0, 90), new Vector2(450, 36), 18, Color.white);
+            MakeLabel(_panel.transform, "タイトル", "Prompt Fighters",
+                new Vector2(0, 180), new Vector2(600, 70), 40, Color.yellow);
+            MakeLabel(_panel.transform, "Sub", "キャラクターを選択してください",
+                new Vector2(0, 120), new Vector2(500, 40), 20, Color.white);
 
-            // 1P 列
-            AddLabel(_panel.transform, "P1Label", "1P",
-                new Vector2(-230, 40), new Vector2(200, 36), 22, new Color(0.4f, 0.7f, 1f));
-            _p1NameInput  = AddInputField(_panel.transform, "P1Name",
-                new Vector2(-230, 0), new Vector2(200, 36), "キャラクター名");
+            // 1P
+            MakeLabel(_panel.transform, "P1Lbl", "1P",
+                new Vector2(-250, 60), new Vector2(220, 40), 24, new Color(0.5f, 0.8f, 1f));
 
-            var p1Left  = AddButton(_panel.transform, "P1L", "◀",
-                new Vector2(-330, -45), new Vector2(40, 36), () => ChangePreset(ref _p1PresetIdx, -1, _p1PresetLabel));
-            _p1PresetLabel = AddLabel(_panel.transform, "P1Preset", GetPresetName(_p1PresetIdx),
-                new Vector2(-230, -45), new Vector2(180, 36), 13, Color.white);
-            var p1Right = AddButton(_panel.transform, "P1R", "▶",
-                new Vector2(-130, -45), new Vector2(40, 36), () => ChangePreset(ref _p1PresetIdx, +1, _p1PresetLabel));
+            var p1Row = CreateUIObject("P1Row", _panel.transform);
+            p1Row.GetComponent<RectTransform>().anchoredPosition = new Vector2(-250, 10);
+            p1Row.GetComponent<RectTransform>().sizeDelta = new Vector2(280, 40);
+            p1Row.GetComponent<RectTransform>().anchorMin = p1Row.GetComponent<RectTransform>().anchorMax = new Vector2(0.5f, 0.5f);
 
-            // 2P 列
-            AddLabel(_panel.transform, "P2Label", "2P",
-                new Vector2(230, 40), new Vector2(200, 36), 22, new Color(1f, 0.6f, 0.4f));
-            _p2NameInput  = AddInputField(_panel.transform, "P2Name",
-                new Vector2(230, 0), new Vector2(200, 36), "キャラクター名");
+            MakeButton(p1Row.transform, "P1L", "◀", new Vector2(-120, 0), new Vector2(40, 36),
+                () => ChangePreset(ref _p1PresetIdx, -1, _p1PresetLabel));
+            _p1PresetLabel = MakeLabel(p1Row.transform, "P1Preset", GetPresetName(_p1PresetIdx),
+                new Vector2(0, 0), new Vector2(190, 36), 14, Color.white);
+            MakeButton(p1Row.transform, "P1R", "▶", new Vector2(120, 0), new Vector2(40, 36),
+                () => ChangePreset(ref _p1PresetIdx, +1, _p1PresetLabel));
 
-            var p2Left  = AddButton(_panel.transform, "P2L", "◀",
-                new Vector2(130, -45), new Vector2(40, 36), () => ChangePreset(ref _p2PresetIdx, -1, _p2PresetLabel));
-            _p2PresetLabel = AddLabel(_panel.transform, "P2Preset", GetPresetName(_p2PresetIdx),
-                new Vector2(230, -45), new Vector2(180, 36), 13, Color.white);
-            var p2Right = AddButton(_panel.transform, "P2R", "▶",
-                new Vector2(330, -45), new Vector2(40, 36), () => ChangePreset(ref _p2PresetIdx, +1, _p2PresetLabel));
+            // 2P
+            MakeLabel(_panel.transform, "P2Lbl", "2P",
+                new Vector2(250, 60), new Vector2(220, 40), 24, new Color(1f, 0.6f, 0.4f));
+
+            var p2Row = CreateUIObject("P2Row", _panel.transform);
+            p2Row.GetComponent<RectTransform>().anchoredPosition = new Vector2(250, 10);
+            p2Row.GetComponent<RectTransform>().sizeDelta = new Vector2(280, 40);
+            p2Row.GetComponent<RectTransform>().anchorMin = p2Row.GetComponent<RectTransform>().anchorMax = new Vector2(0.5f, 0.5f);
+
+            MakeButton(p2Row.transform, "P2L", "◀", new Vector2(-120, 0), new Vector2(40, 36),
+                () => ChangePreset(ref _p2PresetIdx, -1, _p2PresetLabel));
+            _p2PresetLabel = MakeLabel(p2Row.transform, "P2Preset", GetPresetName(_p2PresetIdx),
+                new Vector2(0, 0), new Vector2(190, 36), 14, Color.white);
+            MakeButton(p2Row.transform, "P2R", "▶", new Vector2(120, 0), new Vector2(40, 36),
+                () => ChangePreset(ref _p2PresetIdx, +1, _p2PresetLabel));
 
             // 操作説明
-            AddLabel(_panel.transform, "CtrlHelp",
-                "1P: WASD移動 / J近 / K遠 / L特 / I必 / LShiftガード\n" +
-                "2P: 矢印移動 / Num1近 / Num2遠 / Num3特 / Num5必 / RShiftガード",
-                new Vector2(0, -105), new Vector2(600, 48), 11, new Color(0.8f, 0.8f, 0.8f));
+            MakeLabel(_panel.transform, "CtrlHelp",
+                "1P: WASD移動 / J近距離 / K遠距離 / L特殊 / I必殺 / LShiftガード\n" +
+                "2P: 矢印移動 / Num1近距離 / Num2遠距離 / Num3特殊 / Num5必殺 / RShiftガード",
+                new Vector2(0, -70), new Vector2(700, 60), 12, new Color(0.8f, 0.8f, 0.8f));
 
-            // バトル開始ボタン
-            AddButton(_panel.transform, "StartBtn", "バトル開始！",
-                new Vector2(0, -160), new Vector2(200, 50), OnStartPressed,
-                new Color(0.2f, 0.7f, 0.2f));
+            // 開始ボタン
+            MakeButton(_panel.transform, "StartBtn", "バトル開始！  (Space)",
+                new Vector2(0, -140), new Vector2(260, 56), OnStartPressed,
+                new Color(0.15f, 0.6f, 0.15f));
         }
 
         void ChangePreset(ref int idx, int delta, TextMeshProUGUI label)
         {
+            if (_presets == null || _presets.Count == 0) return;
             idx = (idx + delta + _presets.Count) % _presets.Count;
-            label.text = GetPresetName(idx);
+            if (label != null) label.text = GetPresetName(idx);
         }
 
         string GetPresetName(int idx) =>
@@ -102,9 +117,10 @@ namespace PromptFighters.GameFlow
         void OnStartPressed()
         {
             if (BattleManager.Instance == null) return;
+            if (_presets == null || _presets.Count == 0) return;
 
-            var data1 = CloneWithName(_presets[_p1PresetIdx], _p1NameInput.text);
-            var data2 = CloneWithName(_presets[_p2PresetIdx], _p2NameInput.text);
+            var data1 = CloneData(_presets[_p1PresetIdx]);
+            var data2 = CloneData(_presets[_p2PresetIdx]);
 
             _panel.SetActive(false);
             BattleManager.Instance.StartCountdown(data1, data2);
@@ -115,31 +131,48 @@ namespace PromptFighters.GameFlow
             if (_panel != null) _panel.SetActive(true);
         }
 
-        static CharacterData CloneWithName(CharacterData src, string nameOverride)
+        static CharacterData CloneData(CharacterData src)
         {
-            string name = string.IsNullOrWhiteSpace(nameOverride) ? src.characterName : nameOverride.Trim();
-            var clone = new CharacterData
+            return new CharacterData
             {
-                characterName     = name,
+                characterName     = src.characterName,
                 inputFeatures     = src.inputFeatures,
                 visualPrompt      = src.visualPrompt,
                 visualDescription = src.visualDescription,
                 skills            = src.skills,
+                spritePath        = src.spritePath,
             };
-            return clone;
         }
 
         // ── UIヘルパー ────────────────────────────────────────────
 
-        static TextMeshProUGUI AddLabel(Transform parent, string goName, string text,
+        static GameObject CreateUIObject(string name, Transform parent)
+        {
+            var go = new GameObject(name);
+            go.layer = parent.gameObject.layer;
+            var rt = go.AddComponent<RectTransform>();
+            rt.SetParent(parent, false);
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = Vector2.zero;
+            return go;
+        }
+
+        static void StretchFull(RectTransform rt)
+        {
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = rt.offsetMax = Vector2.zero;
+        }
+
+        static TextMeshProUGUI MakeLabel(Transform parent, string name, string text,
             Vector2 pos, Vector2 size, float fontSize, Color color)
         {
-            var go = new GameObject(goName);
-            go.transform.SetParent(parent, false);
-            var rt = go.AddComponent<RectTransform>();
-            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            var go = CreateUIObject(name, parent);
+            var rt = go.GetComponent<RectTransform>();
             rt.anchoredPosition = pos;
             rt.sizeDelta = size;
+
             var tmp = go.AddComponent<TextMeshProUGUI>();
             tmp.text      = text;
             tmp.fontSize  = fontSize;
@@ -149,61 +182,11 @@ namespace PromptFighters.GameFlow
             return tmp;
         }
 
-        static TMP_InputField AddInputField(Transform parent, string goName,
-            Vector2 pos, Vector2 size, string placeholder)
-        {
-            var go = new GameObject(goName);
-            go.transform.SetParent(parent, false);
-            var rt = go.AddComponent<RectTransform>();
-            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = pos;
-            rt.sizeDelta = size;
-
-            var bg = go.AddComponent<Image>();
-            bg.color = new Color(0.15f, 0.15f, 0.2f, 1f);
-
-            var field = go.AddComponent<TMP_InputField>();
-
-            // テキスト表示用
-            var textGo = new GameObject("Text");
-            textGo.transform.SetParent(go.transform, false);
-            var textRt = textGo.AddComponent<RectTransform>();
-            textRt.anchorMin = Vector2.zero;
-            textRt.anchorMax = Vector2.one;
-            textRt.offsetMin = new Vector2(6, 3);
-            textRt.offsetMax = new Vector2(-6, -3);
-            var textTmp = textGo.AddComponent<TextMeshProUGUI>();
-            textTmp.fontSize  = 14;
-            textTmp.color     = Color.white;
-            textTmp.alignment = TextAlignmentOptions.MidlineLeft;
-            field.textComponent = textTmp;
-
-            // プレースホルダー
-            var phGo = new GameObject("Placeholder");
-            phGo.transform.SetParent(go.transform, false);
-            var phRt = phGo.AddComponent<RectTransform>();
-            phRt.anchorMin = Vector2.zero;
-            phRt.anchorMax = Vector2.one;
-            phRt.offsetMin = new Vector2(6, 3);
-            phRt.offsetMax = new Vector2(-6, -3);
-            var phTmp = phGo.AddComponent<TextMeshProUGUI>();
-            phTmp.text      = placeholder;
-            phTmp.fontSize  = 14;
-            phTmp.color     = new Color(0.5f, 0.5f, 0.5f);
-            phTmp.alignment = TextAlignmentOptions.MidlineLeft;
-            phTmp.fontStyle = FontStyles.Italic;
-            field.placeholder = phTmp;
-
-            return field;
-        }
-
-        static Button AddButton(Transform parent, string goName, string label,
+        static Button MakeButton(Transform parent, string name, string label,
             Vector2 pos, Vector2 size, System.Action onClick, Color? bgColor = null)
         {
-            var go = new GameObject(goName);
-            go.transform.SetParent(parent, false);
-            var rt = go.AddComponent<RectTransform>();
-            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            var go = CreateUIObject(name, parent);
+            var rt = go.GetComponent<RectTransform>();
             rt.anchoredPosition = pos;
             rt.sizeDelta = size;
 
@@ -211,21 +194,17 @@ namespace PromptFighters.GameFlow
             img.color = bgColor ?? new Color(0.2f, 0.2f, 0.3f, 1f);
 
             var btn = go.AddComponent<Button>();
-            var colors = btn.colors;
-            colors.highlightedColor = new Color(0.35f, 0.35f, 0.5f);
-            colors.pressedColor     = new Color(0.1f, 0.1f, 0.15f);
-            btn.colors = colors;
-            btn.onClick.AddListener(() => onClick());
+            var cols = btn.colors;
+            cols.highlightedColor = new Color(0.4f, 0.4f, 0.6f);
+            cols.pressedColor     = new Color(0.1f, 0.1f, 0.1f);
+            btn.colors = cols;
+            btn.onClick.AddListener(() => onClick?.Invoke());
 
-            var textGo = new GameObject("Label");
-            textGo.transform.SetParent(go.transform, false);
-            var textRt = textGo.AddComponent<RectTransform>();
-            textRt.anchorMin = Vector2.zero;
-            textRt.anchorMax = Vector2.one;
-            textRt.offsetMin = textRt.offsetMax = Vector2.zero;
+            var textGo = CreateUIObject("Label", go.transform);
+            StretchFull(textGo.GetComponent<RectTransform>());
             var tmp = textGo.AddComponent<TextMeshProUGUI>();
             tmp.text      = label;
-            tmp.fontSize  = 15;
+            tmp.fontSize  = 16;
             tmp.color     = Color.white;
             tmp.alignment = TextAlignmentOptions.Center;
 

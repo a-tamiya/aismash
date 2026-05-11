@@ -23,15 +23,17 @@ namespace PromptFighters.Battle
         {
             if (_fighter.State == FighterState.Dead) return;
 
-            // Setup/Countdownフェーズでは操作を無効化
             var bm = BattleManager.Instance;
-            if (bm != null && !bm.IsFighting) return;
+            bool fighting = bm == null || bm.IsFighting;
+            // Endedフェーズは完全ブロック
+            if (bm != null && bm.IsEnded) return;
 
             _fighter.Move(ReadMove());
             _fighter.SetGuard(ReadGuard());
             if (ReadJumpPressed()) _fighter.Jump();
 
-            if (_skills != null)
+            // スキルは試合中のみ使用可能
+            if (fighting && _skills != null)
             {
                 if (ReadSkillPressed(SkillSlot.Close))    _skills.TryUseSkill(SkillSlot.Close);
                 if (ReadSkillPressed(SkillSlot.Ranged))   _skills.TryUseSkill(SkillSlot.Ranged);
