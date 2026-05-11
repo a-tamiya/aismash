@@ -1,5 +1,6 @@
 using UnityEngine;
 using PromptFighters.Battle.Skills;
+using PromptFighters.Utils;
 
 namespace PromptFighters.Battle
 {
@@ -53,6 +54,13 @@ namespace PromptFighters.Battle
             if (fighter1 != null) fighter1.OnDeath += () => EndBattle(1);
             if (fighter2 != null) fighter2.OnDeath += () => EndBattle(0);
 
+            // 相手参照をセット（AutoFaceOpponent用）
+            if (fighter1 != null && fighter2 != null)
+            {
+                fighter1.Opponent = fighter2;
+                fighter2.Opponent = fighter1;
+            }
+
             // Setup中はファイターを非アクティブな位置でスポーン
             fighter1?.ResetForBattle(fighter1SpawnPos, faceRight: true);
             fighter2?.ResetForBattle(fighter2SpawnPos, faceRight: false);
@@ -88,6 +96,10 @@ namespace PromptFighters.Battle
             fighter1?.GetComponent<SkillExecutor>()?.LoadCharacter(data1);
             fighter2?.GetComponent<SkillExecutor>()?.LoadCharacter(data2);
 
+            // スプライト読み込み・適用
+            ApplySprite(fighter1, data1);
+            ApplySprite(fighter2, data2);
+
             // 技情報を反映してからリセット
             fighter1?.ResetForBattle(fighter1SpawnPos, faceRight: true);
             fighter2?.ResetForBattle(fighter2SpawnPos, faceRight: false);
@@ -119,6 +131,29 @@ namespace PromptFighters.Battle
             Phase = BattlePhase.Ended;
             OnBattleEnd?.Invoke(winnerIndex);
             Debug.Log($"[Battle] {(winnerIndex < 0 ? "Draw" : $"{winnerIndex + 1}P Wins")}");
+        }
+
+        static void ApplySprite(Fighter fighter, CharacterData data)
+        {
+            if (fighter == null || data == null) return;
+            var sr = fighter.GetComponent<SpriteRenderer>();
+            if (sr == null) return;
+
+            // characterSpriteが既にセットされていればそちらを優先
+            if (data.characterSprite != null)
+            {
+                sr.sprite = data.characterSprite;
+                return;
+            }
+
+            if (string.IsNullOrEmpty(data.spritePath)) return;
+
+            Sprite loaded = SpriteLoader.LoadWithWhiteBgRemoved(data.spritePath);
+            if (loaded != null)
+            {
+                data.characterSprite = loaded;
+                sr.sprite            = loaded;
+            }
         }
 
         // リスタート（BattleResultUIから呼ぶ）

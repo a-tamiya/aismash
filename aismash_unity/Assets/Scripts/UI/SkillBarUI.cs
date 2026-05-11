@@ -104,7 +104,7 @@ namespace PromptFighters.UI
 
         void Update()
         {
-            if (skillExecutor == null) return;
+            if (skillExecutor == null || _slots == null) return;
             for (int i = 0; i < 4; i++)
             {
                 if (_cooldownFill[i] == null) continue;

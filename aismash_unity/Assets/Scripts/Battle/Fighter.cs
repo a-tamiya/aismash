@@ -23,6 +23,9 @@ namespace PromptFighters.Battle
         public float groundCheckRadius = 0.12f;
         public LayerMask groundLayer;
 
+        // 相手ファイターへの参照（BattleManagerがセット）
+        [HideInInspector] public Fighter Opponent;
+
         public float CurrentHP { get; private set; }
         public FighterState State { get; private set; } = FighterState.Idle;
         public bool IsGrounded { get; private set; }
@@ -34,6 +37,7 @@ namespace PromptFighters.Battle
 
         Rigidbody2D _rb;
         SpriteRenderer _sprite;
+        SkillExecutor _skillExecutor;
         float _stunTimer;
         float _controlLockTimer;
         float _skillRecoveryTimer;
@@ -60,16 +64,20 @@ namespace PromptFighters.Battle
 
         void Awake()
         {
-            _rb = GetComponent<Rigidbody2D>();
+            _rb             = GetComponent<Rigidbody2D>();
             _rb.constraints = RigidbodyConstraints2D.FreezeRotation;
-            _sprite = GetComponent<SpriteRenderer>();
-            CurrentHP = maxHP;
+            _sprite         = GetComponent<SpriteRenderer>();
+            _skillExecutor  = GetComponent<SkillExecutor>();
+            CurrentHP       = maxHP;
         }
 
         void Update()
         {
             IsGrounded = groundCheck != null &&
                 Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
+
+            // 自動振り向き: スキル実行中・スタン・死亡以外は常に相手を向く
+            AutoFaceOpponent();
 
             if (_stunTimer          > 0f) _stunTimer          -= Time.deltaTime;
             if (_controlLockTimer   > 0f) _controlLockTimer   -= Time.deltaTime;
@@ -244,6 +252,17 @@ namespace PromptFighters.Battle
             State = FighterState.Dead;
             _rb.linearVelocity = Vector2.zero;
             OnDeath?.Invoke();
+        }
+
+        void AutoFaceOpponent()
+        {
+            if (Opponent == null) return;
+            if (State == FighterState.Dead || State == FighterState.Stunned) return;
+            // スキル実行中は方向転換しない（ヒットボックスの位置がずれるため）
+            if (_skillExecutor != null && _skillExecutor.IsExecuting) return;
+
+            bool shouldFaceRight = Opponent.transform.position.x > transform.position.x;
+            if (shouldFaceRight != FacingRight) Flip();
         }
 
         void Flip()
