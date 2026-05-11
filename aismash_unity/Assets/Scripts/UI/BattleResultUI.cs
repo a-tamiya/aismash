@@ -1,7 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
-using UnityEngine.SceneManagement;
 using PromptFighters.Battle;
 
 namespace PromptFighters.UI
@@ -18,11 +17,13 @@ namespace PromptFighters.UI
             if (panel != null) panel.SetActive(false);
 
             if (BattleManager.Instance != null)
-                BattleManager.Instance.OnBattleEnd += ShowResult;
+            {
+                BattleManager.Instance.OnBattleEnd      += ShowResult;
+                BattleManager.Instance.OnReturnedToSetup += HidePanel;
+            }
 
             if (restartButton != null)
-                restartButton.onClick.AddListener(() =>
-                    SceneManager.LoadScene(SceneManager.GetActiveScene().name));
+                restartButton.onClick.AddListener(OnRestart);
         }
 
         void ShowResult(int winnerIndex)
@@ -35,6 +36,17 @@ namespace PromptFighters.UI
                     1  => "2P WIN!",
                     _  => "DRAW"
                 };
+        }
+
+        void OnRestart()
+        {
+            HidePanel();
+            BattleManager.Instance?.ReturnToSetup();
+        }
+
+        void HidePanel()
+        {
+            if (panel != null) panel.SetActive(false);
         }
     }
 }

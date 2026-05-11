@@ -1,0 +1,68 @@
+{
+  "character_name": "紅蓮の侍ドラゴン",
+  "input_features": "炎を操るドラゴンの侍。大きな刀を持ち、攻撃は遅いが一撃が重い。必殺技は炎の突進斬り。",
+  "visual_prompt": "2D anime standing character, dragon samurai, red flames, large katana, powerful build, full body",
+  "visual_description": "炎をまとった大柄なドラゴンの侍。大きな刀を構え、重厚な雰囲気を醸し出している。",
+  "skills": [
+    {
+      "slot": "close",
+      "skill_name": "居合斬り",
+      "description": "大振りで遅いが重い一撃。ノックバックが大きい。",
+      "element": "fire",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 14, "hit_count": 1, "range": 2.0,
+        "startup": 0.4, "active_time": 0.2, "recovery": 0.6,
+        "cooldown": 2.0, "knockback": 8, "stun_time": 0.3, "guard_damage": 5
+      },
+      "actions": [
+        { "type": "melee_hitbox","time": 0.4, "range": 2.0, "hit_count": 1 }
+      ]
+    },
+    {
+      "slot": "ranged",
+      "skill_name": "炎刃波",
+      "description": "刀から炎の衝撃波を飛ばす。燃焼を付与。",
+      "element": "fire",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 12, "range": 10, "startup": 0.35, "active_time": 0.15,
+        "recovery": 0.55, "cooldown": 3.5, "knockback": 5, "guard_damage": 4
+      },
+      "actions": [
+        { "type": "projectile", "time": 0.35, "projectile_speed": 8, "projectile_lifetime": 1.5,
+          "status": "burn", "duration": 3.0, "chance": 0.7 }
+      ]
+    },
+    {
+      "slot": "special",
+      "skill_name": "竜炎防御",
+      "description": "一定時間、自身を炎で包み攻撃力を高める。次の近距離技が強化される。",
+      "element": "fire",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 0, "range": 0, "startup": 0.1, "active_time": 0.1,
+        "recovery": 0.3, "cooldown": 6.0, "knockback": 0
+      },
+      "actions": [
+        { "type": "apply_status", "time": 0.1, "status": "burn", "duration": 0.01, "chance": 0 }
+      ]
+    },
+    {
+      "slot": "ultimate",
+      "skill_name": "紅蓮突進斬り",
+      "description": "炎をまとって高速で突進し、巨大な斬撃を叩き込む必殺技。",
+      "element": "fire",
+      "risk_level": "extreme",
+      "parameters": {
+        "damage": 28, "range": 2.5, "startup": 0.6, "active_time": 0.3,
+        "recovery": 1.0, "cooldown": 12.0, "knockback": 12, "stun_time": 0.4, "guard_damage": 10
+      },
+      "actions": [
+        { "type": "dash",        "time": 0.1,  "power": 14.0, "direction": "forward" },
+        { "type": "melee_hitbox","time": 0.6,  "range": 2.5,  "hit_count": 1 },
+        { "type": "apply_status","time": 0.6,  "status": "burn", "duration": 3.0, "chance": 1.0 }
+      ]
+    }
+  ]
+}

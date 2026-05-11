@@ -1,0 +1,75 @@
+{
+  "character_name": "シャドウキャット",
+  "input_features": "黒い炎をまとった素早い猫の剣士。近距離で連続攻撃し、相手を怯ませる戦い方が得意。",
+  "visual_prompt": "2D anime standing character, black cat swordsman, dark flames, cool and agile, full body",
+  "visual_description": "黒い炎をまとった猫耳の剣士。細身で素早そうなシルエット。",
+  "skills": [
+    {
+      "slot": "close",
+      "skill_name": "黒炎みだれ斬り",
+      "description": "黒い炎をまとった爪と剣で素早く3回斬りつける。",
+      "element": "fire",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 4, "hit_count": 3, "range": 1.4,
+        "startup": 0.18, "active_time": 0.25, "recovery": 0.45,
+        "cooldown": 1.6, "knockback": 3.5, "stun_time": 0.2,
+        "guard_damage": 2, "move_force": 0.4
+      },
+      "actions": [
+        { "type": "dash",        "time": 0.0,  "power": 3.0, "direction": "forward" },
+        { "type": "melee_hitbox","time": 0.18, "range": 1.4, "hit_count": 1 },
+        { "type": "melee_hitbox","time": 0.28, "range": 1.4, "hit_count": 1 },
+        { "type": "melee_hitbox","time": 0.38, "range": 1.4, "hit_count": 1 },
+        { "type": "apply_status","time": 0.38, "status": "stun", "duration": 0.2, "chance": 0.3 }
+      ]
+    },
+    {
+      "slot": "ranged",
+      "skill_name": "影火球",
+      "description": "黒い炎の塊を遠距離に飛ばす。燃焼状態を付与することがある。",
+      "element": "dark",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 10, "range": 12, "startup": 0.2, "active_time": 0.1,
+        "recovery": 0.4, "cooldown": 2.5, "knockback": 4, "guard_damage": 3
+      },
+      "actions": [
+        { "type": "projectile", "time": 0.2, "projectile_speed": 10, "projectile_lifetime": 1.5,
+          "status": "burn", "duration": 2.0, "chance": 0.4 }
+      ]
+    },
+    {
+      "slot": "special",
+      "skill_name": "闇猫ステップ",
+      "description": "素早く踏み込み斬りつける。命中すると相手の動きが遅くなる。",
+      "element": "dark",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 7, "range": 1.5, "startup": 0.15, "active_time": 0.15,
+        "recovery": 0.5, "cooldown": 5.0, "knockback": 3
+      },
+      "actions": [
+        { "type": "dash",        "time": 0.0,  "power": 7.0, "direction": "forward" },
+        { "type": "melee_hitbox","time": 0.15, "range": 1.5, "hit_count": 1 },
+        { "type": "apply_status","time": 0.15, "status": "slow", "duration": 2.5, "chance": 1.0 }
+      ]
+    },
+    {
+      "slot": "ultimate",
+      "skill_name": "ナイトメアラッシュ",
+      "description": "黒炎をまとい高速で突進する必殺技。ガードを崩すこともある。",
+      "element": "fire",
+      "risk_level": "high",
+      "parameters": {
+        "damage": 25, "range": 2.0, "startup": 0.5, "active_time": 0.25,
+        "recovery": 0.8, "cooldown": 10.0, "knockback": 9, "stun_time": 0.3, "guard_damage": 8
+      },
+      "actions": [
+        { "type": "dash",        "time": 0.1, "power": 12.0, "direction": "forward" },
+        { "type": "melee_hitbox","time": 0.5, "range": 2.0,  "hit_count": 1 },
+        { "type": "apply_status","time": 0.5, "status": "guard_break", "duration": 0.8, "chance": 0.6 }
+      ]
+    }
+  ]
+}

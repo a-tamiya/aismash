@@ -1,0 +1,77 @@
+{
+  "character_name": "雷神ペンギン",
+  "input_features": "雷をまとったペンギンの戦士。小柄だが素早く、遠距離から雷を飛ばしつつ近づくと高速連続攻撃をする。",
+  "visual_prompt": "2D anime standing character, penguin warrior, lightning, compact and fast, full body",
+  "visual_description": "雷をまとった小柄なペンギンの戦士。素早そうな体格で電撃が走っている。",
+  "skills": [
+    {
+      "slot": "close",
+      "skill_name": "電撃連打",
+      "description": "素早い2連パンチ。スタンを付与することがある。",
+      "element": "lightning",
+      "risk_level": "low",
+      "parameters": {
+        "damage": 6, "hit_count": 2, "range": 1.2,
+        "startup": 0.12, "active_time": 0.2, "recovery": 0.3,
+        "cooldown": 1.0, "knockback": 2.5, "stun_time": 0.15, "guard_damage": 1.5
+      },
+      "actions": [
+        { "type": "melee_hitbox","time": 0.12, "range": 1.2, "hit_count": 1 },
+        { "type": "melee_hitbox","time": 0.24, "range": 1.2, "hit_count": 1 },
+        { "type": "apply_status","time": 0.24, "status": "stun", "duration": 0.15, "chance": 0.25 }
+      ]
+    },
+    {
+      "slot": "ranged",
+      "skill_name": "雷弾",
+      "description": "素早い雷の弾丸を飛ばす。スタンを付与することがある。",
+      "element": "lightning",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 9, "range": 14, "startup": 0.15, "active_time": 0.1,
+        "recovery": 0.35, "cooldown": 2.0, "knockback": 3.5, "guard_damage": 2
+      },
+      "actions": [
+        { "type": "projectile", "time": 0.15, "projectile_speed": 13, "projectile_lifetime": 1.2,
+          "status": "stun", "duration": 0.2, "chance": 0.3 }
+      ]
+    },
+    {
+      "slot": "special",
+      "skill_name": "サンダースライド",
+      "description": "雷をまとって高速スライディング。ガードを崩す。",
+      "element": "lightning",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 8, "range": 2.0, "startup": 0.1, "active_time": 0.2,
+        "recovery": 0.5, "cooldown": 4.5, "knockback": 5, "guard_damage": 6
+      },
+      "actions": [
+        { "type": "dash",        "time": 0.0,  "power": 10.0, "direction": "forward" },
+        { "type": "melee_hitbox","time": 0.1,  "range": 2.0,  "hit_count": 1 },
+        { "type": "apply_status","time": 0.1,  "status": "guard_break", "duration": 0.5, "chance": 0.8 }
+      ]
+    },
+    {
+      "slot": "ultimate",
+      "skill_name": "雷神連撃",
+      "description": "雷の力で5回の高速連撃を叩き込む必殺技。",
+      "element": "lightning",
+      "risk_level": "high",
+      "parameters": {
+        "damage": 5, "hit_count": 5, "range": 1.5,
+        "startup": 0.4, "active_time": 0.6, "recovery": 0.7,
+        "cooldown": 9.0, "knockback": 8, "stun_time": 0.2, "guard_damage": 5
+      },
+      "actions": [
+        { "type": "dash",        "time": 0.1, "power": 5.0, "direction": "forward" },
+        { "type": "melee_hitbox","time": 0.4, "range": 1.5, "hit_count": 1 },
+        { "type": "melee_hitbox","time": 0.5, "range": 1.5, "hit_count": 1 },
+        { "type": "melee_hitbox","time": 0.6, "range": 1.5, "hit_count": 1 },
+        { "type": "melee_hitbox","time": 0.7, "range": 1.5, "hit_count": 1 },
+        { "type": "melee_hitbox","time": 0.8, "range": 1.5, "hit_count": 1 },
+        { "type": "apply_status","time": 0.8, "status": "stun", "duration": 0.3, "chance": 0.5 }
+      ]
+    }
+  ]
+}

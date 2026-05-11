@@ -23,6 +23,10 @@ namespace PromptFighters.Battle
         {
             if (_fighter.State == FighterState.Dead) return;
 
+            // Setup/Countdownフェーズでは操作を無効化
+            var bm = BattleManager.Instance;
+            if (bm != null && !bm.IsFighting) return;
+
             _fighter.Move(ReadMove());
             _fighter.SetGuard(ReadGuard());
             if (ReadJumpPressed()) _fighter.Jump();
