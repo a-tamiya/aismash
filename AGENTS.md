@@ -21,6 +21,10 @@ GitHubリポジトリ: https://github.com/a-tamiya/aismash
 3. コミットメッセージを作成して commit
 4. `git push origin main` で push
 
+## コミットメッセージ規約
+
+- **日本語で簡潔に**書く
+
 ## 要件管理
 
 - 要件の追加・変更・削除は `requirements.md` に反映する
