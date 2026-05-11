@@ -79,6 +79,14 @@ namespace PromptFighters.Battle.Skills
             float totalDuration = skill.parameters.startup + skill.parameters.active_time + skill.parameters.recovery;
             _fighter.BeginSkillRecovery(totalDuration);
 
+            // スキル発動フラッシュ
+            var sr = GetComponent<SpriteRenderer>();
+            if (sr != null)
+            {
+                Color ec = SkillEnumParser.ElementColor(skill.element);
+                sr.color = new Color(ec.r, ec.g, ec.b, 1f);
+            }
+
             float t0 = Time.time;
 
             // アクションを time 昇順で順次実行（簡易: アクションは startup考慮済の time にスポーン）

@@ -61,6 +61,11 @@ namespace PromptFighters.Battle
                 fighter2.Opponent = fighter1;
             }
 
+            // ゲーム開始直後にデフォルト画像を適用（StartCountdown前でも表示）
+            var defaultData = new CharacterData();
+            ApplySprite(fighter1, defaultData);
+            ApplySprite(fighter2, new CharacterData());
+
             // Setup中はファイターを非アクティブな位置でスポーン
             fighter1?.ResetForBattle(fighter1SpawnPos, faceRight: true);
             fighter2?.ResetForBattle(fighter2SpawnPos, faceRight: false);

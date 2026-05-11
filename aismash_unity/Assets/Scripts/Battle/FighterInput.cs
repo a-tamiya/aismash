@@ -32,8 +32,8 @@ namespace PromptFighters.Battle
             _fighter.SetGuard(ReadGuard());
             if (ReadJumpPressed()) _fighter.Jump();
 
-            // スキルは試合中のみ使用可能
-            if (fighting && _skills != null)
+            // スキルはEnded以外で使用可能
+            if (_skills != null)
             {
                 if (ReadSkillPressed(SkillSlot.Close))    _skills.TryUseSkill(SkillSlot.Close);
                 if (ReadSkillPressed(SkillSlot.Ranged))   _skills.TryUseSkill(SkillSlot.Ranged);

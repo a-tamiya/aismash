@@ -29,12 +29,12 @@ namespace PromptFighters.Battle.Skills
             go.transform.position = worldPos;
             var col = go.AddComponent<BoxCollider2D>();
             col.isTrigger = true;
-            col.size      = size;
+            col.size      = Vector2.one; // スケールで大きさを制御するためcolliderは1x1
 
             var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite          = RuntimeSprite.Square();
-            sr.color           = new Color(1f, 1f, 1f, 0.4f);
-            sr.sortingOrder    = 10;
+            sr.sprite       = RuntimeSprite.Square();
+            sr.color        = new Color(1f, 1f, 0f, 0.55f);
+            sr.sortingOrder = 10;
             go.transform.localScale = new Vector3(size.x, size.y, 1f);
 
             var hb = go.AddComponent<Hitbox>();
@@ -45,11 +45,8 @@ namespace PromptFighters.Battle.Skills
 
         void Start()
         {
-            GetComponent<SpriteRenderer>().color =
-                new Color(SkillEnumParser.ElementColor(Element).r,
-                          SkillEnumParser.ElementColor(Element).g,
-                          SkillEnumParser.ElementColor(Element).b,
-                          0.45f);
+            Color ec = SkillEnumParser.ElementColor(Element);
+            GetComponent<SpriteRenderer>().color = new Color(ec.r, ec.g, ec.b, 0.65f);
             Destroy(gameObject, Lifetime);
         }
 

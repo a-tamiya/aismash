@@ -1,5 +1,6 @@
 using UnityEngine;
 using PromptFighters.Battle.Skills;
+using PromptFighters.UI;
 
 namespace PromptFighters.Battle
 {
@@ -33,7 +34,8 @@ namespace PromptFighters.Battle
         public int PlayerIndex { get; set; }
 
         public event System.Action<float, float> OnHPChanged;
-        public event System.Action OnDeath;
+        public event System.Action               OnDeath;
+        public event System.Action<float, bool>  OnDamageReceived; // (damage, wasBlocked)
 
         Rigidbody2D _rb;
         SpriteRenderer _sprite;
@@ -49,6 +51,7 @@ namespace PromptFighters.Battle
         float _slowTimer;
         float _slowFactor = 0.5f;
         float _guardBreakTimer;
+        float _hitFlashTimer;
 
         static readonly Color GuardColor      = new Color(0.4f, 0.6f, 1f);
         static readonly Color StunColor       = new Color(1f, 0.8f, 0f);
@@ -84,6 +87,7 @@ namespace PromptFighters.Battle
             if (_skillRecoveryTimer > 0f) _skillRecoveryTimer -= Time.deltaTime;
             if (_slowTimer          > 0f) _slowTimer          -= Time.deltaTime;
             if (_guardBreakTimer    > 0f) _guardBreakTimer    -= Time.deltaTime;
+            if (_hitFlashTimer      > 0f) _hitFlashTimer      -= Time.deltaTime;
             TickBurn();
 
             UpdateState();
@@ -123,6 +127,13 @@ namespace PromptFighters.Battle
         {
             if (_sprite == null) return;
 
+            // ヒットフラッシュ中は白点滅
+            if (_hitFlashTimer > 0f)
+            {
+                _sprite.color = Color.white;
+                return;
+            }
+
             Color c = State switch
             {
                 FighterState.Guarding => GuardColor,
@@ -130,7 +141,6 @@ namespace PromptFighters.Battle
                 _                     => Color.white,
             };
 
-            // 状態異常は通常時のみ上書き表示
             if (State != FighterState.Guarding && State != FighterState.Stunned)
             {
                 if      (_burnTimer       > 0f) c = BurnColor;
@@ -192,6 +202,9 @@ namespace PromptFighters.Battle
             if (!blocking && stunDuration > 0f)
                 _stunTimer = Mathf.Min(stunDuration, 1.5f);
 
+            OnDamageReceived?.Invoke(actual, blocking);
+            DamagePopup.Spawn(transform.position, actual, blocking);
+            if (!blocking) _hitFlashTimer = 0.08f;
             if (CurrentHP <= 0f) Die();
         }
 
@@ -237,6 +250,7 @@ namespace PromptFighters.Battle
             _burnTimer          = 0f;
             _slowTimer          = 0f;
             _guardBreakTimer    = 0f;
+            _hitFlashTimer      = 0f;
             State               = FighterState.Idle;
             transform.position  = spawnPos;
             _rb.linearVelocity  = Vector2.zero;
