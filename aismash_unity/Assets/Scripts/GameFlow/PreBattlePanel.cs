@@ -125,7 +125,6 @@ namespace PromptFighters.GameFlow
             {
                 var logoGo = CreateUIObject("LogoImage", _titlePanel.transform);
                 var logoRt = logoGo.GetComponent<RectTransform>();
-                // 画像のアスペクト比を保ちつつ最大幅640に収める
                 float aspect = (float)logoSprite.texture.width / logoSprite.texture.height;
                 float logoW = Mathf.Min(640f, logoSprite.texture.width);
                 float logoH = logoW / aspect;
@@ -151,19 +150,19 @@ namespace PromptFighters.GameFlow
                 "プロンプトでファイターを作ろう。API準備中はプリセットで対戦・トレーニングができます。",
                 new Vector2(0, -25), new Vector2(700, 38), 15, new Color(0.92f, 0.96f, 1f));
             MakeLabel(_titlePanel.transform, "ApiNote",
-                "API offline: presets, sample skills, and training mode are ready.",
+                "現在はプリセットキャラ・サンプル技・トレーニングモードでプレイできます。",
                 new Vector2(0, -58), new Vector2(700, 28), 13, new Color(0.72f, 0.84f, 1f));
 
-            var startButton = MakeButton(_titlePanel.transform, "GameStartBtn", "GAME START",
+            var startButton = MakeButton(_titlePanel.transform, "GameStartBtn", "ゲームスタート",
                 new Vector2(0, -128), new Vector2(310, 62), ShowCharacterSelect,
                 new Color(0.92f, 0.42f, 0.08f, 1f));
             SetButtonLabelStyle(startButton, 22f, FontStyles.Bold, new Color(1f, 0.98f, 0.9f));
             _startButtonRect = startButton.GetComponent<RectTransform>();
-            MakeLabel(_titlePanel.transform, "StartHelp", "Space / Enter",
-                new Vector2(0, -178), new Vector2(240, 24), 12, new Color(0.8f, 0.88f, 1f));
+            MakeLabel(_titlePanel.transform, "StartHelp", "スペース / エンターキー",
+                new Vector2(0, -178), new Vector2(320, 24), 13, new Color(0.8f, 0.88f, 1f));
 
             MakeLabel(_titlePanel.transform, "Footer",
-                "1P: WASD + J/K/L/I    2P: Arrows + Num1/2/3/5",
+                "1P: WASD + J/K/L/I    2P: 矢印 + テンキー1/2/3/5",
                 new Vector2(0, -286), new Vector2(760, 28), 12, new Color(0.76f, 0.82f, 0.9f));
         }
 
@@ -173,71 +172,122 @@ namespace PromptFighters.GameFlow
             StretchFull(_panel.GetComponent<RectTransform>());
 
             var bg = _panel.AddComponent<Image>();
-            bg.color = new Color(0.05f, 0.05f, 0.1f, 0.95f);
+            bg.sprite = CreateGradientSprite(
+                new Color(0.02f, 0.02f, 0.06f, 1f),
+                new Color(0.06f, 0f, 0.14f, 1f),
+                new Color(0f, 0.08f, 0.16f, 1f),
+                new Color(0f, 0f, 0.04f, 1f));
+            bg.type = Image.Type.Simple;
 
-            // CanvasGroupでレイキャスト対象に
             var cg = _panel.AddComponent<CanvasGroup>();
             cg.interactable = true;
             cg.blocksRaycasts = true;
 
-            // タイトル
-            MakeLabel(_panel.transform, "Title", "Prompt Fighters",
-                new Vector2(0, 180), new Vector2(600, 70), 40, Color.yellow);
-            MakeLabel(_panel.transform, "Sub", "Select preset fighters",
-                new Vector2(0, 120), new Vector2(500, 40), 20, Color.white);
+            // ── ヘッダー ──
+            var header = CreateUIObject("Header", _panel.transform);
+            var hRt = header.GetComponent<RectTransform>();
+            hRt.anchorMin = new Vector2(0f, 1f);
+            hRt.anchorMax = new Vector2(1f, 1f);
+            hRt.offsetMin = new Vector2(0f, -80f);
+            hRt.offsetMax = Vector2.zero;
+            header.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.5f);
 
-            // 1P
-            MakeLabel(_panel.transform, "P1Lbl", "1P",
-                new Vector2(-250, 60), new Vector2(220, 40), 24, new Color(0.5f, 0.8f, 1f));
+            MakeLabel(_panel.transform, "PanelTitle", "キャラクター選択",
+                new Vector2(0, 504), new Vector2(700, 56), 32, new Color(1f, 0.88f, 0.3f));
 
-            var p1Row = CreateUIObject("P1Row", _panel.transform);
-            p1Row.GetComponent<RectTransform>().anchoredPosition = new Vector2(-250, 10);
-            p1Row.GetComponent<RectTransform>().sizeDelta = new Vector2(280, 40);
-            p1Row.GetComponent<RectTransform>().anchorMin = p1Row.GetComponent<RectTransform>().anchorMax = new Vector2(0.5f, 0.5f);
+            // ── 中央仕切り線 ──
+            MakeOutline(_panel.transform, "Divider", new Vector2(0, 0), new Vector2(3, 860),
+                new Color(1f, 1f, 1f, 0.12f));
 
-            MakeButton(p1Row.transform, "P1L", "<", new Vector2(-120, 0), new Vector2(40, 36),
-                () => ChangePreset(ref _p1PresetIdx, -1, _p1PresetLabel));
-            _p1PresetLabel = MakeLabel(p1Row.transform, "P1Preset", GetPresetName(_p1PresetIdx),
-                new Vector2(0, 0), new Vector2(190, 36), 14, Color.white);
-            MakeButton(p1Row.transform, "P1R", ">", new Vector2(120, 0), new Vector2(40, 36),
-                () => ChangePreset(ref _p1PresetIdx, +1, _p1PresetLabel));
+            // ── 1P エリア（左半分） ──
+            BuildPlayerColumn(_panel.transform, true);
 
-            // 2P
-            MakeLabel(_panel.transform, "P2Lbl", "2P",
-                new Vector2(250, 60), new Vector2(220, 40), 24, new Color(1f, 0.6f, 0.4f));
+            // ── 2P エリア（右半分） ──
+            BuildPlayerColumn(_panel.transform, false);
 
-            var p2Row = CreateUIObject("P2Row", _panel.transform);
-            p2Row.GetComponent<RectTransform>().anchoredPosition = new Vector2(250, 10);
-            p2Row.GetComponent<RectTransform>().sizeDelta = new Vector2(280, 40);
-            p2Row.GetComponent<RectTransform>().anchorMin = p2Row.GetComponent<RectTransform>().anchorMax = new Vector2(0.5f, 0.5f);
+            // ── フッター: ボタン ──
+            var startBtn = MakeButton(_panel.transform, "StartBtn", "バトル開始",
+                new Vector2(-200, -460), new Vector2(320, 68), OnStartPressed,
+                new Color(0.1f, 0.55f, 0.1f, 1f));
+            SetButtonLabelStyle(startBtn, 24f, FontStyles.Bold, Color.white);
 
-            MakeButton(p2Row.transform, "P2L", "<", new Vector2(-120, 0), new Vector2(40, 36),
-                () => ChangePreset(ref _p2PresetIdx, -1, _p2PresetLabel));
-            _p2PresetLabel = MakeLabel(p2Row.transform, "P2Preset", GetPresetName(_p2PresetIdx),
-                new Vector2(0, 0), new Vector2(190, 36), 14, Color.white);
-            MakeButton(p2Row.transform, "P2R", ">", new Vector2(120, 0), new Vector2(40, 36),
-                () => ChangePreset(ref _p2PresetIdx, +1, _p2PresetLabel));
+            var trainBtn = MakeButton(_panel.transform, "TrainingBtn", "トレーニング",
+                new Vector2(200, -460), new Vector2(320, 68), OnTrainingPressed,
+                new Color(0.1f, 0.25f, 0.65f, 1f));
+            SetButtonLabelStyle(trainBtn, 24f, FontStyles.Bold, Color.white);
 
-            // 操作説明
+            MakeLabel(_panel.transform, "StartHelp", "スペースキーでバトル開始 / Tキーでトレーニング",
+                new Vector2(0, -505), new Vector2(800, 28), 14, new Color(0.72f, 0.8f, 1f));
+
+            // ── 操作ガイド ──
             MakeLabel(_panel.transform, "CtrlHelp",
-                "1P: WASD Move / J Close / K Ranged / L Special / I Ultimate / LShift Guard\n" +
-                "2P: Arrows Move / Num1 Close / Num2 Ranged / Num3 Special / Num5 Ultimate / RShift Guard",
-                new Vector2(0, -70), new Vector2(700, 60), 12, new Color(0.8f, 0.8f, 0.8f));
-
-            // 開始ボタン
-            MakeButton(_panel.transform, "StartBtn", "START BATTLE  (Space)",
-                new Vector2(-150, -150), new Vector2(260, 56), OnStartPressed,
-                new Color(0.15f, 0.6f, 0.15f));
-
-            MakeButton(_panel.transform, "TrainingBtn", "TRAINING  (T)",
-                new Vector2(150, -150), new Vector2(260, 56), OnTrainingPressed,
-                new Color(0.15f, 0.35f, 0.65f));
-
-            MakeLabel(_panel.transform, "TrainingHelp",
-                "Use training mode to verify movement and skills while AI generation is unavailable.",
-                new Vector2(0, -205), new Vector2(700, 30), 13, new Color(0.8f, 0.9f, 1f));
+                "1P: WASD 移動 / J 近距離 / K 遠距離 / L 特殊 / I 必殺 / 左Shift ガード\n" +
+                "2P: 矢印キー 移動 / テンキー1 近距離 / 2 遠距離 / 3 特殊 / 5 必殺 / 右Shift ガード",
+                new Vector2(0, 540 - 810), new Vector2(840, 52), 13, new Color(0.72f, 0.78f, 0.92f));
 
             BuildTrainingPanel();
+        }
+
+        void BuildPlayerColumn(Transform parent, bool isP1)
+        {
+            float cx = isP1 ? -480f : 480f;
+            var pColor = isP1 ? new Color(0.4f, 0.75f, 1f) : new Color(1f, 0.55f, 0.35f);
+            var bgColor = isP1
+                ? new Color(0.08f, 0.12f, 0.22f, 0.6f)
+                : new Color(0.22f, 0.08f, 0.08f, 0.6f);
+
+            // 背景
+            var colBg = CreateUIObject(isP1 ? "P1ColBg" : "P2ColBg", parent);
+            var cbRt = colBg.GetComponent<RectTransform>();
+            cbRt.anchorMin = new Vector2(isP1 ? 0f : 0.5f, 0f);
+            cbRt.anchorMax = new Vector2(isP1 ? 0.5f : 1f, 1f);
+            cbRt.offsetMin = isP1 ? new Vector2(0f, 80f) : new Vector2(0f, 80f);
+            cbRt.offsetMax = isP1 ? new Vector2(-2f, -80f) : new Vector2(0f, -80f);
+            colBg.AddComponent<Image>().color = bgColor;
+
+            // プレイヤーバッジ
+            MakeLabel(parent, isP1 ? "P1Badge" : "P2Badge",
+                isP1 ? "1P" : "2P",
+                new Vector2(cx, 360f), new Vector2(100f, 60f), 40, pColor)
+                .fontStyle = FontStyles.Bold;
+
+            // カラーライン
+            MakeOutline(parent, isP1 ? "P1Line" : "P2Line",
+                new Vector2(cx, 310f), new Vector2(280f, 3f), pColor);
+
+            // プリセット選択行
+            var row = CreateUIObject(isP1 ? "P1Row" : "P2Row", parent);
+            var rowRt = row.GetComponent<RectTransform>();
+            rowRt.anchorMin = rowRt.anchorMax = new Vector2(0.5f, 0.5f);
+            rowRt.anchoredPosition = new Vector2(cx, 240f);
+            rowRt.sizeDelta = new Vector2(380f, 52f);
+
+            MakeButton(row.transform, "Left", "◀", new Vector2(-160f, 0f), new Vector2(48f, 48f),
+                isP1
+                    ? () => ChangePreset(ref _p1PresetIdx, -1, _p1PresetLabel)
+                    : () => ChangePreset(ref _p2PresetIdx, -1, _p2PresetLabel),
+                new Color(0.2f, 0.2f, 0.35f));
+
+            var label = MakeLabel(row.transform, "Preset",
+                isP1 ? GetPresetName(_p1PresetIdx) : GetPresetName(_p2PresetIdx),
+                new Vector2(0f, 0f), new Vector2(250f, 48f), 18, Color.white);
+            label.enableWordWrapping = false;
+            label.overflowMode = TextOverflowModes.Ellipsis;
+
+            MakeButton(row.transform, "Right", "▶", new Vector2(160f, 0f), new Vector2(48f, 48f),
+                isP1
+                    ? () => ChangePreset(ref _p1PresetIdx, +1, _p1PresetLabel)
+                    : () => ChangePreset(ref _p2PresetIdx, +1, _p2PresetLabel),
+                new Color(0.2f, 0.2f, 0.35f));
+
+            if (isP1) _p1PresetLabel = label;
+            else       _p2PresetLabel = label;
+
+            // キャラ情報エリア
+            MakeLabel(parent, isP1 ? "P1InfoTitle" : "P2InfoTitle",
+                "キャラクター",
+                new Vector2(cx, 170f), new Vector2(300f, 30f), 14,
+                new Color(0.72f, 0.8f, 1f));
         }
 
         void BuildTrainingPanel()
@@ -250,12 +300,12 @@ namespace PromptFighters.GameFlow
             cg.interactable = false;
             cg.blocksRaycasts = false;
 
-            MakeLabel(_trainingPanel.transform, "TrainingTitle", "TRAINING",
-                new Vector2(0, 285), new Vector2(280, 46), 28, new Color(0.5f, 0.85f, 1f));
+            MakeLabel(_trainingPanel.transform, "TrainingTitle", "トレーニングモード",
+                new Vector2(0, 485), new Vector2(480, 46), 28, new Color(0.5f, 0.85f, 1f));
             MakeLabel(_trainingPanel.transform, "TrainingControls",
-                "1P: WASD / J K L I / LShift    2P: Arrows / Num1 Num2 Num3 Num5 / RShift\n" +
-                "Esc: Back to select    R: Reset position, HP, and cooldowns",
-                new Vector2(0, 235), new Vector2(820, 48), 13, new Color(0.9f, 0.95f, 1f));
+                "1P: WASD 移動 / J K L I 技 / 左Shift ガード    2P: 矢印 移動 / テンキー1 2 3 5 技 / 右Shift ガード\n" +
+                "Escキー: キャラ選択に戻る    Rキー: 位置・HP・クールダウンをリセット",
+                new Vector2(0, 440), new Vector2(900, 52), 14, new Color(0.9f, 0.95f, 1f));
         }
 
         void ChangePreset(ref int idx, int delta, TextMeshProUGUI label)

@@ -36,7 +36,7 @@ namespace PromptFighters.UI
         void ShowTraining()
         {
             if (timerText == null) return;
-            timerText.text = "TRAINING";
+            timerText.text = "トレーニング中";
             timerText.color = new Color(0.5f, 0.85f, 1f);
         }
     }

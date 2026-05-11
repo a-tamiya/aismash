@@ -43,14 +43,14 @@ namespace PromptFighters.UI
         {
             if (_text != null) _text.gameObject.SetActive(true);
             int n = Mathf.CeilToInt(t);
-            _text.text  = n > 0 ? n.ToString() : "FIGHT!";
-            _text.color = n > 0 ? Color.white : Color.yellow;
+            _text.text  = n > 0 ? n.ToString() : "ファイト！";
+            _text.color = n > 0 ? Color.white : new Color(1f, 0.85f, 0.1f);
         }
 
         void OnFight()
         {
-            _text.text  = "FIGHT!";
-            _text.color = Color.yellow;
+            _text.text  = "ファイト！";
+            _text.color = new Color(1f, 0.85f, 0.1f);
             Invoke(nameof(Hide), 0.8f);
         }
 

@@ -793,9 +793,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: aff866715ef629a4fbf7db086880d249, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PromptFighters.UI.BattleResultUI
-  panel: {fileID: 248175970}
-  resultText: {fileID: 1084021716}
-  restartButton: {fileID: 1293824306}
 --- !u!114 &248175973
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1673,6 +1670,8 @@ GameObject:
   - component: {fileID: 602783421}
   - component: {fileID: 602783422}
   - component: {fileID: 602783423}
+  - component: {fileID: 602783425}
+  - component: {fileID: 602783424}
   m_Layer: 0
   m_Name: Canvas
   m_TagString: Untagged
@@ -1819,6 +1818,30 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PromptFighters.UI.SkillBarUI
   skillExecutor: {fileID: 315558357}
   isLeftSide: 0
+--- !u!114 &602783424
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 602783413}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aff866715ef629a4fbf7db086880d249, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PromptFighters.UI.BattleResultUI
+--- !u!114 &602783425
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 602783413}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 65091c1c26829ce419b9fa9510d28181, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PromptFighters.UI.BattleHUD
 --- !u!28 &682929573
 Texture2D:
   m_ObjectHideFlags: 0
@@ -2448,7 +2471,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1096614737
 RectTransform:
   m_ObjectHideFlags: 0
@@ -3991,7 +4014,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1858630614
 RectTransform:
   m_ObjectHideFlags: 0
@@ -4381,7 +4404,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &2019456727
 RectTransform:
   m_ObjectHideFlags: 0
