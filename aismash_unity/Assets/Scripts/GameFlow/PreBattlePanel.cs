@@ -119,17 +119,37 @@ namespace PromptFighters.GameFlow
             MakeOutline(_titlePanel.transform, "FrameBottom", new Vector2(0, -190), new Vector2(760, 3),
                 new Color(1f, 0.65f, 0.2f, 0.75f));
 
-            MakeLabel(_titlePanel.transform, "TitleKicker", "AI PROMPT FIGHTER",
-                new Vector2(0, 120), new Vector2(620, 44), 22, new Color(0.75f, 0.95f, 1f));
-            var title = MakeLabel(_titlePanel.transform, "TitleMain", "PROMPT FIGHTERS",
-                new Vector2(0, 54), new Vector2(760, 92), 58, new Color(1f, 0.92f, 0.46f));
-            title.fontStyle = FontStyles.Bold;
-            title.characterSpacing = 2f;
-            _titleMainRect = title.rectTransform;
+            // ロゴ画像 (Resources/Art/logo.png) があれば表示、なければテキストフォールバック
+            var logoSprite = Resources.Load<Sprite>("Art/logo");
+            if (logoSprite != null)
+            {
+                var logoGo = CreateUIObject("LogoImage", _titlePanel.transform);
+                var logoRt = logoGo.GetComponent<RectTransform>();
+                // 画像のアスペクト比を保ちつつ最大幅640に収める
+                float aspect = (float)logoSprite.texture.width / logoSprite.texture.height;
+                float logoW = Mathf.Min(640f, logoSprite.texture.width);
+                float logoH = logoW / aspect;
+                logoRt.anchoredPosition = new Vector2(0, 80f);
+                logoRt.sizeDelta = new Vector2(logoW, logoH);
+                var logoImg = logoGo.AddComponent<Image>();
+                logoImg.sprite = logoSprite;
+                logoImg.preserveAspect = true;
+                _titleMainRect = logoRt;
+            }
+            else
+            {
+                MakeLabel(_titlePanel.transform, "TitleKicker", "AI PROMPT FIGHTER",
+                    new Vector2(0, 120), new Vector2(620, 44), 22, new Color(0.75f, 0.95f, 1f));
+                var title = MakeLabel(_titlePanel.transform, "TitleMain", "PROMPT FIGHTERS",
+                    new Vector2(0, 54), new Vector2(760, 92), 58, new Color(1f, 0.92f, 0.46f));
+                title.fontStyle = FontStyles.Bold;
+                title.characterSpacing = 2f;
+                _titleMainRect = title.rectTransform;
+            }
 
             MakeLabel(_titlePanel.transform, "TitleSub",
-                "Create fighters from prompts. Test controls while AI assets are pending.",
-                new Vector2(0, -12), new Vector2(700, 38), 18, new Color(0.92f, 0.96f, 1f));
+                "プロンプトでファイターを作ろう。API準備中はプリセットで対戦・トレーニングができます。",
+                new Vector2(0, -25), new Vector2(700, 38), 15, new Color(0.92f, 0.96f, 1f));
             MakeLabel(_titlePanel.transform, "ApiNote",
                 "API offline: presets, sample skills, and training mode are ready.",
                 new Vector2(0, -58), new Vector2(700, 28), 13, new Color(0.72f, 0.84f, 1f));
