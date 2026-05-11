@@ -75,6 +75,7 @@ namespace PromptFighters.UI
                 nameTmp.color             = Color.white;
                 nameTmp.textWrappingMode = TextWrappingModes.NoWrap;
                 nameTmp.overflowMode      = TextOverflowModes.Ellipsis;
+                UITheme.Apply(nameTmp);
                 _skillNames[i] = nameTmp;
 
                 // スロットラベル
@@ -86,6 +87,7 @@ namespace PromptFighters.UI
                 labelTmp.alignment = TextAlignmentOptions.Center;
                 labelTmp.color     = new Color(0.8f, 0.8f, 0.8f);
                 labelTmp.text      = SlotLabels[i];
+                UITheme.Apply(labelTmp);
 
                 // キーバインド
                 var keyObj = CreateRect("Key", slot);
@@ -96,6 +98,7 @@ namespace PromptFighters.UI
                 keyTmp.alignment = TextAlignmentOptions.Center;
                 keyTmp.color     = new Color(1f, 0.9f, 0.5f);
                 keyTmp.text      = keys[i];
+                UITheme.Apply(keyTmp);
                 _keybindLabels[i] = keyTmp;
             }
 

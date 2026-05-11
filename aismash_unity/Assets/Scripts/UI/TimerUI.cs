@@ -14,7 +14,11 @@ namespace PromptFighters.UI
 
         void Start()
         {
-            if (timerText != null) _normalColor = timerText.color;
+            if (timerText != null)
+            {
+                UITheme.Apply(timerText, 55f, FontStyles.Bold);
+                _normalColor = timerText.color;
+            }
             if (BattleManager.Instance != null)
             {
                 BattleManager.Instance.OnTimerChanged += Refresh;

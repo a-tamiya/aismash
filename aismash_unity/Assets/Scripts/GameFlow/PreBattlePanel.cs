@@ -6,6 +6,7 @@ using UnityEngine.InputSystem.UI;
 using TMPro;
 using PromptFighters.Battle;
 using PromptFighters.Battle.Skills;
+using PromptFighters.UI;
 
 namespace PromptFighters.GameFlow
 {
@@ -37,6 +38,7 @@ namespace PromptFighters.GameFlow
             if (_presets.Count < 2) _p2PresetIdx = 0;
             BuildTitlePanel();
             BuildPanel();
+            UITheme.ApplyAllInScene();
             ShowTitlePanel();
 
             if (BattleManager.Instance != null)
@@ -387,6 +389,7 @@ namespace PromptFighters.GameFlow
             tmp.color     = color;
             tmp.alignment = TextAlignmentOptions.Center;
             tmp.textWrappingMode = TextWrappingModes.Normal;
+            UITheme.Apply(tmp);
             return tmp;
         }
 
@@ -415,6 +418,7 @@ namespace PromptFighters.GameFlow
             tmp.fontSize  = 16;
             tmp.color     = Color.white;
             tmp.alignment = TextAlignmentOptions.Center;
+            UITheme.Apply(tmp);
 
             return btn;
         }
@@ -449,6 +453,7 @@ namespace PromptFighters.GameFlow
             label.fontSize = fontSize;
             label.fontStyle = style;
             label.color = color;
+            UITheme.Apply(label);
         }
 
         static Sprite CreateGradientSprite(Color topLeft, Color topRight, Color bottomLeft, Color bottomRight)

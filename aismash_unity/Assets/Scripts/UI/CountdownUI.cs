@@ -28,6 +28,7 @@ namespace PromptFighters.UI
                 _text.fontStyle  = FontStyles.Bold;
             }
 
+            UITheme.Apply(_text, 80f, FontStyles.Bold);
             Hide();
 
             if (BattleManager.Instance != null)

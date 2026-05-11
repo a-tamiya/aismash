@@ -25,6 +25,7 @@ namespace PromptFighters.UI
             tmp.text      = blocked ? $"({Mathf.RoundToInt(damage)})" : Mathf.RoundToInt(damage).ToString();
             tmp.alignment = TextAlignmentOptions.Center;
             tmp.sortingOrder = 20;
+            UITheme.Apply(tmp);
 
             go.AddComponent<DamagePopup>();
         }
