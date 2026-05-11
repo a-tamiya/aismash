@@ -22,7 +22,7 @@ namespace PromptFighters.UI
 
         static readonly string[] Keys1P = { "J", "K", "L", "I" };
         static readonly string[] Keys2P = { "Num1", "Num2", "Num3", "Num5" };
-        static readonly string[] SlotLabels = { "近距離", "遠距離", "特殊", "必殺" };
+        static readonly string[] SlotLabels = { "Close", "Ranged", "Special", "Ultimate" };
         static readonly Color CooldownColor = new Color(0f, 0f, 0f, 0.7f);
         static readonly Color ReadyColor    = new Color(0.2f, 0.8f, 0.3f, 0.5f);
 
@@ -135,7 +135,7 @@ namespace PromptFighters.UI
             {
                 if (_skillNames[i] == null) continue;
                 var s = skillExecutor.GetSkill((SkillSlot)i);
-                _skillNames[i].text = s != null ? s.skill_name : "---";
+                _skillNames[i].text = s != null && IsAscii(s.skill_name) ? s.skill_name : SlotLabels[i];
             }
         }
 
@@ -156,6 +156,14 @@ namespace PromptFighters.UI
             if (img == null) img = go.AddComponent<Image>();
             img.color = color;
             return img;
+        }
+
+        static bool IsAscii(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return true;
+            for (int i = 0; i < value.Length; i++)
+                if (value[i] > 127) return false;
+            return true;
         }
     }
 }

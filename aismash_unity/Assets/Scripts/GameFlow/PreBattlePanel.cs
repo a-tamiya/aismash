@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
 using TMPro;
 using PromptFighters.Battle;
 using PromptFighters.Battle.Skills;
@@ -23,6 +25,11 @@ namespace PromptFighters.GameFlow
         Image _titleBottomGlow;
         RectTransform _titleMainRect;
         RectTransform _startButtonRect;
+
+        void Awake()
+        {
+            EnsureInputSystemUIInputModule();
+        }
 
         void Start()
         {
@@ -119,10 +126,10 @@ namespace PromptFighters.GameFlow
             _titleMainRect = title.rectTransform;
 
             MakeLabel(_titlePanel.transform, "TitleSub",
-                "言葉から生まれるキャラクターで戦う 2D 対戦アクション",
+                "Create fighters from prompts. Test controls while AI assets are pending.",
                 new Vector2(0, -12), new Vector2(700, 38), 18, new Color(0.92f, 0.96f, 1f));
             MakeLabel(_titlePanel.transform, "ApiNote",
-                "API準備中でもテストキャラとトレーニングで操作確認できます",
+                "API offline: presets, sample skills, and training mode are ready.",
                 new Vector2(0, -58), new Vector2(700, 28), 13, new Color(0.72f, 0.84f, 1f));
 
             var startButton = MakeButton(_titlePanel.transform, "GameStartBtn", "GAME START",
@@ -152,9 +159,9 @@ namespace PromptFighters.GameFlow
             cg.blocksRaycasts = true;
 
             // タイトル
-            MakeLabel(_panel.transform, "タイトル", "Prompt Fighters",
+            MakeLabel(_panel.transform, "Title", "Prompt Fighters",
                 new Vector2(0, 180), new Vector2(600, 70), 40, Color.yellow);
-            MakeLabel(_panel.transform, "Sub", "キャラクターを選択してください",
+            MakeLabel(_panel.transform, "Sub", "Select preset fighters",
                 new Vector2(0, 120), new Vector2(500, 40), 20, Color.white);
 
             // 1P
@@ -166,11 +173,11 @@ namespace PromptFighters.GameFlow
             p1Row.GetComponent<RectTransform>().sizeDelta = new Vector2(280, 40);
             p1Row.GetComponent<RectTransform>().anchorMin = p1Row.GetComponent<RectTransform>().anchorMax = new Vector2(0.5f, 0.5f);
 
-            MakeButton(p1Row.transform, "P1L", "◀", new Vector2(-120, 0), new Vector2(40, 36),
+            MakeButton(p1Row.transform, "P1L", "<", new Vector2(-120, 0), new Vector2(40, 36),
                 () => ChangePreset(ref _p1PresetIdx, -1, _p1PresetLabel));
             _p1PresetLabel = MakeLabel(p1Row.transform, "P1Preset", GetPresetName(_p1PresetIdx),
                 new Vector2(0, 0), new Vector2(190, 36), 14, Color.white);
-            MakeButton(p1Row.transform, "P1R", "▶", new Vector2(120, 0), new Vector2(40, 36),
+            MakeButton(p1Row.transform, "P1R", ">", new Vector2(120, 0), new Vector2(40, 36),
                 () => ChangePreset(ref _p1PresetIdx, +1, _p1PresetLabel));
 
             // 2P
@@ -182,30 +189,30 @@ namespace PromptFighters.GameFlow
             p2Row.GetComponent<RectTransform>().sizeDelta = new Vector2(280, 40);
             p2Row.GetComponent<RectTransform>().anchorMin = p2Row.GetComponent<RectTransform>().anchorMax = new Vector2(0.5f, 0.5f);
 
-            MakeButton(p2Row.transform, "P2L", "◀", new Vector2(-120, 0), new Vector2(40, 36),
+            MakeButton(p2Row.transform, "P2L", "<", new Vector2(-120, 0), new Vector2(40, 36),
                 () => ChangePreset(ref _p2PresetIdx, -1, _p2PresetLabel));
             _p2PresetLabel = MakeLabel(p2Row.transform, "P2Preset", GetPresetName(_p2PresetIdx),
                 new Vector2(0, 0), new Vector2(190, 36), 14, Color.white);
-            MakeButton(p2Row.transform, "P2R", "▶", new Vector2(120, 0), new Vector2(40, 36),
+            MakeButton(p2Row.transform, "P2R", ">", new Vector2(120, 0), new Vector2(40, 36),
                 () => ChangePreset(ref _p2PresetIdx, +1, _p2PresetLabel));
 
             // 操作説明
             MakeLabel(_panel.transform, "CtrlHelp",
-                "1P: WASD移動 / J近距離 / K遠距離 / L特殊 / I必殺 / LShiftガード\n" +
-                "2P: 矢印移動 / Num1近距離 / Num2遠距離 / Num3特殊 / Num5必殺 / RShiftガード",
+                "1P: WASD Move / J Close / K Ranged / L Special / I Ultimate / LShift Guard\n" +
+                "2P: Arrows Move / Num1 Close / Num2 Ranged / Num3 Special / Num5 Ultimate / RShift Guard",
                 new Vector2(0, -70), new Vector2(700, 60), 12, new Color(0.8f, 0.8f, 0.8f));
 
             // 開始ボタン
-            MakeButton(_panel.transform, "StartBtn", "バトル開始！  (Space)",
+            MakeButton(_panel.transform, "StartBtn", "START BATTLE  (Space)",
                 new Vector2(-150, -150), new Vector2(260, 56), OnStartPressed,
                 new Color(0.15f, 0.6f, 0.15f));
 
-            MakeButton(_panel.transform, "TrainingBtn", "トレーニング  (T)",
+            MakeButton(_panel.transform, "TrainingBtn", "TRAINING  (T)",
                 new Vector2(150, -150), new Vector2(260, 56), OnTrainingPressed,
                 new Color(0.15f, 0.35f, 0.65f));
 
             MakeLabel(_panel.transform, "TrainingHelp",
-                "API画像生成待ち中は、テストキャラで操作確認できます。",
+                "Use training mode to verify movement and skills while AI generation is unavailable.",
                 new Vector2(0, -205), new Vector2(700, 30), 13, new Color(0.8f, 0.9f, 1f));
 
             BuildTrainingPanel();
@@ -225,7 +232,7 @@ namespace PromptFighters.GameFlow
                 new Vector2(0, 285), new Vector2(280, 46), 28, new Color(0.5f, 0.85f, 1f));
             MakeLabel(_trainingPanel.transform, "TrainingControls",
                 "1P: WASD / J K L I / LShift    2P: Arrows / Num1 Num2 Num3 Num5 / RShift\n" +
-                "Esc: キャラ選択へ戻る    R: 位置とHPをリセット",
+                "Esc: Back to select    R: Reset position, HP, and cooldowns",
                 new Vector2(0, 235), new Vector2(820, 48), 13, new Color(0.9f, 0.95f, 1f));
         }
 
@@ -236,8 +243,12 @@ namespace PromptFighters.GameFlow
             if (label != null) label.text = GetPresetName(idx);
         }
 
-        string GetPresetName(int idx) =>
-            (_presets != null && idx < _presets.Count) ? _presets[idx].characterName : "---";
+        string GetPresetName(int idx)
+        {
+            if (_presets == null || idx < 0 || idx >= _presets.Count) return "---";
+            string name = _presets[idx].characterName;
+            return IsAscii(name) ? name : $"Preset {idx + 1}";
+        }
 
         void OnStartPressed()
         {
@@ -314,6 +325,31 @@ namespace PromptFighters.GameFlow
                 skills            = src.skills,
                 spritePath        = src.spritePath,
             };
+        }
+
+        static bool IsAscii(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return true;
+            for (int i = 0; i < value.Length; i++)
+                if (value[i] > 127) return false;
+            return true;
+        }
+
+        static void EnsureInputSystemUIInputModule()
+        {
+            var eventSystem = EventSystem.current;
+            if (eventSystem == null) return;
+
+            var go = eventSystem.gameObject;
+            var standalone = go.GetComponent<StandaloneInputModule>();
+            if (standalone != null)
+            {
+                standalone.enabled = false;
+                Destroy(standalone);
+            }
+
+            if (go.GetComponent<InputSystemUIInputModule>() == null)
+                go.AddComponent<InputSystemUIInputModule>();
         }
 
         // ── UIヘルパー ────────────────────────────────────────────

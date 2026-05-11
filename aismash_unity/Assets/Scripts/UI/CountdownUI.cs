@@ -28,19 +28,19 @@ namespace PromptFighters.UI
                 _text.fontStyle  = FontStyles.Bold;
             }
 
-            gameObject.SetActive(false);
+            Hide();
 
             if (BattleManager.Instance != null)
             {
                 BattleManager.Instance.OnCountdownChanged += OnCountdown;
                 BattleManager.Instance.OnBattleStart      += OnFight;
-                BattleManager.Instance.OnBattleEnd        += _ => gameObject.SetActive(false);
+                BattleManager.Instance.OnBattleEnd        += _ => Hide();
             }
         }
 
         void OnCountdown(float t)
         {
-            gameObject.SetActive(true);
+            if (_text != null) _text.gameObject.SetActive(true);
             int n = Mathf.CeilToInt(t);
             _text.text  = n > 0 ? n.ToString() : "FIGHT!";
             _text.color = n > 0 ? Color.white : Color.yellow;
@@ -53,6 +53,9 @@ namespace PromptFighters.UI
             Invoke(nameof(Hide), 0.8f);
         }
 
-        void Hide() => gameObject.SetActive(false);
+        void Hide()
+        {
+            if (_text != null) _text.gameObject.SetActive(false);
+        }
     }
 }
