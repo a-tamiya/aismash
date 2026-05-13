@@ -250,28 +250,41 @@ AIは、各プレイヤーの入力から以下を生成する。
 
 固定技を事前に用意するのではなく、Unity側に「技を構成する基本部品」を実装し、AIがそれらを組み合わせて技レシピを生成する。
 
-例：
+**各技が飛び道具（projectile）か近接攻撃（melee_hitbox）かは、プレイヤーの入力テキストから推論する。**
+
+| 入力の傾向 | 推論の方向 |
+|---|---|
+| 「遠距離」「弾を飛ばす」「射撃」「砲撃」「魔法弾」など | attack_a/b/cに `projectile` を多く使用 |
+| 「近距離」「接近戦」「斬る」「殴る」「格闘」など | attack_a/b/cに `melee_hitbox` や `dash + melee_hitbox` を多く使用 |
+| 混合・バランス型 | 近接と遠距離を組み合わせて生成 |
+| 明示的な記述がない場合 | キャラのモチーフ（例：弓使い→projectile、剣士→melee）から推論 |
+
+横スマッシュ（smash_side）は原則として近接の強打（melee_hitbox）とする。ただし「大砲」「大爆発」など明らかに遠距離の必殺系である場合は projectile も可。
+
+**生成例（遠距離主体のキャラ）:**
 
 ```text
 プレイヤー入力：
-黒い炎をまとった猫の剣士
+雷をまとったペンギンの戦士。遠距離から雷を飛ばしつつ、近づかれたら素早く逃げる。
 
-AI生成：
-基本技A（attack_a）：黒炎みだれ斬り
-構造：melee_hitbox（3連撃）→ apply_status(stun)
-パラメータ：3ヒット、短射程、低ダメージ、短い怯み
+AI推論 → 遠距離主体
+attack_a: projectile（雷弾、主力の飛び道具）
+attack_b: projectile（拡散雷弾など別パターンの飛び道具）
+attack_c: dash（後方へ逃げ）＋遠距離発射
+smash_side: melee_hitbox（近づいた相手への強打）
+```
 
-基本技B（attack_b）：影火球
-構造：projectile
-パラメータ：中ダメージ、遠射程、burnの可能性あり
+**生成例（近距離主体のキャラ）:**
 
-基本技C（attack_c）：闇猫ステップ
-構造：dash → melee_hitbox → apply_status(stun)
-パラメータ：ダッシュで接近し、スタン付与
+```text
+プレイヤー入力：
+黒い炎をまとった素早い猫の剣士。近距離で連続攻撃する。
 
-横スマッシュ（smash_side）：ナイトメアラッシュ
-構造：dash → melee_hitbox（強力）
-パラメータ：高ダメージ、長い後隙・クールダウン
+AI推論 → 近接主体
+attack_a: melee_hitbox（連続斬り）
+attack_b: dash → melee_hitbox（ダッシュ斬り）
+attack_c: melee_hitbox → apply_status（スタン付与の一撃）
+smash_side: dash → melee_hitbox（強力な踏み込み斬り）
 ```
 
 ### 6.3 技構成部品
@@ -680,6 +693,8 @@ AIがキャラクターと技を生成中...
 ### 12.3 キャラクター生成JSON
 
 AIは、Unityが読み取りやすいJSON形式で出力する。`base_visual_prompt` はUnity側が各ポーズ記述子を付加して画像生成に使用する。
+
+`actions` 配列内の `type` フィールド（`melee_hitbox` / `projectile` / `dash` など）は、`input_features` のテキストから戦闘スタイルを推論して決定する。遠距離主体のキャラなら `projectile` が多くなり、近接主体なら `melee_hitbox` や `dash + melee_hitbox` が多くなる。
 
 例：
 
