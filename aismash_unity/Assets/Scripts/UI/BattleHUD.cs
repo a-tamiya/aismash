@@ -13,6 +13,7 @@ namespace PromptFighters.UI
     {
         // ── 内部参照 ──────────────────────────────────────────────
         Image            _hp1Fill, _hp2Fill;
+        RectTransform    _hp1FillRect, _hp2FillRect;
         TextMeshProUGUI  _hp1Num, _hp2Num, _hp1Name, _hp2Name;
         TextMeshProUGUI  _timerText;
         GameObject       _hudRoot;
@@ -130,6 +131,21 @@ namespace PromptFighters.UI
             float t = max > 0f ? Mathf.Clamp01(hp / max) : 0f;
             fill.fillAmount = t;
             fill.color = HpGrad.Evaluate(t);
+            var fillRect = player == 1 ? _hp1FillRect : _hp2FillRect;
+            if (fillRect != null)
+            {
+                if (player == 1)
+                {
+                    fillRect.anchorMin = Vector2.zero;
+                    fillRect.anchorMax = new Vector2(t, 1f);
+                }
+                else
+                {
+                    fillRect.anchorMin = new Vector2(1f - t, 0f);
+                    fillRect.anchorMax = Vector2.one;
+                }
+                fillRect.offsetMin = fillRect.offsetMax = Vector2.zero;
+            }
             if (num) num.text = Mathf.CeilToInt(hp).ToString();
         }
 
@@ -157,14 +173,14 @@ namespace PromptFighters.UI
             Anchor(c1, 0f, 1f, 0.5f, 1f, pad, -barH - pad, -4f, -pad);
             var bg1 = c1.AddComponent<Image>();
             bg1.color = new Color(0f, 0f, 0f, 0.65f);
-            AddHPBar(c1.transform, true, out _hp1Fill, out _hp1Num, out _hp1Name);
+            AddHPBar(c1.transform, true, out _hp1Fill, out _hp1FillRect, out _hp1Num, out _hp1Name);
 
             // 2P HPバーコンテナ (右半分)
             var c2 = MakeUI("HPContainer2P", _hudRoot.transform);
             Anchor(c2, 0.5f, 1f, 1f, 1f, 4f, -barH - pad, -pad, -pad);
             var bg2 = c2.AddComponent<Image>();
             bg2.color = new Color(0f, 0f, 0f, 0.65f);
-            AddHPBar(c2.transform, false, out _hp2Fill, out _hp2Num, out _hp2Name);
+            AddHPBar(c2.transform, false, out _hp2Fill, out _hp2FillRect, out _hp2Num, out _hp2Name);
 
             // タイマー（中央）
             var tc = MakeUI("TimerBox", _hudRoot.transform);
@@ -197,7 +213,7 @@ namespace PromptFighters.UI
         }
 
         void AddHPBar(Transform parent, bool isP1,
-                      out Image fill, out TextMeshProUGUI num, out TextMeshProUGUI name)
+                      out Image fill, out RectTransform fillRect, out TextMeshProUGUI num, out TextMeshProUGUI name)
         {
             // 名前ラベル
             var nameGo = MakeUI("Name", parent);
@@ -227,11 +243,10 @@ namespace PromptFighters.UI
             var fillGo = MakeUI("Fill", barBg.transform);
             FillParent(fillGo);
             var fillImg = fillGo.AddComponent<Image>();
-            fillImg.type         = Image.Type.Filled;
-            fillImg.fillMethod   = Image.FillMethod.Horizontal;
-            fillImg.fillOrigin   = isP1 ? 0 : 1;
+            fillImg.type         = Image.Type.Simple;
             fillImg.color        = new Color(0.15f, 0.85f, 0.3f);
             fill = fillImg;
+            fillRect = fillGo.GetComponent<RectTransform>();
 
             // HP数値
             var numGo = MakeUI("HPNum", parent);
@@ -333,7 +348,7 @@ namespace PromptFighters.UI
                 nmTmp.fontSize         = 14f;
                 nmTmp.alignment        = TextAlignmentOptions.Center;
                 nmTmp.color            = Color.white;
-                nmTmp.enableWordWrapping = false;
+                nmTmp.textWrappingMode = TextWrappingModes.NoWrap;
                 nmTmp.overflowMode     = TextOverflowModes.Ellipsis;
                 UITheme.Apply(nmTmp);
                 nameArr[i] = nmTmp;

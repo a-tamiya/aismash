@@ -39,6 +39,8 @@ namespace PromptFighters.Battle
 
         Rigidbody2D _rb;
         SpriteRenderer _sprite;
+        SpriteRenderer _rootSprite;
+        Transform _visualRoot;
         SkillExecutor _skillExecutor;
         float _stunTimer;
         float _controlLockTimer;
@@ -65,11 +67,14 @@ namespace PromptFighters.Battle
             _controlLockTimer   <= 0f     &&
             _skillRecoveryTimer <= 0f;
 
+        public SpriteRenderer VisualRenderer => _sprite;
+
         void Awake()
         {
             _rb             = GetComponent<Rigidbody2D>();
             _rb.constraints = RigidbodyConstraints2D.FreezeRotation;
-            _sprite         = GetComponent<SpriteRenderer>();
+            _rootSprite     = GetComponent<SpriteRenderer>();
+            EnsureVisualRenderer();
             _skillExecutor  = GetComponent<SkillExecutor>();
             CurrentHP       = maxHP;
         }
@@ -258,7 +263,62 @@ namespace PromptFighters.Battle
             var s = transform.localScale;
             s.x = faceRight ? Mathf.Abs(s.x) : -Mathf.Abs(s.x);
             transform.localScale = s;
+            ApplyVisualScaleCorrection();
             OnHPChanged?.Invoke(CurrentHP, maxHP);
+        }
+
+        public void SetCharacterSprite(Sprite sprite)
+        {
+            EnsureVisualRenderer();
+            if (_sprite == null) return;
+            _sprite.sprite = sprite;
+            ApplyVisualScaleCorrection();
+        }
+
+        void EnsureVisualRenderer()
+        {
+            if (_sprite != null) return;
+
+            var visual = transform.Find("Visual");
+            if (visual == null)
+            {
+                var go = new GameObject("Visual");
+                go.transform.SetParent(transform, false);
+                visual = go.transform;
+            }
+
+            _visualRoot = visual;
+            _sprite = visual.GetComponent<SpriteRenderer>();
+            if (_sprite == null) _sprite = visual.gameObject.AddComponent<SpriteRenderer>();
+
+            if (_rootSprite != null)
+            {
+                _sprite.sprite = _rootSprite.sprite;
+                _sprite.sharedMaterial = _rootSprite.sharedMaterial;
+                _sprite.sortingLayerID = _rootSprite.sortingLayerID;
+                _sprite.sortingOrder = _rootSprite.sortingOrder;
+                _rootSprite.enabled = false;
+            }
+
+            ApplyVisualScaleCorrection();
+        }
+
+        void ApplyVisualScaleCorrection()
+        {
+            if (_visualRoot == null) return;
+
+            Vector3 parentScale = transform.localScale;
+            float x = Mathf.Abs(parentScale.x);
+            float y = Mathf.Abs(parentScale.y);
+            if (x <= 0.001f || y <= 0.001f)
+            {
+                _visualRoot.localScale = Vector3.one;
+                return;
+            }
+
+            _visualRoot.localPosition = Vector3.zero;
+            _visualRoot.localRotation = Quaternion.identity;
+            _visualRoot.localScale = new Vector3(y / x, 1f, 1f);
         }
 
         void Die()

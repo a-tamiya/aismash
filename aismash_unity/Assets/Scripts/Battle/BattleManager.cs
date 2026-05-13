@@ -28,6 +28,7 @@ namespace PromptFighters.Battle
         public Fighter fighter2;
         public Vector3 fighter1SpawnPos = new Vector3(-4f, 1f, 0f);
         public Vector3 fighter2SpawnPos = new Vector3( 4f, 1f, 0f);
+        public Vector3 nameplateOffset = new Vector3(0f, 2.35f, 0f);
 
         public float       TimeRemaining { get; private set; }
         public BattlePhase Phase         { get; private set; } = BattlePhase.Setup;
@@ -60,6 +61,8 @@ namespace PromptFighters.Battle
         {
             if (fighter1 != null) fighter1.OnDeath += () => HandleFighterDeath(1);
             if (fighter2 != null) fighter2.OnDeath += () => HandleFighterDeath(0);
+            EnsureNameplate(fighter1, "P1", new Color(0.4f, 0.75f, 1f));
+            EnsureNameplate(fighter2, "P2", new Color(1f, 0.55f, 0.35f));
 
             // 相手参照をセット（AutoFaceOpponent用）
             if (fighter1 != null && fighter2 != null)
@@ -196,13 +199,11 @@ namespace PromptFighters.Battle
         static void ApplySprite(Fighter fighter, CharacterData data)
         {
             if (fighter == null || data == null) return;
-            var sr = fighter.GetComponent<SpriteRenderer>();
-            if (sr == null) return;
 
             // characterSpriteが既にセットされていればそちらを優先
             if (data.characterSprite != null)
             {
-                sr.sprite = data.characterSprite;
+                fighter.SetCharacterSprite(data.characterSprite);
                 return;
             }
 
@@ -212,8 +213,24 @@ namespace PromptFighters.Battle
             if (loaded != null)
             {
                 data.characterSprite = loaded;
-                sr.sprite            = loaded;
+                fighter.SetCharacterSprite(loaded);
             }
+        }
+
+        void EnsureNameplate(Fighter fighter, string label, Color color)
+        {
+            if (fighter == null) return;
+
+            PlayerNameplate plate = null;
+            var existing = GameObject.Find($"{label}_Nameplate");
+            if (existing != null) plate = existing.GetComponent<PlayerNameplate>();
+            if (plate == null)
+            {
+                var go = new GameObject($"{label}_Nameplate");
+                plate = go.AddComponent<PlayerNameplate>();
+            }
+
+            plate.SetTarget(fighter.transform, fighter.VisualRenderer, label, color, nameplateOffset);
         }
 
         // リスタート（BattleResultUIから呼ぶ）

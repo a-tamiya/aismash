@@ -80,7 +80,7 @@ namespace PromptFighters.Battle.Skills
             _fighter.BeginSkillRecovery(totalDuration);
 
             // スキル発動フラッシュ
-            var sr = GetComponent<SpriteRenderer>();
+            var sr = _fighter.VisualRenderer;
             if (sr != null)
             {
                 Color ec = SkillEnumParser.ElementColor(skill.element);

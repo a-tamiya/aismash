@@ -7,6 +7,7 @@ using TMPro;
 using PromptFighters.Battle;
 using PromptFighters.Battle.Skills;
 using PromptFighters.UI;
+using PromptFighters.Utils;
 
 namespace PromptFighters.GameFlow
 {
@@ -18,6 +19,8 @@ namespace PromptFighters.GameFlow
 
         TextMeshProUGUI _p1PresetLabel;
         TextMeshProUGUI _p2PresetLabel;
+        Image _p1PreviewImage;
+        Image _p2PreviewImage;
 
         GameObject _titlePanel;
         GameObject _panel;
@@ -39,6 +42,7 @@ namespace PromptFighters.GameFlow
             BuildTitlePanel();
             BuildPanel();
             UITheme.ApplyAllInScene();
+            RefreshCharacterPreview();
             ShowTitlePanel();
 
             if (BattleManager.Instance != null)
@@ -271,7 +275,7 @@ namespace PromptFighters.GameFlow
             var label = MakeLabel(row.transform, "Preset",
                 isP1 ? GetPresetName(_p1PresetIdx) : GetPresetName(_p2PresetIdx),
                 new Vector2(0f, 0f), new Vector2(250f, 48f), 18, Color.white);
-            label.enableWordWrapping = false;
+            label.textWrappingMode = TextWrappingModes.NoWrap;
             label.overflowMode = TextOverflowModes.Ellipsis;
 
             MakeButton(row.transform, "Right", "▶", new Vector2(160f, 0f), new Vector2(48f, 48f),
@@ -283,10 +287,30 @@ namespace PromptFighters.GameFlow
             if (isP1) _p1PresetLabel = label;
             else       _p2PresetLabel = label;
 
+            var previewFrame = CreateUIObject(isP1 ? "P1PreviewFrame" : "P2PreviewFrame", parent);
+            var pfRt = previewFrame.GetComponent<RectTransform>();
+            pfRt.anchoredPosition = new Vector2(cx, 18f);
+            pfRt.sizeDelta = new Vector2(300f, 300f);
+            AddImage(previewFrame, new Color(0.01f, 0.012f, 0.02f, 0.72f));
+            MakeOutline(previewFrame.transform, "PreviewTop", new Vector2(0f, 148f), new Vector2(300f, 3f), pColor);
+
+            var previewGo = CreateUIObject(isP1 ? "P1PreviewImage" : "P2PreviewImage", previewFrame.transform);
+            var pvRt = previewGo.GetComponent<RectTransform>();
+            pvRt.anchorMin = Vector2.zero;
+            pvRt.anchorMax = Vector2.one;
+            pvRt.offsetMin = new Vector2(18f, 12f);
+            pvRt.offsetMax = new Vector2(-18f, -12f);
+            var preview = previewGo.AddComponent<Image>();
+            preview.preserveAspect = true;
+            preview.raycastTarget = false;
+            preview.color = Color.white;
+            if (isP1) _p1PreviewImage = preview;
+            else _p2PreviewImage = preview;
+
             // キャラ情報エリア
             MakeLabel(parent, isP1 ? "P1InfoTitle" : "P2InfoTitle",
                 "キャラクター",
-                new Vector2(cx, 170f), new Vector2(300f, 30f), 14,
+                new Vector2(cx, 178f), new Vector2(300f, 30f), 14,
                 new Color(0.72f, 0.8f, 1f));
         }
 
@@ -313,6 +337,25 @@ namespace PromptFighters.GameFlow
             if (_presets == null || _presets.Count == 0) return;
             idx = (idx + delta + _presets.Count) % _presets.Count;
             if (label != null) label.text = GetPresetName(idx);
+            RefreshCharacterPreview();
+        }
+
+        void RefreshCharacterPreview()
+        {
+            SetPreview(_p1PreviewImage, _p1PresetIdx);
+            SetPreview(_p2PreviewImage, _p2PresetIdx);
+        }
+
+        void SetPreview(Image image, int idx)
+        {
+            if (image == null || _presets == null || idx < 0 || idx >= _presets.Count) return;
+
+            var data = _presets[idx];
+            if (data.characterSprite == null && !string.IsNullOrEmpty(data.spritePath))
+                data.characterSprite = SpriteLoader.LoadWithWhiteBgRemoved(data.spritePath);
+
+            image.sprite = data.characterSprite;
+            image.enabled = image.sprite != null;
         }
 
         string GetPresetName(int idx)
@@ -396,6 +439,7 @@ namespace PromptFighters.GameFlow
                 visualDescription = src.visualDescription,
                 skills            = src.skills,
                 spritePath        = src.spritePath,
+                characterSprite   = src.characterSprite,
             };
         }
 
