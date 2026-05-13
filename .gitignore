@@ -6,3 +6,5 @@ aismash_unity/.vs/
 *.csproj
 *.slnx
 .claude/
+aismash_unity/Assets/StreamingAssets/config.json
+aismash_unity/Assets/StreamingAssets/config.json.meta

@@ -664,9 +664,36 @@ namespace PromptFighters.GameFlow
                     _p2NameInput?.text, _p2FeatureInput?.text, preset2);
             }
 
+            // 画像生成（visual_prompt が取得できていれば DALL-E へ）
+            UpdateGeneratingStatus("キャラクター画像を生成中...");
+            yield return GenerateImages(_pendingData1, _pendingData2);
+
             _generatingPanel?.SetActive(false);
             _generationCoroutine = null;
             ShowSkillConfirmPanel();
+        }
+
+        IEnumerator GenerateImages(CharacterData data1, CharacterData data2)
+        {
+            bool img1Done = false, img2Done = false;
+
+            if (data1 != null && !string.IsNullOrEmpty(data1.visualPrompt))
+            {
+                AIImageClient.Generate(this, data1.visualPrompt,
+                    sprite => { data1.characterSprite = sprite; img1Done = true; },
+                    err    => { Debug.LogWarning("[AIImage] 1P: " + err); img1Done = true; });
+            }
+            else img1Done = true;
+
+            if (data2 != null && !string.IsNullOrEmpty(data2.visualPrompt))
+            {
+                AIImageClient.Generate(this, data2.visualPrompt,
+                    sprite => { data2.characterSprite = sprite; img2Done = true; },
+                    err    => { Debug.LogWarning("[AIImage] 2P: " + err); img2Done = true; });
+            }
+            else img2Done = true;
+
+            yield return new WaitUntil(() => img1Done && img2Done);
         }
 
         CharacterData GetPreset(bool isP1)
