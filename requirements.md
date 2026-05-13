@@ -603,43 +603,23 @@ AIは、Unityが読み取りやすいJSON形式で出力する。
 
 ### 12.4 AIプロバイダー方針
 
-AIの利用形態は、開発フェーズと本番運用で段階的に切り替える。
+OpenAI APIに統一する。開発・展示ともに同一プロバイダーを使用する。
 
-#### 開発中（ローカルLLM）
-
-| 項目 | 内容 |
-|---|---|
-| 使用モデル | Qwen2.5 VL（予定） |
-| 実行環境 | Ollama（ローカル） |
-| エンドポイント | `http://localhost:11434` |
-| 用途 | キャラクター・技パラメーター生成、試合後コメント生成 |
-| 画像生成 | 開発中はスキップ、またはサンプル画像で代替 |
-
-ローカルLLMを使う理由は、API費用なしに高速な開発サイクルを回せるためである。
-
-#### 本番・展示時（OpenAI API）
+#### OpenAI API（統一）
 
 | 項目 | 内容 |
 |---|---|
-| テキスト生成 | OpenAI Chat Completions API（GPT-4o等） |
-| 画像生成 | OpenAI Image Generation API（DALL·E 3等） |
-| 用途 | キャラクター見た目・技パラメーター生成、画像生成、試合後コメント生成 |
+| テキスト生成 | OpenAI Chat Completions API（`gpt-5.4-nano`） |
+| 画像生成 | OpenAI Image Generation API（`gpt-image-2`） |
+| 用途（テキスト） | キャラクター見た目説明・技パラメーターJSON生成、試合後コメント生成 |
+| 用途（画像） | キャラクター立ち絵生成（`visual_prompt` フィールドを渡す） |
 
-OpenAI API切り替えのポイント：
+#### API利用の設計方針
 
-- テキスト生成（技パラメーター・コメント）はChat Completions APIで行う
-- 画像生成は `visual_prompt` フィールドをそのまま DALL·E に渡す
-- Unity側のAPIクライアントはエンドポイントとモデル名を設定で切り替えられる構造にする
-- APIキーはUnityの `StreamingAssets` 以外の安全な場所、またはビルド時の環境変数で管理する
-
-#### 切り替え方針
-
-```text
-開発中：Ollama（Qwen2.5 VL） → 画像なし or サンプル画像
-展示前：OpenAI API に切り替え → DALL·E で画像生成も有効化
-```
-
-Unityのコード側は、プロバイダーを抽象化したインターフェースを用意し、設定ファイルまたはインスペクターで切り替えできるようにする。
+- テキスト生成（キャラ/技JSON・試合コメント）は `AICharacterClient` が Chat Completions API を呼ぶ
+- 画像生成は `AIImageClient` が Images API を呼び、`visual_prompt` をそのまま渡す
+- APIキーは環境変数 `OPENAI_API_KEY`（優先）または `StreamingAssets/config.json` から読み込む
+- `AICharacterClient.ApiKey` は `AIImageClient.ApiKey` に委譲し、キー管理を一元化する
 
 ---
 

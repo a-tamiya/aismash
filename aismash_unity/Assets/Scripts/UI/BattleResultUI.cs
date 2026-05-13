@@ -158,10 +158,11 @@ namespace PromptFighters.UI
             string prompt = BuildCommentPrompt(log);
             string body   = BuildBody(prompt);
 
-            using var req = new UnityWebRequest(PromptFighters.AI.AICharacterClient.OllamaEndpoint, "POST");
+            using var req = new UnityWebRequest(PromptFighters.AI.AICharacterClient.Endpoint, "POST");
             req.uploadHandler   = new UploadHandlerRaw(System.Text.Encoding.UTF8.GetBytes(body));
             req.downloadHandler = new DownloadHandlerBuffer();
             req.SetRequestHeader("Content-Type", "application/json");
+            req.SetRequestHeader("Authorization", "Bearer " + PromptFighters.AI.AICharacterClient.ApiKey);
             req.timeout = 30;
 
             yield return req.SendWebRequest();
@@ -209,16 +210,18 @@ namespace PromptFighters.UI
             string esc = prompt
                 .Replace("\\", "\\\\").Replace("\"", "\\\"")
                 .Replace("\n", "\\n").Replace("\r", "");
-            return $"{{\"model\":\"{PromptFighters.AI.AICharacterClient.OllamaModel}\",\"messages\":[{{\"role\":\"user\",\"content\":\"{esc}\"}}],\"stream\":false}}";
+            return $"{{\"model\":\"{PromptFighters.AI.AICharacterClient.Model}\",\"messages\":[{{\"role\":\"user\",\"content\":\"{esc}\"}}]}}";
         }
 
-        [System.Serializable] class _Resp { public _Msg message; }
-        [System.Serializable] class _Msg  { public string content; }
+        [System.Serializable] class _Resp   { public _Choice[] choices; }
+        [System.Serializable] class _Choice { public _Msg message; }
+        [System.Serializable] class _Msg    { public string content; }
         static string ParseContent(string raw)
         {
             var r = JsonUtility.FromJson<_Resp>(raw);
-            if (r?.message?.content == null) throw new System.Exception("no content");
-            return r.message.content;
+            if (r?.choices != null && r.choices.Length > 0 && r.choices[0].message?.content != null)
+                return r.choices[0].message.content;
+            throw new System.Exception("no content");
         }
 
         static string FallbackComment(int winner, BattleManager bm)

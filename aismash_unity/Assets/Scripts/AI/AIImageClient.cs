@@ -11,7 +11,7 @@ namespace PromptFighters.AI
     public static class AIImageClient
     {
         const string Endpoint = "https://api.openai.com/v1/images/generations";
-        const string Model    = "dall-e-3";
+        const string Model    = "gpt-image-2";
         const string Size     = "1024x1024";
 
         static string _cachedApiKey;

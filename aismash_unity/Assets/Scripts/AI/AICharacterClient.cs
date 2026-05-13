@@ -8,14 +8,14 @@ using PromptFighters.Battle.Skills.Json;
 
 namespace PromptFighters.AI
 {
-    // Ollama（開発中）またはOpenAI（展示時）にリクエストしてCharacterDataを生成する。
+    // OpenAI Chat Completions API でキャラクターデータ・技JSONを生成する。
     public static class AICharacterClient
     {
-        public static string OllamaEndpoint = "http://localhost:11434/api/chat";
-        public static string OllamaModel    = "qwen2.5vl:7b";
+        public static readonly string Endpoint = "https://api.openai.com/v1/chat/completions";
+        public static readonly string Model    = "gpt-5.4-nano";
 
-        // runner MonoBehaviourのStartCoroutineを使って非同期生成を実行する。
-        // 成功時はonSuccess(CharacterData)、失敗時はonError(エラー文字列)を呼ぶ。
+        public static string ApiKey => AIImageClient.ApiKey;
+
         public static Coroutine Generate(MonoBehaviour runner,
             string characterName, string features,
             Action<CharacterData> onSuccess, Action<string> onError)
@@ -27,13 +27,21 @@ namespace PromptFighters.AI
             string characterName, string features,
             Action<CharacterData> onSuccess, Action<string> onError)
         {
+            string key = ApiKey;
+            if (string.IsNullOrEmpty(key))
+            {
+                onError?.Invoke("OpenAI APIキーが未設定です");
+                yield break;
+            }
+
             string prompt = BuildPrompt(characterName, features);
             string body   = BuildBody(prompt);
 
-            using var req = new UnityWebRequest(OllamaEndpoint, "POST");
+            using var req = new UnityWebRequest(Endpoint, "POST");
             req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
             req.downloadHandler = new DownloadHandlerBuffer();
             req.SetRequestHeader("Content-Type", "application/json");
+            req.SetRequestHeader("Authorization", "Bearer " + key);
             req.timeout = 120;
 
             yield return req.SendWebRequest();
@@ -47,7 +55,7 @@ namespace PromptFighters.AI
 
             try
             {
-                string content = ParseOllamaContent(req.downloadHandler.text);
+                string content = ParseContent(req.downloadHandler.text);
                 string json    = ExtractJsonBlock(content);
                 var data = SkillJsonParser.ParseOrFallback(json, characterName);
                 if (string.IsNullOrEmpty(data.characterName)) data.characterName = characterName;
@@ -61,15 +69,17 @@ namespace PromptFighters.AI
             }
         }
 
-        // Ollama /api/chat レスポンスからcontent文字列を取り出す
-        [Serializable] class OllamaResp { public OllamaMsg message; }
-        [Serializable] class OllamaMsg  { public string content; }
+        // OpenAI Chat Completions レスポンスから content を取り出す
+        [Serializable] class OAIResp   { public OAIChoice[] choices; }
+        [Serializable] class OAIChoice { public OAIMsg message; }
+        [Serializable] class OAIMsg    { public string content; }
 
-        static string ParseOllamaContent(string responseText)
+        public static string ParseContent(string responseText)
         {
-            var resp = JsonUtility.FromJson<OllamaResp>(responseText);
-            if (resp?.message?.content != null) return resp.message.content;
-            throw new Exception("message.contentフィールドが見つかりません");
+            var resp = JsonUtility.FromJson<OAIResp>(responseText);
+            if (resp?.choices != null && resp.choices.Length > 0 && resp.choices[0].message?.content != null)
+                return resp.choices[0].message.content;
+            throw new Exception("choices[0].message.contentが見つかりません");
         }
 
         // LLM出力中の最初の { ... } ブロックを抽出する
@@ -96,18 +106,13 @@ namespace PromptFighters.AI
 
         static string BuildBody(string prompt)
         {
-            // qwen3系はthinkingモードを無効化して高速化 (/no_think)
-            string actualPrompt = OllamaModel.StartsWith("qwen3")
-                ? prompt + "\n/no_think"
-                : prompt;
-
-            string esc = actualPrompt
+            string esc = prompt
                 .Replace("\\", "\\\\")
                 .Replace("\"", "\\\"")
                 .Replace("\n", "\\n")
                 .Replace("\r", "")
                 .Replace("\t", " ");
-            return $"{{\"model\":\"{OllamaModel}\",\"messages\":[{{\"role\":\"user\",\"content\":\"{esc}\"}}],\"stream\":false}}";
+            return $"{{\"model\":\"{Model}\",\"messages\":[{{\"role\":\"user\",\"content\":\"{esc}\"}}]}}";
         }
 
         static string BuildPrompt(string name, string features) =>
