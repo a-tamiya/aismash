@@ -1,9 +1,11 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
 using TMPro;
+using PromptFighters.AI;
 using PromptFighters.Battle;
 using PromptFighters.Battle.Skills;
 using PromptFighters.UI;
@@ -29,6 +31,21 @@ namespace PromptFighters.GameFlow
         GameObject _titlePanel;
         GameObject _panel;
         GameObject _trainingPanel;
+
+        // Phase 4: 生成中・技確認パネル
+        GameObject _generatingPanel;
+        GameObject _skillConfirmPanel;
+        TextMeshProUGUI _generatingStatusText;
+        TextMeshProUGUI[] _confirmP1SkillTexts = new TextMeshProUGUI[4];
+        TextMeshProUGUI[] _confirmP2SkillTexts = new TextMeshProUGUI[4];
+        TextMeshProUGUI _confirmP1Name;
+        TextMeshProUGUI _confirmP2Name;
+        TextMeshProUGUI _confirmP1Desc;
+        TextMeshProUGUI _confirmP2Desc;
+        CharacterData _pendingData1;
+        CharacterData _pendingData2;
+        Coroutine _generationCoroutine;
+
         Image _titleTopGlow;
         Image _titleBottomGlow;
         RectTransform _titleMainRect;
@@ -46,6 +63,8 @@ namespace PromptFighters.GameFlow
             if (_presets.Count < 2) _p2PresetIdx = 0;
             BuildTitlePanel();
             BuildPanel();
+            BuildGeneratingPanel();
+            BuildSkillConfirmPanel();
             UITheme.ApplyAllInScene();
             RefreshCharacterPreview();
             ShowTitlePanel();
@@ -104,6 +123,28 @@ namespace PromptFighters.GameFlow
                 {
                     BattleManager.Instance?.ResetTrainingRound();
                 }
+            }
+
+            if (_generatingPanel != null && _generatingPanel.activeSelf)
+            {
+                var kb = UnityEngine.InputSystem.Keyboard.current;
+                if (kb != null && kb.escapeKey.wasPressedThisFrame)
+                    CancelGeneration();
+                // 生成中でもTキーでトレーニング（仮データで）
+                if (kb != null && kb.tKey.wasPressedThisFrame)
+                {
+                    CancelGeneration();
+                    OnTrainingPressed();
+                }
+            }
+
+            if (_skillConfirmPanel != null && _skillConfirmPanel.activeSelf)
+            {
+                var kb = UnityEngine.InputSystem.Keyboard.current;
+                if (kb != null && kb.spaceKey.wasPressedThisFrame)
+                    OnSkillConfirmBattlePressed();
+                if (kb != null && kb.escapeKey.wasPressedThisFrame)
+                    ShowPanel();
             }
         }
 
@@ -363,6 +404,143 @@ namespace PromptFighters.GameFlow
                 new Vector2(0, 440), new Vector2(900, 52), 14, new Color(0.9f, 0.95f, 1f));
         }
 
+        void BuildGeneratingPanel()
+        {
+            _generatingPanel = CreateUIObject("GeneratingOverlay", transform);
+            StretchFull(_generatingPanel.GetComponent<RectTransform>());
+            _generatingPanel.SetActive(false);
+
+            var bg = _generatingPanel.AddComponent<Image>();
+            bg.color = new Color(0f, 0f, 0f, 0.88f);
+
+            MakeLabel(_generatingPanel.transform, "GenTitle",
+                "AIがキャラクターと技を生成中...",
+                new Vector2(0, 120), new Vector2(700, 56), 30f, new Color(0.5f, 0.9f, 1f));
+
+            _generatingStatusText = MakeLabel(_generatingPanel.transform, "GenStatus",
+                "生成を開始しています...",
+                new Vector2(0, 40), new Vector2(700, 40), 18f, new Color(0.85f, 0.9f, 1f));
+
+            MakeLabel(_generatingPanel.transform, "GenNote",
+                "しばらくお待ちください。Ollama (qwen2.5) を使用しています。",
+                new Vector2(0, -20), new Vector2(700, 32), 14f, new Color(0.65f, 0.75f, 0.9f));
+
+            MakeButton(_generatingPanel.transform, "CancelBtn", "キャンセル（ローカル生成で続行）",
+                new Vector2(0, -100), new Vector2(400, 52), CancelGeneration,
+                new Color(0.25f, 0.15f, 0.15f));
+
+            MakeLabel(_generatingPanel.transform, "TrainHint",
+                "Tキー: トレーニングモードで練習しながら待つ　Esc: キャンセル",
+                new Vector2(0, -165), new Vector2(700, 30), 13f, new Color(0.6f, 0.7f, 0.85f));
+        }
+
+        void BuildSkillConfirmPanel()
+        {
+            _skillConfirmPanel = CreateUIObject("SkillConfirmOverlay", transform);
+            StretchFull(_skillConfirmPanel.GetComponent<RectTransform>());
+            _skillConfirmPanel.SetActive(false);
+
+            var bg = _skillConfirmPanel.AddComponent<Image>();
+            bg.sprite = CreateGradientSprite(
+                new Color(0.02f, 0.02f, 0.06f, 1f), new Color(0.06f, 0f, 0.14f, 1f),
+                new Color(0f, 0.08f, 0.16f, 1f), new Color(0f, 0f, 0.04f, 1f));
+
+            MakeLabel(_skillConfirmPanel.transform, "ConfirmTitle", "キャラクター確認",
+                new Vector2(0, 480), new Vector2(700, 52), 30f, new Color(1f, 0.88f, 0.3f));
+
+            // 中央仕切り
+            MakeOutline(_skillConfirmPanel.transform, "Divider",
+                new Vector2(0, 0), new Vector2(3, 900), new Color(1f, 1f, 1f, 0.1f));
+
+            // 1P 列（左）
+            float lx = -440f;
+            MakeLabel(_skillConfirmPanel.transform, "P1Badge", "1P",
+                new Vector2(lx, 420), new Vector2(100, 52), 36f, new Color(0.4f, 0.75f, 1f))
+                .fontStyle = FontStyles.Bold;
+            MakeOutline(_skillConfirmPanel.transform, "P1Line",
+                new Vector2(lx, 378), new Vector2(300, 2), new Color(0.4f, 0.75f, 1f));
+
+            _confirmP1Name = MakeLabel(_skillConfirmPanel.transform, "P1Name", "---",
+                new Vector2(lx, 340), new Vector2(380, 38), 22f, new Color(1f, 1f, 1f));
+            _confirmP1Name.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
+
+            _confirmP1Desc = MakeLabel(_skillConfirmPanel.transform, "P1Desc", "",
+                new Vector2(lx, 295), new Vector2(380, 38), 13f, new Color(0.82f, 0.88f, 1f));
+            _confirmP1Desc.textWrappingMode = TMPro.TextWrappingModes.Normal;
+
+            string[] slotLabels = { "近距離技", "遠距離技", "特殊技", "必殺技" };
+            float[] skillY      = { 220f, 130f, 40f, -60f };
+
+            for (int i = 0; i < 4; i++)
+            {
+                int idx = i;
+                MakeLabel(_skillConfirmPanel.transform, $"P1SlotLabel{i}", slotLabels[i],
+                    new Vector2(lx - 100f, skillY[i] + 20f), new Vector2(100f, 28f), 12f,
+                    new Color(0.5f, 0.7f, 1f));
+                _confirmP1SkillTexts[i] = MakeLabel(_skillConfirmPanel.transform, $"P1Skill{i}", "---",
+                    new Vector2(lx + 30f, skillY[i]), new Vector2(340f, 54f), 14f, Color.white);
+                _confirmP1SkillTexts[i].alignment = TextAlignmentOptions.TopLeft;
+                _confirmP1SkillTexts[i].textWrappingMode = TMPro.TextWrappingModes.Normal;
+            }
+
+            // 2P 列（右）
+            float rx = 440f;
+            MakeLabel(_skillConfirmPanel.transform, "P2Badge", "2P",
+                new Vector2(rx, 420), new Vector2(100, 52), 36f, new Color(1f, 0.55f, 0.35f))
+                .fontStyle = FontStyles.Bold;
+            MakeOutline(_skillConfirmPanel.transform, "P2Line",
+                new Vector2(rx, 378), new Vector2(300, 2), new Color(1f, 0.55f, 0.35f));
+
+            _confirmP2Name = MakeLabel(_skillConfirmPanel.transform, "P2Name", "---",
+                new Vector2(rx, 340), new Vector2(380, 38), 22f, Color.white);
+            _confirmP2Name.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
+
+            _confirmP2Desc = MakeLabel(_skillConfirmPanel.transform, "P2Desc", "",
+                new Vector2(rx, 295), new Vector2(380, 38), 13f, new Color(1f, 0.88f, 0.82f));
+            _confirmP2Desc.textWrappingMode = TMPro.TextWrappingModes.Normal;
+
+            for (int i = 0; i < 4; i++)
+            {
+                MakeLabel(_skillConfirmPanel.transform, $"P2SlotLabel{i}", slotLabels[i],
+                    new Vector2(rx - 100f, skillY[i] + 20f), new Vector2(100f, 28f), 12f,
+                    new Color(1f, 0.7f, 0.5f));
+                _confirmP2SkillTexts[i] = MakeLabel(_skillConfirmPanel.transform, $"P2Skill{i}", "---",
+                    new Vector2(rx + 30f, skillY[i]), new Vector2(340f, 54f), 14f, Color.white);
+                _confirmP2SkillTexts[i].alignment = TextAlignmentOptions.TopLeft;
+                _confirmP2SkillTexts[i].textWrappingMode = TMPro.TextWrappingModes.Normal;
+            }
+
+            // フッター
+            var battleBtn = MakeButton(_skillConfirmPanel.transform, "BattleBtn", "バトル開始",
+                new Vector2(0, -190), new Vector2(360, 64), OnSkillConfirmBattlePressed,
+                new Color(0.1f, 0.55f, 0.1f, 1f));
+            SetButtonLabelStyle(battleBtn, 26f, FontStyles.Bold, Color.white);
+
+            MakeLabel(_skillConfirmPanel.transform, "BattleHint",
+                "スペースキー: バトル開始　Esc: 戻る",
+                new Vector2(0, -245), new Vector2(600, 28), 13f, new Color(0.72f, 0.8f, 1f));
+        }
+
+        void RefreshSkillConfirmContent()
+        {
+            void FillPlayer(CharacterData d, TextMeshProUGUI nameT, TextMeshProUGUI descT,
+                TextMeshProUGUI[] skillTs)
+            {
+                if (d == null) return;
+                if (nameT != null) nameT.text = d.characterName;
+                if (descT != null) descT.text = d.visualDescription;
+                for (int i = 0; i < 4 && i < skillTs.Length; i++)
+                {
+                    if (skillTs[i] == null) continue;
+                    var s = d.skills[i];
+                    skillTs[i].text = s != null ? $"{s.skill_name}\n{s.description}" : "---";
+                }
+            }
+
+            FillPlayer(_pendingData1, _confirmP1Name, _confirmP1Desc, _confirmP1SkillTexts);
+            FillPlayer(_pendingData2, _confirmP2Name, _confirmP2Desc, _confirmP2SkillTexts);
+        }
+
         void ChangePreset(ref int idx, int delta, TextMeshProUGUI label)
         {
             if (_presets == null || _presets.Count == 0) return;
@@ -392,8 +570,7 @@ namespace PromptFighters.GameFlow
         string GetPresetName(int idx)
         {
             if (_presets == null || idx < 0 || idx >= _presets.Count) return "---";
-            string name = _presets[idx].characterName;
-            return IsAscii(name) ? name : $"Preset {idx + 1}";
+            return _presets[idx].characterName;
         }
 
         void OnStartPressed()
@@ -401,11 +578,106 @@ namespace PromptFighters.GameFlow
             if (BattleManager.Instance == null) return;
             if (_presets == null || _presets.Count == 0) return;
 
+            bool hasP1Input = HasCharacterInput(true);
+            bool hasP2Input = HasCharacterInput(false);
+
+            // テキスト入力があれば AI 生成フローへ
+            if (hasP1Input || hasP2Input)
+            {
+                var preset1 = GetPreset(true);
+                var preset2 = GetPreset(false);
+                _panel.SetActive(false);
+                ShowGeneratingPanel();
+                _generationCoroutine = StartCoroutine(GenerateBothChars(preset1, preset2, hasP1Input, hasP2Input));
+                return;
+            }
+
+            // 入力なし: プリセットで即バトル
             var data1 = BuildCharacterData(true);
             var data2 = BuildCharacterData(false);
-
             _panel.SetActive(false);
             BattleManager.Instance.StartCountdown(data1, data2);
+        }
+
+        void OnSkillConfirmBattlePressed()
+        {
+            if (BattleManager.Instance == null || _pendingData1 == null || _pendingData2 == null) return;
+            _skillConfirmPanel?.SetActive(false);
+            BattleManager.Instance.StartCountdown(_pendingData1, _pendingData2);
+        }
+
+        void CancelGeneration()
+        {
+            if (_generationCoroutine != null)
+            {
+                StopCoroutine(_generationCoroutine);
+                _generationCoroutine = null;
+            }
+            _generatingPanel?.SetActive(false);
+            ShowPanel();
+        }
+
+        IEnumerator GenerateBothChars(CharacterData preset1, CharacterData preset2,
+            bool genP1, bool genP2)
+        {
+            _pendingData1 = null;
+            _pendingData2 = null;
+            string errorMsg = null;
+
+            if (genP1)
+            {
+                UpdateGeneratingStatus("1P キャラクターを生成中...");
+                string name1 = _p1NameInput?.text ?? "";
+                string feat1 = _p1FeatureInput?.text ?? "";
+                bool done = false;
+                AICharacterClient.Generate(this, name1, feat1,
+                    data => { _pendingData1 = data; CharacterSaveManager.Save(data); done = true; },
+                    err  => { errorMsg = err; done = true; });
+                yield return new WaitUntil(() => done);
+            }
+            else _pendingData1 = preset1;
+
+            if (genP2)
+            {
+                UpdateGeneratingStatus("2P キャラクターを生成中...");
+                string name2 = _p2NameInput?.text ?? "";
+                string feat2 = _p2FeatureInput?.text ?? "";
+                bool done = false;
+                AICharacterClient.Generate(this, name2, feat2,
+                    data => { _pendingData2 = data; CharacterSaveManager.Save(data); done = true; },
+                    err  => { if (errorMsg == null) errorMsg = err; done = true; });
+                yield return new WaitUntil(() => done);
+            }
+            else _pendingData2 = preset2;
+
+            // 生成失敗時はローカル生成で代替
+            if (_pendingData1 == null)
+            {
+                UpdateGeneratingStatus("生成に失敗しました。ローカル生成で代替します...");
+                _pendingData1 = PromptCharacterFactory.Create(
+                    _p1NameInput?.text, _p1FeatureInput?.text, preset1);
+                yield return new WaitForSeconds(0.8f);
+            }
+            if (_pendingData2 == null)
+            {
+                _pendingData2 = PromptCharacterFactory.Create(
+                    _p2NameInput?.text, _p2FeatureInput?.text, preset2);
+            }
+
+            _generatingPanel?.SetActive(false);
+            _generationCoroutine = null;
+            ShowSkillConfirmPanel();
+        }
+
+        CharacterData GetPreset(bool isP1)
+        {
+            int idx = isP1 ? _p1PresetIdx : _p2PresetIdx;
+            return _presets != null && idx >= 0 && idx < _presets.Count ? _presets[idx] : null;
+        }
+
+        void UpdateGeneratingStatus(string msg)
+        {
+            if (_generatingStatusText != null) _generatingStatusText.text = msg;
         }
 
         void OnTrainingPressed()
@@ -448,6 +720,20 @@ namespace PromptFighters.GameFlow
             if (_titlePanel != null) _titlePanel.SetActive(false);
             if (_panel != null) _panel.SetActive(true);
             if (_trainingPanel != null) _trainingPanel.SetActive(false);
+            if (_generatingPanel != null) _generatingPanel.SetActive(false);
+            if (_skillConfirmPanel != null) _skillConfirmPanel.SetActive(false);
+        }
+
+        void ShowGeneratingPanel()
+        {
+            if (_generatingPanel != null) _generatingPanel.SetActive(true);
+            if (_generatingStatusText != null) _generatingStatusText.text = "生成を開始しています...";
+        }
+
+        void ShowSkillConfirmPanel()
+        {
+            RefreshSkillConfirmContent();
+            if (_skillConfirmPanel != null) _skillConfirmPanel.SetActive(true);
         }
 
         void AnimateTitle()

@@ -58,6 +58,8 @@ namespace PromptFighters.Battle
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
+            if (GetComponent<BattleLogger>() == null)
+                gameObject.AddComponent<BattleLogger>();
         }
 
         void Start()

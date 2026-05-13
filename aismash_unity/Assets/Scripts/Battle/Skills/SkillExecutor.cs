@@ -68,6 +68,7 @@ namespace PromptFighters.Battle.Skills
             if (_cooldowns[i] > 0f)               return false;
             if (!_fighter.CanAct)                 return false;
 
+            BattleLogger.Instance?.LogSkillUse(_fighter.PlayerIndex, slot, skills[i].skill_name);
             StartCoroutine(ExecuteSkill(skills[i]));
             return true;
         }
@@ -122,7 +123,7 @@ namespace PromptFighters.Battle.Skills
                 case "melee_hitbox":   SpawnMeleeHitbox(skill, a); break;
                 case "projectile":     SpawnProjectile(skill, a);  break;
                 case "dash":           DoDash(a);                  break;
-                case "apply_status":   ApplySelfStatus(a);         break;
+                case "apply_status":   ApplyOpponentStatus(a);     break;
                 case "delay":          /* no-op: time制御で表現 */ break;
                 default:
                     Debug.LogWarning($"[Skill] Unknown action type: {a.type}");
@@ -177,12 +178,14 @@ namespace PromptFighters.Battle.Skills
             _fighter.ApplyImpulse(new Vector2(dirSign * power, 0f));
         }
 
-        void ApplySelfStatus(SkillAction a)
+        // apply_status は相手に状態異常を付与する。近距離内でchance判定あり。
+        void ApplyOpponentStatus(SkillAction a)
         {
-            // 自己バフ用途。MVPでは未使用（必要になれば対応）
+            if (_fighter.Opponent == null) return;
             var st = SkillEnumParser.ParseStatus(a.status);
             if (st == StatusType.None) return;
-            _fighter.ApplyStatus(st, a.duration);
+            if (UnityEngine.Random.value > a.chance) return;
+            _fighter.Opponent.ApplyStatus(st, a.duration);
         }
     }
 }

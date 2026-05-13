@@ -240,6 +240,8 @@ namespace PromptFighters.Battle
                 _stunTimer = Mathf.Min(stunDuration, 1.5f);
 
             OnDamageReceived?.Invoke(actual, blocking);
+            if (!blocking && Opponent != null)
+                BattleLogger.Instance?.LogDamage(Opponent.PlayerIndex, actual);
             DamagePopup.Spawn(transform.position, actual, blocking);
             if (!blocking) _hitFlashTimer = 0.08f;
             if (CurrentHP <= 0f) Die();
