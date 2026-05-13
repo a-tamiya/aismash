@@ -12,7 +12,7 @@ namespace PromptFighters.AI
     public static class AICharacterClient
     {
         public static string OllamaEndpoint = "http://localhost:11434/api/chat";
-        public static string OllamaModel    = "qwen2.5:7b";
+        public static string OllamaModel    = "qwen3-vl:8b";
 
         // runner MonoBehaviourのStartCoroutineを使って非同期生成を実行する。
         // 成功時はonSuccess(CharacterData)、失敗時はonError(エラー文字列)を呼ぶ。
@@ -96,7 +96,12 @@ namespace PromptFighters.AI
 
         static string BuildBody(string prompt)
         {
-            string esc = prompt
+            // qwen3系はthinkingモードを無効化して高速化 (/no_think)
+            string actualPrompt = OllamaModel.StartsWith("qwen3")
+                ? prompt + "\n/no_think"
+                : prompt;
+
+            string esc = actualPrompt
                 .Replace("\\", "\\\\")
                 .Replace("\"", "\\\"")
                 .Replace("\n", "\\n")
