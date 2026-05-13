@@ -167,12 +167,11 @@ namespace PromptFighters.AI
             Action<Sprite, byte[]> onSuccess, Action<string> onError)
         {
             string safePrompt = EscapeForJson(
-                basePrompt + ", standing idle, full body, transparent background, no text, no watermark");
+                basePrompt + ", standing idle, full body, pure white background, no text, no watermark, no shadow");
             string body =
                 $"{{\"model\":\"{Model}\"," +
                 $"\"prompt\":\"{safePrompt}\"," +
-                $"\"n\":1,\"size\":\"{Size}\",\"quality\":\"{Quality}\"," +
-                $"\"background\":\"transparent\"}}";
+                $"\"n\":1,\"size\":\"{Size}\",\"quality\":\"{Quality}\"}}";
 
             using var req = new UnityWebRequest(GenerationsEndpoint, "POST");
             req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
@@ -252,13 +251,12 @@ namespace PromptFighters.AI
         {
             var form = new List<IMultipartFormSection>
             {
-                new MultipartFormDataSection("model",      Model),
-                new MultipartFormDataSection("prompt",     prompt),
-                new MultipartFormDataSection("size",       Size),
-                new MultipartFormDataSection("quality",    Quality),
-                new MultipartFormDataSection("n",          "1"),
-                new MultipartFormDataSection("background", "transparent"),
-                new MultipartFormFileSection("image[]",    basePngBytes, "reference.png", "image/png"),
+                new MultipartFormDataSection("model",   Model),
+                new MultipartFormDataSection("prompt",  prompt),
+                new MultipartFormDataSection("size",    Size),
+                new MultipartFormDataSection("quality", Quality),
+                new MultipartFormDataSection("n",       "1"),
+                new MultipartFormFileSection("image[]", basePngBytes, "reference.png", "image/png"),
             };
 
             using var req = UnityWebRequest.Post(EditsEndpoint, form);
@@ -296,18 +294,22 @@ namespace PromptFighters.AI
             }
         }
 
-        // バイト列 → Sprite（APIがtransparent背景を返すのでWhiteBackgroundRemover不要）
+        // バイト列 → WhiteBackgroundRemover適用 → Sprite
+        // threshold=0.94: 純白に近い画素のみ除去。キャラの肌・明るい服は保護される。
         static Sprite RawBytesToSprite(byte[] rawBytes)
         {
-            var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-            if (!ImageConversion.LoadImage(tex, rawBytes))
+            var raw = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            if (!ImageConversion.LoadImage(raw, rawBytes))
                 throw new Exception("Texture2D.LoadImage failed");
 
+            var processed = WhiteBackgroundRemover.Apply(raw, threshold: 0.94f, fadeRange: 0.04f);
+            UnityEngine.Object.Destroy(raw);
+
             return Sprite.Create(
-                tex,
-                new Rect(0, 0, tex.width, tex.height),
+                processed,
+                new Rect(0, 0, processed.width, processed.height),
                 new Vector2(0.5f, 0f),
-                tex.height / 2f);
+                processed.height / 2f);
         }
 
         // 透過済み Sprite を PNG としてディスクに保存する

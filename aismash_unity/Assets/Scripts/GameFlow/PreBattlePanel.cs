@@ -16,11 +16,14 @@ namespace PromptFighters.GameFlow
     public class PreBattlePanel : MonoBehaviour
     {
         List<CharacterData> _presets;
+        int _builtInPresetCount = 0; // プリセット（初期キャラ）の件数。以降が生成済みキャラ。
         int _p1PresetIdx = 0;
         int _p2PresetIdx = 1;
 
         TextMeshProUGUI _p1PresetLabel;
         TextMeshProUGUI _p2PresetLabel;
+        TextMeshProUGUI _p1CategoryLabel;
+        TextMeshProUGUI _p2CategoryLabel;
         Image _p1PreviewImage;
         Image _p2PreviewImage;
         TMP_InputField _p1NameInput;
@@ -59,10 +62,11 @@ namespace PromptFighters.GameFlow
 
         void Start()
         {
-            // プリセット + 保存済みキャラを合わせてリストを構築（保存済みは初期キャラとして再利用可能）
-            _presets = new List<CharacterData>(PresetCharacterLoader.LoadAll());
-            var saved = CharacterSaveManager.LoadAll();
-            _presets.AddRange(saved);
+            // プリセット + 保存済みキャラを合わせてリストを構築
+            var builtIn = PresetCharacterLoader.LoadAll();
+            _builtInPresetCount = builtIn.Count;
+            _presets = new List<CharacterData>(builtIn);
+            _presets.AddRange(CharacterSaveManager.LoadAll());
             if (_presets.Count < 2) _p2PresetIdx = 0;
             BuildTitlePanel();
             BuildPanel();
@@ -70,6 +74,7 @@ namespace PromptFighters.GameFlow
             BuildSkillConfirmPanel();
             UITheme.ApplyAllInScene();
             RefreshCharacterPreview();
+            UpdateCategoryLabels();
             ShowTitlePanel();
 
             if (BattleManager.Instance != null)
@@ -346,6 +351,14 @@ namespace PromptFighters.GameFlow
             if (isP1) _p1PresetLabel = label;
             else       _p2PresetLabel = label;
 
+            // カテゴリラベル（初期キャラ / 生成済み）
+            var catLabel = MakeLabel(row.transform, "Category", "初期キャラ",
+                new Vector2(0f, -26f), new Vector2(250f, 22f), 12f,
+                new Color(0.65f, 0.75f, 0.9f));
+            catLabel.textWrappingMode = TextWrappingModes.NoWrap;
+            if (isP1) _p1CategoryLabel = catLabel;
+            else       _p2CategoryLabel = catLabel;
+
             var previewFrame = CreateUIObject(isP1 ? "P1PreviewFrame" : "P2PreviewFrame", parent);
             var pfRt = previewFrame.GetComponent<RectTransform>();
             pfRt.anchoredPosition = new Vector2(cx, 18f);
@@ -549,6 +562,7 @@ namespace PromptFighters.GameFlow
             if (_presets == null || _presets.Count == 0) return;
             idx = (idx + delta + _presets.Count) % _presets.Count;
             if (label != null) label.text = GetPresetName(idx);
+            UpdateCategoryLabels();
             RefreshCharacterPreview();
         }
 
@@ -786,12 +800,13 @@ namespace PromptFighters.GameFlow
             string p1Name = GetPresetName(_p1PresetIdx);
             string p2Name = GetPresetName(_p2PresetIdx);
 
-            _presets = new List<CharacterData>(PresetCharacterLoader.LoadAll());
+            var builtIn = PresetCharacterLoader.LoadAll();
+            _builtInPresetCount = builtIn.Count;
+            _presets = new List<CharacterData>(builtIn);
             _presets.AddRange(CharacterSaveManager.LoadAll());
 
             int maxIdx = Mathf.Max(0, _presets.Count - 1);
 
-            // 直前に選択していたキャラ名で再選択（保存済みキャラが増えてもインデックスがずれない）
             int f1 = p1Name != "---" ? _presets.FindIndex(c => c.characterName == p1Name) : -1;
             _p1PresetIdx = f1 >= 0 ? f1 : Mathf.Clamp(_p1PresetIdx, 0, maxIdx);
 
@@ -800,7 +815,28 @@ namespace PromptFighters.GameFlow
 
             if (_p1PresetLabel != null) _p1PresetLabel.text = GetPresetName(_p1PresetIdx);
             if (_p2PresetLabel != null) _p2PresetLabel.text = GetPresetName(_p2PresetIdx);
+            UpdateCategoryLabels();
             RefreshCharacterPreview();
+        }
+
+        void UpdateCategoryLabels()
+        {
+            if (_p1CategoryLabel != null)
+            {
+                bool isGenerated1 = _p1PresetIdx >= _builtInPresetCount;
+                _p1CategoryLabel.text  = isGenerated1 ? "生成済み" : "初期キャラ";
+                _p1CategoryLabel.color = isGenerated1
+                    ? new Color(1f, 0.85f, 0.2f)       // 金色：生成済み
+                    : new Color(0.65f, 0.75f, 0.9f);    // 薄青：初期キャラ
+            }
+            if (_p2CategoryLabel != null)
+            {
+                bool isGenerated2 = _p2PresetIdx >= _builtInPresetCount;
+                _p2CategoryLabel.text  = isGenerated2 ? "生成済み" : "初期キャラ";
+                _p2CategoryLabel.color = isGenerated2
+                    ? new Color(1f, 0.85f, 0.2f)
+                    : new Color(0.65f, 0.75f, 0.9f);
+            }
         }
 
         void ShowTrainingPanel()
