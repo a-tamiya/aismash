@@ -7,12 +7,12 @@ using PromptFighters.Battle.Skills;
 
 namespace PromptFighters.AI
 {
-    // OpenAI DALL-E 3 でキャラクター画像を生成する。
+    // OpenAI Images API でキャラクター画像を生成する。
     // visual_prompt を受け取り、Sprite を返す。
     public static class AIImageClient
     {
         const string Endpoint = "https://api.openai.com/v1/images/generations";
-        const string Model    = "gpt-image-2";
+        const string Model    = "gpt-image-1";
         const string Size     = "1024x1024";
 
         static string _cachedApiKey;
@@ -31,7 +31,7 @@ namespace PromptFighters.AI
         static string LoadApiKey()
         {
             // 優先順位: 環境変数 → config.json
-            string fromEnv = System.Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+            string fromEnv = System.Environment.GetEnvironmentVariable("OPENAI_API_KEY")?.Trim();
             if (!string.IsNullOrEmpty(fromEnv)) return fromEnv;
 
             string path = System.IO.Path.Combine(Application.streamingAssetsPath, "config.json");
@@ -40,7 +40,7 @@ namespace PromptFighters.AI
             {
                 string json = System.IO.File.ReadAllText(path);
                 var cfg = JsonUtility.FromJson<Config>(json);
-                return cfg?.openai_api_key ?? "";
+                return cfg?.openai_api_key?.Trim() ?? "";
             }
             catch (Exception e)
             {
@@ -50,6 +50,23 @@ namespace PromptFighters.AI
         }
 
         [Serializable] class Config { public string openai_api_key; }
+
+        public static bool HasConfiguredApiKey(out string error)
+        {
+            error = null;
+            if (IsConfiguredApiKey(ApiKey)) return true;
+            error = "OpenAI APIキーが未設定です。環境変数 OPENAI_API_KEY または StreamingAssets/config.json の openai_api_key に実キーを設定してください。";
+            return false;
+        }
+
+        public static bool IsConfiguredApiKey(string key)
+        {
+            if (string.IsNullOrWhiteSpace(key)) return false;
+            string trimmed = key.Trim();
+            if (trimmed == "YOUR_API_KEY_HERE") return false;
+            if (trimmed.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase)) return false;
+            return true;
+        }
 
         static readonly (CharacterSpriteId id, string prompt)[] SpritePrompts =
         {
@@ -92,6 +109,12 @@ namespace PromptFighters.AI
             Action<CharacterSpriteSet> onSuccess,
             Action<string> onError)
         {
+            if (!HasConfiguredApiKey(out string keyError))
+            {
+                onError?.Invoke(keyError);
+                yield break;
+            }
+
             var set = new CharacterSpriteSet();
             string firstError = null;
 
@@ -148,9 +171,9 @@ namespace PromptFighters.AI
             Action<Sprite> onSuccess, Action<string> onError)
         {
             string key = ApiKey;
-            if (string.IsNullOrEmpty(key) || key == "YOUR_API_KEY_HERE")
+            if (!IsConfiguredApiKey(key))
             {
-                onError?.Invoke("OpenAI APIキーが未設定です (StreamingAssets/config.json)");
+                onError?.Invoke("OpenAI APIキーが未設定です。環境変数 OPENAI_API_KEY または StreamingAssets/config.json を確認してください。");
                 yield break;
             }
 
@@ -171,8 +194,9 @@ namespace PromptFighters.AI
 
             if (req.result != UnityWebRequest.Result.Success)
             {
-                Debug.LogWarning($"[AIImage] 生成エラー: {req.error}\n{req.downloadHandler.text}");
-                onError?.Invoke(req.error);
+                string responseText = req.downloadHandler?.text;
+                Debug.LogWarning($"[AIImage] 生成エラー: {req.error}\n{responseText}");
+                onError?.Invoke($"{req.error}: {responseText}");
                 yield break;
             }
 

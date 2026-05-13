@@ -28,9 +28,9 @@ namespace PromptFighters.AI
             Action<CharacterData> onSuccess, Action<string> onError)
         {
             string key = ApiKey;
-            if (string.IsNullOrEmpty(key))
+            if (!AIImageClient.IsConfiguredApiKey(key))
             {
-                onError?.Invoke("OpenAI APIキーが未設定です");
+                onError?.Invoke("OpenAI APIキーが未設定です。環境変数 OPENAI_API_KEY または StreamingAssets/config.json を確認してください。");
                 yield break;
             }
 
@@ -48,8 +48,9 @@ namespace PromptFighters.AI
 
             if (req.result != UnityWebRequest.Result.Success)
             {
-                Debug.LogWarning($"[AI] 通信エラー: {req.error}");
-                onError?.Invoke(req.error);
+                string responseText = req.downloadHandler?.text;
+                Debug.LogWarning($"[AI] 通信エラー: {req.error}\n{responseText}");
+                onError?.Invoke($"{req.error}: {responseText}");
                 yield break;
             }
 
