@@ -70,7 +70,12 @@ namespace PromptFighters.Battle.Skills
             _hitTargets.Add(target);
             ApplyHit(target);
             _hitsLanded++;
-            if (_hitsLanded >= MaxHits) Destroy(gameObject);
+            if (_hitsLanded >= MaxHits)
+            {
+                // コライダーを無効化してビジュアルは lifetime まで表示し続ける
+                var col = GetComponent<Collider2D>();
+                if (col != null) col.enabled = false;
+            }
         }
 
         void ApplyHit(Fighter target)

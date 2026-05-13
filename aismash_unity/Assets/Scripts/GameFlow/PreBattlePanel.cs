@@ -636,7 +636,15 @@ namespace PromptFighters.GameFlow
                 string feat1 = _p1FeatureInput?.text ?? "";
                 bool done = false;
                 AICharacterClient.Generate(this, name1, feat1,
-                    data => { _pendingData1 = data; CharacterSaveManager.Save(data); done = true; },
+                    data =>
+                    {
+                        _pendingData1 = data;
+                        CharacterSaveManager.Save(data);
+                        // 即座にプリセットリストへ追加し選択状態にする
+                        if (!_presets.Contains(data)) _presets.Add(data);
+                        _p1PresetIdx = _presets.Count - 1;
+                        done = true;
+                    },
                     err  => { errorMsg = err; done = true; });
                 yield return new WaitUntil(() => done);
             }
@@ -649,7 +657,14 @@ namespace PromptFighters.GameFlow
                 string feat2 = _p2FeatureInput?.text ?? "";
                 bool done = false;
                 AICharacterClient.Generate(this, name2, feat2,
-                    data => { _pendingData2 = data; CharacterSaveManager.Save(data); done = true; },
+                    data =>
+                    {
+                        _pendingData2 = data;
+                        CharacterSaveManager.Save(data);
+                        if (!_presets.Contains(data)) _presets.Add(data);
+                        _p2PresetIdx = _presets.Count - 1;
+                        done = true;
+                    },
                     err  => { if (errorMsg == null) errorMsg = err; done = true; });
                 yield return new WaitUntil(() => done);
             }
@@ -758,10 +773,34 @@ namespace PromptFighters.GameFlow
 
         void ShowPanel()
         {
+            RefreshPresets();
             if (_trainingPanel != null) _trainingPanel.SetActive(false);
             if (_panel != null) _panel.SetActive(true);
             if (_titlePanel != null) _titlePanel.SetActive(false);
             _waitForMenuInputRelease = true;
+        }
+
+        // バトルから戻るたびにプリセットを再読み込みし、直前生成キャラを自動選択する
+        void RefreshPresets()
+        {
+            string p1Name = GetPresetName(_p1PresetIdx);
+            string p2Name = GetPresetName(_p2PresetIdx);
+
+            _presets = new List<CharacterData>(PresetCharacterLoader.LoadAll());
+            _presets.AddRange(CharacterSaveManager.LoadAll());
+
+            int maxIdx = Mathf.Max(0, _presets.Count - 1);
+
+            // 直前に選択していたキャラ名で再選択（保存済みキャラが増えてもインデックスがずれない）
+            int f1 = p1Name != "---" ? _presets.FindIndex(c => c.characterName == p1Name) : -1;
+            _p1PresetIdx = f1 >= 0 ? f1 : Mathf.Clamp(_p1PresetIdx, 0, maxIdx);
+
+            int f2 = p2Name != "---" ? _presets.FindIndex(c => c.characterName == p2Name) : -1;
+            _p2PresetIdx = f2 >= 0 ? f2 : Mathf.Clamp(_p2PresetIdx, 0, maxIdx);
+
+            if (_p1PresetLabel != null) _p1PresetLabel.text = GetPresetName(_p1PresetIdx);
+            if (_p2PresetLabel != null) _p2PresetLabel.text = GetPresetName(_p2PresetIdx);
+            RefreshCharacterPreview();
         }
 
         void ShowTrainingPanel()

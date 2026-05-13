@@ -8,8 +8,9 @@ namespace PromptFighters.Battle.Skills
     {
         // 技枠ごとの上限
         static readonly float[] MaxDamage     = { 14f, 14f, 12f, 30f }; // attack_a/b/c/smash_side
-        static readonly float[] MinRecovery   = {0.3f, 0.5f, 1.0f, 3.0f };
-        static readonly float[] MaxRecovery   = {0.8f, 1.2f, 2.5f, 6.0f };
+        static readonly float[] MaxStartup    = { 0.15f, 0.20f, 0.20f, 0.35f };
+        static readonly float[] MinRecovery   = { 0.3f, 0.5f, 1.0f, 1.5f };
+        static readonly float[] MaxRecovery   = { 0.8f, 1.2f, 2.5f, 3.0f };
         static readonly float[] MaxRange      = { 2.5f, 16f, 2.5f, 3.0f };
         static readonly float[] MinKnockback  = { 0f,   0f,  0f,   4f };  // 横スマッシュは最低限吹き飛ぶ
 
@@ -49,8 +50,8 @@ namespace PromptFighters.Battle.Skills
             // ヒット数（上限を超えないよう）
             p.hit_count = Mathf.Clamp(p.hit_count, 1, 10);
 
-            // startupは0以上
-            p.startup     = Mathf.Max(0f, p.startup);
+            // startup: 0以上、スロットごとの上限を適用（極端に遅くならないよう）
+            p.startup     = Mathf.Clamp(p.startup, 0f, MaxStartup[si]);
             p.active_time = Mathf.Max(0.05f, p.active_time);
             p.recovery    = Mathf.Max(MinRecovery[si], p.recovery);
 
