@@ -29,12 +29,12 @@ namespace PromptFighters.AI
 
         static string LoadApiKey()
         {
+            // 優先順位: 環境変数 → config.json
+            string fromEnv = System.Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+            if (!string.IsNullOrEmpty(fromEnv)) return fromEnv;
+
             string path = System.IO.Path.Combine(Application.streamingAssetsPath, "config.json");
-            if (!System.IO.File.Exists(path))
-            {
-                Debug.LogWarning("[AIImage] config.json が見つかりません: " + path);
-                return "";
-            }
+            if (!System.IO.File.Exists(path)) return "";
             try
             {
                 string json = System.IO.File.ReadAllText(path);
