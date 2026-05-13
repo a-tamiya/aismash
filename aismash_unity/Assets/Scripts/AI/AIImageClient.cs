@@ -63,23 +63,27 @@ namespace PromptFighters.AI
             return true;
         }
 
+        // 全スプライト共通の制約サフィックス
+        const string CharSuffix   = "facing right, single character only, one character, complete full body from head to toe not cropped, pure white background, no text, no watermark, no shadow, no duplicate";
+        const string EffectSuffix = "2D game visual effect only, no character figure, no text, pure white background, bright energetic colors, centered in frame";
+
         // (id, filename, editPrompt) — ベース画像を参照して生成する14枚のバリエーション
         static readonly (CharacterSpriteId id, string filename, string prompt)[] EditEntries =
         {
-            (CharacterSpriteId.Idle2,      "idle2",       "slightly different weight shift idle pose, same character, white background, full body"),
-            (CharacterSpriteId.Idle3,      "idle3",       "lively idle pose with slight arm movement, same character, white background, full body"),
-            (CharacterSpriteId.Jump,       "jump",        "jumping airborne pose feet off ground, same character, white background, full body"),
-            (CharacterSpriteId.Damage,     "damage",      "hurt recoil reaction flinching backward, same character, white background, full body"),
-            (CharacterSpriteId.Grab,       "grab",        "grabbing grappling reach-out pose, same character, white background, full body"),
-            (CharacterSpriteId.Dash,       "dash",        "fast dashing running sprint pose, same character, white background, full body"),
-            (CharacterSpriteId.AttackA,    "attack_a",    "basic attack A swing strike action pose, same character, white background, full body"),
-            (CharacterSpriteId.AttackB,    "attack_b",    "basic attack B projectile launch action pose, same character, white background, full body"),
-            (CharacterSpriteId.AttackC,    "attack_c",    "basic attack C special technique action pose, same character, white background, full body"),
-            (CharacterSpriteId.SmashSide,  "smash_side",  "powerful side smash charging heavy attack pose, same character, white background, full body"),
-            (CharacterSpriteId.EffectA,    "effect_a",    "2D game attack visual effect only, no character, no text, white background, bright energetic colors"),
-            (CharacterSpriteId.EffectB,    "effect_b",    "2D game projectile visual effect only, no character, no text, white background, bright energetic colors"),
-            (CharacterSpriteId.EffectC,    "effect_c",    "2D game special attack visual effect only, no character, no text, white background, bright energetic colors"),
-            (CharacterSpriteId.EffectSmash,"effect_smash","2D game large powerful smash effect only, no character, no text, white background, bright energetic colors"),
+            (CharacterSpriteId.Idle2,      "idle2",       $"slightly different weight shift idle pose, same character, {CharSuffix}"),
+            (CharacterSpriteId.Idle3,      "idle3",       $"lively idle pose with slight arm movement, same character, {CharSuffix}"),
+            (CharacterSpriteId.Jump,       "jump",        $"jumping airborne pose feet off ground, same character, {CharSuffix}"),
+            (CharacterSpriteId.Damage,     "damage",      $"hurt recoil reaction flinching backward, same character, {CharSuffix}"),
+            (CharacterSpriteId.Grab,       "grab",        $"grabbing grappling reach-out pose arms extended forward right, same character, {CharSuffix}"),
+            (CharacterSpriteId.Dash,       "dash",        $"fast dashing sprint pose leaning forward to the right, same character, {CharSuffix}"),
+            (CharacterSpriteId.AttackA,    "attack_a",    $"attack A punching or slashing to the right, same character, {CharSuffix}"),
+            (CharacterSpriteId.AttackB,    "attack_b",    $"attack B projectile launch aiming to the right, same character, {CharSuffix}"),
+            (CharacterSpriteId.AttackC,    "attack_c",    $"attack C special technique toward the right, same character, {CharSuffix}"),
+            (CharacterSpriteId.SmashSide,  "smash_side",  $"powerful side smash heavy swing to the right, same character, {CharSuffix}"),
+            (CharacterSpriteId.EffectA,    "effect_a",    $"attack A visual effect, {EffectSuffix}"),
+            (CharacterSpriteId.EffectB,    "effect_b",    $"projectile visual effect, {EffectSuffix}"),
+            (CharacterSpriteId.EffectC,    "effect_c",    $"special attack visual effect, {EffectSuffix}"),
+            (CharacterSpriteId.EffectSmash,"effect_smash",$"large powerful smash effect, {EffectSuffix}"),
         };
 
         // saveDir: PNG保存先ディレクトリ（null なら保存しない）
@@ -139,6 +143,7 @@ namespace PromptFighters.AI
 
             foreach (var (id, filename, editPrompt) in EditEntries)
             {
+                // baseVisualPrompt（外見説明）+ ポーズ指示（CharSuffixを既に含む）
                 string fullPrompt = baseVisualPrompt + ", " + editPrompt;
                 runner.StartCoroutine(GenerateEditCoroutine(
                     id, filename, fullPrompt, baseRawBytes, key, saveDir,
@@ -167,7 +172,7 @@ namespace PromptFighters.AI
             Action<Sprite, byte[]> onSuccess, Action<string> onError)
         {
             string safePrompt = EscapeForJson(
-                basePrompt + ", standing idle, full body, pure white background, no text, no watermark, no shadow");
+                basePrompt + $", standing idle, {CharSuffix}");
             string body =
                 $"{{\"model\":\"{Model}\"," +
                 $"\"prompt\":\"{safePrompt}\"," +
