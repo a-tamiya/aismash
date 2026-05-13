@@ -11,8 +11,8 @@ namespace PromptFighters.Utils
         // threshold : この値以上の min(R,G,B) を「白とみなせる」上限 (0-1)
         // fadeRange : エッジをグラデーションで馴染ませる幅
         public static Texture2D Apply(Texture2D src,
-                                      float threshold = 0.94f,
-                                      float fadeRange = 0.04f)
+                                      float threshold = 0.97f,
+                                      float fadeRange = 0.02f)
         {
             int w = src.width;
             int h = src.height;

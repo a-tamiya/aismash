@@ -8,9 +8,9 @@ namespace PromptFighters.Battle.Skills
     {
         // 技枠ごとの上限
         static readonly float[] MaxDamage     = { 14f, 14f, 12f, 30f }; // attack_a/b/c/smash_side
-        static readonly float[] MaxStartup    = { 0.15f, 0.20f, 0.20f, 0.35f };
-        static readonly float[] MinRecovery   = { 0.3f, 0.5f, 1.0f, 1.5f };
-        static readonly float[] MaxRecovery   = { 0.8f, 1.2f, 2.5f, 3.0f };
+        static readonly float[] MaxStartup    = { 0.06f, 0.10f, 0.10f, 0.18f };
+        static readonly float[] MinRecovery   = { 0.10f, 0.18f, 0.30f, 0.45f };
+        static readonly float[] MaxRecovery   = { 0.30f, 0.50f, 0.80f, 1.20f };
         static readonly float[] MaxRange      = { 2.5f, 16f, 2.5f, 3.0f };
         static readonly float[] MinKnockback  = { 0f,   0f,  0f,   4f };  // 横スマッシュは最低限吹き飛ぶ
 

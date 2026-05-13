@@ -64,7 +64,7 @@ namespace PromptFighters.AI
         }
 
         // 全スプライト共通の制約サフィックス
-        const string CharSuffix   = "facing right, single character only, one character, complete full body from head to toe not cropped, pure white background, no text, no watermark, no shadow, no duplicate";
+        const string CharSuffix   = "facing right, single character only, one character, complete full body from head to toe not cropped, pure white background, no text, no watermark, no shadow, no duplicate. Anime-style character with sharp, bold lines. Highly saturated and energetic color palette.";
         const string EffectSuffix = "2D game visual effect only, no character figure, no text, pure white background, bright energetic colors, centered in frame";
 
         // (id, filename, editPrompt) — ベース画像を参照して生成する14枚のバリエーション
@@ -307,7 +307,7 @@ namespace PromptFighters.AI
             if (!ImageConversion.LoadImage(raw, rawBytes))
                 throw new Exception("Texture2D.LoadImage failed");
 
-            var processed = WhiteBackgroundRemover.Apply(raw, threshold: 0.94f, fadeRange: 0.04f);
+            var processed = WhiteBackgroundRemover.Apply(raw, threshold: 0.97f, fadeRange: 0.02f);
             UnityEngine.Object.Destroy(raw);
 
             return Sprite.Create(

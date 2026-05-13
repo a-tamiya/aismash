@@ -16,15 +16,15 @@ namespace PromptFighters.Battle.Skills
             risk_level  = RiskLevel.Low,
             parameters  = new SkillParameters
             {
-                damage = 4, range = 1.3f, startup = 0.1f, active_time = 0.2f,
-                recovery = 0.5f, hit_count = 3,
-                knockback = 3f, stun_time = 0.15f, guard_damage = 2f,
+                damage = 4, range = 1.3f, startup = 0.04f, active_time = 0.1f,
+                recovery = 0.15f, hit_count = 3,
+                knockback = 3f, stun_time = 0.1f, guard_damage = 2f,
             },
             actions = new List<SkillAction>
             {
-                new SkillAction { type = "melee_hitbox", time = 0.1f, hit_count = 1 },
-                new SkillAction { type = "melee_hitbox", time = 0.2f, hit_count = 1 },
-                new SkillAction { type = "melee_hitbox", time = 0.3f, hit_count = 1 },
+                new SkillAction { type = "melee_hitbox", time = 0.04f, hit_count = 1 },
+                new SkillAction { type = "melee_hitbox", time = 0.08f, hit_count = 1 },
+                new SkillAction { type = "melee_hitbox", time = 0.12f, hit_count = 1 },
             },
         };
 
@@ -37,15 +37,15 @@ namespace PromptFighters.Battle.Skills
             risk_level  = RiskLevel.Medium,
             parameters  = new SkillParameters
             {
-                damage = 10, range = 12f, startup = 0.2f, active_time = 0.1f,
-                recovery = 0.8f, hit_count = 1,
-                knockback = 5f, stun_time = 0.2f, guard_damage = 3f,
+                damage = 10, range = 12f, startup = 0.08f, active_time = 0.1f,
+                recovery = 0.25f, hit_count = 1,
+                knockback = 5f, stun_time = 0.15f, guard_damage = 3f,
             },
             actions = new List<SkillAction>
             {
                 new SkillAction
                 {
-                    type = "projectile", time = 0.2f,
+                    type = "projectile", time = 0.08f,
                     projectile_speed = 10f, projectile_lifetime = 1.5f,
                     status = "burn", duration = 2f, chance = 0.5f,
                 },
@@ -61,17 +61,17 @@ namespace PromptFighters.Battle.Skills
             risk_level  = RiskLevel.Medium,
             parameters  = new SkillParameters
             {
-                damage = 8, range = 1.5f, startup = 0.15f, active_time = 0.15f,
-                recovery = 1.5f, hit_count = 1,
-                knockback = 4f, stun_time = 0.6f, guard_damage = 2f,
+                damage = 8, range = 1.5f, startup = 0.06f, active_time = 0.12f,
+                recovery = 0.45f, hit_count = 1,
+                knockback = 4f, stun_time = 0.4f, guard_damage = 2f,
             },
             actions = new List<SkillAction>
             {
                 new SkillAction { type = "dash", time = 0f, power = 8f, direction = "forward" },
                 new SkillAction
                 {
-                    type = "melee_hitbox", time = 0.15f, range = 1.5f, hit_count = 1,
-                    status = "stun", duration = 0.6f, chance = 1f,
+                    type = "melee_hitbox", time = 0.06f, range = 1.5f, hit_count = 1,
+                    status = "stun", duration = 0.4f, chance = 1f,
                 },
             },
         };
@@ -85,14 +85,14 @@ namespace PromptFighters.Battle.Skills
             risk_level  = RiskLevel.High,
             parameters  = new SkillParameters
             {
-                damage = 24, range = 2f, startup = 0.4f, active_time = 0.2f,
-                recovery = 4.5f, hit_count = 1,
-                knockback = 10f, stun_time = 0.4f, guard_damage = 8f,
+                damage = 24, range = 2f, startup = 0.15f, active_time = 0.15f,
+                recovery = 1.0f, hit_count = 1,
+                knockback = 10f, stun_time = 0.3f, guard_damage = 8f,
             },
             actions = new List<SkillAction>
             {
-                new SkillAction { type = "dash", time = 0.1f, power = 4f, direction = "forward" },
-                new SkillAction { type = "melee_hitbox", time = 0.4f, range = 2f, hit_count = 1 },
+                new SkillAction { type = "dash", time = 0.05f, power = 4f, direction = "forward" },
+                new SkillAction { type = "melee_hitbox", time = 0.15f, range = 2f, hit_count = 1 },
             },
         };
 
