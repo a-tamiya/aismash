@@ -21,6 +21,10 @@ namespace PromptFighters.GameFlow
         TextMeshProUGUI _p2PresetLabel;
         Image _p1PreviewImage;
         Image _p2PreviewImage;
+        TMP_InputField _p1NameInput;
+        TMP_InputField _p1FeatureInput;
+        TMP_InputField _p2NameInput;
+        TMP_InputField _p2FeatureInput;
 
         GameObject _titlePanel;
         GameObject _panel;
@@ -76,6 +80,8 @@ namespace PromptFighters.GameFlow
                         _waitForMenuInputRelease = false;
                     return;
                 }
+
+                if (IsEditingText()) return;
 
                 if (kb != null && kb.spaceKey.wasPressedThisFrame)
                 {
@@ -321,6 +327,22 @@ namespace PromptFighters.GameFlow
                 "キャラクター",
                 new Vector2(cx, 178f), new Vector2(300f, 30f), 14,
                 new Color(0.72f, 0.8f, 1f));
+
+            var nameInput = MakeInputField(parent, isP1 ? "P1NameInput" : "P2NameInput",
+                "キャラクター名", new Vector2(cx, -168f), new Vector2(360f, 44f), false);
+            var featureInput = MakeInputField(parent, isP1 ? "P1FeatureInput" : "P2FeatureInput",
+                "特徴を入力", new Vector2(cx, -246f), new Vector2(360f, 96f), true);
+
+            if (isP1)
+            {
+                _p1NameInput = nameInput;
+                _p1FeatureInput = featureInput;
+            }
+            else
+            {
+                _p2NameInput = nameInput;
+                _p2FeatureInput = featureInput;
+            }
         }
 
         void BuildTrainingPanel()
@@ -379,8 +401,8 @@ namespace PromptFighters.GameFlow
             if (BattleManager.Instance == null) return;
             if (_presets == null || _presets.Count == 0) return;
 
-            var data1 = CloneData(_presets[_p1PresetIdx]);
-            var data2 = CloneData(_presets[_p2PresetIdx]);
+            var data1 = BuildCharacterData(true);
+            var data2 = BuildCharacterData(false);
 
             _panel.SetActive(false);
             BattleManager.Instance.StartCountdown(data1, data2);
@@ -392,8 +414,10 @@ namespace PromptFighters.GameFlow
             if (_presets == null || _presets.Count == 0) return;
 
             int p2Idx = _presets.Count > 1 ? _p2PresetIdx : _p1PresetIdx;
-            var data1 = CloneData(_presets[_p1PresetIdx]);
-            var data2 = CloneData(_presets[p2Idx]);
+            var data1 = BuildCharacterData(true);
+            var data2 = HasCharacterInput(false)
+                ? BuildCharacterData(false)
+                : PromptCharacterFactory.Clone(_presets[p2Idx]);
 
             _panel.SetActive(false);
             BattleManager.Instance.StartTraining(data1, data2);
@@ -439,18 +463,30 @@ namespace PromptFighters.GameFlow
                 _startButtonRect.localScale = Vector3.one * Mathf.Lerp(1f, 1.035f, pulse);
         }
 
-        static CharacterData CloneData(CharacterData src)
+        CharacterData BuildCharacterData(bool isP1)
         {
-            return new CharacterData
-            {
-                characterName     = src.characterName,
-                inputFeatures     = src.inputFeatures,
-                visualPrompt      = src.visualPrompt,
-                visualDescription = src.visualDescription,
-                skills            = src.skills,
-                spritePath        = src.spritePath,
-                characterSprite   = src.characterSprite,
-            };
+            int idx = isP1 ? _p1PresetIdx : _p2PresetIdx;
+            var fallback = _presets != null && idx >= 0 && idx < _presets.Count ? _presets[idx] : null;
+            var nameInput = isP1 ? _p1NameInput : _p2NameInput;
+            var featureInput = isP1 ? _p1FeatureInput : _p2FeatureInput;
+            string characterName = nameInput != null ? nameInput.text : string.Empty;
+            string features = featureInput != null ? featureInput.text : string.Empty;
+            return PromptCharacterFactory.Create(characterName, features, fallback);
+        }
+
+        bool HasCharacterInput(bool isP1)
+        {
+            var nameInput = isP1 ? _p1NameInput : _p2NameInput;
+            var featureInput = isP1 ? _p1FeatureInput : _p2FeatureInput;
+            return (nameInput != null && !string.IsNullOrWhiteSpace(nameInput.text)) ||
+                   (featureInput != null && !string.IsNullOrWhiteSpace(featureInput.text));
+        }
+
+        static bool IsEditingText()
+        {
+            if (EventSystem.current == null) return false;
+            var selected = EventSystem.current.currentSelectedGameObject;
+            return selected != null && selected.GetComponentInParent<TMP_InputField>() != null;
         }
 
         static bool IsAscii(string value)
@@ -515,6 +551,59 @@ namespace PromptFighters.GameFlow
             tmp.textWrappingMode = TextWrappingModes.Normal;
             UITheme.Apply(tmp);
             return tmp;
+        }
+
+        static TMP_InputField MakeInputField(Transform parent, string name, string placeholder,
+            Vector2 pos, Vector2 size, bool multiline)
+        {
+            var go = CreateUIObject(name, parent);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchoredPosition = pos;
+            rt.sizeDelta = size;
+
+            var bg = go.AddComponent<Image>();
+            bg.color = new Color(0.02f, 0.025f, 0.05f, 0.86f);
+
+            var viewport = CreateUIObject("TextArea", go.transform);
+            var vpRt = viewport.GetComponent<RectTransform>();
+            vpRt.anchorMin = Vector2.zero;
+            vpRt.anchorMax = Vector2.one;
+            vpRt.offsetMin = new Vector2(12f, 6f);
+            vpRt.offsetMax = new Vector2(-12f, -6f);
+            viewport.AddComponent<RectMask2D>();
+
+            var textGo = CreateUIObject("Text", viewport.transform);
+            StretchFull(textGo.GetComponent<RectTransform>());
+            var text = textGo.AddComponent<TextMeshProUGUI>();
+            text.fontSize = multiline ? 15f : 18f;
+            text.color = Color.white;
+            text.alignment = multiline ? TextAlignmentOptions.TopLeft : TextAlignmentOptions.Left;
+            text.textWrappingMode = multiline ? TextWrappingModes.Normal : TextWrappingModes.NoWrap;
+            text.overflowMode = TextOverflowModes.Ellipsis;
+            UITheme.Apply(text);
+
+            var placeholderGo = CreateUIObject("Placeholder", viewport.transform);
+            StretchFull(placeholderGo.GetComponent<RectTransform>());
+            var placeholderText = placeholderGo.AddComponent<TextMeshProUGUI>();
+            placeholderText.text = placeholder;
+            placeholderText.fontSize = text.fontSize;
+            placeholderText.color = new Color(0.7f, 0.75f, 0.85f, 0.62f);
+            placeholderText.alignment = text.alignment;
+            placeholderText.textWrappingMode = text.textWrappingMode;
+            placeholderText.overflowMode = TextOverflowModes.Ellipsis;
+            UITheme.Apply(placeholderText);
+
+            var input = go.AddComponent<TMP_InputField>();
+            input.textViewport = vpRt;
+            input.textComponent = text;
+            input.placeholder = placeholderText;
+            input.lineType = multiline
+                ? TMP_InputField.LineType.MultiLineNewline
+                : TMP_InputField.LineType.SingleLine;
+            input.characterLimit = multiline ? 120 : 28;
+            input.caretColor = Color.white;
+            input.selectionColor = new Color(0.35f, 0.55f, 1f, 0.45f);
+            return input;
         }
 
         static Button MakeButton(Transform parent, string name, string label,
