@@ -188,36 +188,46 @@ namespace PromptFighters.AI
                 yield break;
             }
 
-            byte[] rawBytes = null;
+            // try-catch の中に yield return は置けないため、レスポンス解析と URL DL を分離する
+            string imageUrl = null;
+            string imageBase64 = null;
             try
             {
-                ParseImageResponse(req.downloadHandler.text, out string url, out string b64);
-                if (!string.IsNullOrEmpty(b64))
-                {
-                    rawBytes = Convert.FromBase64String(b64);
-                }
-                else if (!string.IsNullOrEmpty(url))
-                {
-                    using var imgReq = UnityWebRequestTexture.GetTexture(url);
-                    imgReq.timeout = 60;
-                    yield return imgReq.SendWebRequest();
-                    if (imgReq.result != UnityWebRequest.Result.Success)
-                    {
-                        onError?.Invoke("URL画像のダウンロード失敗: " + imgReq.error);
-                        yield break;
-                    }
-                    var urlTex = DownloadHandlerTexture.GetContent(imgReq);
-                    rawBytes = ImageConversion.EncodeToPNG(urlTex);
-                }
-                else
-                {
-                    onError?.Invoke("レスポンスにurl/b64_jsonが見つかりません");
-                    yield break;
-                }
+                ParseImageResponse(req.downloadHandler.text, out imageUrl, out imageBase64);
             }
             catch (Exception e)
             {
                 onError?.Invoke("レスポンス解析失敗: " + e.Message);
+                yield break;
+            }
+
+            byte[] rawBytes = null;
+
+            if (!string.IsNullOrEmpty(imageBase64))
+            {
+                try { rawBytes = Convert.FromBase64String(imageBase64); }
+                catch (Exception e) { onError?.Invoke("Base64デコード失敗: " + e.Message); yield break; }
+            }
+            else if (!string.IsNullOrEmpty(imageUrl))
+            {
+                // URL ダウンロードは try-catch の外で yield return する
+                var imgReq = UnityWebRequestTexture.GetTexture(imageUrl);
+                imgReq.timeout = 60;
+                yield return imgReq.SendWebRequest();
+                if (imgReq.result != UnityWebRequest.Result.Success)
+                {
+                    string err = imgReq.error;
+                    imgReq.Dispose();
+                    onError?.Invoke("URL画像のダウンロード失敗: " + err);
+                    yield break;
+                }
+                var urlTex = DownloadHandlerTexture.GetContent(imgReq);
+                rawBytes = ImageConversion.EncodeToPNG(urlTex);
+                imgReq.Dispose();
+            }
+            else
+            {
+                onError?.Invoke("レスポンスにurl/b64_jsonが見つかりません");
                 yield break;
             }
 
