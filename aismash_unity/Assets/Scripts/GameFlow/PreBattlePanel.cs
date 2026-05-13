@@ -29,6 +29,7 @@ namespace PromptFighters.GameFlow
         Image _titleBottomGlow;
         RectTransform _titleMainRect;
         RectTransform _startButtonRect;
+        bool _waitForMenuInputRelease;
 
         void Awake()
         {
@@ -68,6 +69,14 @@ namespace PromptFighters.GameFlow
             if (_panel != null && _panel.activeSelf)
             {
                 var kb = UnityEngine.InputSystem.Keyboard.current;
+                if (_waitForMenuInputRelease)
+                {
+                    if (kb == null ||
+                        (!kb.spaceKey.isPressed && !kb.enterKey.isPressed && !kb.tKey.isPressed))
+                        _waitForMenuInputRelease = false;
+                    return;
+                }
+
                 if (kb != null && kb.spaceKey.wasPressedThisFrame)
                 {
                     OnStartPressed();
@@ -395,6 +404,7 @@ namespace PromptFighters.GameFlow
             if (_trainingPanel != null) _trainingPanel.SetActive(false);
             if (_panel != null) _panel.SetActive(true);
             if (_titlePanel != null) _titlePanel.SetActive(false);
+            _waitForMenuInputRelease = true;
         }
 
         void ShowTrainingPanel()

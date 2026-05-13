@@ -26,10 +26,10 @@ namespace PromptFighters.Battle
         [Header("References")]
         public Fighter fighter1;
         public Fighter fighter2;
-        public Vector3 fighter1SpawnPos = new Vector3(-4f, 1f, 0f);
-        public Vector3 fighter2SpawnPos = new Vector3( 4f, 1f, 0f);
+        public Vector3 fighter1SpawnPos = new Vector3(-4f, -1.8f, 0f);
+        public Vector3 fighter2SpawnPos = new Vector3( 4f, -1.8f, 0f);
         public Vector3 nameplateOffset = new Vector3(0f, 2.35f, 0f);
-        public float stageHalfWidth = 5.25f;
+        public float stageHalfWidth = 6.5f;
 
         public float       TimeRemaining { get; private set; }
         public BattlePhase Phase         { get; private set; } = BattlePhase.Setup;

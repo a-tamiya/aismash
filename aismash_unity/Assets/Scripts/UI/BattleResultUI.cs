@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using UnityEngine.InputSystem;
 using PromptFighters.Battle;
 
 namespace PromptFighters.UI
@@ -129,7 +130,17 @@ namespace PromptFighters.UI
                 _resultText.transform.localScale = Vector3.one * pulse;
             }
 
-            if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return))
+            var kb = Keyboard.current;
+            bool newInputPressed = kb != null &&
+                (kb.spaceKey.wasPressedThisFrame || kb.enterKey.wasPressedThisFrame);
+
+#if ENABLE_LEGACY_INPUT_MANAGER
+            bool legacyInputPressed = Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return);
+#else
+            bool legacyInputPressed = false;
+#endif
+
+            if (newInputPressed || legacyInputPressed)
             {
                 HidePanel();
                 BattleManager.Instance?.ReturnToSetup();

@@ -1217,6 +1217,10 @@ MonoBehaviour:
   moveSpeed: 5
   jumpForce: 12
   guardDamageRatio: 0.15
+  maxGuardDurability: 100
+  guardTimeDrainPerSecond: 18
+  guardHitDamageRatio: 0.45
+  guardBreakLockDuration: 5
   groundCheck: {fileID: 1957225304}
   groundCheckRadius: 0.12
   groundLayer:
@@ -1953,8 +1957,10 @@ MonoBehaviour:
   trainingRespawnDelay: 1
   fighter1: {fileID: 1711540623}
   fighter2: {fileID: 315558351}
-  fighter1SpawnPos: {x: -4, y: -1.5, z: 0}
-  fighter2SpawnPos: {x: 4, y: -1.5, z: 0}
+  fighter1SpawnPos: {x: -4, y: -1.8, z: 0}
+  fighter2SpawnPos: {x: 4, y: -1.8, z: 0}
+  nameplateOffset: {x: 0, y: 2.35, z: 0}
+  stageHalfWidth: 6.5
 --- !u!4 &819546708
 Transform:
   m_ObjectHideFlags: 0
@@ -3396,6 +3402,10 @@ MonoBehaviour:
   moveSpeed: 5
   jumpForce: 12
   guardDamageRatio: 0.15
+  maxGuardDurability: 100
+  guardTimeDrainPerSecond: 18
+  guardHitDamageRatio: 0.45
+  guardBreakLockDuration: 5
   groundCheck: {fileID: 779165785}
   groundCheckRadius: 0.12
   groundLayer:
