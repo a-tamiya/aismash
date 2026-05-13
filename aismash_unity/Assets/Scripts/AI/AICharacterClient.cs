@@ -30,7 +30,7 @@ namespace PromptFighters.AI
             string key = ApiKey;
             if (!AIImageClient.IsConfiguredApiKey(key))
             {
-                onError?.Invoke("OpenAI APIキーが未設定です。環境変数 OPENAI_API_KEY または StreamingAssets/config.json を確認してください。");
+                onError?.Invoke("OpenAI APIキーが未設定です。環境変数 OPENAI_API_KEY を確認してください。");
                 yield break;
             }
 

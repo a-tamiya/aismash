@@ -30,32 +30,14 @@ namespace PromptFighters.AI
 
         static string LoadApiKey()
         {
-            // 優先順位: 環境変数 → config.json
-            string fromEnv = System.Environment.GetEnvironmentVariable("OPENAI_API_KEY")?.Trim();
-            if (!string.IsNullOrEmpty(fromEnv)) return fromEnv;
-
-            string path = System.IO.Path.Combine(Application.streamingAssetsPath, "config.json");
-            if (!System.IO.File.Exists(path)) return "";
-            try
-            {
-                string json = System.IO.File.ReadAllText(path);
-                var cfg = JsonUtility.FromJson<Config>(json);
-                return cfg?.openai_api_key?.Trim() ?? "";
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning("[AIImage] config.json 読み込みエラー: " + e.Message);
-                return "";
-            }
+            return System.Environment.GetEnvironmentVariable("OPENAI_API_KEY")?.Trim() ?? "";
         }
-
-        [Serializable] class Config { public string openai_api_key; }
 
         public static bool HasConfiguredApiKey(out string error)
         {
             error = null;
             if (IsConfiguredApiKey(ApiKey)) return true;
-            error = "OpenAI APIキーが未設定です。環境変数 OPENAI_API_KEY または StreamingAssets/config.json の openai_api_key に実キーを設定してください。";
+            error = "OpenAI APIキーが未設定です。環境変数 OPENAI_API_KEY に実キーを設定してください。";
             return false;
         }
 
@@ -173,7 +155,7 @@ namespace PromptFighters.AI
             string key = ApiKey;
             if (!IsConfiguredApiKey(key))
             {
-                onError?.Invoke("OpenAI APIキーが未設定です。環境変数 OPENAI_API_KEY または StreamingAssets/config.json を確認してください。");
+                onError?.Invoke("OpenAI APIキーが未設定です。環境変数 OPENAI_API_KEY を確認してください。");
                 yield break;
             }
 
