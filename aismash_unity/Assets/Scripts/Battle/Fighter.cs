@@ -18,6 +18,10 @@ namespace PromptFighters.Battle
 
         [Header("Guard")]
         [Range(0f, 1f)] public float guardDamageRatio = 0.15f;
+        public float maxGuardDurability = 100f;
+        public float guardTimeDrainPerSecond = 18f;
+        public float guardHitDamageRatio = 0.45f;
+        public float guardBreakLockDuration = 5f;
 
         [Header("Ground Check")]
         public Transform groundCheck;
@@ -28,12 +32,15 @@ namespace PromptFighters.Battle
         [HideInInspector] public Fighter Opponent;
 
         public float CurrentHP { get; private set; }
+        public float CurrentGuardDurability { get; private set; }
         public FighterState State { get; private set; } = FighterState.Idle;
         public bool IsGrounded { get; private set; }
         public bool FacingRight { get; set; } = true;
         public int PlayerIndex { get; set; }
 
         public event System.Action<float, float> OnHPChanged;
+        public event System.Action<float, float> OnGuardChanged;
+        public event System.Action               OnGuardBroken;
         public event System.Action               OnDeath;
         public event System.Action<float, bool>  OnDamageReceived; // (damage, wasBlocked)
 
@@ -62,8 +69,10 @@ namespace PromptFighters.Battle
         static readonly Color GuardBreakColor = new Color(0.6f, 0.3f, 0.7f);
 
         public bool CanAct =>
+            State != FighterState.Guarding &&
             State != FighterState.Stunned &&
             State != FighterState.Dead    &&
+            _guardBreakTimer    <= 0f     &&
             _controlLockTimer   <= 0f     &&
             _skillRecoveryTimer <= 0f;
 
@@ -77,6 +86,7 @@ namespace PromptFighters.Battle
             EnsureVisualRenderer();
             _skillExecutor  = GetComponent<SkillExecutor>();
             CurrentHP       = maxHP;
+            CurrentGuardDurability = maxGuardDurability;
         }
 
         void Update()
@@ -91,12 +101,22 @@ namespace PromptFighters.Battle
             if (_controlLockTimer   > 0f) _controlLockTimer   -= Time.deltaTime;
             if (_skillRecoveryTimer > 0f) _skillRecoveryTimer -= Time.deltaTime;
             if (_slowTimer          > 0f) _slowTimer          -= Time.deltaTime;
-            if (_guardBreakTimer    > 0f) _guardBreakTimer    -= Time.deltaTime;
+            if (_guardBreakTimer    > 0f)
+            {
+                _guardBreakTimer -= Time.deltaTime;
+                if (_guardBreakTimer <= 0f) EndGuardBreak();
+            }
             if (_hitFlashTimer      > 0f) _hitFlashTimer      -= Time.deltaTime;
             TickBurn();
+            TickGuard();
 
             UpdateState();
             UpdateVisual();
+        }
+
+        void LateUpdate()
+        {
+            ClampToStage();
         }
 
         void TickBurn()
@@ -117,7 +137,7 @@ namespace PromptFighters.Battle
         {
             if (State == FighterState.Dead || State == FighterState.Guarding) return;
 
-            if (_stunTimer > 0f) { State = FighterState.Stunned; return; }
+            if (_stunTimer > 0f || _guardBreakTimer > 0f) { State = FighterState.Stunned; return; }
 
             if (!IsGrounded)
             {
@@ -146,10 +166,16 @@ namespace PromptFighters.Battle
                 _                     => Color.white,
             };
 
+            if (_guardBreakTimer > 0f)
+            {
+                float pulse = (Mathf.Sin(Time.time * 18f) + 1f) * 0.5f;
+                _sprite.color = Color.Lerp(GuardBreakColor, Color.white, pulse * 0.35f);
+                return;
+            }
+
             if (State != FighterState.Guarding && State != FighterState.Stunned)
             {
                 if      (_burnTimer       > 0f) c = BurnColor;
-                else if (_guardBreakTimer > 0f) c = GuardBreakColor;
                 else if (_slowTimer       > 0f) c = SlowColor;
             }
 
@@ -174,7 +200,9 @@ namespace PromptFighters.Battle
         public void SetGuard(bool guarding)
         {
             if (State == FighterState.Dead || _stunTimer > 0f) return;
+            if (_skillExecutor != null && _skillExecutor.IsExecuting) return;
             if (_guardBreakTimer > 0f) { guarding = false; }
+            if (CurrentGuardDurability <= 0f) { guarding = false; }
 
             if (guarding && State != FighterState.Guarding)
             {
@@ -197,6 +225,10 @@ namespace PromptFighters.Battle
             float actual  = blocking ? Mathf.Max(damage * guardDamageRatio, guardDamage) : damage;
             CurrentHP     = Mathf.Max(0f, CurrentHP - actual);
             OnHPChanged?.Invoke(CurrentHP, maxHP);
+            if (blocking)
+                DamageGuard(Mathf.Max(guardDamage, damage * guardHitDamageRatio));
+            else if (_guardBreakTimer > 0f)
+                EndGuardBreak();
 
             if (knockbackForce > 0f && (!blocking || knockbackForce > 6f))
             {
@@ -229,8 +261,7 @@ namespace PromptFighters.Battle
                     _slowTimer = Mathf.Max(_slowTimer, duration);
                     break;
                 case StatusType.GuardBreak:
-                    _guardBreakTimer = Mathf.Max(_guardBreakTimer, Mathf.Min(duration, 1.5f));
-                    if (State == FighterState.Guarding) State = FighterState.Idle;
+                    BreakGuard(Mathf.Max(1.5f, duration));
                     break;
             }
         }
@@ -256,6 +287,7 @@ namespace PromptFighters.Battle
             _slowTimer          = 0f;
             _guardBreakTimer    = 0f;
             _hitFlashTimer      = 0f;
+            CurrentGuardDurability = maxGuardDurability;
             State               = FighterState.Idle;
             transform.position  = spawnPos;
             _rb.linearVelocity  = Vector2.zero;
@@ -265,6 +297,57 @@ namespace PromptFighters.Battle
             transform.localScale = s;
             ApplyVisualScaleCorrection();
             OnHPChanged?.Invoke(CurrentHP, maxHP);
+            OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
+        }
+
+        void TickGuard()
+        {
+            if (State != FighterState.Guarding) return;
+            DamageGuard(guardTimeDrainPerSecond * Time.deltaTime);
+        }
+
+        void DamageGuard(float amount)
+        {
+            if (amount <= 0f || CurrentGuardDurability <= 0f) return;
+
+            CurrentGuardDurability = Mathf.Max(0f, CurrentGuardDurability - amount);
+            OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
+            if (CurrentGuardDurability <= 0f)
+                BreakGuard(guardBreakLockDuration);
+        }
+
+        void BreakGuard(float duration)
+        {
+            _guardBreakTimer = Mathf.Max(_guardBreakTimer, duration);
+            State = FighterState.Stunned;
+            CurrentGuardDurability = 0f;
+            _rb.linearVelocity = Vector2.zero;
+            OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
+            OnGuardBroken?.Invoke();
+            DamagePopup.SpawnText(transform.position, "GUARD BREAK", GuardBreakColor, 3.2f);
+        }
+
+        void EndGuardBreak()
+        {
+            _guardBreakTimer = 0f;
+            CurrentGuardDurability = maxGuardDurability;
+            if (State == FighterState.Stunned && _stunTimer <= 0f) State = FighterState.Idle;
+            OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
+        }
+
+        void ClampToStage()
+        {
+            var bm = BattleManager.Instance;
+            if (bm == null || !bm.IsFighting) return;
+
+            float minX = bm.StageMinX;
+            float maxX = bm.StageMaxX;
+            Vector3 pos = transform.position;
+            float clampedX = Mathf.Clamp(pos.x, minX, maxX);
+            if (Mathf.Approximately(pos.x, clampedX)) return;
+
+            transform.position = new Vector3(clampedX, pos.y, pos.z);
+            _rb.linearVelocity = new Vector2(0f, _rb.linearVelocity.y);
         }
 
         public void SetCharacterSprite(Sprite sprite)

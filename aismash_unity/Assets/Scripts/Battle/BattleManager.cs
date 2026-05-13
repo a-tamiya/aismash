@@ -29,10 +29,13 @@ namespace PromptFighters.Battle
         public Vector3 fighter1SpawnPos = new Vector3(-4f, 1f, 0f);
         public Vector3 fighter2SpawnPos = new Vector3( 4f, 1f, 0f);
         public Vector3 nameplateOffset = new Vector3(0f, 2.35f, 0f);
+        public float stageHalfWidth = 5.25f;
 
         public float       TimeRemaining { get; private set; }
         public BattlePhase Phase         { get; private set; } = BattlePhase.Setup;
         public float       Countdown     { get; private set; }
+        public float       StageMinX     => -stageHalfWidth;
+        public float       StageMaxX     =>  stageHalfWidth;
 
         // 旧 BattleState 互換プロパティ
         public bool IsFighting => Phase == BattlePhase.Fighting || Phase == BattlePhase.Training;

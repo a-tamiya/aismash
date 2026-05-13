@@ -30,6 +30,22 @@ namespace PromptFighters.UI
             go.AddComponent<DamagePopup>();
         }
 
+        public static void SpawnText(Vector3 worldPos, string text, Color color, float fontSize = 3.6f)
+        {
+            var go = new GameObject("TextPopup");
+            go.transform.position = worldPos + Vector3.up * 1.5f;
+
+            var tmp = go.AddComponent<TextMeshPro>();
+            tmp.fontSize  = fontSize;
+            tmp.color     = color;
+            tmp.text      = text;
+            tmp.alignment = TextAlignmentOptions.Center;
+            tmp.sortingOrder = 21;
+            UITheme.Apply(tmp);
+
+            go.AddComponent<DamagePopup>();
+        }
+
         void Awake() => _tmp = GetComponent<TextMeshPro>();
 
         void Update()

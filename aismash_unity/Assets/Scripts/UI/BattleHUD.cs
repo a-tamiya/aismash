@@ -14,6 +14,8 @@ namespace PromptFighters.UI
         // ── 内部参照 ──────────────────────────────────────────────
         Image            _hp1Fill, _hp2Fill;
         RectTransform    _hp1FillRect, _hp2FillRect;
+        Image            _guard1Fill, _guard2Fill;
+        RectTransform    _guard1FillRect, _guard2FillRect;
         TextMeshProUGUI  _hp1Num, _hp2Num, _hp1Name, _hp2Name;
         TextMeshProUGUI  _timerText;
         GameObject       _hudRoot;
@@ -62,6 +64,8 @@ namespace PromptFighters.UI
 
             if (_f1 != null) _f1.OnHPChanged += (hp, max) => UpdateHP(1, hp, max);
             if (_f2 != null) _f2.OnHPChanged += (hp, max) => UpdateHP(2, hp, max);
+            if (_f1 != null) _f1.OnGuardChanged += (guard, max) => UpdateGuard(1, guard, max);
+            if (_f2 != null) _f2.OnGuardChanged += (guard, max) => UpdateGuard(2, guard, max);
 
             if (bm != null)
             {
@@ -102,6 +106,8 @@ namespace PromptFighters.UI
         {
             if (_f1 != null) UpdateHP(1, _f1.CurrentHP, _f1.maxHP);
             if (_f2 != null) UpdateHP(2, _f2.CurrentHP, _f2.maxHP);
+            if (_f1 != null) UpdateGuard(1, _f1.CurrentGuardDurability, _f1.maxGuardDurability);
+            if (_f2 != null) UpdateGuard(2, _f2.CurrentGuardDurability, _f2.maxGuardDurability);
 
             var bm = BattleManager.Instance;
             if (bm?.Character1 != null && _hp1Name) _hp1Name.text = bm.Character1.characterName;
@@ -149,6 +155,27 @@ namespace PromptFighters.UI
             if (num) num.text = Mathf.CeilToInt(hp).ToString();
         }
 
+        void UpdateGuard(int player, float guard, float max)
+        {
+            var fill = player == 1 ? _guard1Fill : _guard2Fill;
+            var rect = player == 1 ? _guard1FillRect : _guard2FillRect;
+            if (fill == null || rect == null) return;
+
+            float t = max > 0f ? Mathf.Clamp01(guard / max) : 0f;
+            if (player == 1)
+            {
+                rect.anchorMin = Vector2.zero;
+                rect.anchorMax = new Vector2(t, 1f);
+            }
+            else
+            {
+                rect.anchorMin = new Vector2(1f - t, 0f);
+                rect.anchorMax = Vector2.one;
+            }
+            rect.offsetMin = rect.offsetMax = Vector2.zero;
+            fill.color = Color.Lerp(new Color(0.85f, 0.15f, 1f), new Color(0.25f, 0.7f, 1f), t);
+        }
+
         // ── HUD構築 ───────────────────────────────────────────────
         void BuildHUD()
         {
@@ -173,14 +200,14 @@ namespace PromptFighters.UI
             Anchor(c1, 0f, 1f, 0.5f, 1f, pad, -barH - pad, -4f, -pad);
             var bg1 = c1.AddComponent<Image>();
             bg1.color = new Color(0f, 0f, 0f, 0.65f);
-            AddHPBar(c1.transform, true, out _hp1Fill, out _hp1FillRect, out _hp1Num, out _hp1Name);
+            AddHPBar(c1.transform, true, out _hp1Fill, out _hp1FillRect, out _guard1Fill, out _guard1FillRect, out _hp1Num, out _hp1Name);
 
             // 2P HPバーコンテナ (右半分)
             var c2 = MakeUI("HPContainer2P", _hudRoot.transform);
             Anchor(c2, 0.5f, 1f, 1f, 1f, 4f, -barH - pad, -pad, -pad);
             var bg2 = c2.AddComponent<Image>();
             bg2.color = new Color(0f, 0f, 0f, 0.65f);
-            AddHPBar(c2.transform, false, out _hp2Fill, out _hp2FillRect, out _hp2Num, out _hp2Name);
+            AddHPBar(c2.transform, false, out _hp2Fill, out _hp2FillRect, out _guard2Fill, out _guard2FillRect, out _hp2Num, out _hp2Name);
 
             // タイマー（中央）
             var tc = MakeUI("TimerBox", _hudRoot.transform);
@@ -213,7 +240,9 @@ namespace PromptFighters.UI
         }
 
         void AddHPBar(Transform parent, bool isP1,
-                      out Image fill, out RectTransform fillRect, out TextMeshProUGUI num, out TextMeshProUGUI name)
+                      out Image fill, out RectTransform fillRect,
+                      out Image guardFill, out RectTransform guardFillRect,
+                      out TextMeshProUGUI num, out TextMeshProUGUI name)
         {
             // 名前ラベル
             var nameGo = MakeUI("Name", parent);
@@ -236,7 +265,7 @@ namespace PromptFighters.UI
             var bbRt  = barBg.GetComponent<RectTransform>();
             bbRt.anchorMin = new Vector2(0f, 0f);
             bbRt.anchorMax = new Vector2(1f, 1f);
-            bbRt.offsetMin = new Vector2(isP1 ? 92f : 8f,  8f);
+            bbRt.offsetMin = new Vector2(isP1 ? 92f : 8f,  16f);
             bbRt.offsetMax = new Vector2(isP1 ? -54f : -92f, -8f);
             barBg.AddComponent<Image>().color = new Color(0.06f, 0.06f, 0.06f, 1f);
 
@@ -247,6 +276,21 @@ namespace PromptFighters.UI
             fillImg.color        = new Color(0.15f, 0.85f, 0.3f);
             fill = fillImg;
             fillRect = fillGo.GetComponent<RectTransform>();
+
+            var guardBg = MakeUI("GuardBg", parent);
+            var gbRt = guardBg.GetComponent<RectTransform>();
+            gbRt.anchorMin = new Vector2(0f, 0f);
+            gbRt.anchorMax = new Vector2(1f, 0f);
+            gbRt.offsetMin = new Vector2(isP1 ? 92f : 8f,  6f);
+            gbRt.offsetMax = new Vector2(isP1 ? -54f : -92f, 12f);
+            guardBg.AddComponent<Image>().color = new Color(0.02f, 0.02f, 0.04f, 0.95f);
+
+            var guardGo = MakeUI("GuardFill", guardBg.transform);
+            FillParent(guardGo);
+            guardFill = guardGo.AddComponent<Image>();
+            guardFill.type = Image.Type.Simple;
+            guardFill.color = new Color(0.25f, 0.7f, 1f);
+            guardFillRect = guardGo.GetComponent<RectTransform>();
 
             // HP数値
             var numGo = MakeUI("HPNum", parent);
