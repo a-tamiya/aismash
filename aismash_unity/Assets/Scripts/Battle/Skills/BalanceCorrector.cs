@@ -10,9 +10,11 @@ namespace PromptFighters.Battle.Skills
         static readonly float[] MaxDamage     = { 14f, 12f, 10f, 30f }; // Close/Ranged/Special/Ultimate
         static readonly float[] MinCooldown   = {  1f,  2f,  4f,  8f };
         static readonly float[] MaxCooldown   = {2.5f,  4f,  7f, 15f };
+        // 近距離系はヒットボックスサイズ(1〜2.5)、遠距離は射程(〜16)
+        static readonly float[] MaxRange      = { 2.5f, 16f, 2.5f, 3.0f };
+        static readonly float[] MinKnockback  = { 0f,   0f,  0f,   4f };  // 必殺技は最低限吹き飛ぶ
 
-        const float MaxRange     = 16f;  // ステージ幅超え防止
-        const float MaxStunTime  =  1.5f;
+        const float MaxStunTime  = 1.5f;
         const float MaxKnockback = 15f;
 
         public static void Apply(SkillData skill)
@@ -36,14 +38,14 @@ namespace PromptFighters.Battle.Skills
             // クールダウン
             p.cooldown = Mathf.Clamp(p.cooldown, MinCooldown[si], MaxCooldown[si]);
 
-            // 射程
-            p.range = Mathf.Clamp(p.range, 0.5f, MaxRange);
+            // 射程（closeはヒットボックスサイズ、rangedは射程距離）
+            p.range = Mathf.Clamp(p.range, 0.5f, MaxRange[si]);
 
             // 怯み時間
             p.stun_time = Mathf.Clamp(p.stun_time, 0f, MaxStunTime);
 
-            // ノックバック
-            p.knockback = Mathf.Clamp(p.knockback, 0f, MaxKnockback);
+            // ノックバック（必殺技は最低値保証）
+            p.knockback = Mathf.Clamp(p.knockback, MinKnockback[si], MaxKnockback);
 
             // ヒット数（上限を超えないよう）
             p.hit_count = Mathf.Clamp(p.hit_count, 1, 10);
@@ -74,6 +76,10 @@ namespace PromptFighters.Battle.Skills
                         };
                         a.chance = Mathf.Clamp01(a.chance);
                     }
+
+                    // melee_hitboxのrangeはヒットボックスサイズなので上限2.5
+                    if (a.type == "melee_hitbox")
+                        a.range = Mathf.Clamp(a.range, 0.5f, 2.5f);
 
                     // dashのpowerに上限
                     if (a.type == "dash" && a.power > 15f) a.power = 15f;

@@ -12,7 +12,7 @@ namespace PromptFighters.AI
     public static class AICharacterClient
     {
         public static string OllamaEndpoint = "http://localhost:11434/api/chat";
-        public static string OllamaModel    = "qwen3-vl:8b";
+        public static string OllamaModel    = "qwen2.5vl:7b";
 
         // runner MonoBehaviourのStartCoroutineを使って非同期生成を実行する。
         // 成功時はonSuccess(CharacterData)、失敗時はonError(エラー文字列)を呼ぶ。
@@ -111,13 +111,22 @@ namespace PromptFighters.AI
         }
 
         static string BuildPrompt(string name, string features) =>
-$@"あなたは2D格闘ゲーム「プロンプトファイターズ」のキャラクター生成AIです。
-以下のキャラクター情報からゲーム用JSONデータを生成してください。JSONのみを出力してください（前後に説明文を入れないでください）。
+$@"2D格闘ゲームのキャラクターJSONを生成してください。JSONのみ出力（説明不要）。
 
 キャラクター名: {name}
 特徴: {features}
 
-以下のJSON形式で出力:
+【パラメーター設計ガイド】キャラの特徴からパラメーターを推論してください:
+- 素早い・俊敏 → startup小(0.08-0.12)・recovery小・cooldown短・knockback小
+- 重い・大型・遅い → startup大(0.3-0.5)・recovery大・damage大・knockback大
+- 連続攻撃 → hit_count多(3-4)・damage/hit小
+- 一撃必殺 → hit_count=1・damage大・startup大・cooldown長
+- 遠距離タイプ → ranged cooldown短・close cooldown長
+- 近距離タイプ → close cooldown短・ranged cooldown長
+- damage範囲: 近距離8〜14、遠距離6〜12、特殊4〜10、必殺18〜30
+- range意味: 近距離/特殊/必殺はヒットボックスサイズ(1.0〜2.5)、遠距離は弾の射程(8〜16)
+- knockback範囲: 近距離1〜8、遠距離1〜6、特殊2〜10、必殺6〜14
+
 {{
   ""character_name"": ""{name}"",
   ""input_features"": ""{features}"",
@@ -127,59 +136,54 @@ $@"あなたは2D格闘ゲーム「プロンプトファイターズ」のキャ
     {{
       ""slot"": ""close"",
       ""skill_name"": ""[近距離技名（日本語）]"",
-      ""description"": ""[技説明（日本語、30字以内）]"",
-      ""element"": ""physical"",
+      ""description"": ""[技説明30字以内]"",
+      ""element"": ""[特徴に合う属性]"",
       ""risk_level"": ""medium"",
-      ""parameters"": {{""damage"":12,""hit_count"":2,""range"":1.4,""startup"":0.15,""active_time"":0.2,""recovery"":0.4,""cooldown"":1.5,""knockback"":4.0,""stun_time"":0.2,""guard_damage"":2.0,""move_force"":0.3}},
+      ""parameters"": {{""damage"":[推論],""hit_count"":[推論],""range"":[1.0〜2.5],""startup"":[推論],""active_time"":[推論],""recovery"":[推論],""cooldown"":[推論],""knockback"":[推論],""stun_time"":[推論],""guard_damage"":[推論],""move_force"":[推論]}},
       ""actions"": [
-        {{""type"":""dash"",""time"":0.0,""power"":3.0,""direction"":""forward""}},
-        {{""type"":""melee_hitbox"",""time"":0.15,""range"":1.4,""hit_count"":1}},
-        {{""type"":""melee_hitbox"",""time"":0.28,""range"":1.4,""hit_count"":1}}
+        {{""type"":""dash"",""time"":0.0,""power"":[推論],""direction"":""forward""}},
+        {{""type"":""melee_hitbox"",""time"":[推論],""range"":[1.0〜2.5],""hit_count"":1}}
       ]
     }},
     {{
       ""slot"": ""ranged"",
       ""skill_name"": ""[遠距離技名（日本語）]"",
-      ""description"": ""[技説明（日本語、30字以内）]"",
-      ""element"": ""fire"",
+      ""description"": ""[技説明30字以内]"",
+      ""element"": ""[特徴に合う属性]"",
       ""risk_level"": ""medium"",
-      ""parameters"": {{""damage"":10,""range"":12.0,""startup"":0.2,""active_time"":0.1,""recovery"":0.4,""cooldown"":2.5,""knockback"":4.0,""guard_damage"":3.0}},
+      ""parameters"": {{""damage"":[推論],""range"":12.0,""startup"":[推論],""active_time"":0.1,""recovery"":[推論],""cooldown"":[推論],""knockback"":[推論],""guard_damage"":[推論]}},
       ""actions"": [
-        {{""type"":""projectile"",""time"":0.2,""projectile_speed"":10.0,""projectile_lifetime"":1.5}}
+        {{""type"":""projectile"",""time"":[推論],""projectile_speed"":10.0,""projectile_lifetime"":1.5}}
       ]
     }},
     {{
       ""slot"": ""special"",
       ""skill_name"": ""[特殊技名（日本語）]"",
-      ""description"": ""[技説明（日本語、30字以内）]"",
-      ""element"": ""lightning"",
+      ""description"": ""[技説明30字以内]"",
+      ""element"": ""[特徴に合う属性]"",
       ""risk_level"": ""medium"",
-      ""parameters"": {{""damage"":7,""range"":1.5,""startup"":0.15,""active_time"":0.15,""recovery"":0.5,""cooldown"":5.0,""knockback"":3.0,""stun_time"":0.5}},
+      ""parameters"": {{""damage"":[推論],""range"":[推論],""startup"":[推論],""active_time"":[推論],""recovery"":[推論],""cooldown"":[推論],""knockback"":[推論],""stun_time"":[推論]}},
       ""actions"": [
-        {{""type"":""dash"",""time"":0.0,""power"":7.0,""direction"":""forward""}},
-        {{""type"":""melee_hitbox"",""time"":0.15,""range"":1.5,""hit_count"":1}},
-        {{""type"":""apply_status"",""time"":0.15,""status"":""stun"",""duration"":0.5,""chance"":0.8}}
+        {{""type"":""dash"",""time"":0.0,""power"":[推論],""direction"":""forward""}},
+        {{""type"":""melee_hitbox"",""time"":[推論],""range"":[推論],""hit_count"":1}},
+        {{""type"":""apply_status"",""time"":[推論],""status"":""stun"",""duration"":[推論],""chance"":[推論]}}
       ]
     }},
     {{
       ""slot"": ""ultimate"",
       ""skill_name"": ""[必殺技名（日本語）]"",
-      ""description"": ""[技説明（日本語、30字以内）]"",
-      ""element"": ""fire"",
+      ""description"": ""[技説明30字以内]"",
+      ""element"": ""[特徴に合う属性]"",
       ""risk_level"": ""high"",
-      ""parameters"": {{""damage"":24,""range"":2.0,""startup"":0.45,""active_time"":0.2,""recovery"":0.8,""cooldown"":10.0,""knockback"":9.0,""stun_time"":0.3,""guard_damage"":8.0}},
+      ""parameters"": {{""damage"":[推論],""range"":[推論],""startup"":[推論],""active_time"":[推論],""recovery"":[推論],""cooldown"":[推論],""knockback"":[推論],""stun_time"":[推論],""guard_damage"":[推論]}},
       ""actions"": [
-        {{""type"":""dash"",""time"":0.1,""power"":10.0,""direction"":""forward""}},
-        {{""type"":""melee_hitbox"",""time"":0.45,""range"":2.0,""hit_count"":1}}
+        {{""type"":""dash"",""time"":0.1,""power"":[推論],""direction"":""forward""}},
+        {{""type"":""melee_hitbox"",""time"":[推論],""range"":[推論],""hit_count"":1}}
       ]
     }}
   ]
 }}
 
-ルール:
-- elementはキャラの特徴から選択: none / physical / fire / ice / lightning / dark / wind
-- 近距離技のdamageは8〜14、遠距離技は6〜12、特殊技は4〜10、必殺技は18〜30
-- 技名と説明はキャラクターの特徴を反映した日本語にすること
-- actionsのtypeはmelee_hitbox/projectile/dash/apply_statusのみ使用可能";
+注意: [推論]をすべて数値に置き換えること。elementはphysical/fire/ice/lightning/dark/windから選択。";
     }
 }
