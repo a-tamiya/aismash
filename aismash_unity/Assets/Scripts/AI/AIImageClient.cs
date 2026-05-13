@@ -21,7 +21,7 @@ namespace PromptFighters.AI
         {
             get
             {
-                if (_cachedApiKey != null) return _cachedApiKey;
+                if (IsConfiguredApiKey(_cachedApiKey)) return _cachedApiKey;
                 _cachedApiKey = LoadApiKey();
                 return _cachedApiKey;
             }
@@ -30,7 +30,20 @@ namespace PromptFighters.AI
 
         static string LoadApiKey()
         {
-            return System.Environment.GetEnvironmentVariable("OPENAI_API_KEY")?.Trim() ?? "";
+            string fromProcess = System.Environment.GetEnvironmentVariable("OPENAI_API_KEY")?.Trim();
+            if (!string.IsNullOrEmpty(fromProcess)) return fromProcess;
+
+#if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
+            // Unity Hub/Editor can keep an older process environment. On Windows, also read
+            // the current user's persisted environment variable without storing secrets in repo files.
+            string userValue = System.Environment.GetEnvironmentVariable(
+                "OPENAI_API_KEY",
+                System.EnvironmentVariableTarget.User);
+            if (!string.IsNullOrWhiteSpace(userValue))
+                return userValue.Trim();
+#endif
+
+            return "";
         }
 
         public static bool HasConfiguredApiKey(out string error)
