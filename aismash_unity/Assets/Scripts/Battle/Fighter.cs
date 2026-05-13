@@ -59,6 +59,11 @@ namespace PromptFighters.Battle
         SpriteRenderer _rootSprite;
         Transform _visualRoot;
         SkillExecutor _skillExecutor;
+        CharacterSpriteSet _spriteSet = new CharacterSpriteSet();
+        CharacterSpriteId? _forcedSprite;
+        float _forcedSpriteTimer;
+        float _idleAnimTimer;
+        int _idleFrame;
         float _stunTimer;
         float _controlLockTimer;
         float _skillRecoveryTimer;
@@ -127,6 +132,11 @@ namespace PromptFighters.Battle
                 if (_guardBreakTimer <= 0f) EndGuardBreak();
             }
             if (_hitFlashTimer      > 0f) _hitFlashTimer      -= Time.deltaTime;
+            if (_forcedSpriteTimer  > 0f)
+            {
+                _forcedSpriteTimer -= Time.deltaTime;
+                if (_forcedSpriteTimer <= 0f) _forcedSprite = null;
+            }
             TickBurn();
             TickGuard();
             TickGrab();
@@ -173,6 +183,7 @@ namespace PromptFighters.Battle
         void UpdateVisual()
         {
             if (_sprite == null) return;
+            UpdateStateSprite();
 
             // ヒットフラッシュ中は白点滅
             if (_hitFlashTimer > 0f)
@@ -203,6 +214,48 @@ namespace PromptFighters.Battle
             }
 
             _sprite.color = c;
+        }
+
+        void UpdateStateSprite()
+        {
+            Sprite next = null;
+            if (_forcedSprite.HasValue)
+            {
+                next = _spriteSet.Get(_forcedSprite.Value, _sprite.sprite);
+            }
+            else
+            {
+                CharacterSpriteId id = State switch
+                {
+                    FighterState.Moving => CharacterSpriteId.Dash,
+                    FighterState.Jumping => CharacterSpriteId.Jump,
+                    FighterState.Falling => CharacterSpriteId.Jump,
+                    FighterState.Stunned => CharacterSpriteId.Damage,
+                    FighterState.Grabbed => CharacterSpriteId.Damage,
+                    _ => CurrentIdleSpriteId(),
+                };
+                next = _spriteSet.Get(id, _sprite.sprite);
+            }
+
+            if (next != null && _sprite.sprite != next)
+                _sprite.sprite = next;
+        }
+
+        CharacterSpriteId CurrentIdleSpriteId()
+        {
+            _idleAnimTimer += Time.deltaTime;
+            if (_idleAnimTimer >= 0.3f)
+            {
+                _idleAnimTimer = 0f;
+                _idleFrame = (_idleFrame + 1) % 3;
+            }
+
+            return _idleFrame switch
+            {
+                1 => CharacterSpriteId.Idle2,
+                2 => CharacterSpriteId.Idle3,
+                _ => CharacterSpriteId.Idle1,
+            };
         }
 
         public void Move(float direction)
@@ -299,6 +352,43 @@ namespace PromptFighters.Battle
             _rb.linearVelocity = new Vector2(impulse.x, _rb.linearVelocity.y + impulse.y);
         }
 
+        public void ShowSkillSprite(SkillSlot slot, float seconds)
+        {
+            CharacterSpriteId id = slot switch
+            {
+                SkillSlot.AttackA => CharacterSpriteId.AttackA,
+                SkillSlot.AttackB => CharacterSpriteId.AttackB,
+                SkillSlot.AttackC => CharacterSpriteId.AttackC,
+                SkillSlot.SmashSide => CharacterSpriteId.SmashSide,
+                _ => CharacterSpriteId.Idle1,
+            };
+            ForceSprite(id, seconds);
+        }
+
+        public void ShowGrabSprite(float seconds)
+        {
+            ForceSprite(CharacterSpriteId.Grab, seconds);
+        }
+
+        public Sprite GetEffectSprite(SkillSlot slot)
+        {
+            CharacterSpriteId id = slot switch
+            {
+                SkillSlot.AttackA => CharacterSpriteId.EffectA,
+                SkillSlot.AttackB => CharacterSpriteId.EffectB,
+                SkillSlot.AttackC => CharacterSpriteId.EffectC,
+                SkillSlot.SmashSide => CharacterSpriteId.EffectSmash,
+                _ => CharacterSpriteId.EffectA,
+            };
+            return _spriteSet.Get(id, null, false);
+        }
+
+        void ForceSprite(CharacterSpriteId id, float seconds)
+        {
+            _forcedSprite = id;
+            _forcedSpriteTimer = Mathf.Max(_forcedSpriteTimer, seconds);
+        }
+
         public void SetGrabThrowParameters(GrabParameters grab, ThrowParameters throwData)
         {
             if (grab != null) grabParameters = grab;
@@ -309,6 +399,7 @@ namespace PromptFighters.Battle
         {
             if (!CanAct || Opponent == null) return false;
             if (_grabCooldownTimer > 0f) return false;
+            ShowGrabSprite(grabParameters.startup + 0.15f);
             StartCoroutine(ExecuteGrab());
             return true;
         }
@@ -426,6 +517,10 @@ namespace PromptFighters.Battle
             _grabHoldTimer      = 0f;
             _grabCooldownTimer  = 0f;
             _isTryingGrab       = false;
+            _forcedSprite       = null;
+            _forcedSpriteTimer  = 0f;
+            _idleAnimTimer      = 0f;
+            _idleFrame          = 0;
             CurrentGuardDurability = maxGuardDurability;
             State               = FighterState.Idle;
             transform.position  = spawnPos;
@@ -494,6 +589,17 @@ namespace PromptFighters.Battle
             EnsureVisualRenderer();
             if (_sprite == null) return;
             _sprite.sprite = sprite;
+            _spriteSet.Set(CharacterSpriteId.Idle1, sprite);
+            ApplyVisualScaleCorrection();
+        }
+
+        public void SetCharacterSprites(CharacterSpriteSet spriteSet)
+        {
+            EnsureVisualRenderer();
+            if (_sprite == null || spriteSet == null) return;
+            _spriteSet = spriteSet;
+            Sprite primary = _spriteSet.Get(CharacterSpriteId.Idle1, _sprite.sprite);
+            if (primary != null) _sprite.sprite = primary;
             ApplyVisualScaleCorrection();
         }
 
@@ -520,6 +626,7 @@ namespace PromptFighters.Battle
                 _sprite.sortingLayerID = _rootSprite.sortingLayerID;
                 _sprite.sortingOrder = _rootSprite.sortingOrder;
                 _rootSprite.enabled = false;
+                _spriteSet.Set(CharacterSpriteId.Idle1, _sprite.sprite);
             }
 
             ApplyVisualScaleCorrection();

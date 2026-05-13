@@ -85,6 +85,7 @@ namespace PromptFighters.Battle.Skills
             _isExecuting = true;
             float totalDuration = skill.parameters.startup + skill.parameters.active_time + skill.parameters.recovery;
             _fighter.BeginSkillRecovery(totalDuration);
+            _fighter.ShowSkillSprite(skill.slot, totalDuration);
 
             // スキル発動フラッシュ
             var sr = _fighter.VisualRenderer;
@@ -156,6 +157,7 @@ namespace PromptFighters.Battle.Skills
             hb.StunTime       = skill.parameters.stun_time;
             hb.GuardDamage    = skill.parameters.guard_damage;
             hb.Element        = skill.element;
+            hb.EffectSprite   = _fighter.GetEffectSprite(skill.slot);
             hb.MaxHits        = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
         }
 
@@ -174,6 +176,7 @@ namespace PromptFighters.Battle.Skills
             p.StunTime       = skill.parameters.stun_time;
             p.GuardDamage    = skill.parameters.guard_damage;
             p.Element        = skill.element;
+            p.EffectSprite   = _fighter.GetEffectSprite(skill.slot);
         }
 
         void DoDash(SkillAction a)

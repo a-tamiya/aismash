@@ -3,6 +3,7 @@ using System.Collections;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
+using PromptFighters.Battle.Skills;
 
 namespace PromptFighters.AI
 {
@@ -50,11 +51,96 @@ namespace PromptFighters.AI
 
         [Serializable] class Config { public string openai_api_key; }
 
+        static readonly (CharacterSpriteId id, string prompt)[] SpritePrompts =
+        {
+            (CharacterSpriteId.Idle1, "standing idle pose, full body, white background"),
+            (CharacterSpriteId.Idle2, "same character, slightly different idle pose, full body, white background"),
+            (CharacterSpriteId.Idle3, "same character, lively idle pose, full body, white background"),
+            (CharacterSpriteId.Jump, "same character, jumping pose, full body, white background"),
+            (CharacterSpriteId.Damage, "same character, hurt reaction pose, full body, white background"),
+            (CharacterSpriteId.Grab, "same character, grabbing pose, full body, white background"),
+            (CharacterSpriteId.Dash, "same character, fast dashing pose, full body, white background"),
+            (CharacterSpriteId.AttackA, "same character, basic attack A action pose, full body, white background"),
+            (CharacterSpriteId.AttackB, "same character, basic attack B action pose, full body, white background"),
+            (CharacterSpriteId.AttackC, "same character, basic attack C action pose, full body, white background"),
+            (CharacterSpriteId.SmashSide, "same character, powerful side smash attack pose, full body, white background"),
+            (CharacterSpriteId.EffectA, "2D game visual effect for attack A only, no character, no text, transparent background"),
+            (CharacterSpriteId.EffectB, "2D game visual effect for attack B only, no character, no text, transparent background"),
+            (CharacterSpriteId.EffectC, "2D game visual effect for attack C only, no character, no text, transparent background"),
+            (CharacterSpriteId.EffectSmash, "large 2D game visual effect for side smash only, no character, no text, transparent background"),
+        };
+
         public static Coroutine Generate(MonoBehaviour runner,
             string visualPrompt,
             Action<Sprite> onSuccess, Action<string> onError)
         {
             return runner.StartCoroutine(GenerateCoroutine(visualPrompt, onSuccess, onError));
+        }
+
+        public static Coroutine GenerateSpriteSet(MonoBehaviour runner,
+            string baseVisualPrompt,
+            Action<string> onProgress,
+            Action<CharacterSpriteSet> onSuccess,
+            Action<string> onError)
+        {
+            return runner.StartCoroutine(GenerateSpriteSetCoroutine(baseVisualPrompt, onProgress, onSuccess, onError));
+        }
+
+        static IEnumerator GenerateSpriteSetCoroutine(
+            string baseVisualPrompt,
+            Action<string> onProgress,
+            Action<CharacterSpriteSet> onSuccess,
+            Action<string> onError)
+        {
+            var set = new CharacterSpriteSet();
+            string firstError = null;
+
+            for (int i = 0; i < SpritePrompts.Length; i++)
+            {
+                var item = SpritePrompts[i];
+                onProgress?.Invoke($"スプライト生成中... {i + 1}/{SpritePrompts.Length}");
+                bool done = false;
+                Sprite generated = null;
+                string error = null;
+                string prompt = $"{baseVisualPrompt}, {item.prompt}";
+
+                yield return GenerateCoroutine(prompt,
+                    sprite => { generated = sprite; done = true; },
+                    err => { error = err; done = true; });
+
+                if (!done) yield return new WaitUntil(() => done);
+
+                if (generated != null)
+                {
+                    set.Set(item.id, generated);
+                    if (item.id == CharacterSpriteId.Idle1)
+                    {
+                        FillMissingCharacterSprites(set, generated);
+                    }
+                }
+                else
+                {
+                    firstError ??= error;
+                    Debug.LogWarning($"[AIImage] {item.id} の生成に失敗: {error}");
+                }
+            }
+
+            if (set.Get(CharacterSpriteId.Idle1) == null)
+            {
+                onError?.Invoke(firstError ?? "Idle1画像の生成に失敗しました");
+                yield break;
+            }
+
+            onSuccess?.Invoke(set);
+        }
+
+        static void FillMissingCharacterSprites(CharacterSpriteSet set, Sprite fallback)
+        {
+            for (int i = (int)CharacterSpriteId.Idle1; i <= (int)CharacterSpriteId.SmashSide; i++)
+            {
+                if (set.sprites[i] == null)
+                    set.sprites[i] = fallback;
+            }
         }
 
         static IEnumerator GenerateCoroutine(
@@ -72,7 +158,7 @@ namespace PromptFighters.AI
                 .Replace("\\", "\\\\").Replace("\"", "\\\"")
                 .Replace("\n", " ").Replace("\r", "");
 
-            string body = $"{{\"model\":\"{Model}\",\"prompt\":\"{safePrompt}\",\"n\":1,\"size\":\"{Size}\",\"response_format\":\"url\"}}";
+            string body = $"{{\"model\":\"{Model}\",\"prompt\":\"{safePrompt}\",\"n\":1,\"size\":\"{Size}\"}}";
 
             using var req = new UnityWebRequest(Endpoint, "POST");
             req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
@@ -90,15 +176,33 @@ namespace PromptFighters.AI
                 yield break;
             }
 
-            string imageUrl;
+            string imageUrl = null;
+            string imageBase64 = null;
             try
             {
-                imageUrl = ParseUrl(req.downloadHandler.text);
+                ParseImageResponse(req.downloadHandler.text, out imageUrl, out imageBase64);
             }
             catch (Exception e)
             {
                 Debug.LogWarning($"[AIImage] レスポンス解析エラー: {e.Message}");
                 onError?.Invoke("レスポンス解析失敗: " + e.Message);
+                yield break;
+            }
+
+            if (!string.IsNullOrEmpty(imageBase64))
+            {
+                try
+                {
+                    byte[] bytes = Convert.FromBase64String(imageBase64);
+                    var decodedTex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                    if (!decodedTex.LoadImage(bytes))
+                        throw new Exception("Texture2D.LoadImage failed");
+                    onSuccess?.Invoke(Texture2ToSprite(decodedTex));
+                }
+                catch (Exception e)
+                {
+                    onError?.Invoke("base64画像の変換に失敗: " + e.Message);
+                }
                 yield break;
             }
 
@@ -121,14 +225,19 @@ namespace PromptFighters.AI
 
         // {"data":[{"url":"..."}]} から url を取り出す
         [Serializable] class ImgResp { public ImgData[] data; }
-        [Serializable] class ImgData { public string url; }
+        [Serializable] class ImgData { public string url; public string b64_json; }
 
-        static string ParseUrl(string json)
+        static void ParseImageResponse(string json, out string url, out string b64Json)
         {
+            url = null;
+            b64Json = null;
             var resp = JsonUtility.FromJson<ImgResp>(json);
-            if (resp?.data == null || resp.data.Length == 0 || string.IsNullOrEmpty(resp.data[0].url))
-                throw new Exception("data[0].url が見つかりません");
-            return resp.data[0].url;
+            if (resp?.data == null || resp.data.Length == 0)
+                throw new Exception("data[0] が見つかりません");
+            url = resp.data[0].url;
+            b64Json = resp.data[0].b64_json;
+            if (string.IsNullOrEmpty(url) && string.IsNullOrEmpty(b64Json))
+                throw new Exception("data[0].url / data[0].b64_json が見つかりません");
         }
 
         static Sprite Texture2ToSprite(Texture2D tex)

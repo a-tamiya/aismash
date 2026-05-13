@@ -210,6 +210,8 @@ namespace PromptFighters.Battle
             // characterSpriteが既にセットされていればそちらを優先
             if (data.characterSprite != null)
             {
+                data.spriteSet.Set(CharacterSpriteId.Idle1, data.characterSprite);
+                fighter.SetCharacterSprites(data.spriteSet);
                 fighter.SetCharacterSprite(data.characterSprite);
                 return;
             }
@@ -219,8 +221,8 @@ namespace PromptFighters.Battle
             Sprite loaded = SpriteLoader.LoadWithWhiteBgRemoved(data.spritePath);
             if (loaded != null)
             {
-                data.characterSprite = loaded;
-                fighter.SetCharacterSprite(loaded);
+                data.SetPrimarySprite(loaded);
+                fighter.SetCharacterSprites(data.spriteSet);
             }
         }
 

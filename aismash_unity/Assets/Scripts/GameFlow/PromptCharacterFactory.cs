@@ -52,6 +52,7 @@ namespace PromptFighters.GameFlow
                 visualDescription = src.visualDescription,
                 spritePath = src.spritePath,
                 characterSprite = src.characterSprite,
+                spriteSet = CloneSpriteSet(src.spriteSet),
                 grabParameters = new GrabParameters
                 {
                     range = src.grabParameters.range,
@@ -69,6 +70,15 @@ namespace PromptFighters.GameFlow
 
             for (int i = 0; i < clone.skills.Length && i < src.skills.Length; i++)
                 clone.skills[i] = CloneSkill(src.skills[i]);
+            return clone;
+        }
+
+        static CharacterSpriteSet CloneSpriteSet(CharacterSpriteSet src)
+        {
+            var clone = new CharacterSpriteSet();
+            if (src?.sprites == null) return clone;
+            for (int i = 0; i < clone.sprites.Length && i < src.sprites.Length; i++)
+                clone.sprites[i] = src.sprites[i];
             return clone;
         }
 

@@ -17,6 +17,7 @@ namespace PromptFighters.Battle.Skills
         public float        StatusDuration;
         public float        StatusChance = 1f;
         public Element      Element = Element.None;
+        public Sprite       EffectSprite;
         public int          MaxHits  = 1;
         public float        Lifetime = 0.1f;
 
@@ -46,7 +47,16 @@ namespace PromptFighters.Battle.Skills
         void Start()
         {
             Color ec = SkillEnumParser.ElementColor(Element);
-            GetComponent<SpriteRenderer>().color = new Color(ec.r, ec.g, ec.b, 0.65f);
+            var sr = GetComponent<SpriteRenderer>();
+            if (EffectSprite != null)
+            {
+                sr.sprite = EffectSprite;
+                sr.color = Color.white;
+            }
+            else
+            {
+                sr.color = new Color(ec.r, ec.g, ec.b, 0.65f);
+            }
             Destroy(gameObject, Lifetime);
         }
 

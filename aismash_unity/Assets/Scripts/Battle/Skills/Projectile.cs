@@ -15,6 +15,7 @@ namespace PromptFighters.Battle.Skills
         public float      StatusDuration;
         public float      StatusChance = 1f;
         public Element    Element = Element.None;
+        public Sprite     EffectSprite;
         public float      Speed     = 8f;
         public float      Lifetime  = 2f;
         public Vector2    Direction = Vector2.right;
@@ -48,7 +49,16 @@ namespace PromptFighters.Battle.Skills
 
         void Start()
         {
-            GetComponent<SpriteRenderer>().color = SkillEnumParser.ElementColor(Element);
+            var sr = GetComponent<SpriteRenderer>();
+            if (EffectSprite != null)
+            {
+                sr.sprite = EffectSprite;
+                sr.color = Color.white;
+            }
+            else
+            {
+                sr.color = SkillEnumParser.ElementColor(Element);
+            }
             GetComponent<Rigidbody2D>().linearVelocity = Direction * Speed;
             Destroy(gameObject, Lifetime);
         }

@@ -2,6 +2,48 @@ using UnityEngine;
 
 namespace PromptFighters.Battle.Skills
 {
+    public enum CharacterSpriteId
+    {
+        Idle1 = 0,
+        Idle2 = 1,
+        Idle3 = 2,
+        Jump = 3,
+        Damage = 4,
+        Grab = 5,
+        Dash = 6,
+        AttackA = 7,
+        AttackB = 8,
+        AttackC = 9,
+        SmashSide = 10,
+        EffectA = 11,
+        EffectB = 12,
+        EffectC = 13,
+        EffectSmash = 14,
+    }
+
+    [System.Serializable]
+    public class CharacterSpriteSet
+    {
+        public Sprite[] sprites = new Sprite[15];
+
+        public Sprite Get(CharacterSpriteId id, Sprite fallback = null, bool fallbackToPrimary = true)
+        {
+            int index = (int)id;
+            if (sprites != null && index >= 0 && index < sprites.Length && sprites[index] != null)
+                return sprites[index];
+            if (fallbackToPrimary && sprites != null && sprites.Length > 0 && sprites[0] != null)
+                return sprites[0];
+            return fallback;
+        }
+
+        public void Set(CharacterSpriteId id, Sprite sprite)
+        {
+            if (sprites == null || sprites.Length != 15)
+                sprites = new Sprite[15];
+            sprites[(int)id] = sprite;
+        }
+    }
+
     // キャラクター1人分のランタイムデータ。
     // Phase 4でAI生成結果がここに入り、Phase 5でファイル保存される。
     public class CharacterData
@@ -17,8 +59,15 @@ namespace PromptFighters.Battle.Skills
 
         public string spritePath        = "Sprites/test.jpg"; // StreamingAssets相対パス or 絶対パス
         public Sprite characterSprite;  // Phase 4で設定（またはspritePath読み込み後に格納）
+        public CharacterSpriteSet spriteSet = new CharacterSpriteSet();
 
         public SkillData GetSkill(SkillSlot slot) => skills[(int)slot];
+
+        public void SetPrimarySprite(Sprite sprite)
+        {
+            characterSprite = sprite;
+            spriteSet.Set(CharacterSpriteId.Idle1, sprite);
+        }
     }
 
     [System.Serializable]
