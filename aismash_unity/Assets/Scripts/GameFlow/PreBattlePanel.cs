@@ -222,7 +222,7 @@ namespace PromptFighters.GameFlow
                 new Vector2(0, -178), new Vector2(320, 24), 13, new Color(0.8f, 0.88f, 1f));
 
             MakeLabel(_titlePanel.transform, "Footer",
-                "1P: WASD + J/K/L/U/G    2P: 矢印 + テンキー2/3/1/5/0",
+                "1P: WASD + J/K/L/G    スマッシュ: A/Dはじき+J    2P: 矢印 + テンキー2/3/1/0",
                 new Vector2(0, -286), new Vector2(760, 28), 12, new Color(0.76f, 0.82f, 0.9f));
         }
 
@@ -281,8 +281,8 @@ namespace PromptFighters.GameFlow
 
             // ── 操作ガイド ──
             MakeLabel(_panel.transform, "CtrlHelp",
-                "1P: WASD 移動 / J 基本技A / K 基本技B / L 基本技C / U スマッシュ / G つかみ / 左Shift ガード\n" +
-                "2P: 矢印キー 移動 / テンキー2 基本技A / 3 基本技B / 1 基本技C / 5 スマッシュ / 0 つかみ / 右Shift ガード",
+                "1P: WASD 移動 / J 基本技A / K 基本技B / L 基本技C / A/Dはじき+J スマッシュ / G つかみ / 左Shift ガード\n" +
+                "2P: 矢印キー 移動 / テンキー2 基本技A / 3 基本技B / 1 基本技C / ←/→はじき+2 スマッシュ / 0 つかみ / 右Shift ガード",
                 new Vector2(0, 540 - 810), new Vector2(840, 52), 13, new Color(0.72f, 0.78f, 0.92f));
 
             BuildTrainingPanel();
@@ -399,7 +399,7 @@ namespace PromptFighters.GameFlow
             MakeLabel(_trainingPanel.transform, "TrainingTitle", "トレーニングモード",
                 new Vector2(0, 485), new Vector2(480, 46), 28, new Color(0.5f, 0.85f, 1f));
             MakeLabel(_trainingPanel.transform, "TrainingControls",
-                "1P: WASD 移動 / J K L U 技 / G つかみ / 左Shift ガード    2P: 矢印 移動 / テンキー2 3 1 5 技 / 0 つかみ / 右Shift ガード\n" +
+                "1P: WASD 移動 / J K L 技 / A/Dはじき+J スマッシュ / G つかみ / 左Shift ガード    2P: 矢印 移動 / テンキー2 3 1 技 / ←/→はじき+2 スマッシュ / 0 つかみ / 右Shift ガード\n" +
                 "Escキー: キャラ選択に戻る    Rキー: 位置・HP・技状態をリセット",
                 new Vector2(0, 440), new Vector2(900, 52), 14, new Color(0.9f, 0.95f, 1f));
         }

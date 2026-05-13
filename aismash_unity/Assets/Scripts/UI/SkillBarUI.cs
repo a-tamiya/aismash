@@ -19,8 +19,8 @@ namespace PromptFighters.UI
         TextMeshProUGUI[] _skillNames;
         TextMeshProUGUI[] _keybindLabels;
 
-        static readonly string[] Keys1P = { "J", "K", "L", "U" };
-        static readonly string[] Keys2P = { "Num2", "Num3", "Num1", "Num5" };
+        static readonly string[] Keys1P = { "J", "K", "L", "A/D+J" };
+        static readonly string[] Keys2P = { "Num2", "Num3", "Num1", "←/→+Num2" };
         static readonly string[] SlotLabels = { "Attack A", "Attack B", "Attack C", "Smash" };
 
         void Start()

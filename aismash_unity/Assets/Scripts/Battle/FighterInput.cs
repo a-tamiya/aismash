@@ -13,7 +13,10 @@ namespace PromptFighters.Battle
         SkillExecutor _skills;
         bool _smashHeld;
         float _smashCharge;
+        float _lastSmashFlickTime = -10f;
+        float _previousSmashAxis;
         const float MaxSmashCharge = 1f;
+        const float SmashFlickWindow = 0.18f;
 
         void Awake()
         {
@@ -30,6 +33,16 @@ namespace PromptFighters.Battle
             // 対戦中またはトレーニング中だけ操作を受け付ける
             if (bm != null && !bm.IsFighting) return;
 
+            if (_fighter.IsGrabbed) return;
+            if (_fighter.IsHoldingOpponent)
+            {
+                float throwDir = ReadMove();
+                if (throwDir > 0.35f) _fighter.ThrowHeld(_fighter.FacingRight);
+                else if (throwDir < -0.35f) _fighter.ThrowHeld(!_fighter.FacingRight);
+                return;
+            }
+
+            RecordSmashFlick();
             float smashMultiplier = UpdateSmashCharge();
             if (_smashHeld)
             {
@@ -41,13 +54,6 @@ namespace PromptFighters.Battle
             _fighter.Move(ReadMove());
             _fighter.SetGuard(ReadGuard());
             if (ReadJumpPressed()) _fighter.Jump();
-            if (_fighter.IsHoldingOpponent)
-            {
-                float throwDir = ReadMove();
-                if (throwDir > 0.35f) _fighter.ThrowHeld(_fighter.FacingRight);
-                else if (throwDir < -0.35f) _fighter.ThrowHeld(!_fighter.FacingRight);
-                return;
-            }
             if (ReadGrabPressed()) _fighter.TryStartGrab();
 
             // スキルはEnded以外で使用可能
@@ -169,22 +175,27 @@ namespace PromptFighters.Battle
 
         float UpdateSmashCharge()
         {
-            bool pressed = false;
+            bool rightButtonPressed = false;
             var kb = Keyboard.current;
             if (kb != null)
             {
-                if (playerIndex == 0) pressed |= kb.uKey.isPressed;
-                else                  pressed |= kb.numpad5Key.isPressed;
+                rightButtonPressed |= playerIndex == 0
+                    ? kb.jKey.isPressed
+                    : kb.numpad2Key.isPressed;
             }
 
             var gp = GetGamepad();
             if (gp != null)
             {
-                bool flicking = Mathf.Abs(gp.leftStick.x.ReadValue()) >= 0.7f || Mathf.Abs(gp.dpad.x.ReadValue()) > 0.5f;
-                pressed |= flicking && gp.buttonEast.isPressed;
+                rightButtonPressed |= gp.buttonEast.isPressed;
             }
 
-            if (pressed)
+            bool canStartSmash = Time.time - _lastSmashFlickTime <= SmashFlickWindow;
+            bool charging = _smashHeld
+                ? rightButtonPressed
+                : rightButtonPressed && canStartSmash;
+
+            if (charging)
             {
                 _smashHeld = true;
                 _smashCharge = Mathf.Min(MaxSmashCharge, _smashCharge + Time.deltaTime);
@@ -199,9 +210,34 @@ namespace PromptFighters.Battle
 
             bool released = _smashHeld;
             float multiplier = released ? Mathf.Lerp(1f, 2f, _smashCharge / MaxSmashCharge) : 0f;
-            _smashHeld = pressed;
+            _smashHeld = false;
             _smashCharge = 0f;
             return multiplier;
+        }
+
+        void RecordSmashFlick()
+        {
+            float axis = 0f;
+            var kb = Keyboard.current;
+            if (kb != null)
+            {
+                bool keyboardFlick = playerIndex == 0
+                    ? kb.aKey.wasPressedThisFrame || kb.dKey.wasPressedThisFrame
+                    : kb.leftArrowKey.wasPressedThisFrame || kb.rightArrowKey.wasPressedThisFrame;
+                if (keyboardFlick) _lastSmashFlickTime = Time.time;
+            }
+
+            var gp = GetGamepad();
+            if (gp != null)
+            {
+                float stick = gp.leftStick.x.ReadValue();
+                float dpad = gp.dpad.x.ReadValue();
+                axis = Mathf.Abs(stick) > Mathf.Abs(dpad) ? stick : dpad;
+            }
+
+            if (Mathf.Abs(axis) >= 0.7f && Mathf.Abs(_previousSmashAxis) < 0.7f)
+                _lastSmashFlickTime = Time.time;
+            _previousSmashAxis = axis;
         }
 
         Gamepad GetGamepad()

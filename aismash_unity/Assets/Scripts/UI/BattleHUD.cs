@@ -27,8 +27,8 @@ namespace PromptFighters.UI
         SkillExecutor _se1, _se2;
 
         static readonly string[] SlotJp   = { "基本技A", "基本技B", "基本技C", "スマッシュ" };
-        static readonly string[] Keys1P   = { "J", "K", "L", "U" };
-        static readonly string[] Keys2P   = { "テン2", "テン3", "テン1", "テン5" };
+        static readonly string[] Keys1P   = { "J", "K", "L", "A/D+J" };
+        static readonly string[] Keys2P   = { "テン2", "テン3", "テン1", "←/→+2" };
         static readonly Color    P1Color  = new Color(0.40f, 0.75f, 1.00f);
         static readonly Color    P2Color  = new Color(1.00f, 0.55f, 0.30f);
 
