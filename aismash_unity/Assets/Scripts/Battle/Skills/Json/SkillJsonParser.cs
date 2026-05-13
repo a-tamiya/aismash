@@ -36,9 +36,13 @@ namespace PromptFighters.Battle.Skills.Json
             {
                 characterName     = raw.character_name,
                 inputFeatures     = raw.input_features     ?? "",
-                visualPrompt      = raw.visual_prompt      ?? "",
+                visualPrompt      = !string.IsNullOrEmpty(raw.base_visual_prompt) ? raw.base_visual_prompt : (raw.visual_prompt ?? ""),
                 visualDescription = raw.visual_description ?? "",
+                grabParameters    = raw.grab_parameters ?? new GrabParameters(),
+                throwParameters   = raw.throw_parameters ?? new ThrowParameters(),
             };
+
+            ClampGrabThrow(data);
 
             // スキルを変換
             var skillMap = new SkillData[4];
@@ -68,6 +72,17 @@ namespace PromptFighters.Battle.Skills.Json
 
             data.skills = skillMap;
             return data;
+        }
+
+        static void ClampGrabThrow(CharacterData data)
+        {
+            data.grabParameters.range = Mathf.Clamp(data.grabParameters.range, 0.8f, 2.2f);
+            data.grabParameters.startup = Mathf.Clamp(data.grabParameters.startup, 0.08f, 0.25f);
+            data.grabParameters.recovery = Mathf.Clamp(data.grabParameters.recovery, 0.6f, 1.5f);
+            data.throwParameters.front_damage = Mathf.Clamp(data.throwParameters.front_damage, 8f, 12f);
+            data.throwParameters.back_damage = Mathf.Clamp(data.throwParameters.back_damage, 8f, 12f);
+            data.throwParameters.front_knockback = Mathf.Clamp(data.throwParameters.front_knockback, 6f, 12f);
+            data.throwParameters.back_knockback = Mathf.Clamp(data.throwParameters.back_knockback, 6f, 14f);
         }
 
         // ParseOrFallback: 失敗時はキャラ名だけ入れてサンプル技で構築

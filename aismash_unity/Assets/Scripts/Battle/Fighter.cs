@@ -4,7 +4,7 @@ using PromptFighters.UI;
 
 namespace PromptFighters.Battle
 {
-    public enum FighterState { Idle, Moving, Jumping, Falling, Guarding, Stunned, Dead }
+    public enum FighterState { Idle, Moving, Jumping, Falling, Guarding, Stunned, Grabbed, Dead }
 
     [RequireComponent(typeof(Rigidbody2D), typeof(BoxCollider2D))]
     public class Fighter : MonoBehaviour
@@ -23,6 +23,12 @@ namespace PromptFighters.Battle
         public float guardHitDamageRatio = 0.45f;
         public float guardBreakLockDuration = 5f;
 
+        [Header("Grab / Throw")]
+        public GrabParameters grabParameters = new GrabParameters();
+        public ThrowParameters throwParameters = new ThrowParameters();
+        public float maxGrabHoldSeconds = 3f;
+        public float grabReleaseRecovery = 0.35f;
+
         [Header("Ground Check")]
         public Transform groundCheck;
         public float groundCheckRadius = 0.12f;
@@ -37,6 +43,8 @@ namespace PromptFighters.Battle
         public bool IsGrounded { get; private set; }
         public bool FacingRight { get; set; } = true;
         public int PlayerIndex { get; set; }
+        public bool IsHoldingOpponent => _heldOpponent != null;
+        public bool IsGrabbed => _grabbedBy != null;
 
         public event System.Action<float, float> OnHPChanged;
         public event System.Action<float, float> OnGuardChanged;
@@ -61,6 +69,10 @@ namespace PromptFighters.Battle
         float _slowFactor = 0.5f;
         float _guardBreakTimer;
         float _hitFlashTimer;
+        Fighter _heldOpponent;
+        Fighter _grabbedBy;
+        float _grabHoldTimer;
+        bool _isTryingGrab;
 
         static readonly Color GuardColor      = new Color(0.4f, 0.6f, 1f);
         static readonly Color StunColor       = new Color(1f, 0.8f, 0f);
@@ -71,7 +83,11 @@ namespace PromptFighters.Battle
         public bool CanAct =>
             State != FighterState.Guarding &&
             State != FighterState.Stunned &&
+            State != FighterState.Grabbed &&
             State != FighterState.Dead    &&
+            !_isTryingGrab                &&
+            _heldOpponent == null         &&
+            _grabbedBy == null            &&
             _guardBreakTimer    <= 0f     &&
             _controlLockTimer   <= 0f     &&
             _skillRecoveryTimer <= 0f;
@@ -109,6 +125,7 @@ namespace PromptFighters.Battle
             if (_hitFlashTimer      > 0f) _hitFlashTimer      -= Time.deltaTime;
             TickBurn();
             TickGuard();
+            TickGrab();
 
             UpdateState();
             UpdateVisual();
@@ -135,9 +152,10 @@ namespace PromptFighters.Battle
 
         void UpdateState()
         {
-            if (State == FighterState.Dead || State == FighterState.Guarding) return;
+            if (State == FighterState.Dead || State == FighterState.Guarding || State == FighterState.Grabbed) return;
 
             if (_stunTimer > 0f || _guardBreakTimer > 0f) { State = FighterState.Stunned; return; }
+            if (_grabbedBy != null) { State = FighterState.Grabbed; return; }
 
             if (!IsGrounded)
             {
@@ -163,6 +181,7 @@ namespace PromptFighters.Battle
             {
                 FighterState.Guarding => GuardColor,
                 FighterState.Stunned  => StunColor,
+                FighterState.Grabbed  => StunColor,
                 _                     => Color.white,
             };
 
@@ -201,6 +220,7 @@ namespace PromptFighters.Battle
         {
             if (State == FighterState.Dead || _stunTimer > 0f) return;
             if (_skillExecutor != null && _skillExecutor.IsExecuting) return;
+            if (_heldOpponent != null || _grabbedBy != null || _isTryingGrab) return;
             if (_guardBreakTimer > 0f) { guarding = false; }
             if (CurrentGuardDurability <= 0f) { guarding = false; }
 
@@ -220,6 +240,7 @@ namespace PromptFighters.Battle
                                float guardDamage = 0f)
         {
             if (State == FighterState.Dead) return;
+            if (_grabbedBy != null) return;
 
             bool blocking = State == FighterState.Guarding && _guardBreakTimer <= 0f;
             float actual  = blocking ? Mathf.Max(damage * guardDamageRatio, guardDamage) : damage;
@@ -274,6 +295,109 @@ namespace PromptFighters.Battle
             _rb.linearVelocity = new Vector2(impulse.x, _rb.linearVelocity.y + impulse.y);
         }
 
+        public void SetGrabThrowParameters(GrabParameters grab, ThrowParameters throwData)
+        {
+            if (grab != null) grabParameters = grab;
+            if (throwData != null) throwParameters = throwData;
+        }
+
+        public bool TryStartGrab()
+        {
+            if (!CanAct || Opponent == null) return false;
+            StartCoroutine(ExecuteGrab());
+            return true;
+        }
+
+        System.Collections.IEnumerator ExecuteGrab()
+        {
+            _isTryingGrab = true;
+            _rb.linearVelocity = new Vector2(0f, _rb.linearVelocity.y);
+            if (grabParameters.startup > 0f)
+                yield return new WaitForSeconds(grabParameters.startup);
+
+            if (State == FighterState.Dead || Opponent == null)
+            {
+                _isTryingGrab = false;
+                yield break;
+            }
+
+            bool success = IsOpponentInGrabRange();
+            if (success)
+            {
+                _heldOpponent = Opponent;
+                _heldOpponent.BeginGrabbedBy(this);
+                _grabHoldTimer = maxGrabHoldSeconds;
+            }
+            else
+            {
+                BeginSkillRecovery(grabParameters.recovery);
+            }
+
+            _isTryingGrab = false;
+        }
+
+        bool IsOpponentInGrabRange()
+        {
+            if (Opponent == null) return false;
+            Vector2 delta = Opponent.transform.position - transform.position;
+            float forward = FacingRight ? delta.x : -delta.x;
+            return forward >= 0f &&
+                   forward <= grabParameters.range &&
+                   Mathf.Abs(delta.y) <= 1.2f;
+        }
+
+        void BeginGrabbedBy(Fighter owner)
+        {
+            if (State == FighterState.Dead) return;
+            SetGuard(false);
+            _grabbedBy = owner;
+            State = FighterState.Grabbed;
+            _rb.linearVelocity = Vector2.zero;
+            _stunTimer = 0f;
+            _controlLockTimer = 0f;
+        }
+
+        void TickGrab()
+        {
+            if (_heldOpponent == null) return;
+
+            _grabHoldTimer -= Time.deltaTime;
+            Vector3 holdOffset = new Vector3(FacingRight ? 0.75f : -0.75f, 0f, 0f);
+            _heldOpponent.transform.position = transform.position + holdOffset;
+            _heldOpponent._rb.linearVelocity = Vector2.zero;
+
+            if (_grabHoldTimer <= 0f)
+                ReleaseHeldOpponent(applyRecovery: true);
+        }
+
+        public bool ThrowHeld(bool forward)
+        {
+            if (_heldOpponent == null) return false;
+
+            Fighter target = _heldOpponent;
+            ReleaseHeldOpponent(applyRecovery: false);
+
+            float direction = FacingRight ? 1f : -1f;
+            if (!forward) direction = -direction;
+
+            float damage = forward ? throwParameters.front_damage : throwParameters.back_damage;
+            float knockback = forward ? throwParameters.front_knockback : throwParameters.back_knockback;
+            Vector2 kb = new Vector2(direction * knockback, knockback * 0.35f);
+            target.TakeDamage(damage, knockback, kb, 0.15f, damage);
+            return true;
+        }
+
+        void ReleaseHeldOpponent(bool applyRecovery)
+        {
+            if (_heldOpponent == null) return;
+            _heldOpponent._grabbedBy = null;
+            if (_heldOpponent.State == FighterState.Grabbed)
+                _heldOpponent.State = FighterState.Idle;
+            _heldOpponent = null;
+            _grabHoldTimer = 0f;
+            if (applyRecovery) BeginSkillRecovery(grabReleaseRecovery);
+        }
+
         public void BeginSkillRecovery(float seconds)
         {
             _skillRecoveryTimer = Mathf.Max(_skillRecoveryTimer, seconds);
@@ -289,6 +413,10 @@ namespace PromptFighters.Battle
             _slowTimer          = 0f;
             _guardBreakTimer    = 0f;
             _hitFlashTimer      = 0f;
+            _heldOpponent       = null;
+            _grabbedBy          = null;
+            _grabHoldTimer      = 0f;
+            _isTryingGrab       = false;
             CurrentGuardDurability = maxGuardDurability;
             State               = FighterState.Idle;
             transform.position  = spawnPos;
@@ -416,7 +544,7 @@ namespace PromptFighters.Battle
         void AutoFaceOpponent()
         {
             if (Opponent == null) return;
-            if (State == FighterState.Dead || State == FighterState.Stunned) return;
+            if (State == FighterState.Dead || State == FighterState.Stunned || State == FighterState.Grabbed) return;
             // スキル実行中は方向転換しない（ヒットボックスの位置がずれるため）
             if (_skillExecutor != null && _skillExecutor.IsExecuting) return;
 

@@ -26,7 +26,6 @@ namespace PromptFighters.Battle.Skills
         public float startup;
         public float active_time;
         public float recovery;
-        public float cooldown;
         public int   hit_count = 1;
         public float knockback;
         public float stun_time;

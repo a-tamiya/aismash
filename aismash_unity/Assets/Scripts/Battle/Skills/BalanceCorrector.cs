@@ -7,12 +7,11 @@ namespace PromptFighters.Battle.Skills
     public static class BalanceCorrector
     {
         // 技枠ごとの上限
-        static readonly float[] MaxDamage     = { 14f, 12f, 10f, 30f }; // Close/Ranged/Special/Ultimate
-        static readonly float[] MinCooldown   = {  1f,  2f,  4f,  8f };
-        static readonly float[] MaxCooldown   = {2.5f,  4f,  7f, 15f };
-        // 近距離系はヒットボックスサイズ(1〜2.5)、遠距離は射程(〜16)
+        static readonly float[] MaxDamage     = { 14f, 14f, 12f, 30f }; // attack_a/b/c/smash_side
+        static readonly float[] MinRecovery   = {0.3f, 0.5f, 1.0f, 3.0f };
+        static readonly float[] MaxRecovery   = {0.8f, 1.2f, 2.5f, 6.0f };
         static readonly float[] MaxRange      = { 2.5f, 16f, 2.5f, 3.0f };
-        static readonly float[] MinKnockback  = { 0f,   0f,  0f,   4f };  // 必殺技は最低限吹き飛ぶ
+        static readonly float[] MinKnockback  = { 0f,   0f,  0f,   4f };  // 横スマッシュは最低限吹き飛ぶ
 
         const float MaxStunTime  = 1.5f;
         const float MaxKnockback = 15f;
@@ -35,10 +34,10 @@ namespace PromptFighters.Battle.Skills
                 p.damage = Mathf.Clamp(p.damage, 0f, totalMaxDmg);
             }
 
-            // クールダウン
-            p.cooldown = Mathf.Clamp(p.cooldown, MinCooldown[si], MaxCooldown[si]);
+            // 後隙
+            p.recovery = Mathf.Clamp(p.recovery, MinRecovery[si], MaxRecovery[si]);
 
-            // 射程（closeはヒットボックスサイズ、rangedは射程距離）
+            // 射程（近接はヒットボックスサイズ、飛び道具は射程距離）
             p.range = Mathf.Clamp(p.range, 0.5f, MaxRange[si]);
 
             // 怯み時間
@@ -53,7 +52,7 @@ namespace PromptFighters.Battle.Skills
             // startupは0以上
             p.startup     = Mathf.Max(0f, p.startup);
             p.active_time = Mathf.Max(0.05f, p.active_time);
-            p.recovery    = Mathf.Max(0.05f, p.recovery);
+            p.recovery    = Mathf.Max(MinRecovery[si], p.recovery);
 
             // actions内のdamage_overrideにも適用
             if (skill.actions != null)

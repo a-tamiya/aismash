@@ -1,6 +1,6 @@
 namespace PromptFighters.Battle.Skills
 {
-    public enum SkillSlot { Close = 0, Ranged = 1, Special = 2, Ultimate = 3 }
+    public enum SkillSlot { AttackA = 0, AttackB = 1, AttackC = 2, SmashSide = 3 }
 
     public enum Element { None, Physical, Fire, Ice, Lightning, Dark, Wind }
 
@@ -12,11 +12,15 @@ namespace PromptFighters.Battle.Skills
     {
         public static SkillSlot ParseSlot(string s) => s switch
         {
-            "close"    => SkillSlot.Close,
-            "ranged"   => SkillSlot.Ranged,
-            "special"  => SkillSlot.Special,
-            "ultimate" => SkillSlot.Ultimate,
-            _          => SkillSlot.Close,
+            "attack_a"   => SkillSlot.AttackA,
+            "attack_b"   => SkillSlot.AttackB,
+            "attack_c"   => SkillSlot.AttackC,
+            "smash_side" => SkillSlot.SmashSide,
+            "close"      => SkillSlot.AttackA,
+            "ranged"     => SkillSlot.AttackB,
+            "special"    => SkillSlot.AttackC,
+            "ultimate"   => SkillSlot.SmashSide,
+            _            => SkillSlot.AttackA,
         };
 
         public static Element ParseElement(string s) => s switch

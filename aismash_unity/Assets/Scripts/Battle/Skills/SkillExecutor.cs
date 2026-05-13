@@ -12,11 +12,9 @@ namespace PromptFighters.Battle.Skills
         public bool autoEquipSampleSkills = true;
 
         Fighter _fighter;
-        readonly float[] _cooldowns = new float[4];
         bool _isExecuting;
 
         public bool  IsExecuting               => _isExecuting;
-        public float GetCooldown(SkillSlot s)  => _cooldowns[(int)s];
         public SkillData GetSkill(SkillSlot s) => skills[(int)s];
 
         void Awake()
@@ -38,7 +36,7 @@ namespace PromptFighters.Battle.Skills
             if (data == null) return;
             for (int i = 0; i < skills.Length; i++)
                 skills[i] = data.skills[i];
-            ResetCooldowns();
+            ResetSkillState();
             Debug.Log($"[SkillExecutor] キャラクター「{data.characterName}」の技をロードしました。");
         }
 
@@ -49,15 +47,10 @@ namespace PromptFighters.Battle.Skills
             LoadCharacter(data);
         }
 
-        public void ResetCooldowns()
+        public void ResetSkillState()
         {
-            for (int i = 0; i < _cooldowns.Length; i++) _cooldowns[i] = 0f;
-        }
-
-        void Update()
-        {
-            for (int i = 0; i < _cooldowns.Length; i++)
-                if (_cooldowns[i] > 0f) _cooldowns[i] -= Time.deltaTime;
+            _isExecuting = false;
+            StopAllCoroutines();
         }
 
         public bool TryUseSkill(SkillSlot slot)
@@ -65,18 +58,31 @@ namespace PromptFighters.Battle.Skills
             int i = (int)slot;
             if (skills[i] == null)                return false;
             if (_isExecuting)                     return false;
-            if (_cooldowns[i] > 0f)               return false;
             if (!_fighter.CanAct)                 return false;
+            if (slot == SkillSlot.SmashSide && !_fighter.IsGrounded) return false;
 
             BattleLogger.Instance?.LogSkillUse(_fighter.PlayerIndex, slot, skills[i].skill_name);
-            StartCoroutine(ExecuteSkill(skills[i]));
+            StartCoroutine(ExecuteSkill(skills[i], 1f));
             return true;
         }
 
-        IEnumerator ExecuteSkill(SkillData skill)
+        public bool TryUseSkill(SkillSlot slot, float powerMultiplier)
+        {
+            int i = (int)slot;
+            if (skills[i] == null) return false;
+            if (_isExecuting) return false;
+            if (!_fighter.CanAct) return false;
+            if (slot == SkillSlot.SmashSide && !_fighter.IsGrounded) return false;
+
+            float multiplier = Mathf.Clamp(powerMultiplier, 1f, 2f);
+            BattleLogger.Instance?.LogSkillUse(_fighter.PlayerIndex, slot, skills[i].skill_name);
+            StartCoroutine(ExecuteSkill(skills[i], multiplier));
+            return true;
+        }
+
+        IEnumerator ExecuteSkill(SkillData skill, float powerMultiplier)
         {
             _isExecuting = true;
-            _cooldowns[(int)skill.slot] = skill.parameters.cooldown;
             float totalDuration = skill.parameters.startup + skill.parameters.active_time + skill.parameters.recovery;
             _fighter.BeginSkillRecovery(totalDuration);
 
@@ -101,7 +107,7 @@ namespace PromptFighters.Battle.Skills
                 var a = actions[actionIdx];
                 if (elapsed >= a.time)
                 {
-                    ExecuteAction(skill, a);
+                    ExecuteAction(skill, a, powerMultiplier);
                     actionIdx++;
                 }
                 else
@@ -116,12 +122,12 @@ namespace PromptFighters.Battle.Skills
             _isExecuting = false;
         }
 
-        void ExecuteAction(SkillData skill, SkillAction a)
+        void ExecuteAction(SkillData skill, SkillAction a, float powerMultiplier)
         {
             switch (a.type)
             {
-                case "melee_hitbox":   SpawnMeleeHitbox(skill, a); break;
-                case "projectile":     SpawnProjectile(skill, a);  break;
+                case "melee_hitbox":   SpawnMeleeHitbox(skill, a, powerMultiplier); break;
+                case "projectile":     SpawnProjectile(skill, a, powerMultiplier);  break;
                 case "dash":           DoDash(a);                  break;
                 case "apply_status":   ApplyOpponentStatus(a);     break;
                 case "delay":          /* no-op: time制御で表現 */ break;
@@ -131,7 +137,7 @@ namespace PromptFighters.Battle.Skills
             }
         }
 
-        void SpawnMeleeHitbox(SkillData skill, SkillAction a)
+        void SpawnMeleeHitbox(SkillData skill, SkillAction a, float powerMultiplier)
         {
             float dirSign = _fighter.FacingRight ? 1f : -1f;
             float range   = a.range > 0f ? a.range : skill.parameters.range;
@@ -143,9 +149,9 @@ namespace PromptFighters.Battle.Skills
 
             var hb = Hitbox.Spawn(_fighter, (Vector2)_fighter.transform.position + offset, size, lifetime);
             hb.transform.SetParent(_fighter.transform, worldPositionStays: true);
-            float dmg = a.damage_override >= 0f ? a.damage_override : skill.parameters.damage;
+            float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) * powerMultiplier;
             hb.Damage         = dmg;
-            hb.Knockback      = skill.parameters.knockback;
+            hb.Knockback      = skill.parameters.knockback * powerMultiplier;
             hb.KnockbackDir   = new Vector2(1f, 0.3f);
             hb.StunTime       = skill.parameters.stun_time;
             hb.GuardDamage    = skill.parameters.guard_damage;
@@ -153,7 +159,7 @@ namespace PromptFighters.Battle.Skills
             hb.MaxHits        = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
         }
 
-        void SpawnProjectile(SkillData skill, SkillAction a)
+        void SpawnProjectile(SkillData skill, SkillAction a, float powerMultiplier)
         {
             float dirSign = _fighter.FacingRight ? 1f : -1f;
             Vector2 spawn = (Vector2)_fighter.transform.position + new Vector2(dirSign * 0.6f, 0.2f);
@@ -162,9 +168,9 @@ namespace PromptFighters.Battle.Skills
             float lifetime = a.projectile_lifetime > 0f ? a.projectile_lifetime : 1.5f;
 
             var p = Projectile.Spawn(_fighter, spawn, new Vector2(dirSign, 0f), speed, lifetime);
-            float dmg = a.damage_override >= 0f ? a.damage_override : skill.parameters.damage;
+            float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) * powerMultiplier;
             p.Damage         = dmg;
-            p.Knockback      = skill.parameters.knockback;
+            p.Knockback      = skill.parameters.knockback * powerMultiplier;
             p.StunTime       = skill.parameters.stun_time;
             p.GuardDamage    = skill.parameters.guard_damage;
             p.Element        = skill.element;

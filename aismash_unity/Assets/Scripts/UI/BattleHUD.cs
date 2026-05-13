@@ -20,17 +20,15 @@ namespace PromptFighters.UI
         TextMeshProUGUI  _timerText;
         GameObject       _hudRoot;
 
-        readonly Image[]           _p1CD    = new Image[4];
-        readonly Image[]           _p2CD    = new Image[4];
         readonly TextMeshProUGUI[] _p1Names = new TextMeshProUGUI[4];
         readonly TextMeshProUGUI[] _p2Names = new TextMeshProUGUI[4];
 
         Fighter       _f1, _f2;
         SkillExecutor _se1, _se2;
 
-        static readonly string[] SlotJp   = { "近距離", "遠距離", "特殊", "必殺" };
-        static readonly string[] Keys1P   = { "J", "K", "L", "I" };
-        static readonly string[] Keys2P   = { "テン1", "テン2", "テン3", "テン5" };
+        static readonly string[] SlotJp   = { "基本技A", "基本技B", "基本技C", "スマッシュ" };
+        static readonly string[] Keys1P   = { "J", "K", "L", "U" };
+        static readonly string[] Keys2P   = { "テン2", "テン3", "テン1", "テン5" };
         static readonly Color    P1Color  = new Color(0.40f, 0.75f, 1.00f);
         static readonly Color    P2Color  = new Color(1.00f, 0.55f, 0.30f);
 
@@ -77,26 +75,6 @@ namespace PromptFighters.UI
                 bm.OnTrainingStart += ShowHUD;
                 bm.OnTrainingStart += RefreshAll;
             }
-        }
-
-        void Update()
-        {
-            if (_hudRoot == null || !_hudRoot.activeSelf) return;
-            for (int i = 0; i < 4; i++)
-            {
-                RefreshCD(_p1CD[i], _se1, i);
-                RefreshCD(_p2CD[i], _se2, i);
-            }
-        }
-
-        void RefreshCD(Image fill, SkillExecutor se, int i)
-        {
-            if (fill == null || se == null) return;
-            var sk = se.GetSkill((SkillSlot)i);
-            if (sk == null) return;
-            float cd  = se.GetCooldown((SkillSlot)i);
-            float max = sk.parameters.cooldown;
-            fill.fillAmount = max > 0f ? Mathf.Clamp01(cd / max) : 0f;
         }
 
         void ShowHUD() { if (_hudRoot) _hudRoot.SetActive(true); }
@@ -345,7 +323,6 @@ namespace PromptFighters.UI
         void BuildSlots(Transform parent, bool isP1)
         {
             string[] keys = isP1 ? Keys1P : Keys2P;
-            var cdArr   = isP1 ? _p1CD    : _p2CD;
             var nameArr = isP1 ? _p1Names : _p2Names;
             var se      = isP1 ? _se1     : _se2;
 
@@ -369,17 +346,6 @@ namespace PromptFighters.UI
                 tbRt.anchorMin = new Vector2(0f, 1f); tbRt.anchorMax = new Vector2(1f, 1f);
                 tbRt.sizeDelta = new Vector2(0f, 3f); tbRt.anchoredPosition = Vector2.zero;
                 topBar.AddComponent<Image>().color = SlotColor(i);
-
-                // クールダウンオーバーレイ
-                var cd = MakeUI("CD", slot.transform);
-                FillParent(cd);
-                var cdImg = cd.AddComponent<Image>();
-                cdImg.type        = Image.Type.Filled;
-                cdImg.fillMethod  = Image.FillMethod.Vertical;
-                cdImg.fillOrigin  = 1;
-                cdImg.color       = new Color(0f, 0f, 0f, 0.62f);
-                cdImg.fillAmount  = 0f;
-                cdArr[i] = cdImg;
 
                 // 技名（上段）
                 var nm = MakeUI("SkillName", slot.transform);

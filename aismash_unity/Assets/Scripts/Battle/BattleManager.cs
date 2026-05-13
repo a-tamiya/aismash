@@ -131,7 +131,7 @@ namespace PromptFighters.Battle
         public void ResetTrainingRound()
         {
             if (Phase != BattlePhase.Training) return;
-            ResetFightersAndCooldowns();
+            ResetFightersAndSkillState();
         }
 
         void BeginFighting()
@@ -176,7 +176,7 @@ namespace PromptFighters.Battle
             yield return new WaitForSeconds(trainingRespawnDelay);
             _trainingResetRoutine = null;
             if (Phase == BattlePhase.Training)
-                ResetFightersAndCooldowns();
+                ResetFightersAndSkillState();
         }
 
         void ApplyCharacters(CharacterData data1, CharacterData data2)
@@ -186,19 +186,21 @@ namespace PromptFighters.Battle
 
             fighter1?.GetComponent<SkillExecutor>()?.LoadCharacter(data1);
             fighter2?.GetComponent<SkillExecutor>()?.LoadCharacter(data2);
+            fighter1?.SetGrabThrowParameters(data1?.grabParameters, data1?.throwParameters);
+            fighter2?.SetGrabThrowParameters(data2?.grabParameters, data2?.throwParameters);
 
             ApplySprite(fighter1, data1);
             ApplySprite(fighter2, data2);
 
-            ResetFightersAndCooldowns();
+            ResetFightersAndSkillState();
         }
 
-        void ResetFightersAndCooldowns()
+        void ResetFightersAndSkillState()
         {
             fighter1?.ResetForBattle(fighter1SpawnPos, faceRight: true);
             fighter2?.ResetForBattle(fighter2SpawnPos, faceRight: false);
-            fighter1?.GetComponent<SkillExecutor>()?.ResetCooldowns();
-            fighter2?.GetComponent<SkillExecutor>()?.ResetCooldowns();
+            fighter1?.GetComponent<SkillExecutor>()?.ResetSkillState();
+            fighter2?.GetComponent<SkillExecutor>()?.ResetSkillState();
         }
 
         static void ApplySprite(Fighter fighter, CharacterData data)

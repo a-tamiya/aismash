@@ -60,7 +60,7 @@ namespace PromptFighters.GameFlow
             sb.AppendLine("{");
             sb.AppendLine($"  \"character_name\": {Q(d.characterName)},");
             sb.AppendLine($"  \"input_features\": {Q(d.inputFeatures)},");
-            sb.AppendLine($"  \"visual_prompt\": {Q(d.visualPrompt)},");
+            sb.AppendLine($"  \"base_visual_prompt\": {Q(d.visualPrompt)},");
             sb.AppendLine($"  \"visual_description\": {Q(d.visualDescription)},");
             sb.AppendLine("  \"skills\": [");
 
@@ -73,7 +73,9 @@ namespace PromptFighters.GameFlow
                 AppendSkill(sb, skill);
             }
             sb.AppendLine();
-            sb.AppendLine("  ]");
+            sb.AppendLine("  ],");
+            sb.AppendLine($"  \"grab_parameters\": {{\"range\": {d.grabParameters.range}, \"startup\": {d.grabParameters.startup}, \"recovery\": {d.grabParameters.recovery}}},");
+            sb.AppendLine($"  \"throw_parameters\": {{\"front_damage\": {d.throwParameters.front_damage}, \"front_knockback\": {d.throwParameters.front_knockback}, \"back_damage\": {d.throwParameters.back_damage}, \"back_knockback\": {d.throwParameters.back_knockback}}}");
             sb.Append("}");
             return sb.ToString();
         }
@@ -90,7 +92,7 @@ namespace PromptFighters.GameFlow
             sb.AppendLine($"      \"parameters\": {{");
             sb.AppendLine($"        \"damage\": {p.damage}, \"hit_count\": {p.hit_count}, \"range\": {p.range},");
             sb.AppendLine($"        \"startup\": {p.startup}, \"active_time\": {p.active_time}, \"recovery\": {p.recovery},");
-            sb.AppendLine($"        \"cooldown\": {p.cooldown}, \"knockback\": {p.knockback}, \"stun_time\": {p.stun_time},");
+            sb.AppendLine($"        \"knockback\": {p.knockback}, \"stun_time\": {p.stun_time},");
             sb.AppendLine($"        \"guard_damage\": {p.guard_damage}, \"move_force\": {p.move_force}");
             sb.AppendLine("      },");
             sb.AppendLine("      \"actions\": [");
@@ -124,11 +126,11 @@ namespace PromptFighters.GameFlow
         static string Q(string s) => s == null ? "\"\"" : $"\"{s.Replace("\\","\\\\").Replace("\"","\\\"").Replace("\n","\\n")}\"";
 
         static string SlotStr(SkillSlot s) => s switch {
-            SkillSlot.Close    => "close",
-            SkillSlot.Ranged   => "ranged",
-            SkillSlot.Special  => "special",
-            SkillSlot.Ultimate => "ultimate",
-            _                  => "close",
+            SkillSlot.AttackA   => "attack_a",
+            SkillSlot.AttackB   => "attack_b",
+            SkillSlot.AttackC   => "attack_c",
+            SkillSlot.SmashSide => "smash_side",
+            _                   => "attack_a",
         };
         static string ElemStr(Element e) => e switch {
             Element.Physical  => "physical",

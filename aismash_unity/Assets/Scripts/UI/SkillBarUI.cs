@@ -16,15 +16,12 @@ namespace PromptFighters.UI
         public bool isLeftSide = true;  // 1P=左, 2P=右
 
         RectTransform[] _slots;
-        Image[]         _cooldownFill;
         TextMeshProUGUI[] _skillNames;
         TextMeshProUGUI[] _keybindLabels;
 
-        static readonly string[] Keys1P = { "J", "K", "L", "I" };
-        static readonly string[] Keys2P = { "Num1", "Num2", "Num3", "Num5" };
-        static readonly string[] SlotLabels = { "Close", "Ranged", "Special", "Ultimate" };
-        static readonly Color CooldownColor = new Color(0f, 0f, 0f, 0.7f);
-        static readonly Color ReadyColor    = new Color(0.2f, 0.8f, 0.3f, 0.5f);
+        static readonly string[] Keys1P = { "J", "K", "L", "U" };
+        static readonly string[] Keys2P = { "Num2", "Num3", "Num1", "Num5" };
+        static readonly string[] SlotLabels = { "Attack A", "Attack B", "Attack C", "Smash" };
 
         void Start()
         {
@@ -37,7 +34,6 @@ namespace PromptFighters.UI
             if (canvas == null) return;
 
             _slots         = new RectTransform[4];
-            _cooldownFill  = new Image[4];
             _skillNames    = new TextMeshProUGUI[4];
             _keybindLabels = new TextMeshProUGUI[4];
 
@@ -55,15 +51,6 @@ namespace PromptFighters.UI
                 slot.anchorMin = slot.anchorMax = new Vector2(0.5f, 0.5f);
                 AddImage(slot.gameObject, new Color(0.1f, 0.1f, 0.15f, 0.85f));
                 _slots[i] = slot;
-
-                // クールダウンオーバーレイ（上から下に縮む）
-                var fill = CreateRect("CoolFill", slot);
-                fill.anchorMin = new Vector2(0, 0);
-                fill.anchorMax = new Vector2(1, 0);
-                fill.pivot     = new Vector2(0.5f, 0f);
-                fill.sizeDelta = Vector2.zero;
-                var fillImg = AddImage(fill.gameObject, CooldownColor);
-                _cooldownFill[i] = fillImg;
 
                 // 技名
                 var nameObj = CreateRect("SkillName", slot);
@@ -107,28 +94,6 @@ namespace PromptFighters.UI
 
         void Update()
         {
-            if (skillExecutor == null || _slots == null) return;
-            for (int i = 0; i < 4; i++)
-            {
-                if (_cooldownFill[i] == null) continue;
-                var slot = (SkillSlot)i;
-                var skill = skillExecutor.GetSkill(slot);
-                if (skill == null) continue;
-
-                float cd    = skillExecutor.GetCooldown(slot);
-                float maxCD = skill.parameters.cooldown;
-                float t     = maxCD > 0f ? Mathf.Clamp01(cd / maxCD) : 0f;
-
-                // fillのheightをtに合わせてクールダウンをオーバーレイ
-                var rt = _cooldownFill[i].rectTransform;
-                rt.offsetMax = new Vector2(0f, _slots[i].sizeDelta.y * t);
-                rt.offsetMin = Vector2.zero;
-
-                // 背景色: 準備完了なら緑ぎみ
-                AddImage(_slots[i].gameObject, t <= 0f
-                    ? new Color(0.1f, 0.25f, 0.12f, 0.85f)
-                    : new Color(0.1f, 0.1f, 0.15f, 0.85f));
-            }
         }
 
         void RefreshNames()

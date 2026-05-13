@@ -9,11 +9,11 @@ public static class SkillJsonTester
     static readonly string SampleJson = @"{
   ""character_name"": ""シャドウキャット"",
   ""input_features"": ""黒い炎をまとった素早い猫の剣士。近距離で連続攻撃する。"",
-  ""visual_prompt"": ""2D anime standing character, black cat swordsman, dark flames"",
+  ""base_visual_prompt"": ""2D anime standing character, black cat swordsman, dark flames"",
   ""visual_description"": ""黒い炎をまとった猫耳の剣士。"",
   ""skills"": [
     {
-      ""slot"": ""close"",
+      ""slot"": ""attack_a"",
       ""skill_name"": ""黒炎みだれ斬り"",
       ""description"": ""黒い炎をまとった爪で3回斬りつける。"",
       ""element"": ""fire"",
@@ -25,7 +25,6 @@ public static class SkillJsonTester
         ""startup"": 0.18,
         ""active_time"": 0.25,
         ""recovery"": 0.45,
-        ""cooldown"": 1.6,
         ""knockback"": 3.5,
         ""stun_time"": 0.25,
         ""guard_damage"": 2,
@@ -38,7 +37,7 @@ public static class SkillJsonTester
       ]
     },
     {
-      ""slot"": ""ranged"",
+      ""slot"": ""attack_b"",
       ""skill_name"": ""影火球"",
       ""description"": ""黒い炎球を飛ばす遠距離技。"",
       ""element"": ""dark"",
@@ -48,8 +47,7 @@ public static class SkillJsonTester
         ""range"": 12,
         ""startup"": 0.2,
         ""active_time"": 0.1,
-        ""recovery"": 0.4,
-        ""cooldown"": 2.5,
+        ""recovery"": 0.8,
         ""knockback"": 4
       },
       ""actions"": [
@@ -57,7 +55,7 @@ public static class SkillJsonTester
       ]
     },
     {
-      ""slot"": ""special"",
+      ""slot"": ""attack_c"",
       ""skill_name"": ""闇猫ステップ"",
       ""description"": ""素早く踏み込み相手をスローにする。"",
       ""element"": ""dark"",
@@ -67,8 +65,7 @@ public static class SkillJsonTester
         ""range"": 1.5,
         ""startup"": 0.15,
         ""active_time"": 0.15,
-        ""recovery"": 0.5,
-        ""cooldown"": 5,
+        ""recovery"": 1.5,
         ""knockback"": 3,
         ""stun_time"": 0
       },
@@ -79,7 +76,7 @@ public static class SkillJsonTester
       ]
     },
     {
-      ""slot"": ""ultimate"",
+      ""slot"": ""smash_side"",
       ""skill_name"": ""ナイトメアラッシュ"",
       ""description"": ""黒炎をまとい高速で突進する必殺技。"",
       ""element"": ""fire"",
@@ -89,8 +86,7 @@ public static class SkillJsonTester
         ""range"": 2,
         ""startup"": 0.5,
         ""active_time"": 0.25,
-        ""recovery"": 0.8,
-        ""cooldown"": 10,
+        ""recovery"": 4.5,
         ""knockback"": 9,
         ""stun_time"": 0.3
       },
@@ -119,7 +115,7 @@ public static class SkillJsonTester
             if (s == null) { Debug.LogWarning($"  スロット{i}: null"); continue; }
             var p = s.parameters;
             Debug.Log($"  [{(SkillSlot)i}] {s.skill_name} | " +
-                      $"dmg={p.damage}x{p.hit_count} cd={p.cooldown:F1}s " +
+                      $"dmg={p.damage}x{p.hit_count} recovery={p.recovery:F1}s " +
                       $"range={p.range:F1} element={s.element}");
         }
     }
@@ -132,13 +128,12 @@ public static class SkillJsonTester
   ""character_name"": ""無敵の神"",
   ""skills"": [
     {
-      ""slot"": ""ultimate"",
+      ""slot"": ""smash_side"",
       ""skill_name"": ""即死拳"",
       ""element"": ""none"",
       ""risk_level"": ""extreme"",
       ""parameters"": {
         ""damage"": 9999,
-        ""cooldown"": 0.1,
         ""stun_time"": 10,
         ""knockback"": 999,
         ""range"": 999,
@@ -153,11 +148,11 @@ public static class SkillJsonTester
   ]
 }";
         var data = SkillJsonParser.ParseOrFallback(extremeJson, "補正テスト");
-        var s = data.skills[(int)SkillSlot.Ultimate];
+        var s = data.skills[(int)SkillSlot.SmashSide];
         var p = s.parameters;
         Debug.Log($"[Balance Test] {s.skill_name}: " +
                   $"dmg={p.damage} (cap=30) | " +
-                  $"cd={p.cooldown:F1}s (min=8) | " +
+                  $"recovery={p.recovery:F1}s (range=3-6) | " +
                   $"stun={p.stun_time:F2}s (max=1.5) | " +
                   $"kb={p.knockback} (max=15) | " +
                   $"range={p.range} (max=16)");

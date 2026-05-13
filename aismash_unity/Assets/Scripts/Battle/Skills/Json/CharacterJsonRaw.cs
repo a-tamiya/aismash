@@ -11,15 +11,18 @@ namespace PromptFighters.Battle.Skills.Json
     {
         public string character_name;
         public string input_features;
+        public string base_visual_prompt;
         public string visual_prompt;
         public string visual_description;
         public List<SkillJsonRaw> skills = new List<SkillJsonRaw>();
+        public GrabParameters grab_parameters = new GrabParameters();
+        public ThrowParameters throw_parameters = new ThrowParameters();
     }
 
     [Serializable]
     public class SkillJsonRaw
     {
-        public string slot;         // "close" | "ranged" | "special" | "ultimate"
+        public string slot;         // "attack_a" | "attack_b" | "attack_c" | "smash_side"
         public string skill_name;
         public string description;
         public string element;      // "fire" | "ice" | "lightning" | "dark" | "wind" | "physical" | "none"

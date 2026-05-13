@@ -11,6 +11,9 @@ namespace PromptFighters.Battle
 
         Fighter _fighter;
         SkillExecutor _skills;
+        bool _smashHeld;
+        float _smashCharge;
+        const float MaxSmashCharge = 1f;
 
         void Awake()
         {
@@ -27,17 +30,33 @@ namespace PromptFighters.Battle
             // 対戦中またはトレーニング中だけ操作を受け付ける
             if (bm != null && !bm.IsFighting) return;
 
+            float smashMultiplier = UpdateSmashCharge();
+            if (_smashHeld)
+            {
+                _fighter.Move(0f);
+                _fighter.SetGuard(false);
+                return;
+            }
+
             _fighter.Move(ReadMove());
             _fighter.SetGuard(ReadGuard());
             if (ReadJumpPressed()) _fighter.Jump();
+            if (_fighter.IsHoldingOpponent)
+            {
+                float throwDir = ReadMove();
+                if (throwDir > 0.35f) _fighter.ThrowHeld(_fighter.FacingRight);
+                else if (throwDir < -0.35f) _fighter.ThrowHeld(!_fighter.FacingRight);
+                return;
+            }
+            if (ReadGrabPressed()) _fighter.TryStartGrab();
 
             // スキルはEnded以外で使用可能
             if (_skills != null)
             {
-                if (ReadSkillPressed(SkillSlot.Close))    _skills.TryUseSkill(SkillSlot.Close);
-                if (ReadSkillPressed(SkillSlot.Ranged))   _skills.TryUseSkill(SkillSlot.Ranged);
-                if (ReadSkillPressed(SkillSlot.Special))  _skills.TryUseSkill(SkillSlot.Special);
-                if (ReadSkillPressed(SkillSlot.Ultimate)) _skills.TryUseSkill(SkillSlot.Ultimate);
+                if (ReadSkillPressed(SkillSlot.AttackA)) _skills.TryUseSkill(SkillSlot.AttackA);
+                if (ReadSkillPressed(SkillSlot.AttackB)) _skills.TryUseSkill(SkillSlot.AttackB);
+                if (ReadSkillPressed(SkillSlot.AttackC)) _skills.TryUseSkill(SkillSlot.AttackC);
+                if (smashMultiplier > 0f) _skills.TryUseSkill(SkillSlot.SmashSide, smashMultiplier);
             }
         }
 
@@ -81,7 +100,7 @@ namespace PromptFighters.Battle
                 if (playerIndex == 1 && kb.upArrowKey.wasPressedThisFrame)  return true;
             }
             var gp = GetGamepad();
-            return gp != null && gp.buttonSouth.wasPressedThisFrame;
+            return gp != null && (gp.dpad.up.wasPressedThisFrame || gp.leftStick.up.wasPressedThisFrame);
         }
 
         bool ReadGuard()
@@ -96,6 +115,19 @@ namespace PromptFighters.Battle
             return gp != null && gp.leftShoulder.isPressed;
         }
 
+        bool ReadGrabPressed()
+        {
+            var kb = Keyboard.current;
+            if (kb != null)
+            {
+                if (playerIndex == 0 && kb.gKey.wasPressedThisFrame) return true;
+                if (playerIndex == 1 && kb.numpad0Key.wasPressedThisFrame) return true;
+            }
+
+            var gp = GetGamepad();
+            return gp != null && gp.rightShoulder.wasPressedThisFrame;
+        }
+
         bool ReadSkillPressed(SkillSlot slot)
         {
             var kb = Keyboard.current;
@@ -105,20 +137,18 @@ namespace PromptFighters.Battle
                 {
                     switch (slot)
                     {
-                        case SkillSlot.Close:    if (kb.jKey.wasPressedThisFrame) return true; break;
-                        case SkillSlot.Ranged:   if (kb.kKey.wasPressedThisFrame) return true; break;
-                        case SkillSlot.Special:  if (kb.lKey.wasPressedThisFrame) return true; break;
-                        case SkillSlot.Ultimate: if (kb.iKey.wasPressedThisFrame) return true; break;
+                        case SkillSlot.AttackA: if (kb.jKey.wasPressedThisFrame) return true; break;
+                        case SkillSlot.AttackB: if (kb.kKey.wasPressedThisFrame) return true; break;
+                        case SkillSlot.AttackC: if (kb.lKey.wasPressedThisFrame) return true; break;
                     }
                 }
                 else
                 {
                     switch (slot)
                     {
-                        case SkillSlot.Close:    if (kb.numpad1Key.wasPressedThisFrame) return true; break;
-                        case SkillSlot.Ranged:   if (kb.numpad2Key.wasPressedThisFrame) return true; break;
-                        case SkillSlot.Special:  if (kb.numpad3Key.wasPressedThisFrame) return true; break;
-                        case SkillSlot.Ultimate: if (kb.numpad5Key.wasPressedThisFrame) return true; break;
+                        case SkillSlot.AttackA: if (kb.numpad2Key.wasPressedThisFrame) return true; break;
+                        case SkillSlot.AttackB: if (kb.numpad3Key.wasPressedThisFrame) return true; break;
+                        case SkillSlot.AttackC: if (kb.numpad1Key.wasPressedThisFrame) return true; break;
                     }
                 }
             }
@@ -128,14 +158,50 @@ namespace PromptFighters.Battle
             {
                 switch (slot)
                 {
-                    case SkillSlot.Close:    return gp.buttonWest.wasPressedThisFrame;  // X / Square
-                    case SkillSlot.Ranged:   return gp.buttonNorth.wasPressedThisFrame; // Y / Triangle
-                    case SkillSlot.Special:  return gp.buttonEast.wasPressedThisFrame;  // B / Circle
-                    case SkillSlot.Ultimate: return gp.rightShoulder.wasPressedThisFrame;
+                    case SkillSlot.AttackA: return gp.buttonEast.wasPressedThisFrame;  // B / Circle
+                    case SkillSlot.AttackB: return gp.buttonSouth.wasPressedThisFrame; // A / Cross
+                    case SkillSlot.AttackC: return gp.buttonWest.wasPressedThisFrame;  // X / Square
                 }
             }
 
             return false;
+        }
+
+        float UpdateSmashCharge()
+        {
+            bool pressed = false;
+            var kb = Keyboard.current;
+            if (kb != null)
+            {
+                if (playerIndex == 0) pressed |= kb.uKey.isPressed;
+                else                  pressed |= kb.numpad5Key.isPressed;
+            }
+
+            var gp = GetGamepad();
+            if (gp != null)
+            {
+                bool flicking = Mathf.Abs(gp.leftStick.x.ReadValue()) >= 0.7f || Mathf.Abs(gp.dpad.x.ReadValue()) > 0.5f;
+                pressed |= flicking && gp.buttonEast.isPressed;
+            }
+
+            if (pressed)
+            {
+                _smashHeld = true;
+                _smashCharge = Mathf.Min(MaxSmashCharge, _smashCharge + Time.deltaTime);
+                if (_smashCharge >= MaxSmashCharge)
+                {
+                    _smashHeld = false;
+                    _smashCharge = 0f;
+                    return 2f;
+                }
+                return 0f;
+            }
+
+            bool released = _smashHeld;
+            float multiplier = released ? Mathf.Lerp(1f, 2f, _smashCharge / MaxSmashCharge) : 0f;
+            _smashHeld = pressed;
+            _smashCharge = 0f;
+            return multiplier;
         }
 
         Gamepad GetGamepad()

@@ -28,10 +28,10 @@ namespace PromptFighters.GameFlow
                 characterSprite = fallback?.characterSprite,
             };
 
-            data.skills[(int)SkillSlot.Close] = BuildCloseSkill(safeName, element);
-            data.skills[(int)SkillSlot.Ranged] = BuildRangedSkill(safeName, element);
-            data.skills[(int)SkillSlot.Special] = BuildSpecialSkill(safeName, element);
-            data.skills[(int)SkillSlot.Ultimate] = BuildUltimateSkill(safeName, element);
+            data.skills[(int)SkillSlot.AttackA] = BuildCloseSkill(safeName, element);
+            data.skills[(int)SkillSlot.AttackB] = BuildRangedSkill(safeName, element);
+            data.skills[(int)SkillSlot.AttackC] = BuildSpecialSkill(safeName, element);
+            data.skills[(int)SkillSlot.SmashSide] = BuildUltimateSkill(safeName, element);
             return data;
         }
 
@@ -52,6 +52,19 @@ namespace PromptFighters.GameFlow
                 visualDescription = src.visualDescription,
                 spritePath = src.spritePath,
                 characterSprite = src.characterSprite,
+                grabParameters = new GrabParameters
+                {
+                    range = src.grabParameters.range,
+                    startup = src.grabParameters.startup,
+                    recovery = src.grabParameters.recovery,
+                },
+                throwParameters = new ThrowParameters
+                {
+                    front_damage = src.throwParameters.front_damage,
+                    front_knockback = src.throwParameters.front_knockback,
+                    back_damage = src.throwParameters.back_damage,
+                    back_knockback = src.throwParameters.back_knockback,
+                },
             };
 
             for (int i = 0; i < clone.skills.Length && i < src.skills.Length; i++)
@@ -136,7 +149,6 @@ namespace PromptFighters.GameFlow
                     startup = src.parameters.startup,
                     active_time = src.parameters.active_time,
                     recovery = src.parameters.recovery,
-                    cooldown = src.parameters.cooldown,
                     hit_count = src.parameters.hit_count,
                     knockback = src.parameters.knockback,
                     stun_time = src.parameters.stun_time,
