@@ -59,7 +59,10 @@ namespace PromptFighters.GameFlow
 
         void Start()
         {
-            _presets = PresetCharacterLoader.LoadAll();
+            // プリセット + 保存済みキャラを合わせてリストを構築（保存済みは初期キャラとして再利用可能）
+            _presets = new List<CharacterData>(PresetCharacterLoader.LoadAll());
+            var saved = CharacterSaveManager.LoadAll();
+            _presets.AddRange(saved);
             if (_presets.Count < 2) _p2PresetIdx = 0;
             BuildTitlePanel();
             BuildPanel();
@@ -592,9 +595,11 @@ namespace PromptFighters.GameFlow
                 return;
             }
 
-            // 入力なし: プリセットで即バトル
+            // 入力なし: プリセットで即バトル（保存済みキャラの場合はスプライトセットをロード）
             var data1 = BuildCharacterData(true);
             var data2 = BuildCharacterData(false);
+            EnsureSpriteSet(data1);
+            EnsureSpriteSet(data2);
             _panel.SetActive(false);
             BattleManager.Instance.StartCountdown(data1, data2);
         }
@@ -681,8 +686,14 @@ namespace PromptFighters.GameFlow
             {
                 AIImageClient.GenerateSpriteSet(this, data1.visualPrompt,
                     msg => UpdateGeneratingStatus("1P " + msg),
-                    sprites => { data1.spriteSet = sprites; data1.characterSprite = sprites.Get(CharacterSpriteId.Idle1); img1Done = true; },
-                    err    => { Debug.LogWarning("[AIImage] 1P: " + err); img1Done = true; });
+                    sprites =>
+                    {
+                        data1.spriteSet = sprites;
+                        data1.characterSprite = sprites.Get(CharacterSpriteId.Idle1);
+                        img1Done = true;
+                    },
+                    err => { Debug.LogWarning("[AIImage] 1P: " + err); img1Done = true; },
+                    saveDir: data1.spriteDir);
             }
             else img1Done = true;
 
@@ -690,12 +701,33 @@ namespace PromptFighters.GameFlow
             {
                 AIImageClient.GenerateSpriteSet(this, data2.visualPrompt,
                     msg => UpdateGeneratingStatus("2P " + msg),
-                    sprites => { data2.spriteSet = sprites; data2.characterSprite = sprites.Get(CharacterSpriteId.Idle1); img2Done = true; },
-                    err    => { Debug.LogWarning("[AIImage] 2P: " + err); img2Done = true; });
+                    sprites =>
+                    {
+                        data2.spriteSet = sprites;
+                        data2.characterSprite = sprites.Get(CharacterSpriteId.Idle1);
+                        img2Done = true;
+                    },
+                    err => { Debug.LogWarning("[AIImage] 2P: " + err); img2Done = true; },
+                    saveDir: data2.spriteDir);
             }
             else img2Done = true;
 
             yield return new WaitUntil(() => img1Done && img2Done);
+        }
+
+        // 保存済みスプライトがある場合はフルロードする（バトル開始直前に呼ぶ）
+        static void EnsureSpriteSet(CharacterData data)
+        {
+            if (data == null) return;
+            if (data.spriteSet?.Get(CharacterSpriteId.Idle1) != null) return;
+            if (string.IsNullOrEmpty(data.spriteDir)) return;
+
+            var loaded = CharacterSaveManager.LoadSpriteSet(data.spriteDir);
+            if (loaded == null) return;
+
+            data.spriteSet = loaded;
+            if (data.characterSprite == null)
+                data.characterSprite = loaded.Get(CharacterSpriteId.Idle1);
         }
 
         CharacterData GetPreset(bool isP1)

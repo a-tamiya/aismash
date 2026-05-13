@@ -51,6 +51,7 @@ namespace PromptFighters.GameFlow
                 visualPrompt = src.visualPrompt,
                 visualDescription = src.visualDescription,
                 spritePath = src.spritePath,
+                spriteDir = src.spriteDir,
                 characterSprite = src.characterSprite,
                 spriteSet = CloneSpriteSet(src.spriteSet),
                 grabParameters = new GrabParameters

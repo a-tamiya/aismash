@@ -58,6 +58,7 @@ namespace PromptFighters.Battle.Skills
         public ThrowParameters throwParameters = new ThrowParameters();
 
         public string spritePath        = "Sprites/test.jpg"; // StreamingAssets相対パス or 絶対パス
+        public string spriteDir         = null;               // 保存済みスプライトのディレクトリ（絶対パス）
         public Sprite characterSprite;  // Phase 4で設定（またはspritePath読み込み後に格納）
         public CharacterSpriteSet spriteSet = new CharacterSpriteSet();
 

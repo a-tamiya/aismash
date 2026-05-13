@@ -5,14 +5,36 @@ using System.Text;
 using UnityEngine;
 using PromptFighters.Battle.Skills;
 using PromptFighters.Battle.Skills.Json;
+using PromptFighters.Utils;
 
 namespace PromptFighters.GameFlow
 {
     // 生成されたキャラクターをpersistentDataPathに保存・読み込みする。
+    // スプライトPNGは {SaveDir}/{id}/sprites/ 以下に保存する。
     public static class CharacterSaveManager
     {
         static string SaveDir => Path.Combine(Application.persistentDataPath, "SavedChars");
 
+        static readonly (CharacterSpriteId id, string filename)[] SpriteEntries =
+        {
+            (CharacterSpriteId.Idle1,      "idle1"),
+            (CharacterSpriteId.Idle2,      "idle2"),
+            (CharacterSpriteId.Idle3,      "idle3"),
+            (CharacterSpriteId.Jump,       "jump"),
+            (CharacterSpriteId.Damage,     "damage"),
+            (CharacterSpriteId.Grab,       "grab"),
+            (CharacterSpriteId.Dash,       "dash"),
+            (CharacterSpriteId.AttackA,    "attack_a"),
+            (CharacterSpriteId.AttackB,    "attack_b"),
+            (CharacterSpriteId.AttackC,    "attack_c"),
+            (CharacterSpriteId.SmashSide,  "smash_side"),
+            (CharacterSpriteId.EffectA,    "effect_a"),
+            (CharacterSpriteId.EffectB,    "effect_b"),
+            (CharacterSpriteId.EffectC,    "effect_c"),
+            (CharacterSpriteId.EffectSmash,"effect_smash"),
+        };
+
+        // JSONを保存し、data.spriteDir を設定する。
         public static void Save(CharacterData data)
         {
             if (data == null || string.IsNullOrWhiteSpace(data.characterName)) return;
@@ -21,6 +43,7 @@ namespace PromptFighters.GameFlow
                 Directory.CreateDirectory(SaveDir);
                 string id   = SanitizeId(data.characterName) + "_" + DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                 string path = Path.Combine(SaveDir, id + ".json");
+                data.spriteDir = Path.Combine(SaveDir, id, "sprites");
                 string json = Serialize(data);
                 File.WriteAllText(path, json, Encoding.UTF8);
                 PresetCharacterLoader.ClearCache();
@@ -32,6 +55,28 @@ namespace PromptFighters.GameFlow
             }
         }
 
+        // 透過済みスプライトをPNGとして保存する（AIImageClientが保存済みの場合は不要）
+        public static void SaveSprites(CharacterData data)
+        {
+            if (data?.spriteSet == null || string.IsNullOrEmpty(data.spriteDir)) return;
+            try
+            {
+                Directory.CreateDirectory(data.spriteDir);
+                foreach (var (id, filename) in SpriteEntries)
+                {
+                    var sprite = data.spriteSet.sprites[(int)id];
+                    if (sprite?.texture == null) continue;
+                    byte[] png = ImageConversion.EncodeToPNG(sprite.texture);
+                    File.WriteAllBytes(Path.Combine(data.spriteDir, filename + ".png"), png);
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Save] スプライト保存失敗: {e.Message}");
+            }
+        }
+
+        // 保存済みキャラを全件ロードする。Idle1プレビュー用スプライトも設定する。
         public static List<CharacterData> LoadAll()
         {
             var results = new List<CharacterData>();
@@ -43,7 +88,18 @@ namespace PromptFighters.GameFlow
                 {
                     string json = File.ReadAllText(path, Encoding.UTF8);
                     var data    = SkillJsonParser.Parse(json);
-                    if (data != null) results.Add(data);
+                    if (data == null) continue;
+
+                    string id        = Path.GetFileNameWithoutExtension(path);
+                    string spriteDir = Path.Combine(SaveDir, id, "sprites");
+                    data.spriteDir   = spriteDir;
+
+                    // Idle1をプレビュー用にロード
+                    string idle1 = Path.Combine(spriteDir, "idle1.png");
+                    if (File.Exists(idle1))
+                        data.characterSprite = SpriteLoader.LoadDirect(idle1);
+
+                    results.Add(data);
                 }
                 catch (Exception e)
                 {
@@ -53,7 +109,27 @@ namespace PromptFighters.GameFlow
             return results;
         }
 
-        // CharacterData → JSONテキスト（SkillJsonParser.Parse で再読み込み可能な形式）
+        // バトル開始時に保存済みスプライトセットをフルロードする。
+        public static CharacterSpriteSet LoadSpriteSet(string spriteDir)
+        {
+            if (string.IsNullOrEmpty(spriteDir) || !Directory.Exists(spriteDir)) return null;
+
+            var set = new CharacterSpriteSet();
+            bool anyLoaded = false;
+
+            foreach (var (id, filename) in SpriteEntries)
+            {
+                string path = Path.Combine(spriteDir, filename + ".png");
+                if (!File.Exists(path)) continue;
+                var sprite = SpriteLoader.LoadDirect(path);
+                if (sprite == null) continue;
+                set.Set(id, sprite);
+                anyLoaded = true;
+            }
+
+            return anyLoaded ? set : null;
+        }
+
         static string Serialize(CharacterData d)
         {
             var sb = new StringBuilder();

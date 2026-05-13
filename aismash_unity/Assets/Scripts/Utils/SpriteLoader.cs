@@ -42,6 +42,34 @@ namespace PromptFighters.Utils
             return sprite;
         }
 
+        // 透過済みPNGをWhiteBackgroundRemoverなしで直接ロードする（保存済みスプライト用）
+        public static Sprite LoadDirect(string path)
+        {
+            string fullPath = Path.IsPathRooted(path)
+                ? path
+                : Path.Combine(Application.streamingAssetsPath, path);
+
+            if (!File.Exists(fullPath))
+            {
+                Debug.LogWarning($"[SpriteLoader] ファイルが見つかりません: {fullPath}");
+                return null;
+            }
+
+            byte[] bytes = File.ReadAllBytes(fullPath);
+            var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            if (!ImageConversion.LoadImage(tex, bytes))
+            {
+                Debug.LogWarning($"[SpriteLoader] 画像の読み込みに失敗しました: {fullPath}");
+                return null;
+            }
+
+            return Sprite.Create(
+                tex,
+                new Rect(0, 0, tex.width, tex.height),
+                new Vector2(0.5f, 0f),
+                tex.height / 2f);
+        }
+
         // バイト列から直接ロード（Phase 4 API連携用）
         public static Sprite LoadFromBytesWithWhiteBgRemoved(byte[] bytes,
                                                              float threshold = 0.88f,

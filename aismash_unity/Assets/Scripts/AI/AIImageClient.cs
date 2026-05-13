@@ -1,19 +1,24 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
 using PromptFighters.Battle.Skills;
+using PromptFighters.Utils;
 
 namespace PromptFighters.AI
 {
-    // OpenAI Images API でキャラクター画像を生成する。
-    // visual_prompt を受け取り、Sprite を返す。
+    // OpenAI Images API でキャラクタースプライトセットを生成する。
+    // ベース画像(Idle1)を /v1/images/generations で生成後、残り14枚を /v1/images/edits で並列生成する。
     public static class AIImageClient
     {
-        const string Endpoint = "https://api.openai.com/v1/images/generations";
-        const string Model    = "gpt-image-1";
-        const string Size     = "1024x1024";
+        const string GenerationsEndpoint = "https://api.openai.com/v1/images/generations";
+        const string EditsEndpoint = "https://api.openai.com/v1/images/edits";
+        const string Model = "gpt-image-2";
+        const string Size = "1024x1536";
+        const string Quality = "low";
 
         static string _cachedApiKey;
 
@@ -34,15 +39,10 @@ namespace PromptFighters.AI
             if (!string.IsNullOrEmpty(fromProcess)) return fromProcess;
 
 #if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
-            // Unity Hub/Editor can keep an older process environment. On Windows, also read
-            // the current user's persisted environment variable without storing secrets in repo files.
             string userValue = System.Environment.GetEnvironmentVariable(
-                "OPENAI_API_KEY",
-                System.EnvironmentVariableTarget.User);
-            if (!string.IsNullOrWhiteSpace(userValue))
-                return userValue.Trim();
+                "OPENAI_API_KEY", System.EnvironmentVariableTarget.User);
+            if (!string.IsNullOrWhiteSpace(userValue)) return userValue.Trim();
 #endif
-
             return "";
         }
 
@@ -63,186 +63,260 @@ namespace PromptFighters.AI
             return true;
         }
 
-        static readonly (CharacterSpriteId id, string prompt)[] SpritePrompts =
+        // (id, filename, editPrompt) — ベース画像を参照して生成する14枚のバリエーション
+        static readonly (CharacterSpriteId id, string filename, string prompt)[] EditEntries =
         {
-            (CharacterSpriteId.Idle1, "standing idle pose, full body, white background"),
-            (CharacterSpriteId.Idle2, "same character, slightly different idle pose, full body, white background"),
-            (CharacterSpriteId.Idle3, "same character, lively idle pose, full body, white background"),
-            (CharacterSpriteId.Jump, "same character, jumping pose, full body, white background"),
-            (CharacterSpriteId.Damage, "same character, hurt reaction pose, full body, white background"),
-            (CharacterSpriteId.Grab, "same character, grabbing pose, full body, white background"),
-            (CharacterSpriteId.Dash, "same character, fast dashing pose, full body, white background"),
-            (CharacterSpriteId.AttackA, "same character, basic attack A action pose, full body, white background"),
-            (CharacterSpriteId.AttackB, "same character, basic attack B action pose, full body, white background"),
-            (CharacterSpriteId.AttackC, "same character, basic attack C action pose, full body, white background"),
-            (CharacterSpriteId.SmashSide, "same character, powerful side smash attack pose, full body, white background"),
-            (CharacterSpriteId.EffectA, "2D game visual effect for attack A only, no character, no text, transparent background"),
-            (CharacterSpriteId.EffectB, "2D game visual effect for attack B only, no character, no text, transparent background"),
-            (CharacterSpriteId.EffectC, "2D game visual effect for attack C only, no character, no text, transparent background"),
-            (CharacterSpriteId.EffectSmash, "large 2D game visual effect for side smash only, no character, no text, transparent background"),
+            (CharacterSpriteId.Idle2,      "idle2",       "slightly different weight shift idle pose, same character, white background, full body"),
+            (CharacterSpriteId.Idle3,      "idle3",       "lively idle pose with slight arm movement, same character, white background, full body"),
+            (CharacterSpriteId.Jump,       "jump",        "jumping airborne pose feet off ground, same character, white background, full body"),
+            (CharacterSpriteId.Damage,     "damage",      "hurt recoil reaction flinching backward, same character, white background, full body"),
+            (CharacterSpriteId.Grab,       "grab",        "grabbing grappling reach-out pose, same character, white background, full body"),
+            (CharacterSpriteId.Dash,       "dash",        "fast dashing running sprint pose, same character, white background, full body"),
+            (CharacterSpriteId.AttackA,    "attack_a",    "basic attack A swing strike action pose, same character, white background, full body"),
+            (CharacterSpriteId.AttackB,    "attack_b",    "basic attack B projectile launch action pose, same character, white background, full body"),
+            (CharacterSpriteId.AttackC,    "attack_c",    "basic attack C special technique action pose, same character, white background, full body"),
+            (CharacterSpriteId.SmashSide,  "smash_side",  "powerful side smash charging heavy attack pose, same character, white background, full body"),
+            (CharacterSpriteId.EffectA,    "effect_a",    "2D game attack visual effect only, no character, no text, white background, bright energetic colors"),
+            (CharacterSpriteId.EffectB,    "effect_b",    "2D game projectile visual effect only, no character, no text, white background, bright energetic colors"),
+            (CharacterSpriteId.EffectC,    "effect_c",    "2D game special attack visual effect only, no character, no text, white background, bright energetic colors"),
+            (CharacterSpriteId.EffectSmash,"effect_smash","2D game large powerful smash effect only, no character, no text, white background, bright energetic colors"),
         };
 
-        public static Coroutine Generate(MonoBehaviour runner,
-            string visualPrompt,
-            Action<Sprite> onSuccess, Action<string> onError)
-        {
-            return runner.StartCoroutine(GenerateCoroutine(visualPrompt, onSuccess, onError));
-        }
-
+        // saveDir: PNG保存先ディレクトリ（null なら保存しない）
         public static Coroutine GenerateSpriteSet(MonoBehaviour runner,
             string baseVisualPrompt,
             Action<string> onProgress,
             Action<CharacterSpriteSet> onSuccess,
-            Action<string> onError)
+            Action<string> onError,
+            string saveDir = null)
         {
-            return runner.StartCoroutine(GenerateSpriteSetCoroutine(baseVisualPrompt, onProgress, onSuccess, onError));
+            return runner.StartCoroutine(
+                GenerateSpriteSetCoroutine(runner, baseVisualPrompt, onProgress, onSuccess, onError, saveDir));
         }
 
         static IEnumerator GenerateSpriteSetCoroutine(
+            MonoBehaviour runner,
             string baseVisualPrompt,
             Action<string> onProgress,
             Action<CharacterSpriteSet> onSuccess,
-            Action<string> onError)
+            Action<string> onError,
+            string saveDir)
         {
             if (!HasConfiguredApiKey(out string keyError))
             {
                 onError?.Invoke(keyError);
                 yield break;
             }
+            string key = ApiKey;
 
-            var set = new CharacterSpriteSet();
-            string firstError = null;
+            // Step 1: ベース画像 (Idle1) を生成
+            onProgress?.Invoke("ベース画像を生成中...");
+            Sprite baseSprite = null;
+            byte[] baseRawBytes = null; // 編集リファレンス用オリジナルバイト列
+            string baseError = null;
 
-            for (int i = 0; i < SpritePrompts.Length; i++)
+            yield return GenerateBaseCoroutine(baseVisualPrompt, key,
+                (sprite, rawBytes) => { baseSprite = sprite; baseRawBytes = rawBytes; },
+                err => baseError = err);
+
+            if (baseSprite == null)
             {
-                var item = SpritePrompts[i];
-                onProgress?.Invoke($"スプライト生成中... {i + 1}/{SpritePrompts.Length}");
-                bool done = false;
-                Sprite generated = null;
-                string error = null;
-                string prompt = $"{baseVisualPrompt}, {item.prompt}";
-
-                yield return GenerateCoroutine(prompt,
-                    sprite => { generated = sprite; done = true; },
-                    err => { error = err; done = true; });
-
-                if (!done) yield return new WaitUntil(() => done);
-
-                if (generated != null)
-                {
-                    set.Set(item.id, generated);
-                    if (item.id == CharacterSpriteId.Idle1)
-                    {
-                        FillMissingCharacterSprites(set, generated);
-                    }
-                }
-                else
-                {
-                    firstError ??= error;
-                    Debug.LogWarning($"[AIImage] {item.id} の生成に失敗: {error}");
-                }
-            }
-
-            if (set.Get(CharacterSpriteId.Idle1) == null)
-            {
-                onError?.Invoke(firstError ?? "Idle1画像の生成に失敗しました");
+                onError?.Invoke(baseError ?? "ベース画像(Idle1)の生成に失敗しました");
                 yield break;
             }
+
+            var set = new CharacterSpriteSet();
+            set.Set(CharacterSpriteId.Idle1, baseSprite);
+
+            if (saveDir != null)
+            {
+                TrySavePng(saveDir, "idle1", baseSprite);
+            }
+
+            // Step 2: 残り14枚を並列生成 (images/edits)
+            onProgress?.Invoke($"バリエーション画像を並列生成中... (14枚)");
+            int pending = EditEntries.Length;
+
+            foreach (var (id, filename, editPrompt) in EditEntries)
+            {
+                string fullPrompt = baseVisualPrompt + ", " + editPrompt;
+                runner.StartCoroutine(GenerateEditCoroutine(
+                    id, filename, fullPrompt, baseRawBytes, key, saveDir,
+                    (spriteId, fname, sprite) =>
+                    {
+                        set.Set(spriteId, sprite);
+                        pending--;
+                        onProgress?.Invoke($"生成完了: {fname} (残り {pending} 枚)");
+                    },
+                    (spriteId, err) =>
+                    {
+                        Debug.LogWarning($"[AIImage] {spriteId} 生成失敗（Idle1で代替）: {err}");
+                        set.Set(spriteId, baseSprite);
+                        pending--;
+                    }));
+            }
+
+            yield return new WaitUntil(() => pending == 0);
 
             onSuccess?.Invoke(set);
         }
 
-        static void FillMissingCharacterSprites(CharacterSpriteSet set, Sprite fallback)
+        // /v1/images/generations でベース画像を生成し、(Sprite, rawBytes) を返す
+        static IEnumerator GenerateBaseCoroutine(
+            string basePrompt, string key,
+            Action<Sprite, byte[]> onSuccess, Action<string> onError)
         {
-            for (int i = (int)CharacterSpriteId.Idle1; i <= (int)CharacterSpriteId.SmashSide; i++)
-            {
-                if (set.sprites[i] == null)
-                    set.sprites[i] = fallback;
-            }
-        }
+            string safePrompt = EscapeForJson(
+                basePrompt + ", standing idle, full body, white background, no text, no watermark");
+            string body =
+                $"{{\"model\":\"{Model}\"," +
+                $"\"prompt\":\"{safePrompt}\"," +
+                $"\"n\":1,\"size\":\"{Size}\",\"quality\":\"{Quality}\"}}";
 
-        static IEnumerator GenerateCoroutine(
-            string visualPrompt,
-            Action<Sprite> onSuccess, Action<string> onError)
-        {
-            string key = ApiKey;
-            if (!IsConfiguredApiKey(key))
-            {
-                onError?.Invoke("OpenAI APIキーが未設定です。環境変数 OPENAI_API_KEY を確認してください。");
-                yield break;
-            }
-
-            string safePrompt = (visualPrompt + ", white background, no text, no watermark")
-                .Replace("\\", "\\\\").Replace("\"", "\\\"")
-                .Replace("\n", " ").Replace("\r", "");
-
-            string body = $"{{\"model\":\"{Model}\",\"prompt\":\"{safePrompt}\",\"n\":1,\"size\":\"{Size}\"}}";
-
-            using var req = new UnityWebRequest(Endpoint, "POST");
+            using var req = new UnityWebRequest(GenerationsEndpoint, "POST");
             req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
             req.downloadHandler = new DownloadHandlerBuffer();
             req.SetRequestHeader("Content-Type", "application/json");
             req.SetRequestHeader("Authorization", "Bearer " + key);
-            req.timeout = 60;
+            req.timeout = 120;
 
             yield return req.SendWebRequest();
 
             if (req.result != UnityWebRequest.Result.Success)
             {
-                string responseText = req.downloadHandler?.text;
-                Debug.LogWarning($"[AIImage] 生成エラー: {req.error}\n{responseText}");
-                onError?.Invoke($"{req.error}: {responseText}");
+                onError?.Invoke($"{req.error}: {req.downloadHandler?.text}");
                 yield break;
             }
 
-            string imageUrl = null;
-            string imageBase64 = null;
+            byte[] rawBytes = null;
             try
             {
-                ParseImageResponse(req.downloadHandler.text, out imageUrl, out imageBase64);
+                ParseImageResponse(req.downloadHandler.text, out string url, out string b64);
+                if (!string.IsNullOrEmpty(b64))
+                {
+                    rawBytes = Convert.FromBase64String(b64);
+                }
+                else if (!string.IsNullOrEmpty(url))
+                {
+                    using var imgReq = UnityWebRequestTexture.GetTexture(url);
+                    imgReq.timeout = 60;
+                    yield return imgReq.SendWebRequest();
+                    if (imgReq.result != UnityWebRequest.Result.Success)
+                    {
+                        onError?.Invoke("URL画像のダウンロード失敗: " + imgReq.error);
+                        yield break;
+                    }
+                    var urlTex = DownloadHandlerTexture.GetContent(imgReq);
+                    rawBytes = ImageConversion.EncodeToPNG(urlTex);
+                }
+                else
+                {
+                    onError?.Invoke("レスポンスにurl/b64_jsonが見つかりません");
+                    yield break;
+                }
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"[AIImage] レスポンス解析エラー: {e.Message}");
                 onError?.Invoke("レスポンス解析失敗: " + e.Message);
                 yield break;
             }
 
-            if (!string.IsNullOrEmpty(imageBase64))
+            try
             {
-                try
-                {
-                    byte[] bytes = Convert.FromBase64String(imageBase64);
-                    var decodedTex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-                    if (!decodedTex.LoadImage(bytes))
-                        throw new Exception("Texture2D.LoadImage failed");
-                    onSuccess?.Invoke(Texture2ToSprite(decodedTex));
-                }
-                catch (Exception e)
-                {
-                    onError?.Invoke("base64画像の変換に失敗: " + e.Message);
-                }
-                yield break;
+                var sprite = RawBytesToSprite(rawBytes);
+                onSuccess?.Invoke(sprite, rawBytes);
             }
-
-            // 画像URLをダウンロードしてSpriteに変換
-            using var imgReq = UnityWebRequestTexture.GetTexture(imageUrl);
-            imgReq.timeout = 60;
-            yield return imgReq.SendWebRequest();
-
-            if (imgReq.result != UnityWebRequest.Result.Success)
+            catch (Exception e)
             {
-                Debug.LogWarning($"[AIImage] 画像DLエラー: {imgReq.error}");
-                onError?.Invoke("画像ダウンロード失敗: " + imgReq.error);
-                yield break;
+                onError?.Invoke("画像変換失敗: " + e.Message);
             }
-
-            var tex = DownloadHandlerTexture.GetContent(imgReq);
-            var sprite = Texture2ToSprite(tex);
-            onSuccess?.Invoke(sprite);
         }
 
-        // {"data":[{"url":"..."}]} から url を取り出す
+        // /v1/images/edits でベース画像を参照してバリエーションを生成する
+        static IEnumerator GenerateEditCoroutine(
+            CharacterSpriteId id, string filename, string prompt,
+            byte[] basePngBytes, string key, string saveDir,
+            Action<CharacterSpriteId, string, Sprite> onSuccess,
+            Action<CharacterSpriteId, string> onError)
+        {
+            var form = new List<IMultipartFormSection>
+            {
+                new MultipartFormDataSection("model",   Model),
+                new MultipartFormDataSection("prompt",  prompt),
+                new MultipartFormDataSection("size",    Size),
+                new MultipartFormDataSection("quality", Quality),
+                new MultipartFormDataSection("n",       "1"),
+                new MultipartFormFileSection("image[]", basePngBytes, "reference.png", "image/png"),
+            };
+
+            using var req = UnityWebRequest.Post(EditsEndpoint, form);
+            req.SetRequestHeader("Authorization", "Bearer " + key);
+            req.timeout = 180;
+
+            yield return req.SendWebRequest();
+
+            if (req.result != UnityWebRequest.Result.Success)
+            {
+                onError?.Invoke(id, $"{req.error}: {req.downloadHandler?.text}");
+                yield break;
+            }
+
+            try
+            {
+                ParseImageResponse(req.downloadHandler.text, out string url, out string b64);
+                if (string.IsNullOrEmpty(b64))
+                {
+                    onError?.Invoke(id, "b64_jsonが見つかりません");
+                    yield break;
+                }
+
+                byte[] rawBytes = Convert.FromBase64String(b64);
+                var sprite = RawBytesToSprite(rawBytes);
+
+                if (saveDir != null)
+                    TrySavePng(saveDir, filename, sprite);
+
+                onSuccess?.Invoke(id, filename, sprite);
+            }
+            catch (Exception e)
+            {
+                onError?.Invoke(id, "画像処理失敗: " + e.Message);
+            }
+        }
+
+        // バイト列 → WhiteBackgroundRemover適用 → Sprite
+        static Sprite RawBytesToSprite(byte[] rawBytes)
+        {
+            var raw = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            if (!ImageConversion.LoadImage(raw, rawBytes))
+                throw new Exception("Texture2D.LoadImage failed");
+
+            var processed = WhiteBackgroundRemover.Apply(raw);
+            UnityEngine.Object.Destroy(raw);
+
+            return Sprite.Create(
+                processed,
+                new Rect(0, 0, processed.width, processed.height),
+                new Vector2(0.5f, 0f),
+                processed.height / 2f);
+        }
+
+        // 透過済み Sprite を PNG としてディスクに保存する
+        static void TrySavePng(string dir, string filename, Sprite sprite)
+        {
+            if (sprite?.texture == null) return;
+            try
+            {
+                Directory.CreateDirectory(dir);
+                byte[] png = ImageConversion.EncodeToPNG(sprite.texture);
+                File.WriteAllBytes(Path.Combine(dir, filename + ".png"), png);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[AIImage] PNG保存失敗 ({filename}): {e.Message}");
+            }
+        }
+
         [Serializable] class ImgResp { public ImgData[] data; }
         [Serializable] class ImgData { public string url; public string b64_json; }
 
@@ -259,11 +333,7 @@ namespace PromptFighters.AI
                 throw new Exception("data[0].url / data[0].b64_json が見つかりません");
         }
 
-        static Sprite Texture2ToSprite(Texture2D tex)
-        {
-            return Sprite.Create(tex,
-                new Rect(0, 0, tex.width, tex.height),
-                new Vector2(0.5f, 0.5f), 100f);
-        }
+        static string EscapeForJson(string s) =>
+            s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", " ").Replace("\r", "");
     }
 }
