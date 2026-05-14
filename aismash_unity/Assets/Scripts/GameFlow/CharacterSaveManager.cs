@@ -192,6 +192,9 @@ namespace PromptFighters.GameFlow
             if (!string.IsNullOrEmpty(a.direction)) sb.Append($",\"direction\":{Q(a.direction)}");
             if (a.power > 0f)                        sb.Append($",\"power\":{a.power}");
             if (a.range > 0f)                        sb.Append($",\"range\":{a.range}");
+            if (a.spawn_x > 0f)                      sb.Append($",\"spawn_x\":{a.spawn_x}");
+            if (!Mathf.Approximately(a.spawn_y, 0f)) sb.Append($",\"spawn_y\":{a.spawn_y}");
+            if (a.size_y > 0f)                       sb.Append($",\"size_y\":{a.size_y}");
             if (a.hit_count > 0)                     sb.Append($",\"hit_count\":{a.hit_count}");
             if (a.projectile_speed > 0f)             sb.Append($",\"projectile_speed\":{a.projectile_speed}");
             if (a.projectile_lifetime > 0f)          sb.Append($",\"projectile_lifetime\":{a.projectile_lifetime}");

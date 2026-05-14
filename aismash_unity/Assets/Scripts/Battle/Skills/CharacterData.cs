@@ -78,7 +78,7 @@ namespace PromptFighters.Battle.Skills
         public float groundMoveSpeed = 5f;
         public float airMoveSpeed = 4f;
         public float jumpForce = 12f;
-        public float guardDurability = 100f;
+        public float guardDurability = 65f;
         public float lightness = 1f;
         public float weight = 1f;
     }

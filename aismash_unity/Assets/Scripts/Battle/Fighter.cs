@@ -20,9 +20,11 @@ namespace PromptFighters.Battle
 
         [Header("Guard")]
         [Range(0f, 1f)] public float guardDamageRatio = 0.15f;
-        public float maxGuardDurability = 100f;
+        public float maxGuardDurability = 65f;
         public float guardTimeDrainPerSecond = 18f;
         public float guardHitDamageRatio = 0.45f;
+        public float guardRecoveryPerSecond = 10f;
+        public float guardRecoveryDelay = 1.0f;
         public float guardBreakLockDuration = 5f;
 
         [Header("Grab / Throw")]
@@ -77,6 +79,7 @@ namespace PromptFighters.Battle
         float _slowTimer;
         float _slowFactor = 0.5f;
         float _guardBreakTimer;
+        float _guardRecoveryDelayTimer;
         float _hitFlashTimer;
         Fighter _heldOpponent;
         Fighter _grabbedBy;
@@ -128,6 +131,7 @@ namespace PromptFighters.Battle
             if (_skillRecoveryTimer > 0f) _skillRecoveryTimer -= Time.deltaTime;
             if (_grabCooldownTimer  > 0f) _grabCooldownTimer  -= Time.deltaTime;
             if (_slowTimer          > 0f) _slowTimer          -= Time.deltaTime;
+            if (_guardRecoveryDelayTimer > 0f) _guardRecoveryDelayTimer -= Time.deltaTime;
             if (_guardBreakTimer    > 0f)
             {
                 _guardBreakTimer -= Time.deltaTime;
@@ -405,7 +409,7 @@ namespace PromptFighters.Battle
             moveSpeed = Mathf.Clamp(stats.groundMoveSpeed, 3.2f, 7.5f);
             airMoveSpeed = Mathf.Clamp(stats.airMoveSpeed, 2.5f, 6.5f);
             jumpForce = Mathf.Clamp(stats.jumpForce, 8f, 16f);
-            maxGuardDurability = Mathf.Clamp(stats.guardDurability, 60f, 140f);
+            maxGuardDurability = Mathf.Clamp(stats.guardDurability, 40f, 90f);
             weight = Mathf.Clamp(stats.weight > 0f ? stats.weight : 1f / Mathf.Max(0.6f, stats.lightness), 0.6f, 1.6f);
             CurrentGuardDurability = Mathf.Min(CurrentGuardDurability, maxGuardDurability);
             OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
@@ -527,6 +531,7 @@ namespace PromptFighters.Battle
             _burnTimer          = 0f;
             _slowTimer          = 0f;
             _guardBreakTimer    = 0f;
+            _guardRecoveryDelayTimer = 0f;
             _hitFlashTimer      = 0f;
             _heldOpponent       = null;
             _grabbedBy          = null;
@@ -552,8 +557,18 @@ namespace PromptFighters.Battle
 
         void TickGuard()
         {
-            if (State != FighterState.Guarding) return;
-            DamageGuard(guardTimeDrainPerSecond * Time.deltaTime);
+            if (State == FighterState.Guarding)
+            {
+                DamageGuard(guardTimeDrainPerSecond * Time.deltaTime);
+                return;
+            }
+
+            if (_guardBreakTimer > 0f || _guardRecoveryDelayTimer > 0f) return;
+            if (CurrentGuardDurability >= maxGuardDurability) return;
+
+            CurrentGuardDurability = Mathf.Min(maxGuardDurability,
+                CurrentGuardDurability + guardRecoveryPerSecond * Time.deltaTime);
+            OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
         }
 
         void DamageGuard(float amount)
@@ -561,6 +576,7 @@ namespace PromptFighters.Battle
             if (amount <= 0f || CurrentGuardDurability <= 0f) return;
 
             CurrentGuardDurability = Mathf.Max(0f, CurrentGuardDurability - amount);
+            _guardRecoveryDelayTimer = guardRecoveryDelay;
             OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
             if (CurrentGuardDurability <= 0f)
                 BreakGuard(guardBreakLockDuration);
@@ -580,7 +596,8 @@ namespace PromptFighters.Battle
         void EndGuardBreak()
         {
             _guardBreakTimer = 0f;
-            CurrentGuardDurability = maxGuardDurability;
+            CurrentGuardDurability = Mathf.Max(CurrentGuardDurability, maxGuardDurability * 0.35f);
+            _guardRecoveryDelayTimer = guardRecoveryDelay;
             if (State == FighterState.Stunned && _stunTimer <= 0f) State = FighterState.Idle;
             OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
         }

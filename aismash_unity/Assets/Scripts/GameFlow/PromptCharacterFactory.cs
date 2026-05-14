@@ -121,7 +121,7 @@ namespace PromptFighters.GameFlow
                 stats.groundMoveSpeed = 6.5f;
                 stats.airMoveSpeed = 5.4f;
                 stats.jumpForce = 13.5f;
-                stats.guardDurability = 85f;
+                stats.guardDurability = 55f;
                 stats.lightness = 1.3f;
                 stats.weight = 0.75f;
             }
@@ -130,7 +130,7 @@ namespace PromptFighters.GameFlow
                 stats.groundMoveSpeed = 3.8f;
                 stats.airMoveSpeed = 3.0f;
                 stats.jumpForce = 9.5f;
-                stats.guardDurability = 125f;
+                stats.guardDurability = 85f;
                 stats.lightness = 0.75f;
                 stats.weight = 1.35f;
             }
@@ -139,7 +139,7 @@ namespace PromptFighters.GameFlow
                 stats.groundMoveSpeed = 5.2f;
                 stats.airMoveSpeed = 6.0f;
                 stats.jumpForce = 14.5f;
-                stats.guardDurability = 90f;
+                stats.guardDurability = 60f;
                 stats.lightness = 1.18f;
                 stats.weight = 0.85f;
             }
@@ -224,6 +224,9 @@ namespace PromptFighters.GameFlow
                     time = action.time,
                     duration = action.duration,
                     range = action.range,
+                    spawn_x = action.spawn_x,
+                    spawn_y = action.spawn_y,
+                    size_y = action.size_y,
                     hit_count = action.hit_count,
                     damage_override = action.damage_override,
                     power = action.power,

@@ -144,8 +144,12 @@ namespace PromptFighters.Battle.Skills
             float range   = a.range > 0f ? a.range : skill.parameters.range;
             if (range <= 0f) range = 1.2f;
 
-            Vector2 offset = new Vector2(dirSign * (range * 0.5f + 0.3f), 0f);
-            Vector2 size   = new Vector2(range, 1.2f);
+            Vector2 baseOffset = DefaultMeleeOffset(skill.slot, range);
+            float offsetX = a.spawn_x > 0f ? a.spawn_x : baseOffset.x;
+            float offsetY = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : baseOffset.y;
+            float height = a.size_y > 0f ? a.size_y : DefaultHitboxHeight(skill.slot);
+            Vector2 offset = new Vector2(dirSign * offsetX, offsetY);
+            Vector2 size   = new Vector2(range, height);
             float lifetime = skill.parameters.active_time > 0f ? skill.parameters.active_time : 0.12f;
 
             var hb = Hitbox.Spawn(_fighter, (Vector2)_fighter.transform.position + offset, size, lifetime);
@@ -164,7 +168,10 @@ namespace PromptFighters.Battle.Skills
         void SpawnProjectile(SkillData skill, SkillAction a, float powerMultiplier)
         {
             float dirSign = _fighter.FacingRight ? 1f : -1f;
-            Vector2 spawn = (Vector2)_fighter.transform.position + new Vector2(dirSign * 0.6f, 0.2f);
+            Vector2 baseOffset = DefaultProjectileOffset(skill.slot);
+            float offsetX = a.spawn_x > 0f ? a.spawn_x : baseOffset.x;
+            float offsetY = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : baseOffset.y;
+            Vector2 spawn = (Vector2)_fighter.transform.position + new Vector2(dirSign * offsetX, offsetY);
 
             float speed    = a.projectile_speed    > 0f ? a.projectile_speed    : 9f;
             float lifetime = a.projectile_lifetime > 0f ? a.projectile_lifetime : 1.5f;
@@ -178,6 +185,36 @@ namespace PromptFighters.Battle.Skills
             p.Element        = skill.element;
             p.EffectSprite   = _fighter.GetEffectSprite(skill.slot);
         }
+
+        static Vector2 DefaultMeleeOffset(SkillSlot slot, float range)
+        {
+            float x = range * 0.5f + 0.35f;
+            return slot switch
+            {
+                SkillSlot.AttackA => new Vector2(x, 0.35f),
+                SkillSlot.AttackB => new Vector2(x, 0.75f),
+                SkillSlot.AttackC => new Vector2(x + 0.15f, 0.15f),
+                SkillSlot.SmashSide => new Vector2(x + 0.25f, 0.55f),
+                _ => new Vector2(x, 0.35f),
+            };
+        }
+
+        static float DefaultHitboxHeight(SkillSlot slot) => slot switch
+        {
+            SkillSlot.AttackB => 1.0f,
+            SkillSlot.AttackC => 1.45f,
+            SkillSlot.SmashSide => 1.7f,
+            _ => 1.2f,
+        };
+
+        static Vector2 DefaultProjectileOffset(SkillSlot slot) => slot switch
+        {
+            SkillSlot.AttackA => new Vector2(0.7f, 0.55f),
+            SkillSlot.AttackB => new Vector2(0.8f, 1.05f),
+            SkillSlot.AttackC => new Vector2(0.75f, 0.75f),
+            SkillSlot.SmashSide => new Vector2(0.9f, 1.0f),
+            _ => new Vector2(0.8f, 1.0f),
+        };
 
         void DoDash(SkillAction a)
         {

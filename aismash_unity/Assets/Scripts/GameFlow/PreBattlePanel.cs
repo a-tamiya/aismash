@@ -19,6 +19,8 @@ namespace PromptFighters.GameFlow
         int _builtInPresetCount = 0; // プリセット（初期キャラ）の件数。以降が生成済みキャラ。
         int _p1PresetIdx = 0;
         int _p2PresetIdx = 1;
+        int _p1IconPage = 0;
+        int _p2IconPage = 0;
 
         TextMeshProUGUI _p1PresetLabel;
         TextMeshProUGUI _p2PresetLabel;
@@ -30,6 +32,8 @@ namespace PromptFighters.GameFlow
         TextMeshProUGUI _p2DetailText;
         Image _p1PreviewImage;
         Image _p2PreviewImage;
+        TextMeshProUGUI _p1PageLabel;
+        TextMeshProUGUI _p2PageLabel;
         TMP_InputField _p1NameInput;
         TMP_InputField _p1FeatureInput;
         TMP_InputField _p2NameInput;
@@ -37,6 +41,7 @@ namespace PromptFighters.GameFlow
 
         GameObject _titlePanel;
         GameObject _panel;
+        GameObject _generationSetupPanel;
         GameObject _trainingPanel;
 
         // Phase 4: 生成中・技確認パネル
@@ -49,9 +54,14 @@ namespace PromptFighters.GameFlow
         TextMeshProUGUI _confirmP2Name;
         TextMeshProUGUI _confirmP1Desc;
         TextMeshProUGUI _confirmP2Desc;
+        TextMeshProUGUI _confirmP1Stats;
+        TextMeshProUGUI _confirmP2Stats;
+        Image _confirmP1Image;
+        Image _confirmP2Image;
         CharacterData _pendingData1;
         CharacterData _pendingData2;
         Coroutine _generationCoroutine;
+        bool _generationTrainingActive;
 
         Image _titleTopGlow;
         Image _titleBottomGlow;
@@ -74,6 +84,7 @@ namespace PromptFighters.GameFlow
             if (_presets.Count < 2) _p2PresetIdx = 0;
             BuildTitlePanel();
             BuildPanel();
+            BuildGenerationSetupPanel();
             BuildGeneratingPanel();
             BuildSkillConfirmPanel();
             UITheme.ApplyAllInScene();
@@ -115,14 +126,9 @@ namespace PromptFighters.GameFlow
 
                 if (IsEditingText()) return;
 
-                if (kb != null && kb.spaceKey.wasPressedThisFrame)
-                {
-                    OnStartPressed();
-                }
-                if (kb != null && kb.tKey.wasPressedThisFrame)
-                {
-                    OnTrainingPressed();
-                }
+                if (kb != null && kb.spaceKey.wasPressedThisFrame) OnStartPressed();
+                if (kb != null && kb.tKey.wasPressedThisFrame) OnTrainingPressed();
+                if (kb != null && kb.gKey.wasPressedThisFrame) ShowGenerationSetupPanel();
             }
 
             if (_trainingPanel != null && _trainingPanel.activeSelf)
@@ -143,11 +149,10 @@ namespace PromptFighters.GameFlow
                 var kb = UnityEngine.InputSystem.Keyboard.current;
                 if (kb != null && kb.escapeKey.wasPressedThisFrame)
                     CancelGeneration();
-                // 生成中でもTキーでトレーニング（仮データで）
+                // 生成中でもTキーでトレーニング。生成コルーチンは止めない。
                 if (kb != null && kb.tKey.wasPressedThisFrame)
                 {
-                    CancelGeneration();
-                    OnTrainingPressed();
+                    StartTrainingDuringGeneration();
                 }
             }
 
@@ -280,16 +285,21 @@ namespace PromptFighters.GameFlow
 
             // ── フッター: ボタン ──
             var startBtn = MakeButton(_panel.transform, "StartBtn", "バトル開始",
-                new Vector2(-200, -460), new Vector2(320, 68), OnStartPressed,
+                new Vector2(-300, -460), new Vector2(250, 64), OnStartPressed,
                 new Color(0.1f, 0.55f, 0.1f, 1f));
-            SetButtonLabelStyle(startBtn, 24f, FontStyles.Bold, Color.white);
+            SetButtonLabelStyle(startBtn, 22f, FontStyles.Bold, Color.white);
 
             var trainBtn = MakeButton(_panel.transform, "TrainingBtn", "トレーニング",
-                new Vector2(200, -460), new Vector2(320, 68), OnTrainingPressed,
+                new Vector2(0, -460), new Vector2(250, 64), OnTrainingPressed,
                 new Color(0.1f, 0.25f, 0.65f, 1f));
-            SetButtonLabelStyle(trainBtn, 24f, FontStyles.Bold, Color.white);
+            SetButtonLabelStyle(trainBtn, 22f, FontStyles.Bold, Color.white);
 
-            MakeLabel(_panel.transform, "StartHelp", "スペースキーでバトル開始 / Tキーでトレーニング",
+            var genBtn = MakeButton(_panel.transform, "GenerateBtn", "キャラ生成",
+                new Vector2(300, -460), new Vector2(250, 64), ShowGenerationSetupPanel,
+                new Color(0.55f, 0.22f, 0.08f, 1f));
+            SetButtonLabelStyle(genBtn, 22f, FontStyles.Bold, Color.white);
+
+            MakeLabel(_panel.transform, "StartHelp", "スペース: 既存キャラでバトル / T: トレーニング / G: 新規生成",
                 new Vector2(0, -505), new Vector2(800, 28), 14, new Color(0.72f, 0.8f, 1f));
 
             // ── 操作ガイド ──
@@ -366,10 +376,10 @@ namespace PromptFighters.GameFlow
 
             var gridFrame = CreateUIObject(isP1 ? "P1IconGridFrame" : "P2IconGridFrame", parent);
             var gfRt = gridFrame.GetComponent<RectTransform>();
-            gfRt.anchoredPosition = new Vector2(cx, 190f);
-            gfRt.sizeDelta = new Vector2(392f, 128f);
+            gfRt.anchoredPosition = new Vector2(cx, 168f);
+            gfRt.sizeDelta = new Vector2(392f, 210f);
             AddImage(gridFrame, new Color(0.015f, 0.018f, 0.035f, 0.82f));
-            MakeOutline(gridFrame.transform, "GridTop", new Vector2(0f, 63f), new Vector2(392f, 2f), pColor);
+            MakeOutline(gridFrame.transform, "GridTop", new Vector2(0f, 104f), new Vector2(392f, 2f), pColor);
 
             var grid = CreateUIObject(isP1 ? "P1IconGrid" : "P2IconGrid", gridFrame.transform);
             StretchFull(grid.GetComponent<RectTransform>());
@@ -382,9 +392,20 @@ namespace PromptFighters.GameFlow
             if (isP1) _p1IconGrid = grid.transform;
             else _p2IconGrid = grid.transform;
 
+            var prevPage = MakeButton(gridFrame.transform, "PrevPage", "<", new Vector2(-166f, -88f), new Vector2(42f, 30f),
+                () => ChangeIconPage(isP1, -1), new Color(0.12f, 0.13f, 0.18f));
+            SetButtonLabelStyle(prevPage, 15f, FontStyles.Bold, Color.white);
+            var nextPage = MakeButton(gridFrame.transform, "NextPage", ">", new Vector2(166f, -88f), new Vector2(42f, 30f),
+                () => ChangeIconPage(isP1, 1), new Color(0.12f, 0.13f, 0.18f));
+            SetButtonLabelStyle(nextPage, 15f, FontStyles.Bold, Color.white);
+            var pageLabel = MakeLabel(gridFrame.transform, "PageLabel", "1/1",
+                new Vector2(0f, -88f), new Vector2(120f, 24f), 12f, new Color(0.82f, 0.9f, 1f));
+            if (isP1) _p1PageLabel = pageLabel;
+            else _p2PageLabel = pageLabel;
+
             var previewFrame = CreateUIObject(isP1 ? "P1PreviewFrame" : "P2PreviewFrame", parent);
             var pfRt = previewFrame.GetComponent<RectTransform>();
-            pfRt.anchoredPosition = new Vector2(cx - 116f, 40f);
+            pfRt.anchoredPosition = new Vector2(cx - 120f, -72f);
             pfRt.sizeDelta = new Vector2(150f, 150f);
             AddImage(previewFrame, new Color(0.01f, 0.012f, 0.02f, 0.72f));
             MakeOutline(previewFrame.transform, "PreviewTop", new Vector2(0f, 74f), new Vector2(150f, 3f), pColor);
@@ -404,32 +425,20 @@ namespace PromptFighters.GameFlow
 
             var detailBg = CreateUIObject(isP1 ? "P1DetailBg" : "P2DetailBg", parent);
             var dbRt = detailBg.GetComponent<RectTransform>();
-            dbRt.anchoredPosition = new Vector2(cx + 78f, 40f);
-            dbRt.sizeDelta = new Vector2(235f, 150f);
+            dbRt.anchoredPosition = new Vector2(cx + 84f, -72f);
+            dbRt.sizeDelta = new Vector2(248f, 172f);
             AddImage(detailBg, new Color(0.015f, 0.018f, 0.035f, 0.82f));
 
             var detailText = MakeLabel(detailBg.transform, "DetailText", "",
-                Vector2.zero, new Vector2(215f, 136f), 11f, new Color(0.9f, 0.95f, 1f));
+                Vector2.zero, new Vector2(228f, 156f), 10.5f, new Color(0.9f, 0.95f, 1f));
             detailText.alignment = TextAlignmentOptions.TopLeft;
             detailText.textWrappingMode = TextWrappingModes.Normal;
             if (isP1) _p1DetailText = detailText;
             else _p2DetailText = detailText;
 
-            var nameInput = MakeInputField(parent, isP1 ? "P1NameInput" : "P2NameInput",
-                "キャラクター名", new Vector2(cx, -160f), new Vector2(360f, 44f), false);
-            var featureInput = MakeInputField(parent, isP1 ? "P1FeatureInput" : "P2FeatureInput",
-                "特徴を入力", new Vector2(cx, -238f), new Vector2(360f, 96f), true);
-
-            if (isP1)
-            {
-                _p1NameInput = nameInput;
-                _p1FeatureInput = featureInput;
-            }
-            else
-            {
-                _p2NameInput = nameInput;
-                _p2FeatureInput = featureInput;
-            }
+            MakeLabel(parent, isP1 ? "P1ExistingHint" : "P2ExistingHint",
+                "既存キャラ選択",
+                new Vector2(cx, -182f), new Vector2(300f, 26f), 13f, new Color(0.72f, 0.8f, 1f));
         }
 
         void BuildTrainingPanel()
@@ -448,6 +457,73 @@ namespace PromptFighters.GameFlow
                 "1P: WASD 移動 / J K L 技 / A/Dはじき+J スマッシュ / G つかみ / 左Shift ガード    2P: 矢印 移動 / テンキー2 3 1 技 / ←/→はじき+2 スマッシュ / 0 つかみ / 右Shift ガード\n" +
                 "Escキー: キャラ選択に戻る    Rキー: 位置・HP・技状態をリセット",
                 new Vector2(0, 440), new Vector2(900, 52), 14, new Color(0.9f, 0.95f, 1f));
+        }
+
+        void BuildGenerationSetupPanel()
+        {
+            _generationSetupPanel = CreateUIObject("GenerationSetupOverlay", transform);
+            StretchFull(_generationSetupPanel.GetComponent<RectTransform>());
+            _generationSetupPanel.SetActive(false);
+
+            var bg = _generationSetupPanel.AddComponent<Image>();
+            bg.sprite = CreateGradientSprite(
+                new Color(0.02f, 0.02f, 0.06f, 1f),
+                new Color(0.09f, 0.02f, 0.12f, 1f),
+                new Color(0f, 0.08f, 0.14f, 1f),
+                new Color(0f, 0f, 0.04f, 1f));
+
+            MakeLabel(_generationSetupPanel.transform, "GenSetupTitle", "新規キャラクター生成",
+                new Vector2(0f, 455f), new Vector2(760f, 56f), 30f, new Color(1f, 0.88f, 0.35f));
+
+            BuildGenerationColumn(_generationSetupPanel.transform, true);
+            BuildGenerationColumn(_generationSetupPanel.transform, false);
+
+            var startGen = MakeButton(_generationSetupPanel.transform, "StartGenerateBtn", "生成開始",
+                new Vector2(-170f, -430f), new Vector2(260f, 62f), OnGeneratePressed,
+                new Color(0.65f, 0.28f, 0.08f, 1f));
+            SetButtonLabelStyle(startGen, 22f, FontStyles.Bold, Color.white);
+
+            var back = MakeButton(_generationSetupPanel.transform, "BackToSelectBtn", "戻る",
+                new Vector2(170f, -430f), new Vector2(220f, 62f), ShowCharacterSelect,
+                new Color(0.14f, 0.16f, 0.22f, 1f));
+            SetButtonLabelStyle(back, 20f, FontStyles.Bold, Color.white);
+
+            MakeLabel(_generationSetupPanel.transform, "GenSetupHint",
+                "空欄のプレイヤーは選択中の既存キャラを使用します。生成中はTキーで練習できます。",
+                new Vector2(0f, -485f), new Vector2(840f, 28f), 13f, new Color(0.78f, 0.86f, 1f));
+        }
+
+        void BuildGenerationColumn(Transform parent, bool isP1)
+        {
+            float cx = isP1 ? -330f : 330f;
+            var pColor = isP1 ? new Color(0.4f, 0.75f, 1f) : new Color(1f, 0.55f, 0.35f);
+
+            MakePanel(parent, isP1 ? "P1GenBg" : "P2GenBg",
+                new Vector2(cx, 35f), new Vector2(520f, 650f), new Color(0.01f, 0.014f, 0.03f, 0.72f));
+            MakeLabel(parent, isP1 ? "P1GenBadge" : "P2GenBadge", isP1 ? "1P" : "2P",
+                new Vector2(cx, 325f), new Vector2(120f, 44f), 28f, pColor).fontStyle = FontStyles.Bold;
+            MakeOutline(parent, isP1 ? "P1GenLine" : "P2GenLine",
+                new Vector2(cx, 292f), new Vector2(360f, 2f), pColor);
+
+            var nameInput = MakeInputField(parent, isP1 ? "P1GenerateNameInput" : "P2GenerateNameInput",
+                "キャラクター名", new Vector2(cx, 220f), new Vector2(430f, 48f), false);
+            var featureInput = MakeInputField(parent, isP1 ? "P1GenerateFeatureInput" : "P2GenerateFeatureInput",
+                "特徴・見た目・戦い方", new Vector2(cx, 80f), new Vector2(430f, 160f), true);
+
+            MakeLabel(parent, isP1 ? "P1GenNote" : "P2GenNote",
+                "例: 雷をまとった小柄な剣士。素早く跳び回り、遠距離から雷を飛ばす。",
+                new Vector2(cx, -40f), new Vector2(430f, 54f), 13f, new Color(0.72f, 0.78f, 0.9f));
+
+            if (isP1)
+            {
+                _p1NameInput = nameInput;
+                _p1FeatureInput = featureInput;
+            }
+            else
+            {
+                _p2NameInput = nameInput;
+                _p2FeatureInput = featureInput;
+            }
         }
 
         void BuildGeneratingPanel()
@@ -476,7 +552,7 @@ namespace PromptFighters.GameFlow
                 new Color(0.25f, 0.15f, 0.15f));
 
             MakeLabel(_generatingPanel.transform, "TrainHint",
-                "Tキー: トレーニングモードで練習しながら待つ　Esc: キャンセル",
+                "Tキー: 生成を続けたままトレーニング　Esc: キャンセル",
                 new Vector2(0, -165), new Vector2(700, 30), 13f, new Color(0.6f, 0.7f, 0.85f));
         }
 
@@ -492,7 +568,7 @@ namespace PromptFighters.GameFlow
                 new Color(0f, 0.08f, 0.16f, 1f), new Color(0f, 0f, 0.04f, 1f));
 
             MakeLabel(_skillConfirmPanel.transform, "ConfirmTitle", "キャラクター確認",
-                new Vector2(0, 480), new Vector2(700, 52), 30f, new Color(1f, 0.88f, 0.3f));
+                new Vector2(0, 492), new Vector2(700, 46), 28f, new Color(1f, 0.88f, 0.3f));
 
             // 中央仕切り
             MakeOutline(_skillConfirmPanel.transform, "Divider",
@@ -501,21 +577,27 @@ namespace PromptFighters.GameFlow
             // 1P 列（左）
             float lx = -440f;
             MakeLabel(_skillConfirmPanel.transform, "P1Badge", "1P",
-                new Vector2(lx, 420), new Vector2(100, 52), 36f, new Color(0.4f, 0.75f, 1f))
+                new Vector2(lx, 438), new Vector2(100, 44), 30f, new Color(0.4f, 0.75f, 1f))
                 .fontStyle = FontStyles.Bold;
             MakeOutline(_skillConfirmPanel.transform, "P1Line",
-                new Vector2(lx, 378), new Vector2(300, 2), new Color(0.4f, 0.75f, 1f));
+                new Vector2(lx, 404), new Vector2(360, 2), new Color(0.4f, 0.75f, 1f));
 
             _confirmP1Name = MakeLabel(_skillConfirmPanel.transform, "P1Name", "---",
-                new Vector2(lx, 340), new Vector2(380, 38), 22f, new Color(1f, 1f, 1f));
+                new Vector2(lx, 374), new Vector2(390, 32), 20f, new Color(1f, 1f, 1f));
             _confirmP1Name.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
 
             _confirmP1Desc = MakeLabel(_skillConfirmPanel.transform, "P1Desc", "",
-                new Vector2(lx, 295), new Vector2(380, 38), 13f, new Color(0.82f, 0.88f, 1f));
+                new Vector2(lx, 338), new Vector2(390, 40), 12f, new Color(0.82f, 0.88f, 1f));
             _confirmP1Desc.textWrappingMode = TMPro.TextWrappingModes.Normal;
 
+            _confirmP1Image = MakePortrait(_skillConfirmPanel.transform, "P1ConfirmImage",
+                new Vector2(lx - 145f, 205f), new Vector2(175f, 210f));
+            _confirmP1Stats = MakeLabel(_skillConfirmPanel.transform, "P1Stats", "",
+                new Vector2(lx + 110f, 210f), new Vector2(240f, 168f), 12f, new Color(0.9f, 0.95f, 1f));
+            _confirmP1Stats.alignment = TextAlignmentOptions.TopLeft;
+
             string[] slotLabels = { "基本技A", "基本技B", "基本技C", "スマッシュ" };
-            float[] skillY      = { 220f, 130f, 40f, -60f };
+            float[] skillY      = { 70f, -28f, -126f, -224f };
 
             for (int i = 0; i < 4; i++)
             {
@@ -524,7 +606,7 @@ namespace PromptFighters.GameFlow
                     new Vector2(lx - 100f, skillY[i] + 20f), new Vector2(100f, 28f), 12f,
                     new Color(0.5f, 0.7f, 1f));
                 _confirmP1SkillTexts[i] = MakeLabel(_skillConfirmPanel.transform, $"P1Skill{i}", "---",
-                    new Vector2(lx + 30f, skillY[i]), new Vector2(340f, 54f), 14f, Color.white);
+                    new Vector2(lx + 54f, skillY[i]), new Vector2(360f, 72f), 12f, Color.white);
                 _confirmP1SkillTexts[i].alignment = TextAlignmentOptions.TopLeft;
                 _confirmP1SkillTexts[i].textWrappingMode = TMPro.TextWrappingModes.Normal;
             }
@@ -532,18 +614,24 @@ namespace PromptFighters.GameFlow
             // 2P 列（右）
             float rx = 440f;
             MakeLabel(_skillConfirmPanel.transform, "P2Badge", "2P",
-                new Vector2(rx, 420), new Vector2(100, 52), 36f, new Color(1f, 0.55f, 0.35f))
+                new Vector2(rx, 438), new Vector2(100, 44), 30f, new Color(1f, 0.55f, 0.35f))
                 .fontStyle = FontStyles.Bold;
             MakeOutline(_skillConfirmPanel.transform, "P2Line",
-                new Vector2(rx, 378), new Vector2(300, 2), new Color(1f, 0.55f, 0.35f));
+                new Vector2(rx, 404), new Vector2(360, 2), new Color(1f, 0.55f, 0.35f));
 
             _confirmP2Name = MakeLabel(_skillConfirmPanel.transform, "P2Name", "---",
-                new Vector2(rx, 340), new Vector2(380, 38), 22f, Color.white);
+                new Vector2(rx, 374), new Vector2(390, 32), 20f, Color.white);
             _confirmP2Name.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
 
             _confirmP2Desc = MakeLabel(_skillConfirmPanel.transform, "P2Desc", "",
-                new Vector2(rx, 295), new Vector2(380, 38), 13f, new Color(1f, 0.88f, 0.82f));
+                new Vector2(rx, 338), new Vector2(390, 40), 12f, new Color(1f, 0.88f, 0.82f));
             _confirmP2Desc.textWrappingMode = TMPro.TextWrappingModes.Normal;
+
+            _confirmP2Image = MakePortrait(_skillConfirmPanel.transform, "P2ConfirmImage",
+                new Vector2(rx - 145f, 205f), new Vector2(175f, 210f));
+            _confirmP2Stats = MakeLabel(_skillConfirmPanel.transform, "P2Stats", "",
+                new Vector2(rx + 110f, 210f), new Vector2(240f, 168f), 12f, new Color(1f, 0.92f, 0.88f));
+            _confirmP2Stats.alignment = TextAlignmentOptions.TopLeft;
 
             for (int i = 0; i < 4; i++)
             {
@@ -551,40 +639,49 @@ namespace PromptFighters.GameFlow
                     new Vector2(rx - 100f, skillY[i] + 20f), new Vector2(100f, 28f), 12f,
                     new Color(1f, 0.7f, 0.5f));
                 _confirmP2SkillTexts[i] = MakeLabel(_skillConfirmPanel.transform, $"P2Skill{i}", "---",
-                    new Vector2(rx + 30f, skillY[i]), new Vector2(340f, 54f), 14f, Color.white);
+                    new Vector2(rx + 54f, skillY[i]), new Vector2(360f, 72f), 12f, Color.white);
                 _confirmP2SkillTexts[i].alignment = TextAlignmentOptions.TopLeft;
                 _confirmP2SkillTexts[i].textWrappingMode = TMPro.TextWrappingModes.Normal;
             }
 
             // フッター
             var battleBtn = MakeButton(_skillConfirmPanel.transform, "BattleBtn", "バトル開始",
-                new Vector2(0, -190), new Vector2(360, 64), OnSkillConfirmBattlePressed,
+                new Vector2(0, -428), new Vector2(330, 58), OnSkillConfirmBattlePressed,
                 new Color(0.1f, 0.55f, 0.1f, 1f));
-            SetButtonLabelStyle(battleBtn, 26f, FontStyles.Bold, Color.white);
+            SetButtonLabelStyle(battleBtn, 24f, FontStyles.Bold, Color.white);
 
             MakeLabel(_skillConfirmPanel.transform, "BattleHint",
                 "スペースキー: バトル開始　Esc: 戻る",
-                new Vector2(0, -245), new Vector2(600, 28), 13f, new Color(0.72f, 0.8f, 1f));
+                new Vector2(0, -475), new Vector2(600, 28), 13f, new Color(0.72f, 0.8f, 1f));
         }
 
         void RefreshSkillConfirmContent()
         {
             void FillPlayer(CharacterData d, TextMeshProUGUI nameT, TextMeshProUGUI descT,
-                TextMeshProUGUI[] skillTs)
+                TextMeshProUGUI statsT, Image image, TextMeshProUGUI[] skillTs)
             {
                 if (d == null) return;
                 if (nameT != null) nameT.text = d.characterName;
                 if (descT != null) descT.text = d.visualDescription;
+                if (statsT != null) statsT.text = BuildStatsText(d);
+                if (image != null)
+                {
+                    EnsurePreviewSprite(d);
+                    image.sprite = d.characterSprite;
+                    image.enabled = image.sprite != null;
+                }
                 for (int i = 0; i < 4 && i < skillTs.Length; i++)
                 {
                     if (skillTs[i] == null) continue;
                     var s = d.skills[i];
-                    skillTs[i].text = s != null ? $"{s.skill_name}\n{s.description}" : "---";
+                    skillTs[i].text = s != null
+                        ? $"{s.skill_name}\n威力 {s.parameters.damage:F0} / リーチ {s.parameters.range:F1} / 発生 {s.parameters.startup:F2}s\n{s.description}"
+                        : "---";
                 }
             }
 
-            FillPlayer(_pendingData1, _confirmP1Name, _confirmP1Desc, _confirmP1SkillTexts);
-            FillPlayer(_pendingData2, _confirmP2Name, _confirmP2Desc, _confirmP2SkillTexts);
+            FillPlayer(_pendingData1, _confirmP1Name, _confirmP1Desc, _confirmP1Stats, _confirmP1Image, _confirmP1SkillTexts);
+            FillPlayer(_pendingData2, _confirmP2Name, _confirmP2Desc, _confirmP2Stats, _confirmP2Image, _confirmP2SkillTexts);
         }
 
         void ChangePreset(ref int idx, int delta, TextMeshProUGUI label)
@@ -594,6 +691,15 @@ namespace PromptFighters.GameFlow
             if (label != null) label.text = GetPresetName(idx);
             UpdateCategoryLabels();
             RefreshCharacterPreview();
+            RebuildIconGrids();
+        }
+
+        void ChangeIconPage(bool isP1, int delta)
+        {
+            if (_presets == null || _presets.Count == 0) return;
+            int maxPage = Mathf.Max(0, (_presets.Count - 1) / 12);
+            if (isP1) _p1IconPage = Mathf.Clamp(_p1IconPage + delta, 0, maxPage);
+            else _p2IconPage = Mathf.Clamp(_p2IconPage + delta, 0, maxPage);
             RebuildIconGrids();
         }
 
@@ -655,9 +761,20 @@ namespace PromptFighters.GameFlow
                 var skill = data.skills[i];
                 if (skill == null) continue;
                 string slot = i switch { 0 => "A", 1 => "B", 2 => "C", 3 => "S", _ => "?" };
-                sb.AppendLine($"{slot}: {skill.skill_name}  威{skill.parameters.damage:F0}/射{skill.parameters.range:F1}");
+                sb.AppendLine($"{slot}: {skill.skill_name}");
+                sb.AppendLine($"  威力{skill.parameters.damage:F0}  リーチ{skill.parameters.range:F1}");
             }
             return sb.ToString();
+        }
+
+        string BuildStatsText(CharacterData data)
+        {
+            var s = data?.stats ?? new CharacterStats();
+            return $"地上移動 {s.groundMoveSpeed:F1}\n" +
+                   $"空中移動 {s.airMoveSpeed:F1}\n" +
+                   $"ジャンプ {s.jumpForce:F1}\n" +
+                   $"ガード耐久 {s.guardDurability:F0}\n" +
+                   $"軽さ {s.lightness:F2} / 重さ {s.weight:F2}";
         }
 
         void RebuildIconGrids()
@@ -674,8 +791,17 @@ namespace PromptFighters.GameFlow
                 Destroy(grid.GetChild(i).gameObject);
 
             int selected = isP1 ? _p1PresetIdx : _p2PresetIdx;
-            int count = Mathf.Min(_presets.Count, 8);
-            for (int i = 0; i < count; i++)
+            int page = isP1 ? _p1IconPage : _p2IconPage;
+            int maxPage = Mathf.Max(0, (_presets.Count - 1) / 12);
+            page = Mathf.Clamp(page, 0, maxPage);
+            if (isP1) _p1IconPage = page;
+            else _p2IconPage = page;
+            int start = page * 12;
+            int end = Mathf.Min(_presets.Count, start + 12);
+            var pageLabel = isP1 ? _p1PageLabel : _p2PageLabel;
+            if (pageLabel != null) pageLabel.text = $"{page + 1}/{maxPage + 1}";
+
+            for (int i = start; i < end; i++)
             {
                 int idx = i;
                 var data = _presets[i];
@@ -706,32 +832,40 @@ namespace PromptFighters.GameFlow
             if (BattleManager.Instance == null) return;
             if (_presets == null || _presets.Count == 0) return;
 
-            bool hasP1Input = HasCharacterInput(true);
-            bool hasP2Input = HasCharacterInput(false);
-
-            // テキスト入力があれば AI 生成フローへ
-            if (hasP1Input || hasP2Input)
-            {
-                var preset1 = GetPreset(true);
-                var preset2 = GetPreset(false);
-                _panel.SetActive(false);
-                ShowGeneratingPanel();
-                _generationCoroutine = StartCoroutine(GenerateBothChars(preset1, preset2, hasP1Input, hasP2Input));
-                return;
-            }
-
-            // 入力なし: プリセットで即バトル（保存済みキャラの場合はスプライトセットをロード）
-            var data1 = BuildCharacterData(true);
-            var data2 = BuildCharacterData(false);
+            var data1 = PromptCharacterFactory.Clone(GetPreset(true));
+            var data2 = PromptCharacterFactory.Clone(GetPreset(false));
             EnsureSpriteSet(data1);
             EnsureSpriteSet(data2);
             _panel.SetActive(false);
             BattleManager.Instance.StartCountdown(data1, data2);
         }
 
+        void OnGeneratePressed()
+        {
+            if (BattleManager.Instance == null) return;
+            if (_presets == null || _presets.Count == 0) return;
+
+            bool hasP1Input = HasCharacterInput(true);
+            bool hasP2Input = HasCharacterInput(false);
+            if (!hasP1Input && !hasP2Input) return;
+
+            var preset1 = GetPreset(true);
+            var preset2 = GetPreset(false);
+            _generationSetupPanel?.SetActive(false);
+            ShowGeneratingPanel();
+            _generationCoroutine = StartCoroutine(GenerateBothChars(preset1, preset2, hasP1Input, hasP2Input));
+        }
+
         void OnSkillConfirmBattlePressed()
         {
             if (BattleManager.Instance == null || _pendingData1 == null || _pendingData2 == null) return;
+            if (_generationTrainingActive)
+            {
+                BattleManager.Instance.ReturnToSetup();
+                _generationTrainingActive = false;
+            }
+            _panel?.SetActive(false);
+            _trainingPanel?.SetActive(false);
             _skillConfirmPanel?.SetActive(false);
             BattleManager.Instance.StartCountdown(_pendingData1, _pendingData2);
         }
@@ -815,6 +949,7 @@ namespace PromptFighters.GameFlow
 
             _generatingPanel?.SetActive(false);
             _generationCoroutine = null;
+            _generationTrainingActive = false;
             ShowSkillConfirmPanel();
         }
 
@@ -887,12 +1022,23 @@ namespace PromptFighters.GameFlow
             if (_presets == null || _presets.Count == 0) return;
 
             int p2Idx = _presets.Count > 1 ? _p2PresetIdx : _p1PresetIdx;
-            var data1 = BuildCharacterData(true);
-            var data2 = HasCharacterInput(false)
-                ? BuildCharacterData(false)
-                : PromptCharacterFactory.Clone(_presets[p2Idx]);
+            var data1 = PromptCharacterFactory.Clone(GetPreset(true));
+            var data2 = PromptCharacterFactory.Clone(_presets[p2Idx]);
 
             _panel.SetActive(false);
+            BattleManager.Instance.StartTraining(data1, data2);
+        }
+
+        void StartTrainingDuringGeneration()
+        {
+            if (_generationTrainingActive) return;
+            if (BattleManager.Instance == null || _presets == null || _presets.Count == 0) return;
+            _generationTrainingActive = true;
+            _generatingPanel?.SetActive(false);
+
+            int p2Idx = _presets.Count > 1 ? _p2PresetIdx : _p1PresetIdx;
+            var data1 = PromptCharacterFactory.Clone(GetPreset(true));
+            var data2 = PromptCharacterFactory.Clone(_presets[p2Idx]);
             BattleManager.Instance.StartTraining(data1, data2);
         }
 
@@ -902,6 +1048,7 @@ namespace PromptFighters.GameFlow
             if (_trainingPanel != null) _trainingPanel.SetActive(false);
             if (_panel != null) _panel.SetActive(true);
             if (_titlePanel != null) _titlePanel.SetActive(false);
+            if (_generationSetupPanel != null) _generationSetupPanel.SetActive(false);
             _waitForMenuInputRelease = true;
         }
 
@@ -960,6 +1107,7 @@ namespace PromptFighters.GameFlow
         {
             if (_titlePanel != null) _titlePanel.SetActive(true);
             if (_panel != null) _panel.SetActive(false);
+            if (_generationSetupPanel != null) _generationSetupPanel.SetActive(false);
             if (_trainingPanel != null) _trainingPanel.SetActive(false);
         }
 
@@ -967,6 +1115,17 @@ namespace PromptFighters.GameFlow
         {
             if (_titlePanel != null) _titlePanel.SetActive(false);
             if (_panel != null) _panel.SetActive(true);
+            if (_generationSetupPanel != null) _generationSetupPanel.SetActive(false);
+            if (_trainingPanel != null) _trainingPanel.SetActive(false);
+            if (_generatingPanel != null) _generatingPanel.SetActive(false);
+            if (_skillConfirmPanel != null) _skillConfirmPanel.SetActive(false);
+        }
+
+        void ShowGenerationSetupPanel()
+        {
+            if (_titlePanel != null) _titlePanel.SetActive(false);
+            if (_panel != null) _panel.SetActive(false);
+            if (_generationSetupPanel != null) _generationSetupPanel.SetActive(true);
             if (_trainingPanel != null) _trainingPanel.SetActive(false);
             if (_generatingPanel != null) _generatingPanel.SetActive(false);
             if (_skillConfirmPanel != null) _skillConfirmPanel.SetActive(false);
@@ -981,6 +1140,7 @@ namespace PromptFighters.GameFlow
         void ShowSkillConfirmPanel()
         {
             RefreshSkillConfirmContent();
+            if (_trainingPanel != null) _trainingPanel.SetActive(false);
             if (_skillConfirmPanel != null) _skillConfirmPanel.SetActive(true);
         }
 
@@ -1203,6 +1363,26 @@ namespace PromptFighters.GameFlow
                 new Vector2(-31f, 19f), new Vector2(22f, 18f), 10f, Color.white);
             badge.fontStyle = FontStyles.Bold;
             return btn;
+        }
+
+        static Image MakePortrait(Transform parent, string name, Vector2 pos, Vector2 size)
+        {
+            var frame = CreateUIObject(name + "Frame", parent);
+            var frt = frame.GetComponent<RectTransform>();
+            frt.anchoredPosition = pos;
+            frt.sizeDelta = size;
+            AddImage(frame, new Color(0.01f, 0.012f, 0.02f, 0.78f));
+
+            var imageGo = CreateUIObject(name, frame.transform);
+            var rt = imageGo.GetComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = new Vector2(10f, 8f);
+            rt.offsetMax = new Vector2(-10f, -8f);
+            var img = imageGo.AddComponent<Image>();
+            img.preserveAspect = true;
+            img.raycastTarget = false;
+            return img;
         }
 
         static Image MakePanel(Transform parent, string name, Vector2 pos, Vector2 size, Color color)

@@ -43,6 +43,9 @@ namespace PromptFighters.Battle.Skills
         // 共通オプション
         public float  duration;
         public float  range;
+        public float  spawn_x;
+        public float  spawn_y;
+        public float  size_y;
         public int    hit_count = 1;
         public float  damage_override = -1f; // -1なら parameters.damage を使用
 
