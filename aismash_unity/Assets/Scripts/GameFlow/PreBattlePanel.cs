@@ -32,6 +32,8 @@ namespace PromptFighters.GameFlow
         TextMeshProUGUI _p2DetailText;
         Image _p1PreviewImage;
         Image _p2PreviewImage;
+        Button _p1DeleteButton;
+        Button _p2DeleteButton;
         TextMeshProUGUI _p1PageLabel;
         TextMeshProUGUI _p2PageLabel;
         TMP_InputField _p1NameInput;
@@ -43,6 +45,7 @@ namespace PromptFighters.GameFlow
         GameObject _panel;
         GameObject _generationSetupPanel;
         GameObject _trainingPanel;
+        TextMeshProUGUI _trainingControlsText;
 
         // Phase 4: 生成中・技確認パネル
         GameObject _generatingPanel;
@@ -136,7 +139,10 @@ namespace PromptFighters.GameFlow
                 var kb = UnityEngine.InputSystem.Keyboard.current;
                 if (kb != null && kb.escapeKey.wasPressedThisFrame)
                 {
-                    BattleManager.Instance?.ReturnToSetup();
+                    if (_generationTrainingActive && _generationCoroutine != null)
+                        ReturnToGeneratingFromTraining();
+                    else
+                        BattleManager.Instance?.ReturnToSetup();
                 }
                 if (kb != null && kb.rKey.wasPressedThisFrame)
                 {
@@ -439,6 +445,13 @@ namespace PromptFighters.GameFlow
             MakeLabel(parent, isP1 ? "P1ExistingHint" : "P2ExistingHint",
                 "既存キャラ選択",
                 new Vector2(cx, -182f), new Vector2(300f, 26f), 13f, new Color(0.72f, 0.8f, 1f));
+
+            var deleteBtn = MakeButton(parent, isP1 ? "P1DeleteGeneratedBtn" : "P2DeleteGeneratedBtn", "生成キャラ削除",
+                new Vector2(cx, -220f), new Vector2(190f, 38f), () => DeleteSelectedCharacter(isP1),
+                new Color(0.32f, 0.08f, 0.08f, 1f));
+            SetButtonLabelStyle(deleteBtn, 14f, FontStyles.Bold, Color.white);
+            if (isP1) _p1DeleteButton = deleteBtn;
+            else _p2DeleteButton = deleteBtn;
         }
 
         void BuildTrainingPanel()
@@ -453,9 +466,8 @@ namespace PromptFighters.GameFlow
 
             MakeLabel(_trainingPanel.transform, "TrainingTitle", "トレーニングモード",
                 new Vector2(0, 485), new Vector2(480, 46), 28, new Color(0.5f, 0.85f, 1f));
-            MakeLabel(_trainingPanel.transform, "TrainingControls",
-                "1P: WASD 移動 / J K L 技 / A/Dはじき+J スマッシュ / G つかみ / 左Shift ガード    2P: 矢印 移動 / テンキー2 3 1 技 / ←/→はじき+2 スマッシュ / 0 つかみ / 右Shift ガード\n" +
-                "Escキー: キャラ選択に戻る    Rキー: 位置・HP・技状態をリセット",
+            _trainingControlsText = MakeLabel(_trainingPanel.transform, "TrainingControls",
+                BuildTrainingHelpText(),
                 new Vector2(0, 440), new Vector2(900, 52), 14, new Color(0.9f, 0.95f, 1f));
         }
 
@@ -949,7 +961,6 @@ namespace PromptFighters.GameFlow
 
             _generatingPanel?.SetActive(false);
             _generationCoroutine = null;
-            _generationTrainingActive = false;
             ShowSkillConfirmPanel();
         }
 
@@ -1042,6 +1053,14 @@ namespace PromptFighters.GameFlow
             BattleManager.Instance.StartTraining(data1, data2);
         }
 
+        void ReturnToGeneratingFromTraining()
+        {
+            BattleManager.Instance?.ReturnToSetup();
+            if (_panel != null) _panel.SetActive(false);
+            if (_trainingPanel != null) _trainingPanel.SetActive(false);
+            if (_generatingPanel != null) _generatingPanel.SetActive(true);
+        }
+
         void ShowPanel()
         {
             RefreshPresets();
@@ -1096,10 +1115,17 @@ namespace PromptFighters.GameFlow
                     ? new Color(1f, 0.85f, 0.2f)
                     : new Color(0.65f, 0.75f, 0.9f);
             }
+
+            if (_p1DeleteButton != null)
+                _p1DeleteButton.gameObject.SetActive(_p1PresetIdx >= _builtInPresetCount);
+            if (_p2DeleteButton != null)
+                _p2DeleteButton.gameObject.SetActive(_p2PresetIdx >= _builtInPresetCount);
         }
 
         void ShowTrainingPanel()
         {
+            if (_trainingControlsText != null)
+                _trainingControlsText.text = BuildTrainingHelpText();
             if (_trainingPanel != null) _trainingPanel.SetActive(true);
         }
 
@@ -1142,6 +1168,37 @@ namespace PromptFighters.GameFlow
             RefreshSkillConfirmContent();
             if (_trainingPanel != null) _trainingPanel.SetActive(false);
             if (_skillConfirmPanel != null) _skillConfirmPanel.SetActive(true);
+        }
+
+        string BuildTrainingHelpText()
+        {
+            string esc = _generationTrainingActive && _generationCoroutine != null
+                ? "Escキー: 生成進行画面に戻る"
+                : "Escキー: キャラ選択に戻る";
+            return "1P: WASD 移動 / J K L 技 / A/Dはじき+J スマッシュ / G つかみ / 左Shift ガード    " +
+                   "2P: 矢印 移動 / テンキー2 3 1 技 / ←/→はじき+2 スマッシュ / 0 つかみ / 右Shift ガード\n" +
+                   $"{esc}    Rキー: 位置・HP・技状態をリセット";
+        }
+
+        void DeleteSelectedCharacter(bool isP1)
+        {
+            if (_presets == null) return;
+            int idx = isP1 ? _p1PresetIdx : _p2PresetIdx;
+            if (idx < _builtInPresetCount || idx < 0 || idx >= _presets.Count) return;
+
+            var data = _presets[idx];
+            if (!CharacterSaveManager.Delete(data)) return;
+
+            _presets.RemoveAt(idx);
+            int maxIdx = Mathf.Max(0, _presets.Count - 1);
+            _p1PresetIdx = Mathf.Clamp(_p1PresetIdx >= idx ? _p1PresetIdx - 1 : _p1PresetIdx, 0, maxIdx);
+            _p2PresetIdx = Mathf.Clamp(_p2PresetIdx >= idx ? _p2PresetIdx - 1 : _p2PresetIdx, 0, maxIdx);
+
+            if (_p1PresetLabel != null) _p1PresetLabel.text = GetPresetName(_p1PresetIdx);
+            if (_p2PresetLabel != null) _p2PresetLabel.text = GetPresetName(_p2PresetIdx);
+            UpdateCategoryLabels();
+            RebuildIconGrids();
+            RefreshCharacterPreview();
         }
 
         void AnimateTitle()

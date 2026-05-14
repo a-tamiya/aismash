@@ -8,10 +8,10 @@ namespace PromptFighters.Battle.Skills
     {
         // 技枠ごとの上限
         static readonly float[] MaxDamage     = { 14f, 14f, 12f, 30f }; // attack_a/b/c/smash_side
-        static readonly float[] MaxStartup    = { 0.06f, 0.10f, 0.10f, 0.18f };
-        static readonly float[] MinRecovery   = { 0.10f, 0.18f, 0.30f, 0.45f };
-        static readonly float[] MaxRecovery   = { 0.30f, 0.50f, 0.80f, 1.20f };
-        static readonly float[] MaxRange      = { 2.5f, 16f, 2.5f, 3.0f };
+        static readonly float[] MaxStartup    = { 0.12f, 0.18f, 0.22f, 0.32f };
+        static readonly float[] MinRecovery   = { 0.08f, 0.14f, 0.22f, 0.38f };
+        static readonly float[] MaxRecovery   = { 0.45f, 0.75f, 1.05f, 1.45f };
+        static readonly float[] MaxRange      = { 3.4f, 22f, 3.6f, 4.2f };
         static readonly float[] MinKnockback  = { 0f,   0f,  0f,   4f };  // 横スマッシュは最低限吹き飛ぶ
 
         const float MaxStunTime  = 1.5f;
@@ -77,9 +77,9 @@ namespace PromptFighters.Battle.Skills
                         a.chance = Mathf.Clamp01(a.chance);
                     }
 
-                    // melee_hitboxのrangeはヒットボックスサイズなので上限2.5
+                    // melee_hitboxのrangeはヒットボックスサイズなので上限を適用
                     if (a.type == "melee_hitbox")
-                        a.range = Mathf.Clamp(a.range, 0.5f, 2.5f);
+                        a.range = Mathf.Clamp(a.range, 0.5f, 3.6f);
 
                     // dashのpowerに上限
                     if (a.type == "dash" && a.power > 15f) a.power = 15f;

@@ -4,15 +4,17 @@ using UnityEngine;
 namespace PromptFighters.Utils
 {
     // 白背景を透過処理する。
-    // 外縁からのフラッドフィルで「背景に繋がっている白画素」のみを除去するため、
-    // キャラクター本体の白い服・肌・髪は保護される。
+    // 外縁からのフラッドフィルに加えて、輪郭の内側に残りやすい純白背景も除去する。
     public static class WhiteBackgroundRemover
     {
         // threshold : この値以上の min(R,G,B) を「白とみなせる」上限 (0-1)
         // fadeRange : エッジをグラデーションで馴染ませる幅
         public static Texture2D Apply(Texture2D src,
                                       float threshold = 0.97f,
-                                      float fadeRange = 0.02f)
+                                      float fadeRange = 0.02f,
+                                      bool removeInteriorWhite = true,
+                                      float interiorThreshold = 0.94f,
+                                      float maxColorSpread = 0.08f)
         {
             int w = src.width;
             int h = src.height;
@@ -51,20 +53,34 @@ namespace PromptFighters.Utils
                 if (py < h - 1) TryEnqueue(px,     py + 1, w, pixels, isBg, queue, minThresh);
             }
 
-            // 背景と判定された画素のみアルファを下げる（内部の白は触らない）
+            float interiorMinThresh = Mathf.Max(0f, interiorThreshold - fadeRange);
+
+            // 背景と判定された画素、および内側に残った純白背景のアルファを下げる
             for (int i = 0; i < pixels.Length; i++)
             {
-                if (!isBg[i]) continue;
                 Color p    = pixels[i];
                 float minC = Mathf.Min(p.r, Mathf.Min(p.g, p.b));
-                if (minC >= threshold)
+                bool shouldRemove = isBg[i];
+                float fadeStart = minThresh;
+                float fadeEnd = threshold;
+
+                if (!shouldRemove && removeInteriorWhite && IsNeutralWhite(p, interiorMinThresh, maxColorSpread))
+                {
+                    shouldRemove = true;
+                    fadeStart = interiorMinThresh;
+                    fadeEnd = interiorThreshold;
+                }
+
+                if (!shouldRemove) continue;
+
+                if (minC >= fadeEnd)
                 {
                     p.a = 0f; // 完全透明
                 }
                 else
                 {
                     // フェードゾーン
-                    float t = (minC - minThresh) / fadeRange;
+                    float t = (minC - fadeStart) / Mathf.Max(0.0001f, fadeEnd - fadeStart);
                     p.a = 1f - Mathf.Clamp01(t);
                 }
                 pixels[i] = p;
@@ -86,6 +102,14 @@ namespace PromptFighters.Utils
             if (minC < minThresh) return; // 白でない → 背景でない、ここで止める
             isBg[idx] = true;
             queue.Enqueue(idx);
+        }
+
+        static bool IsNeutralWhite(Color p, float minThreshold, float maxSpread)
+        {
+            float minC = Mathf.Min(p.r, Mathf.Min(p.g, p.b));
+            if (minC < minThreshold) return false;
+            float maxC = Mathf.Max(p.r, Mathf.Max(p.g, p.b));
+            return maxC - minC <= maxSpread;
         }
     }
 }

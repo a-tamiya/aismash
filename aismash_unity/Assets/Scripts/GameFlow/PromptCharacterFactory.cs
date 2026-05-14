@@ -118,30 +118,30 @@ namespace PromptFighters.GameFlow
 
             if (ContainsAny(text, "fast", "quick", "speed", "agile", "ninja", "素早", "高速", "俊敏", "軽快", "忍者"))
             {
-                stats.groundMoveSpeed = 6.5f;
-                stats.airMoveSpeed = 5.4f;
-                stats.jumpForce = 13.5f;
+                stats.groundMoveSpeed = 8.2f;
+                stats.airMoveSpeed = 7.2f;
+                stats.jumpForce = 16.5f;
                 stats.guardDurability = 55f;
-                stats.lightness = 1.3f;
-                stats.weight = 0.75f;
+                stats.lightness = 1.65f;
+                stats.weight = 0.6f;
             }
             else if (ContainsAny(text, "heavy", "giant", "large", "armor", "tank", "重", "大型", "巨", "鎧", "頑丈"))
             {
-                stats.groundMoveSpeed = 3.8f;
-                stats.airMoveSpeed = 3.0f;
-                stats.jumpForce = 9.5f;
+                stats.groundMoveSpeed = 2.9f;
+                stats.airMoveSpeed = 2.3f;
+                stats.jumpForce = 8.0f;
                 stats.guardDurability = 85f;
-                stats.lightness = 0.75f;
-                stats.weight = 1.35f;
+                stats.lightness = 0.55f;
+                stats.weight = 1.75f;
             }
             else if (ContainsAny(text, "flying", "bird", "wind", "浮", "飛", "鳥", "風"))
             {
-                stats.groundMoveSpeed = 5.2f;
-                stats.airMoveSpeed = 6.0f;
-                stats.jumpForce = 14.5f;
+                stats.groundMoveSpeed = 5.4f;
+                stats.airMoveSpeed = 8.0f;
+                stats.jumpForce = 17.5f;
                 stats.guardDurability = 60f;
-                stats.lightness = 1.18f;
-                stats.weight = 0.85f;
+                stats.lightness = 1.5f;
+                stats.weight = 0.7f;
             }
 
             return stats;

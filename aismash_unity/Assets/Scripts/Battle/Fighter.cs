@@ -406,9 +406,9 @@ namespace PromptFighters.Battle
         public void ApplyCharacterStats(CharacterStats stats)
         {
             if (stats == null) return;
-            moveSpeed = Mathf.Clamp(stats.groundMoveSpeed, 3.2f, 7.5f);
-            airMoveSpeed = Mathf.Clamp(stats.airMoveSpeed, 2.5f, 6.5f);
-            jumpForce = Mathf.Clamp(stats.jumpForce, 8f, 16f);
+            moveSpeed = Mathf.Clamp(stats.groundMoveSpeed, 2.5f, 9.5f);
+            airMoveSpeed = Mathf.Clamp(stats.airMoveSpeed, 2.0f, 8.5f);
+            jumpForce = Mathf.Clamp(stats.jumpForce, 7f, 19f);
             maxGuardDurability = Mathf.Clamp(stats.guardDurability, 40f, 90f);
             weight = Mathf.Clamp(stats.weight > 0f ? stats.weight : 1f / Mathf.Max(0.6f, stats.lightness), 0.6f, 1.6f);
             CurrentGuardDurability = Mathf.Min(CurrentGuardDurability, maxGuardDurability);

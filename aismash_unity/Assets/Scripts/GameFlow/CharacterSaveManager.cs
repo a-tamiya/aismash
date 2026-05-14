@@ -109,6 +109,33 @@ namespace PromptFighters.GameFlow
             return results;
         }
 
+        public static bool Delete(CharacterData data)
+        {
+            if (data == null || string.IsNullOrEmpty(data.spriteDir)) return false;
+
+            try
+            {
+                string characterDir = Directory.GetParent(data.spriteDir)?.FullName;
+                if (string.IsNullOrEmpty(characterDir)) return false;
+
+                string id = Path.GetFileName(characterDir);
+                string jsonPath = Path.Combine(SaveDir, id + ".json");
+                if (File.Exists(jsonPath))
+                    File.Delete(jsonPath);
+                if (Directory.Exists(characterDir))
+                    Directory.Delete(characterDir, true);
+
+                PresetCharacterLoader.ClearCache();
+                Debug.Log($"[Save] 削除完了: {id}");
+                return true;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Save] 削除失敗: {e.Message}");
+                return false;
+            }
+        }
+
         // バトル開始時に保存済みスプライトセットをフルロードする。
         public static CharacterSpriteSet LoadSpriteSet(string spriteDir)
         {
