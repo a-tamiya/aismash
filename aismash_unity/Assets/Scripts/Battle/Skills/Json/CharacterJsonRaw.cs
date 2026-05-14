@@ -14,6 +14,7 @@ namespace PromptFighters.Battle.Skills.Json
         public string base_visual_prompt;
         public string visual_prompt;
         public string visual_description;
+        public CharacterStats stats = new CharacterStats();
         public List<SkillJsonRaw> skills = new List<SkillJsonRaw>();
         public GrabParameters grab_parameters = new GrabParameters();
         public ThrowParameters throw_parameters = new ThrowParameters();

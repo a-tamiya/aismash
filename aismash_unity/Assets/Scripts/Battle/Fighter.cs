@@ -14,7 +14,9 @@ namespace PromptFighters.Battle
 
         [Header("Movement")]
         public float moveSpeed = 5f;
+        public float airMoveSpeed = 4f;
         public float jumpForce = 12f;
+        [Range(0.6f, 1.6f)] public float weight = 1f;
 
         [Header("Guard")]
         [Range(0f, 1f)] public float guardDamageRatio = 0.15f;
@@ -261,7 +263,8 @@ namespace PromptFighters.Battle
         public void Move(float direction)
         {
             if (!CanAct) return;
-            float speed = moveSpeed * (_slowTimer > 0f ? _slowFactor : 1f);
+            float baseSpeed = IsGrounded ? moveSpeed : airMoveSpeed;
+            float speed = baseSpeed * (_slowTimer > 0f ? _slowFactor : 1f);
             _rb.linearVelocity = new Vector2(direction * speed, _rb.linearVelocity.y);
             if      (direction >  0.1f && !FacingRight) Flip();
             else if (direction < -0.1f &&  FacingRight) Flip();
@@ -310,7 +313,8 @@ namespace PromptFighters.Battle
 
             if (knockbackForce > 0f && (!blocking || knockbackForce > 6f))
             {
-                _rb.linearVelocity = knockbackDir.normalized * knockbackForce;
+                float weightScale = 1f / Mathf.Max(0.4f, weight);
+                _rb.linearVelocity = knockbackDir.normalized * knockbackForce * weightScale;
                 _controlLockTimer  = 0.2f;
             }
 
@@ -393,6 +397,18 @@ namespace PromptFighters.Battle
         {
             if (grab != null) grabParameters = grab;
             if (throwData != null) throwParameters = throwData;
+        }
+
+        public void ApplyCharacterStats(CharacterStats stats)
+        {
+            if (stats == null) return;
+            moveSpeed = Mathf.Clamp(stats.groundMoveSpeed, 3.2f, 7.5f);
+            airMoveSpeed = Mathf.Clamp(stats.airMoveSpeed, 2.5f, 6.5f);
+            jumpForce = Mathf.Clamp(stats.jumpForce, 8f, 16f);
+            maxGuardDurability = Mathf.Clamp(stats.guardDurability, 60f, 140f);
+            weight = Mathf.Clamp(stats.weight > 0f ? stats.weight : 1f / Mathf.Max(0.6f, stats.lightness), 0.6f, 1.6f);
+            CurrentGuardDurability = Mathf.Min(CurrentGuardDurability, maxGuardDurability);
+            OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
         }
 
         public bool TryStartGrab()

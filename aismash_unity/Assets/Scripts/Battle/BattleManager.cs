@@ -186,6 +186,8 @@ namespace PromptFighters.Battle
 
             fighter1?.GetComponent<SkillExecutor>()?.LoadCharacter(data1);
             fighter2?.GetComponent<SkillExecutor>()?.LoadCharacter(data2);
+            fighter1?.ApplyCharacterStats(data1?.stats);
+            fighter2?.ApplyCharacterStats(data2?.stats);
             fighter1?.SetGrabThrowParameters(data1?.grabParameters, data1?.throwParameters);
             fighter2?.SetGrabThrowParameters(data2?.grabParameters, data2?.throwParameters);
 

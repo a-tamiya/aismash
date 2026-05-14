@@ -24,6 +24,10 @@ namespace PromptFighters.GameFlow
         TextMeshProUGUI _p2PresetLabel;
         TextMeshProUGUI _p1CategoryLabel;
         TextMeshProUGUI _p2CategoryLabel;
+        Transform _p1IconGrid;
+        Transform _p2IconGrid;
+        TextMeshProUGUI _p1DetailText;
+        TextMeshProUGUI _p2DetailText;
         Image _p1PreviewImage;
         Image _p2PreviewImage;
         TMP_InputField _p1NameInput;
@@ -73,6 +77,7 @@ namespace PromptFighters.GameFlow
             BuildGeneratingPanel();
             BuildSkillConfirmPanel();
             UITheme.ApplyAllInScene();
+            RebuildIconGrids();
             RefreshCharacterPreview();
             UpdateCategoryLabels();
             ShowTitlePanel();
@@ -323,14 +328,14 @@ namespace PromptFighters.GameFlow
             MakeOutline(parent, isP1 ? "P1Line" : "P2Line",
                 new Vector2(cx, 310f), new Vector2(280f, 3f), pColor);
 
-            // プリセット選択行
+            // 選択中キャラ名
             var row = CreateUIObject(isP1 ? "P1Row" : "P2Row", parent);
             var rowRt = row.GetComponent<RectTransform>();
             rowRt.anchorMin = rowRt.anchorMax = new Vector2(0.5f, 0.5f);
-            rowRt.anchoredPosition = new Vector2(cx, 240f);
-            rowRt.sizeDelta = new Vector2(380f, 52f);
+            rowRt.anchoredPosition = new Vector2(cx, 280f);
+            rowRt.sizeDelta = new Vector2(390f, 48f);
 
-            MakeButton(row.transform, "Left", "◀", new Vector2(-160f, 0f), new Vector2(48f, 48f),
+            MakeButton(row.transform, "Left", "<", new Vector2(-172f, 0f), new Vector2(42f, 42f),
                 isP1
                     ? () => ChangePreset(ref _p1PresetIdx, -1, _p1PresetLabel)
                     : () => ChangePreset(ref _p2PresetIdx, -1, _p2PresetLabel),
@@ -342,7 +347,7 @@ namespace PromptFighters.GameFlow
             label.textWrappingMode = TextWrappingModes.NoWrap;
             label.overflowMode = TextOverflowModes.Ellipsis;
 
-            MakeButton(row.transform, "Right", "▶", new Vector2(160f, 0f), new Vector2(48f, 48f),
+            MakeButton(row.transform, "Right", ">", new Vector2(172f, 0f), new Vector2(42f, 42f),
                 isP1
                     ? () => ChangePreset(ref _p1PresetIdx, +1, _p1PresetLabel)
                     : () => ChangePreset(ref _p2PresetIdx, +1, _p2PresetLabel),
@@ -359,12 +364,30 @@ namespace PromptFighters.GameFlow
             if (isP1) _p1CategoryLabel = catLabel;
             else       _p2CategoryLabel = catLabel;
 
+            var gridFrame = CreateUIObject(isP1 ? "P1IconGridFrame" : "P2IconGridFrame", parent);
+            var gfRt = gridFrame.GetComponent<RectTransform>();
+            gfRt.anchoredPosition = new Vector2(cx, 190f);
+            gfRt.sizeDelta = new Vector2(392f, 128f);
+            AddImage(gridFrame, new Color(0.015f, 0.018f, 0.035f, 0.82f));
+            MakeOutline(gridFrame.transform, "GridTop", new Vector2(0f, 63f), new Vector2(392f, 2f), pColor);
+
+            var grid = CreateUIObject(isP1 ? "P1IconGrid" : "P2IconGrid", gridFrame.transform);
+            StretchFull(grid.GetComponent<RectTransform>());
+            var layout = grid.AddComponent<GridLayoutGroup>();
+            layout.cellSize = new Vector2(86f, 58f);
+            layout.spacing = new Vector2(8f, 8f);
+            layout.padding = new RectOffset(12, 12, 6, 6);
+            layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+            layout.constraintCount = 4;
+            if (isP1) _p1IconGrid = grid.transform;
+            else _p2IconGrid = grid.transform;
+
             var previewFrame = CreateUIObject(isP1 ? "P1PreviewFrame" : "P2PreviewFrame", parent);
             var pfRt = previewFrame.GetComponent<RectTransform>();
-            pfRt.anchoredPosition = new Vector2(cx, 18f);
-            pfRt.sizeDelta = new Vector2(300f, 300f);
+            pfRt.anchoredPosition = new Vector2(cx - 116f, 40f);
+            pfRt.sizeDelta = new Vector2(150f, 150f);
             AddImage(previewFrame, new Color(0.01f, 0.012f, 0.02f, 0.72f));
-            MakeOutline(previewFrame.transform, "PreviewTop", new Vector2(0f, 148f), new Vector2(300f, 3f), pColor);
+            MakeOutline(previewFrame.transform, "PreviewTop", new Vector2(0f, 74f), new Vector2(150f, 3f), pColor);
 
             var previewGo = CreateUIObject(isP1 ? "P1PreviewImage" : "P2PreviewImage", previewFrame.transform);
             var pvRt = previewGo.GetComponent<RectTransform>();
@@ -379,16 +402,23 @@ namespace PromptFighters.GameFlow
             if (isP1) _p1PreviewImage = preview;
             else _p2PreviewImage = preview;
 
-            // キャラ情報エリア
-            MakeLabel(parent, isP1 ? "P1InfoTitle" : "P2InfoTitle",
-                "キャラクター",
-                new Vector2(cx, 178f), new Vector2(300f, 30f), 14,
-                new Color(0.72f, 0.8f, 1f));
+            var detailBg = CreateUIObject(isP1 ? "P1DetailBg" : "P2DetailBg", parent);
+            var dbRt = detailBg.GetComponent<RectTransform>();
+            dbRt.anchoredPosition = new Vector2(cx + 78f, 40f);
+            dbRt.sizeDelta = new Vector2(235f, 150f);
+            AddImage(detailBg, new Color(0.015f, 0.018f, 0.035f, 0.82f));
+
+            var detailText = MakeLabel(detailBg.transform, "DetailText", "",
+                Vector2.zero, new Vector2(215f, 136f), 11f, new Color(0.9f, 0.95f, 1f));
+            detailText.alignment = TextAlignmentOptions.TopLeft;
+            detailText.textWrappingMode = TextWrappingModes.Normal;
+            if (isP1) _p1DetailText = detailText;
+            else _p2DetailText = detailText;
 
             var nameInput = MakeInputField(parent, isP1 ? "P1NameInput" : "P2NameInput",
-                "キャラクター名", new Vector2(cx, -168f), new Vector2(360f, 44f), false);
+                "キャラクター名", new Vector2(cx, -160f), new Vector2(360f, 44f), false);
             var featureInput = MakeInputField(parent, isP1 ? "P1FeatureInput" : "P2FeatureInput",
-                "特徴を入力", new Vector2(cx, -246f), new Vector2(360f, 96f), true);
+                "特徴を入力", new Vector2(cx, -238f), new Vector2(360f, 96f), true);
 
             if (isP1)
             {
@@ -564,12 +594,34 @@ namespace PromptFighters.GameFlow
             if (label != null) label.text = GetPresetName(idx);
             UpdateCategoryLabels();
             RefreshCharacterPreview();
+            RebuildIconGrids();
+        }
+
+        void SelectPreset(bool isP1, int idx)
+        {
+            if (_presets == null || idx < 0 || idx >= _presets.Count) return;
+            if (isP1)
+            {
+                _p1PresetIdx = idx;
+                if (_p1PresetLabel != null) _p1PresetLabel.text = GetPresetName(idx);
+            }
+            else
+            {
+                _p2PresetIdx = idx;
+                if (_p2PresetLabel != null) _p2PresetLabel.text = GetPresetName(idx);
+            }
+
+            UpdateCategoryLabels();
+            RefreshCharacterPreview();
+            RebuildIconGrids();
         }
 
         void RefreshCharacterPreview()
         {
             SetPreview(_p1PreviewImage, _p1PresetIdx);
             SetPreview(_p2PreviewImage, _p2PresetIdx);
+            SetDetail(_p1DetailText, _p1PresetIdx);
+            SetDetail(_p2DetailText, _p2PresetIdx);
         }
 
         void SetPreview(Image image, int idx)
@@ -582,6 +634,65 @@ namespace PromptFighters.GameFlow
 
             image.sprite = data.characterSprite;
             image.enabled = image.sprite != null;
+        }
+
+        void SetDetail(TextMeshProUGUI label, int idx)
+        {
+            if (label == null || _presets == null || idx < 0 || idx >= _presets.Count) return;
+            label.text = BuildCharacterDetail(_presets[idx]);
+        }
+
+        string BuildCharacterDetail(CharacterData data)
+        {
+            if (data == null) return "---";
+
+            var s = data.stats ?? new CharacterStats();
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"地上 {s.groundMoveSpeed:F1}  空中 {s.airMoveSpeed:F1}");
+            sb.AppendLine($"ジャンプ {s.jumpForce:F1}  ガード {s.guardDurability:F0}  軽さ {s.lightness:F2}");
+            for (int i = 0; i < data.skills.Length; i++)
+            {
+                var skill = data.skills[i];
+                if (skill == null) continue;
+                string slot = i switch { 0 => "A", 1 => "B", 2 => "C", 3 => "S", _ => "?" };
+                sb.AppendLine($"{slot}: {skill.skill_name}  威{skill.parameters.damage:F0}/射{skill.parameters.range:F1}");
+            }
+            return sb.ToString();
+        }
+
+        void RebuildIconGrids()
+        {
+            RebuildIconGrid(_p1IconGrid, true);
+            RebuildIconGrid(_p2IconGrid, false);
+        }
+
+        void RebuildIconGrid(Transform grid, bool isP1)
+        {
+            if (grid == null || _presets == null) return;
+
+            for (int i = grid.childCount - 1; i >= 0; i--)
+                Destroy(grid.GetChild(i).gameObject);
+
+            int selected = isP1 ? _p1PresetIdx : _p2PresetIdx;
+            int count = Mathf.Min(_presets.Count, 8);
+            for (int i = 0; i < count; i++)
+            {
+                int idx = i;
+                var data = _presets[i];
+                EnsurePreviewSprite(data);
+                bool isSelected = idx == selected;
+                Color bg = isSelected
+                    ? (isP1 ? new Color(0.2f, 0.55f, 1f, 1f) : new Color(1f, 0.35f, 0.2f, 1f))
+                    : new Color(0.08f, 0.09f, 0.13f, 1f);
+                MakeIconButton(grid, $"Icon_{idx}", data.characterSprite, idx + 1, () => SelectPreset(isP1, idx), bg);
+            }
+        }
+
+        void EnsurePreviewSprite(CharacterData data)
+        {
+            if (data == null) return;
+            if (data.characterSprite == null && !string.IsNullOrEmpty(data.spritePath))
+                data.characterSprite = SpriteLoader.LoadWithWhiteBgRemoved(data.spritePath);
         }
 
         string GetPresetName(int idx)
@@ -816,6 +927,7 @@ namespace PromptFighters.GameFlow
             if (_p1PresetLabel != null) _p1PresetLabel.text = GetPresetName(_p1PresetIdx);
             if (_p2PresetLabel != null) _p2PresetLabel.text = GetPresetName(_p2PresetIdx);
             UpdateCategoryLabels();
+            RebuildIconGrids();
             RefreshCharacterPreview();
         }
 
@@ -1055,6 +1167,41 @@ namespace PromptFighters.GameFlow
             tmp.alignment = TextAlignmentOptions.Center;
             UITheme.Apply(tmp);
 
+            return btn;
+        }
+
+        static Button MakeIconButton(Transform parent, string name, Sprite sprite, int number,
+            System.Action onClick, Color bgColor)
+        {
+            var go = CreateUIObject(name, parent);
+            var rt = go.GetComponent<RectTransform>();
+            rt.sizeDelta = new Vector2(86f, 58f);
+
+            var bg = go.AddComponent<Image>();
+            bg.color = bgColor;
+
+            var btn = go.AddComponent<Button>();
+            var cols = btn.colors;
+            cols.highlightedColor = new Color(0.55f, 0.65f, 0.85f);
+            cols.pressedColor = new Color(0.08f, 0.08f, 0.1f);
+            btn.colors = cols;
+            btn.onClick.AddListener(() => onClick?.Invoke());
+
+            var imageGo = CreateUIObject("Portrait", go.transform);
+            var imgRt = imageGo.GetComponent<RectTransform>();
+            imgRt.anchorMin = new Vector2(0f, 0f);
+            imgRt.anchorMax = new Vector2(1f, 1f);
+            imgRt.offsetMin = new Vector2(6f, 4f);
+            imgRt.offsetMax = new Vector2(-6f, -4f);
+            var img = imageGo.AddComponent<Image>();
+            img.sprite = sprite;
+            img.preserveAspect = true;
+            img.raycastTarget = false;
+            img.color = sprite != null ? Color.white : new Color(0.35f, 0.38f, 0.45f);
+
+            var badge = MakeLabel(go.transform, "No", number.ToString(),
+                new Vector2(-31f, 19f), new Vector2(22f, 18f), 10f, Color.white);
+            badge.fontStyle = FontStyles.Bold;
             return btn;
         }
 

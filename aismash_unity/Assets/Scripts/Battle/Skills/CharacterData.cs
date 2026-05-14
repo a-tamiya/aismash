@@ -54,6 +54,7 @@ namespace PromptFighters.Battle.Skills
         public string visualDescription  = "";
 
         public SkillData[] skills = new SkillData[4]; // index = SkillSlot
+        public CharacterStats stats = new CharacterStats();
         public GrabParameters grabParameters = new GrabParameters();
         public ThrowParameters throwParameters = new ThrowParameters();
 
@@ -69,6 +70,17 @@ namespace PromptFighters.Battle.Skills
             characterSprite = sprite;
             spriteSet.Set(CharacterSpriteId.Idle1, sprite);
         }
+    }
+
+    [System.Serializable]
+    public class CharacterStats
+    {
+        public float groundMoveSpeed = 5f;
+        public float airMoveSpeed = 4f;
+        public float jumpForce = 12f;
+        public float guardDurability = 100f;
+        public float lightness = 1f;
+        public float weight = 1f;
     }
 
     [System.Serializable]

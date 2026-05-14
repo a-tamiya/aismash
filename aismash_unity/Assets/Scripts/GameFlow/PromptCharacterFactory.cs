@@ -24,6 +24,7 @@ namespace PromptFighters.GameFlow
                 inputFeatures = safeFeatures,
                 visualPrompt = BuildVisualPrompt(safeName, safeFeatures, element),
                 visualDescription = safeFeatures,
+                stats = InferStats(safeFeatures),
                 spritePath = fallback != null ? fallback.spritePath : "Sprites/test.jpg",
                 characterSprite = fallback?.characterSprite,
             };
@@ -54,6 +55,15 @@ namespace PromptFighters.GameFlow
                 spriteDir = src.spriteDir,
                 characterSprite = src.characterSprite,
                 spriteSet = CloneSpriteSet(src.spriteSet),
+                stats = new CharacterStats
+                {
+                    groundMoveSpeed = src.stats.groundMoveSpeed,
+                    airMoveSpeed = src.stats.airMoveSpeed,
+                    jumpForce = src.stats.jumpForce,
+                    guardDurability = src.stats.guardDurability,
+                    lightness = src.stats.lightness,
+                    weight = src.stats.weight,
+                },
                 grabParameters = new GrabParameters
                 {
                     range = src.grabParameters.range,
@@ -99,6 +109,42 @@ namespace PromptFighters.GameFlow
             for (int i = 0; i < words.Length; i++)
                 if (text.Contains(words[i])) return true;
             return false;
+        }
+
+        static CharacterStats InferStats(string features)
+        {
+            string text = features.ToLowerInvariant();
+            var stats = new CharacterStats();
+
+            if (ContainsAny(text, "fast", "quick", "speed", "agile", "ninja", "素早", "高速", "俊敏", "軽快", "忍者"))
+            {
+                stats.groundMoveSpeed = 6.5f;
+                stats.airMoveSpeed = 5.4f;
+                stats.jumpForce = 13.5f;
+                stats.guardDurability = 85f;
+                stats.lightness = 1.3f;
+                stats.weight = 0.75f;
+            }
+            else if (ContainsAny(text, "heavy", "giant", "large", "armor", "tank", "重", "大型", "巨", "鎧", "頑丈"))
+            {
+                stats.groundMoveSpeed = 3.8f;
+                stats.airMoveSpeed = 3.0f;
+                stats.jumpForce = 9.5f;
+                stats.guardDurability = 125f;
+                stats.lightness = 0.75f;
+                stats.weight = 1.35f;
+            }
+            else if (ContainsAny(text, "flying", "bird", "wind", "浮", "飛", "鳥", "風"))
+            {
+                stats.groundMoveSpeed = 5.2f;
+                stats.airMoveSpeed = 6.0f;
+                stats.jumpForce = 14.5f;
+                stats.guardDurability = 90f;
+                stats.lightness = 1.18f;
+                stats.weight = 0.85f;
+            }
+
+            return stats;
         }
 
         static string BuildVisualPrompt(string name, string features, Element element)

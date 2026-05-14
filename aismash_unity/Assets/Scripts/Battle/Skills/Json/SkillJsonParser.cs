@@ -38,10 +38,12 @@ namespace PromptFighters.Battle.Skills.Json
                 inputFeatures     = raw.input_features     ?? "",
                 visualPrompt      = !string.IsNullOrEmpty(raw.base_visual_prompt) ? raw.base_visual_prompt : (raw.visual_prompt ?? ""),
                 visualDescription = raw.visual_description ?? "",
+                stats             = raw.stats ?? new CharacterStats(),
                 grabParameters    = raw.grab_parameters ?? new GrabParameters(),
                 throwParameters   = raw.throw_parameters ?? new ThrowParameters(),
             };
 
+            ClampStats(data.stats);
             ClampGrabThrow(data);
 
             // スキルを変換
@@ -72,6 +74,19 @@ namespace PromptFighters.Battle.Skills.Json
 
             data.skills = skillMap;
             return data;
+        }
+
+        static void ClampStats(CharacterStats stats)
+        {
+            if (stats == null) return;
+            stats.groundMoveSpeed = Mathf.Clamp(stats.groundMoveSpeed, 3.2f, 7.5f);
+            stats.airMoveSpeed = Mathf.Clamp(stats.airMoveSpeed, 2.5f, 6.5f);
+            stats.jumpForce = Mathf.Clamp(stats.jumpForce, 8f, 16f);
+            stats.guardDurability = Mathf.Clamp(stats.guardDurability, 60f, 140f);
+            stats.lightness = Mathf.Clamp(stats.lightness, 0.6f, 1.6f);
+            stats.weight = Mathf.Clamp(stats.weight, 0.6f, 1.6f);
+            if (Mathf.Approximately(stats.weight, 1f) && !Mathf.Approximately(stats.lightness, 1f))
+                stats.weight = 1f / stats.lightness;
         }
 
         static void ClampGrabThrow(CharacterData data)
