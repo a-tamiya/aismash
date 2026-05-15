@@ -881,25 +881,33 @@ namespace PromptFighters.Battle
             float dx = transform.position.x - Opponent.transform.position.x;
             if (Mathf.Abs(dx) >= minDist) return;
 
-            float dy = transform.position.y - Opponent.transform.position.y;
+            float dy      = transform.position.y - Opponent.transform.position.y;
             float overlap = minDist - Mathf.Abs(dx);
 
             if (Mathf.Abs(dy) < 0.5f)
             {
-                // 同じ高さ帯：横に均等に押し合う（地上での押し合い）
+                // 同じ高さ帯（地上）：均等に即時補正
                 float dir = dx >= 0f ? 1f : -1f;
                 var shift = new Vector3(dir * overlap * 0.5f, 0f, 0f);
-                transform.position += shift;
+                transform.position          += shift;
                 Opponent.transform.position -= shift;
             }
             else
             {
-                // 縦にずれている場合：上にいる方だけを横にスライドさせ、乗り上げを防ぐ
-                // 下にいる方（ジャンプ先の相手）の移動は妨げない → 飛び越えは可能
-                Fighter upper = dy > 0f ? this : Opponent;
-                float velX = upper._rb != null ? upper._rb.linearVelocity.x : 0f;
-                float pushDir = Mathf.Abs(velX) > 0.3f ? Mathf.Sign(velX) : (upper.FacingRight ? 1f : -1f);
-                upper.transform.position += new Vector3(pushDir * overlap, 0f, 0f);
+                // 縦にずれている（空中）
+                // 上昇中・頂点付近はスキップ → 飛び越えを妨げない
+                Fighter upper   = dy > 0f ? this : Opponent;
+                Fighter lower   = dy > 0f ? Opponent : this;
+                float upperVelY = upper._rb != null ? upper._rb.linearVelocity.y : 0f;
+                if (upperVelY >= -0.5f) return;
+
+                // 落下中のみ：速度方向に両者を緩やかに押し出す（乗り上げ防止）
+                float upperVelX = upper._rb != null ? upper._rb.linearVelocity.x : 0f;
+                float pushDir   = Mathf.Abs(upperVelX) > 0.3f ? Mathf.Sign(upperVelX) : (upper.FacingRight ? 1f : -1f);
+                float correction = Mathf.Min(overlap * 0.5f, 0.08f);
+                var shift = new Vector3(pushDir * correction, 0f, 0f);
+                upper.transform.position += shift;
+                lower.transform.position -= shift;
             }
         }
 
