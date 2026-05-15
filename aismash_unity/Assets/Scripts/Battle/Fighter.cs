@@ -53,7 +53,17 @@ namespace PromptFighters.Battle
         public LayerMask groundLayer;
 
         // 相手ファイターへの参照（BattleManagerがセット）
-        [HideInInspector] public Fighter Opponent;
+        Fighter _opponentBacking;
+        [HideInInspector] public Fighter Opponent
+        {
+            get => _opponentBacking;
+            set
+            {
+                _opponentBacking = value;
+                if (_bodyCollider != null && _opponentBacking?._bodyCollider != null)
+                    Physics2D.IgnoreCollision(_bodyCollider, _opponentBacking._bodyCollider, true);
+            }
+        }
 
         public float CurrentHP { get; private set; }
         public float CurrentGuardDurability { get; private set; }
@@ -197,6 +207,7 @@ namespace PromptFighters.Battle
         void LateUpdate()
         {
             ClampToStage();
+            SeparateFromOpponent();
         }
 
         void TickBurn()
@@ -564,8 +575,6 @@ namespace PromptFighters.Battle
 
         void RestoreOpponentCollision()
         {
-            if (_bodyCollider != null && _ignoredOpponentCollider != null)
-                Physics2D.IgnoreCollision(_bodyCollider, _ignoredOpponentCollider, false);
             _ignoredOpponentCollider = null;
         }
 
@@ -858,6 +867,22 @@ namespace PromptFighters.Battle
             _guardRecoveryDelayTimer = guardRecoveryDelay;
             if (State == FighterState.Stunned && _stunTimer <= 0f) State = FighterState.Idle;
             OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
+        }
+
+        void SeparateFromOpponent()
+        {
+            if (Opponent == null || PlayerIndex >= Opponent.PlayerIndex) return;
+            if (State == FighterState.Dead || Opponent.State == FighterState.Dead) return;
+
+            const float minDist = 0.78f;
+            float dx = transform.position.x - Opponent.transform.position.x;
+            if (Mathf.Abs(dx) >= minDist) return;
+
+            float overlap = minDist - Mathf.Abs(dx);
+            float dir = dx >= 0f ? 1f : -1f;
+            var shift = new Vector3(dir * overlap * 0.5f, 0f, 0f);
+            transform.position += shift;
+            Opponent.transform.position -= shift;
         }
 
         void ClampToStage()
