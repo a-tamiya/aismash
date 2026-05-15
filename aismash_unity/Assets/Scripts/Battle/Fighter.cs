@@ -317,6 +317,7 @@ namespace PromptFighters.Battle
         public void SetGuard(bool guarding)
         {
             if (State == FighterState.Dead || _stunTimer > 0f) return;
+            if (guarding && !IsGrounded) guarding = false;
             if (_skillExecutor != null && _skillExecutor.IsExecuting) return;
             if (_heldOpponent != null || _grabbedBy != null || _isTryingGrab || _dodgeTimer > 0f) return;
             if (_guardBreakTimer > 0f) { guarding = false; }

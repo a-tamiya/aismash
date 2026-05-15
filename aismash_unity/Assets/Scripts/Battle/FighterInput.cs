@@ -67,7 +67,7 @@ namespace PromptFighters.Battle
             _previousDodgeInput = moveInput;
 
             _fighter.Move(moveInput.x);
-            _fighter.SetGuard(guardHeld);
+            _fighter.SetGuard(guardHeld && _fighter.IsGrounded);
             if (ReadJumpPressed()) _fighter.Jump();
             if (ReadGrabPressed()) _fighter.TryStartGrab();
             _previousGuardHeld = guardHeld;
