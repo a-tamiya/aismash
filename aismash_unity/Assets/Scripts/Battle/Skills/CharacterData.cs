@@ -89,8 +89,8 @@ namespace PromptFighters.Battle.Skills
     public class GrabParameters
     {
         public float range = 1.5f;
-        public float startup = 0.12f;
-        public float recovery = 0.25f;
+        public float startup = 0.08f;
+        public float recovery = 0.14f;
     }
 
     [System.Serializable]

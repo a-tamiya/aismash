@@ -38,9 +38,9 @@ namespace PromptFighters.Battle
         [Header("Grab / Throw")]
         public GrabParameters grabParameters = new GrabParameters();
         public ThrowParameters throwParameters = new ThrowParameters();
-        public float maxGrabHoldSeconds = 3f;
-        public float grabReleaseRecovery = 0.18f;
-        public float throwGrabCooldown = 1.0f;
+        public float maxGrabHoldSeconds = 1.1f;
+        public float grabReleaseRecovery = 0.12f;
+        public float throwGrabCooldown = 0.45f;
         [Range(0.1f, 2f)] public float throwKnockbackScale = 1.1f;
         public float throwReleaseOffset = 1.25f;
 
@@ -131,7 +131,9 @@ namespace PromptFighters.Battle
             _rb.constraints = RigidbodyConstraints2D.FreezeRotation;
             _defaultGravityScale = _rb.gravityScale;
             maxHP           = Mathf.Max(maxHP, 300f);
-            grabReleaseRecovery = Mathf.Clamp(grabReleaseRecovery, 0.12f, 0.25f);
+            maxGrabHoldSeconds = Mathf.Clamp(maxGrabHoldSeconds, 0.45f, 1.1f);
+            grabReleaseRecovery = Mathf.Clamp(grabReleaseRecovery, 0.08f, 0.16f);
+            throwGrabCooldown = Mathf.Clamp(throwGrabCooldown, 0.25f, 0.6f);
             throwKnockbackScale = Mathf.Max(throwKnockbackScale, 1.1f);
             _rootSprite     = GetComponent<SpriteRenderer>();
             EnsureVisualRenderer();
@@ -454,7 +456,8 @@ namespace PromptFighters.Battle
             if (grab != null)
             {
                 grabParameters = grab;
-                grabParameters.recovery = Mathf.Clamp(grabParameters.recovery, 0.16f, 0.45f);
+                grabParameters.startup = Mathf.Clamp(grabParameters.startup, 0.04f, 0.12f);
+                grabParameters.recovery = Mathf.Clamp(grabParameters.recovery, 0.08f, 0.22f);
             }
             if (throwData != null) throwParameters = throwData;
         }
@@ -533,7 +536,7 @@ namespace PromptFighters.Battle
         {
             if (!CanAct || Opponent == null) return false;
             if (_grabCooldownTimer > 0f) return false;
-            ShowGrabSprite(grabParameters.startup + 0.15f);
+            ShowGrabSprite(grabParameters.startup + 0.08f);
             StartCoroutine(ExecuteGrab());
             return true;
         }
