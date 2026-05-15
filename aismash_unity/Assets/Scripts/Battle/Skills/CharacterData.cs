@@ -81,6 +81,8 @@ namespace PromptFighters.Battle.Skills
         public float guardDurability = 65f;
         public float lightness = 1f;
         public float weight = 1f;
+        public float groundDodgeDistance = 2.2f;
+        public float airDodgeDistance = 1.8f;
     }
 
     [System.Serializable]

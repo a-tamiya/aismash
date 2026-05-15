@@ -165,7 +165,7 @@ namespace PromptFighters.GameFlow
             sb.AppendLine($"  \"input_features\": {Q(d.inputFeatures)},");
             sb.AppendLine($"  \"base_visual_prompt\": {Q(d.visualPrompt)},");
             sb.AppendLine($"  \"visual_description\": {Q(d.visualDescription)},");
-            sb.AppendLine($"  \"stats\": {{\"groundMoveSpeed\": {d.stats.groundMoveSpeed}, \"airMoveSpeed\": {d.stats.airMoveSpeed}, \"jumpForce\": {d.stats.jumpForce}, \"guardDurability\": {d.stats.guardDurability}, \"lightness\": {d.stats.lightness}, \"weight\": {d.stats.weight}}},");
+            sb.AppendLine($"  \"stats\": {{\"groundMoveSpeed\": {d.stats.groundMoveSpeed}, \"airMoveSpeed\": {d.stats.airMoveSpeed}, \"jumpForce\": {d.stats.jumpForce}, \"guardDurability\": {d.stats.guardDurability}, \"lightness\": {d.stats.lightness}, \"weight\": {d.stats.weight}, \"groundDodgeDistance\": {d.stats.groundDodgeDistance}, \"airDodgeDistance\": {d.stats.airDodgeDistance}}},");
             sb.AppendLine("  \"skills\": [");
 
             bool firstSkill = true;

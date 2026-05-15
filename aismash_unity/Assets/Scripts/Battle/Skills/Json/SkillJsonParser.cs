@@ -85,6 +85,8 @@ namespace PromptFighters.Battle.Skills.Json
             stats.guardDurability = Mathf.Clamp(stats.guardDurability, 40f, 90f);
             stats.lightness = Mathf.Clamp(stats.lightness, 0.45f, 2.0f);
             stats.weight = Mathf.Clamp(stats.weight, 0.45f, 2.0f);
+            stats.groundDodgeDistance = Mathf.Clamp(stats.groundDodgeDistance, 1.2f, 3.8f);
+            stats.airDodgeDistance = Mathf.Clamp(stats.airDodgeDistance, 0.8f, 3.2f);
             if (Mathf.Approximately(stats.weight, 1f) && !Mathf.Approximately(stats.lightness, 1f))
                 stats.weight = 1f / stats.lightness;
         }

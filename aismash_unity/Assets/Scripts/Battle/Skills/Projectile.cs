@@ -89,6 +89,7 @@ namespace PromptFighters.Battle.Skills
                 return;
             }
             if (target == Owner) return;
+            if (target.IsDodging) return;
 
             float dir = Mathf.Sign(Direction.x);
             if (dir == 0f) dir = 1f;

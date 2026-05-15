@@ -65,6 +65,7 @@ namespace PromptFighters.Battle.Skills
             if (_hitsLanded >= MaxHits) return;
             var target = other.GetComponentInParent<Fighter>();
             if (target == null || target == Owner) return;
+            if (target.IsDodging) return;
             if (_hitTargets.Contains(target)) return;
 
             _hitTargets.Add(target);

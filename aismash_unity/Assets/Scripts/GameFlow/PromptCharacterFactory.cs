@@ -63,6 +63,8 @@ namespace PromptFighters.GameFlow
                     guardDurability = src.stats.guardDurability,
                     lightness = src.stats.lightness,
                     weight = src.stats.weight,
+                    groundDodgeDistance = src.stats.groundDodgeDistance,
+                    airDodgeDistance = src.stats.airDodgeDistance,
                 },
                 grabParameters = new GrabParameters
                 {
@@ -124,6 +126,8 @@ namespace PromptFighters.GameFlow
                 stats.guardDurability = 55f;
                 stats.lightness = 1.65f;
                 stats.weight = 0.6f;
+                stats.groundDodgeDistance = 3.2f;
+                stats.airDodgeDistance = 2.7f;
             }
             else if (ContainsAny(text, "heavy", "giant", "large", "armor", "tank", "重", "大型", "巨", "鎧", "頑丈"))
             {
@@ -133,6 +137,8 @@ namespace PromptFighters.GameFlow
                 stats.guardDurability = 85f;
                 stats.lightness = 0.55f;
                 stats.weight = 1.75f;
+                stats.groundDodgeDistance = 1.5f;
+                stats.airDodgeDistance = 1.0f;
             }
             else if (ContainsAny(text, "flying", "bird", "wind", "浮", "飛", "鳥", "風"))
             {
@@ -142,6 +148,8 @@ namespace PromptFighters.GameFlow
                 stats.guardDurability = 60f;
                 stats.lightness = 1.5f;
                 stats.weight = 0.7f;
+                stats.groundDodgeDistance = 2.4f;
+                stats.airDodgeDistance = 3.0f;
             }
 
             return stats;

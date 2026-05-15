@@ -4,7 +4,7 @@ using PromptFighters.UI;
 
 namespace PromptFighters.Battle
 {
-    public enum FighterState { Idle, Moving, Jumping, Falling, Guarding, Stunned, Grabbed, Dead }
+    public enum FighterState { Idle, Moving, Jumping, Falling, Guarding, Dodging, Stunned, Grabbed, Dead }
 
     [RequireComponent(typeof(Rigidbody2D), typeof(BoxCollider2D))]
     public class Fighter : MonoBehaviour
@@ -26,6 +26,13 @@ namespace PromptFighters.Battle
         public float guardRecoveryPerSecond = 10f;
         public float guardRecoveryDelay = 1.0f;
         public float guardBreakLockDuration = 5f;
+
+        [Header("Dodge")]
+        public float groundDodgeDistance = 2.2f;
+        public float airDodgeDistance = 1.8f;
+        public float dodgeDuration = 0.28f;
+        public float downDodgeDuration = 0.24f;
+        public float dodgeFallDistance = 1.7f;
 
         [Header("Grab / Throw")]
         public GrabParameters grabParameters = new GrabParameters();
@@ -52,6 +59,7 @@ namespace PromptFighters.Battle
         public int PlayerIndex { get; set; }
         public bool IsHoldingOpponent => _heldOpponent != null;
         public bool IsGrabbed => _grabbedBy != null;
+        public bool IsDodging => State == FighterState.Dodging || _dodgeTimer > 0f;
 
         public event System.Action<float, float> OnHPChanged;
         public event System.Action<float, float> OnGuardChanged;
@@ -74,6 +82,7 @@ namespace PromptFighters.Battle
         float _skillRecoveryTimer;
         float _smashChargeVisualTimer;
         float _smashChargeVisual01;
+        float _dodgeTimer;
 
         // 状態異常タイマー
         float _burnTimer;
@@ -98,6 +107,7 @@ namespace PromptFighters.Battle
 
         public bool CanAct =>
             State != FighterState.Guarding &&
+            State != FighterState.Dodging &&
             State != FighterState.Stunned &&
             State != FighterState.Grabbed &&
             State != FighterState.Dead    &&
@@ -136,6 +146,7 @@ namespace PromptFighters.Battle
             if (_controlLockTimer   > 0f) _controlLockTimer   -= Time.deltaTime;
             if (_skillRecoveryTimer > 0f) _skillRecoveryTimer -= Time.deltaTime;
             if (_smashChargeVisualTimer > 0f) _smashChargeVisualTimer -= Time.deltaTime;
+            if (_dodgeTimer > 0f) _dodgeTimer -= Time.deltaTime;
             if (_grabCooldownTimer  > 0f) _grabCooldownTimer  -= Time.deltaTime;
             if (_slowTimer          > 0f) _slowTimer          -= Time.deltaTime;
             if (_guardRecoveryDelayTimer > 0f) _guardRecoveryDelayTimer -= Time.deltaTime;
@@ -153,6 +164,7 @@ namespace PromptFighters.Battle
             TickBurn();
             TickGuard();
             TickGrab();
+            TickDodge();
 
             UpdateState();
             UpdateVisual();
@@ -179,7 +191,7 @@ namespace PromptFighters.Battle
 
         void UpdateState()
         {
-            if (State == FighterState.Dead || State == FighterState.Guarding || State == FighterState.Grabbed) return;
+            if (State == FighterState.Dead || State == FighterState.Guarding || State == FighterState.Dodging || State == FighterState.Grabbed) return;
 
             if (_stunTimer > 0f || _guardBreakTimer > 0f) { State = FighterState.Stunned; return; }
             if (_grabbedBy != null) { State = FighterState.Grabbed; return; }
@@ -208,6 +220,7 @@ namespace PromptFighters.Battle
             Color c = State switch
             {
                 FighterState.Guarding => GuardColor,
+                FighterState.Dodging  => new Color(GuardColor.r, GuardColor.g, GuardColor.b, 0.48f),
                 FighterState.Stunned  => StunColor,
                 FighterState.Grabbed  => StunColor,
                 _                     => Color.white,
@@ -228,7 +241,7 @@ namespace PromptFighters.Battle
                 return;
             }
 
-            if (State != FighterState.Guarding && State != FighterState.Stunned)
+            if (State != FighterState.Guarding && State != FighterState.Dodging && State != FighterState.Stunned)
             {
                 if      (_burnTimer       > 0f) c = BurnColor;
                 else if (_slowTimer       > 0f) c = SlowColor;
@@ -299,7 +312,7 @@ namespace PromptFighters.Battle
         {
             if (State == FighterState.Dead || _stunTimer > 0f) return;
             if (_skillExecutor != null && _skillExecutor.IsExecuting) return;
-            if (_heldOpponent != null || _grabbedBy != null || _isTryingGrab) return;
+            if (_heldOpponent != null || _grabbedBy != null || _isTryingGrab || _dodgeTimer > 0f) return;
             if (_guardBreakTimer > 0f) { guarding = false; }
             if (CurrentGuardDurability <= 0f) { guarding = false; }
 
@@ -319,6 +332,7 @@ namespace PromptFighters.Battle
                                float guardDamage = 0f)
         {
             if (State == FighterState.Dead) return;
+            if (State == FighterState.Dodging || _dodgeTimer > 0f) return;
             if (_grabbedBy != null) return;
 
             bool blocking = State == FighterState.Guarding && _guardBreakTimer <= 0f;
@@ -434,8 +448,40 @@ namespace PromptFighters.Battle
             jumpForce = Mathf.Clamp(stats.jumpForce, 7f, 19f);
             maxGuardDurability = Mathf.Clamp(stats.guardDurability, 40f, 90f);
             weight = Mathf.Clamp(stats.weight > 0f ? stats.weight : 1f / Mathf.Max(0.6f, stats.lightness), 0.6f, 1.6f);
+            groundDodgeDistance = Mathf.Clamp(stats.groundDodgeDistance, 1.2f, 3.8f);
+            airDodgeDistance = Mathf.Clamp(stats.airDodgeDistance, 0.8f, 3.2f);
             CurrentGuardDurability = Mathf.Min(CurrentGuardDurability, maxGuardDurability);
             OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
+        }
+
+        public bool TryDodge(float horizontal, float vertical)
+        {
+            if (!CanAct) return false;
+            if (_skillExecutor != null && _skillExecutor.IsExecuting) return false;
+
+            SetGuard(false);
+            State = FighterState.Dodging;
+            _controlLockTimer = Mathf.Max(_controlLockTimer, dodgeDuration);
+            float dir = Mathf.Abs(horizontal) > 0.35f ? Mathf.Sign(horizontal) : 0f;
+
+            if (IsGrounded)
+            {
+                _dodgeTimer = vertical < -0.35f && dir == 0f ? downDodgeDuration : dodgeDuration;
+                _rb.linearVelocity = new Vector2(dir * (groundDodgeDistance / Mathf.Max(0.05f, _dodgeTimer)), _rb.linearVelocity.y);
+                if (dir > 0.1f && !FacingRight) Flip();
+                else if (dir < -0.1f && FacingRight) Flip();
+            }
+            else
+            {
+                _dodgeTimer = dodgeDuration;
+                Vector2 dodgeVelocity = dir != 0f
+                    ? new Vector2(dir * (airDodgeDistance / Mathf.Max(0.05f, _dodgeTimer)), 0f)
+                    : new Vector2(0f, -(dodgeFallDistance / Mathf.Max(0.05f, _dodgeTimer)));
+                _rb.linearVelocity = dodgeVelocity;
+            }
+
+            ForceSprite(CharacterSpriteId.Dash, _dodgeTimer);
+            return true;
         }
 
         public bool TryStartGrab()
@@ -574,6 +620,7 @@ namespace PromptFighters.Battle
             _grabHoldTimer      = 0f;
             _grabCooldownTimer  = 0f;
             _isTryingGrab       = false;
+            _dodgeTimer         = 0f;
             _forcedSprite       = null;
             _forcedSpriteTimer  = 0f;
             _idleAnimTimer      = 0f;
@@ -635,6 +682,14 @@ namespace PromptFighters.Battle
             CurrentGuardDurability = Mathf.Min(maxGuardDurability,
                 CurrentGuardDurability + guardRecoveryPerSecond * Time.deltaTime);
             OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
+        }
+
+        void TickDodge()
+        {
+            if (State != FighterState.Dodging) return;
+            if (_dodgeTimer > 0f) return;
+            _rb.linearVelocity = new Vector2(0f, _rb.linearVelocity.y);
+            State = IsGrounded ? FighterState.Idle : FighterState.Falling;
         }
 
         void DamageGuard(float amount)
@@ -768,6 +823,7 @@ namespace PromptFighters.Battle
         {
             if (Opponent == null) return;
             if (State == FighterState.Dead || State == FighterState.Stunned || State == FighterState.Grabbed) return;
+            if (State == FighterState.Dodging) return;
             // スキル実行中は方向転換しない（ヒットボックスの位置がずれるため）
             if (_skillExecutor != null && _skillExecutor.IsExecuting) return;
 

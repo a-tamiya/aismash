@@ -308,8 +308,8 @@ namespace PromptFighters.GameFlow
 
             // ── 操作ガイド ──
             MakeLabel(_panel.transform, "CtrlHelp",
-                "1P: WASD 移動 / J 基本技A / K 基本技B / L 基本技C / A/Dはじき+J スマッシュ / G つかみ / 左Shift ガード\n" +
-                "2P: 矢印キー 移動 / テンキー2 基本技A / 3 基本技B / 1 基本技C / ←/→はじき+2 スマッシュ / 0 つかみ / 右Shift ガード",
+                "1P: WASD 移動 / J 基本技A / K 基本技B / L 基本技C / A/Dはじき+J スマッシュ / G つかみ / 左Shift ガード・回避\n" +
+                "2P: 矢印キー 移動 / テンキー2 基本技A / 3 基本技B / 1 基本技C / ←/→はじき+2 スマッシュ / 0 つかみ / 右Shift ガード・回避",
                 new Vector2(0, 540 - 810), new Vector2(840, 52), 13, new Color(0.72f, 0.78f, 0.92f));
 
             BuildTrainingPanel();
@@ -766,6 +766,7 @@ namespace PromptFighters.GameFlow
             var sb = new System.Text.StringBuilder();
             sb.AppendLine($"地上 {s.groundMoveSpeed:F1}  空中 {s.airMoveSpeed:F1}");
             sb.AppendLine($"ジャンプ {s.jumpForce:F1}  ガード {s.guardDurability:F0}  軽さ {s.lightness:F2}");
+            sb.AppendLine($"回避 地上{s.groundDodgeDistance:F1}  空中{s.airDodgeDistance:F1}");
             for (int i = 0; i < data.skills.Length; i++)
             {
                 var skill = data.skills[i];
@@ -784,7 +785,8 @@ namespace PromptFighters.GameFlow
                    $"空中移動 {s.airMoveSpeed:F1}\n" +
                    $"ジャンプ {s.jumpForce:F1}\n" +
                    $"ガード耐久 {s.guardDurability:F0}\n" +
-                   $"軽さ {s.lightness:F2} / 重さ {s.weight:F2}";
+                   $"軽さ {s.lightness:F2} / 重さ {s.weight:F2}\n" +
+                   $"回避距離 地上 {s.groundDodgeDistance:F1} / 空中 {s.airDodgeDistance:F1}";
         }
 
         void RebuildIconGrids()
@@ -1193,9 +1195,9 @@ namespace PromptFighters.GameFlow
             string esc = _generationTrainingActive && _generationCoroutine != null
                 ? "Escキー: 生成進行画面に戻る"
                 : "Escキー: キャラ選択に戻る";
-            return "1P: WASD 移動 / J K L 技 / A/Dはじき+J スマッシュ / G つかみ / 左Shift ガード    " +
-                   "2P: 矢印 移動 / テンキー2 3 1 技 / ←/→はじき+2 スマッシュ / 0 つかみ / 右Shift ガード\n" +
-                   "Pad: Y ジャンプ / LT・LB つかみ / RT・RB ガード / B A X 技 / はじき+B スマッシュ    " +
+            return "1P: WASD 移動 / J K L 技 / A/Dはじき+J スマッシュ / G つかみ / 左Shift ガード・回避    " +
+                   "2P: 矢印 移動 / テンキー2 3 1 技 / ←/→はじき+2 スマッシュ / 0 つかみ / 右Shift ガード・回避\n" +
+                   "Pad: Y ジャンプ / LT・LB つかみ / RT・RB ガード・回避 / B A X 技 / はじき+B スマッシュ    " +
                    $"{esc}    Rキー: 位置・HP・技状態をリセット";
         }
 

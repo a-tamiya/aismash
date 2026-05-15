@@ -52,7 +52,13 @@ namespace PromptFighters.Battle
                 return;
             }
 
-            _fighter.Move(ReadMove());
+            float move = ReadMove();
+            float vertical = ReadVertical();
+            bool wantsDodge = !_fighter.IsGrounded || Mathf.Abs(move) > 0.35f || vertical < -0.35f;
+            if (wantsDodge && ReadDodgePressed() && _fighter.TryDodge(move, vertical))
+                return;
+
+            _fighter.Move(move);
             _fighter.SetGuard(ReadGuard());
             if (ReadJumpPressed()) _fighter.Jump();
             if (ReadGrabPressed()) _fighter.TryStartGrab();
@@ -98,6 +104,37 @@ namespace PromptFighters.Battle
             return Mathf.Clamp(dir, -1f, 1f);
         }
 
+        float ReadVertical()
+        {
+            float dir = 0f;
+
+            var kb = Keyboard.current;
+            if (kb != null)
+            {
+                if (playerIndex == 0)
+                {
+                    if (kb.sKey.isPressed) dir -= 1f;
+                    if (kb.wKey.isPressed) dir += 1f;
+                }
+                else
+                {
+                    if (kb.downArrowKey.isPressed) dir -= 1f;
+                    if (kb.upArrowKey.isPressed)   dir += 1f;
+                }
+            }
+
+            var gp = GetGamepad();
+            if (gp != null)
+            {
+                float stick = gp.leftStick.y.ReadValue();
+                float dpad  = gp.dpad.y.ReadValue();
+                float gpDir = Mathf.Abs(stick) > 0.3f ? stick : dpad;
+                if (Mathf.Abs(gpDir) > 0.1f) dir = gpDir;
+            }
+
+            return Mathf.Clamp(dir, -1f, 1f);
+        }
+
         bool ReadJumpPressed()
         {
             var kb = Keyboard.current;
@@ -120,6 +157,19 @@ namespace PromptFighters.Battle
             }
             var gp = GetGamepad();
             return gp != null && (gp.rightShoulder.isPressed || gp.rightTrigger.isPressed);
+        }
+
+        bool ReadDodgePressed()
+        {
+            var kb = Keyboard.current;
+            if (kb != null)
+            {
+                if (playerIndex == 0 && kb.leftShiftKey.wasPressedThisFrame)  return true;
+                if (playerIndex == 1 && kb.rightShiftKey.wasPressedThisFrame) return true;
+            }
+
+            var gp = GetGamepad();
+            return gp != null && (gp.rightShoulder.wasPressedThisFrame || gp.rightTrigger.wasPressedThisFrame);
         }
 
         bool ReadGrabPressed()
