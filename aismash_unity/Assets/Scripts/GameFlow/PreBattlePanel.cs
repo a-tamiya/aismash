@@ -1009,7 +1009,7 @@ namespace PromptFighters.GameFlow
         static void EnsureSpriteSet(CharacterData data)
         {
             if (data == null) return;
-            if (data.spriteSet?.Get(CharacterSpriteId.Idle1) != null) return;
+            if (HasPoseAndEffectSprites(data.spriteSet)) return;
             if (string.IsNullOrEmpty(data.spriteDir)) return;
 
             var loaded = CharacterSaveManager.LoadSpriteSet(data.spriteDir);
@@ -1018,6 +1018,16 @@ namespace PromptFighters.GameFlow
             data.spriteSet = loaded;
             if (data.characterSprite == null)
                 data.characterSprite = loaded.Get(CharacterSpriteId.Idle1);
+        }
+
+        static bool HasPoseAndEffectSprites(CharacterSpriteSet spriteSet)
+        {
+            if (spriteSet?.sprites == null) return false;
+            for (int i = 1; i < spriteSet.sprites.Length; i++)
+            {
+                if (spriteSet.sprites[i] != null) return true;
+            }
+            return false;
         }
 
         CharacterData GetPreset(bool isP1)
@@ -1039,6 +1049,8 @@ namespace PromptFighters.GameFlow
             int p2Idx = _presets.Count > 1 ? _p2PresetIdx : _p1PresetIdx;
             var data1 = PromptCharacterFactory.Clone(GetPreset(true));
             var data2 = PromptCharacterFactory.Clone(_presets[p2Idx]);
+            EnsureSpriteSet(data1);
+            EnsureSpriteSet(data2);
 
             _panel.SetActive(false);
             BattleManager.Instance.StartTraining(data1, data2);
@@ -1054,6 +1066,8 @@ namespace PromptFighters.GameFlow
             int p2Idx = _presets.Count > 1 ? _p2PresetIdx : _p1PresetIdx;
             var data1 = PromptCharacterFactory.Clone(GetPreset(true));
             var data2 = PromptCharacterFactory.Clone(_presets[p2Idx]);
+            EnsureSpriteSet(data1);
+            EnsureSpriteSet(data2);
             BattleManager.Instance.StartTraining(data1, data2);
         }
 
