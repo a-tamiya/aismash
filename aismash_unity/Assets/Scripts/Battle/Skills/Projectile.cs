@@ -16,6 +16,7 @@ namespace PromptFighters.Battle.Skills
         public float      StatusChance = 1f;
         public Element    Element = Element.None;
         public Sprite     EffectSprite;
+        public bool       FlipEffectX;
         public float      Speed     = 8f;
         public float      Lifetime  = 2f;
         public Vector2    Direction = Vector2.right;
@@ -55,6 +56,7 @@ namespace PromptFighters.Battle.Skills
             {
                 sr.sprite = EffectSprite;
                 sr.color = Color.white;
+                sr.flipX = FlipEffectX;
                 FitColliderToSprite(sr);
             }
             else

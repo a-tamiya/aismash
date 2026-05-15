@@ -75,7 +75,7 @@ namespace PromptFighters.Battle
             EnsureNameplate(fighter1, "P1", new Color(0.4f, 0.75f, 1f));
             EnsureNameplate(fighter2, "P2", new Color(1f, 0.55f, 0.35f));
 
-            // 相手参照をセット（AutoFaceOpponent用）
+            // 相手参照をセット（つかみ・状態異常・AIコメント用）
             if (fighter1 != null && fighter2 != null)
             {
                 fighter1.Opponent = fighter2;

@@ -95,7 +95,7 @@ namespace PromptFighters.Battle.Skills.Json
         {
             data.grabParameters.range = Mathf.Clamp(data.grabParameters.range, 0.8f, 2.2f);
             data.grabParameters.startup = Mathf.Clamp(data.grabParameters.startup, 0.08f, 0.25f);
-            data.grabParameters.recovery = Mathf.Clamp(data.grabParameters.recovery, 0.6f, 1.5f);
+            data.grabParameters.recovery = Mathf.Clamp(data.grabParameters.recovery, 0.16f, 0.45f);
             data.throwParameters.front_damage = Mathf.Clamp(data.throwParameters.front_damage, 8f, 12f);
             data.throwParameters.back_damage = Mathf.Clamp(data.throwParameters.back_damage, 8f, 12f);
             data.throwParameters.front_knockback = Mathf.Clamp(data.throwParameters.front_knockback, 6f, 12f);

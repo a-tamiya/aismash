@@ -16,6 +16,7 @@ namespace PromptFighters.Battle
         public float moveSpeed = 5f;
         public float airMoveSpeed = 4f;
         public float jumpForce = 12f;
+        public int maxAirJumps = 1;
         [Range(0.6f, 1.6f)] public float weight = 1f;
 
         [Header("Guard")]
@@ -38,7 +39,7 @@ namespace PromptFighters.Battle
         public GrabParameters grabParameters = new GrabParameters();
         public ThrowParameters throwParameters = new ThrowParameters();
         public float maxGrabHoldSeconds = 3f;
-        public float grabReleaseRecovery = 0.35f;
+        public float grabReleaseRecovery = 0.18f;
         public float throwGrabCooldown = 1.0f;
         [Range(0.1f, 2f)] public float throwKnockbackScale = 1.1f;
         public float throwReleaseOffset = 1.25f;
@@ -86,6 +87,7 @@ namespace PromptFighters.Battle
         float _defaultGravityScale;
         bool _airDodgeUsed;
         bool _dodgeGravitySuppressed;
+        int _airJumpsRemaining;
 
         // 状態異常タイマー
         float _burnTimer;
@@ -129,6 +131,7 @@ namespace PromptFighters.Battle
             _rb.constraints = RigidbodyConstraints2D.FreezeRotation;
             _defaultGravityScale = _rb.gravityScale;
             maxHP           = Mathf.Max(maxHP, 300f);
+            grabReleaseRecovery = Mathf.Clamp(grabReleaseRecovery, 0.12f, 0.25f);
             throwKnockbackScale = Mathf.Max(throwKnockbackScale, 1.1f);
             _rootSprite     = GetComponent<SpriteRenderer>();
             EnsureVisualRenderer();
@@ -143,10 +146,10 @@ namespace PromptFighters.Battle
             IsGrounded = groundCheck != null &&
                 Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
             if (IsGrounded && State != FighterState.Dodging)
+            {
                 _airDodgeUsed = false;
-
-            // 自動振り向き: スキル実行中・スタン・死亡以外は常に相手を向く
-            AutoFaceOpponent();
+                _airJumpsRemaining = maxAirJumps;
+            }
 
             if (_stunTimer          > 0f) _stunTimer          -= Time.deltaTime;
             if (_controlLockTimer   > 0f) _controlLockTimer   -= Time.deltaTime;
@@ -310,7 +313,12 @@ namespace PromptFighters.Battle
 
         public void Jump()
         {
-            if (!IsGrounded || !CanAct) return;
+            if (!CanAct) return;
+            if (!IsGrounded)
+            {
+                if (_airJumpsRemaining <= 0) return;
+                _airJumpsRemaining--;
+            }
             _rb.linearVelocity = new Vector2(_rb.linearVelocity.x, jumpForce);
         }
 
@@ -443,7 +451,11 @@ namespace PromptFighters.Battle
 
         public void SetGrabThrowParameters(GrabParameters grab, ThrowParameters throwData)
         {
-            if (grab != null) grabParameters = grab;
+            if (grab != null)
+            {
+                grabParameters = grab;
+                grabParameters.recovery = Mathf.Clamp(grabParameters.recovery, 0.16f, 0.45f);
+            }
             if (throwData != null) throwParameters = throwData;
         }
 
@@ -660,6 +672,7 @@ namespace PromptFighters.Battle
             _forcedSpriteTimer  = 0f;
             _idleAnimTimer      = 0f;
             _idleFrame          = 0;
+            _airJumpsRemaining  = maxAirJumps;
             CurrentGuardDurability = maxGuardDurability;
             State               = FighterState.Idle;
             transform.position  = spawnPos;
@@ -854,18 +867,6 @@ namespace PromptFighters.Battle
             State = FighterState.Dead;
             _rb.linearVelocity = Vector2.zero;
             OnDeath?.Invoke();
-        }
-
-        void AutoFaceOpponent()
-        {
-            if (Opponent == null) return;
-            if (State == FighterState.Dead || State == FighterState.Stunned || State == FighterState.Grabbed) return;
-            if (State == FighterState.Dodging) return;
-            // スキル実行中は方向転換しない（ヒットボックスの位置がずれるため）
-            if (_skillExecutor != null && _skillExecutor.IsExecuting) return;
-
-            bool shouldFaceRight = Opponent.transform.position.x > transform.position.x;
-            if (shouldFaceRight != FacingRight) Flip();
         }
 
         void Flip()

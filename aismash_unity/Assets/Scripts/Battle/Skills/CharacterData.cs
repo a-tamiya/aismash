@@ -90,7 +90,7 @@ namespace PromptFighters.Battle.Skills
     {
         public float range = 1.5f;
         public float startup = 0.12f;
-        public float recovery = 1.0f;
+        public float recovery = 0.25f;
     }
 
     [System.Serializable]

@@ -83,7 +83,8 @@ namespace PromptFighters.Battle.Skills
         IEnumerator ExecuteSkill(SkillData skill, float powerMultiplier)
         {
             _isExecuting = true;
-            float totalDuration = skill.parameters.startup + skill.parameters.active_time + skill.parameters.recovery;
+            float recovery = EffectiveRecovery(skill);
+            float totalDuration = skill.parameters.startup + skill.parameters.active_time + recovery;
             _fighter.BeginSkillRecovery(totalDuration);
             _fighter.ShowSkillSprite(skill.slot, totalDuration);
 
@@ -121,6 +122,14 @@ namespace PromptFighters.Battle.Skills
             while (Time.time - t0 < totalDuration) yield return null;
 
             _isExecuting = false;
+        }
+
+        static float EffectiveRecovery(SkillData skill)
+        {
+            if (skill == null) return 0f;
+            return skill.slot == SkillSlot.SmashSide
+                ? Mathf.Clamp(skill.parameters.recovery, 0.12f, 0.55f)
+                : skill.parameters.recovery;
         }
 
         void ExecuteAction(SkillData skill, SkillAction a, float powerMultiplier)
@@ -162,6 +171,7 @@ namespace PromptFighters.Battle.Skills
             hb.GuardDamage    = skill.parameters.guard_damage;
             hb.Element        = skill.element;
             hb.EffectSprite   = _fighter.GetEffectSprite(skill.slot);
+            hb.FlipEffectX    = !_fighter.FacingRight;
             hb.MaxHits        = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
         }
 
@@ -184,6 +194,7 @@ namespace PromptFighters.Battle.Skills
             p.GuardDamage    = skill.parameters.guard_damage;
             p.Element        = skill.element;
             p.EffectSprite   = _fighter.GetEffectSprite(skill.slot);
+            p.FlipEffectX    = !_fighter.FacingRight;
             p.transform.localScale = new Vector3(
                 Mathf.Clamp(speed * lifetime * 0.08f * ProjectileVisualScale, 0.74f, 1.74f),
                 Mathf.Clamp((a.size_y > 0f ? a.size_y * 0.55f : 0.75f) * ProjectileVisualScale, 0.54f, 1.26f),

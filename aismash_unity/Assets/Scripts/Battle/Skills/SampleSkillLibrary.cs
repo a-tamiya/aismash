@@ -86,7 +86,7 @@ namespace PromptFighters.Battle.Skills
             parameters  = new SkillParameters
             {
                 damage = 24, range = 2f, startup = 0.15f, active_time = 0.15f,
-                recovery = 1.0f, hit_count = 1,
+                recovery = 0.35f, hit_count = 1,
                 knockback = 10f, stun_time = 0.3f, guard_damage = 8f,
             },
             actions = new List<SkillAction>
