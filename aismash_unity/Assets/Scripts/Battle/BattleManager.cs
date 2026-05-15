@@ -31,7 +31,7 @@ namespace PromptFighters.Battle
         public Vector3 fighter2SpawnPos = new Vector3( 4f, -1.8f, 0f);
         public Vector3 nameplateOffset = new Vector3(0f, 2.35f, 0f);
         public float stageHalfWidth = 6.5f;
-        [Range(0.6f, 1.2f)] public float fighterScale = 0.88f;
+        [Range(0.6f, 1.2f)] public float fighterScale = 1.0f;
 
         public float       TimeRemaining { get; private set; }
         public BattlePhase Phase         { get; private set; } = BattlePhase.Setup;
