@@ -46,6 +46,7 @@ namespace PromptFighters.Battle
             float smashMultiplier = UpdateSmashCharge();
             if (_smashHeld)
             {
+                _fighter.ShowSmashCharge(_smashCharge / MaxSmashCharge);
                 _fighter.Move(0f);
                 _fighter.SetGuard(false);
                 return;
@@ -106,7 +107,7 @@ namespace PromptFighters.Battle
                 if (playerIndex == 1 && kb.upArrowKey.wasPressedThisFrame)  return true;
             }
             var gp = GetGamepad();
-            return gp != null && (gp.dpad.up.wasPressedThisFrame || gp.leftStick.up.wasPressedThisFrame);
+            return gp != null && gp.buttonNorth.wasPressedThisFrame;
         }
 
         bool ReadGuard()
@@ -118,7 +119,7 @@ namespace PromptFighters.Battle
                 if (playerIndex == 1 && kb.rightShiftKey.isPressed) return true;
             }
             var gp = GetGamepad();
-            return gp != null && gp.leftShoulder.isPressed;
+            return gp != null && (gp.rightShoulder.isPressed || gp.rightTrigger.isPressed);
         }
 
         bool ReadGrabPressed()
@@ -131,7 +132,7 @@ namespace PromptFighters.Battle
             }
 
             var gp = GetGamepad();
-            return gp != null && gp.rightShoulder.wasPressedThisFrame;
+            return gp != null && (gp.leftShoulder.wasPressedThisFrame || gp.leftTrigger.wasPressedThisFrame);
         }
 
         bool ReadSkillPressed(SkillSlot slot)

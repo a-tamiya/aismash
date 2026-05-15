@@ -10,8 +10,8 @@ namespace PromptFighters.Battle.Skills
     {
         public SkillData[] skills = new SkillData[4]; // index = SkillSlot
         public bool autoEquipSampleSkills = true;
-        const float MeleeHitboxScale = 0.85f;
-        const float ProjectileVisualScale = 0.82f;
+        const float MeleeHitboxScale = 1.02f;
+        const float ProjectileVisualScale = 0.98f;
 
         Fighter _fighter;
         bool _isExecuting;
@@ -187,8 +187,8 @@ namespace PromptFighters.Battle.Skills
             p.Element        = skill.element;
             p.EffectSprite   = _fighter.GetEffectSprite(skill.slot);
             p.transform.localScale = new Vector3(
-                Mathf.Clamp(speed * lifetime * 0.08f * ProjectileVisualScale, 0.62f, 1.45f),
-                Mathf.Clamp((a.size_y > 0f ? a.size_y * 0.55f : 0.75f) * ProjectileVisualScale, 0.45f, 1.05f),
+                Mathf.Clamp(speed * lifetime * 0.08f * ProjectileVisualScale, 0.74f, 1.74f),
+                Mathf.Clamp((a.size_y > 0f ? a.size_y * 0.55f : 0.75f) * ProjectileVisualScale, 0.54f, 1.26f),
                 1f);
         }
 

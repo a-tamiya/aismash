@@ -10,7 +10,7 @@ namespace PromptFighters.Battle
     public class Fighter : MonoBehaviour
     {
         [Header("Stats")]
-        public float maxHP = 100f;
+        public float maxHP = 300f;
 
         [Header("Movement")]
         public float moveSpeed = 5f;
@@ -71,6 +71,8 @@ namespace PromptFighters.Battle
         float _stunTimer;
         float _controlLockTimer;
         float _skillRecoveryTimer;
+        float _smashChargeVisualTimer;
+        float _smashChargeVisual01;
 
         // 状態異常タイマー
         float _burnTimer;
@@ -111,6 +113,7 @@ namespace PromptFighters.Battle
         {
             _rb             = GetComponent<Rigidbody2D>();
             _rb.constraints = RigidbodyConstraints2D.FreezeRotation;
+            maxHP           = Mathf.Max(maxHP, 300f);
             _rootSprite     = GetComponent<SpriteRenderer>();
             EnsureVisualRenderer();
             ApplyColliderScaleCorrection();
@@ -130,6 +133,7 @@ namespace PromptFighters.Battle
             if (_stunTimer          > 0f) _stunTimer          -= Time.deltaTime;
             if (_controlLockTimer   > 0f) _controlLockTimer   -= Time.deltaTime;
             if (_skillRecoveryTimer > 0f) _skillRecoveryTimer -= Time.deltaTime;
+            if (_smashChargeVisualTimer > 0f) _smashChargeVisualTimer -= Time.deltaTime;
             if (_grabCooldownTimer  > 0f) _grabCooldownTimer  -= Time.deltaTime;
             if (_slowTimer          > 0f) _slowTimer          -= Time.deltaTime;
             if (_guardRecoveryDelayTimer > 0f) _guardRecoveryDelayTimer -= Time.deltaTime;
@@ -211,6 +215,14 @@ namespace PromptFighters.Battle
             {
                 float pulse = (Mathf.Sin(Time.time * 18f) + 1f) * 0.5f;
                 _sprite.color = Color.Lerp(GuardBreakColor, Color.white, pulse * 0.35f);
+                return;
+            }
+
+            if (_smashChargeVisualTimer > 0f)
+            {
+                float pulse = (Mathf.Sin(Time.time * 28f) + 1f) * 0.5f;
+                Color chargeColor = Color.Lerp(new Color(1f, 0.85f, 0.15f), new Color(1f, 0.35f, 0.05f), _smashChargeVisual01);
+                _sprite.color = Color.Lerp(chargeColor, Color.white, pulse * 0.25f);
                 return;
             }
 
@@ -380,6 +392,13 @@ namespace PromptFighters.Battle
             ForceSprite(CharacterSpriteId.Grab, seconds);
         }
 
+        public void ShowSmashCharge(float charge01)
+        {
+            _smashChargeVisual01 = Mathf.Clamp01(charge01);
+            _smashChargeVisualTimer = 0.12f;
+            ForceSprite(CharacterSpriteId.SmashSide, 0.12f);
+        }
+
         public Sprite GetEffectSprite(SkillSlot slot)
         {
             CharacterSpriteId id = slot switch
@@ -530,6 +549,8 @@ namespace PromptFighters.Battle
             _stunTimer          = 0f;
             _controlLockTimer   = 0f;
             _skillRecoveryTimer = 0f;
+            _smashChargeVisualTimer = 0f;
+            _smashChargeVisual01 = 0f;
             _burnTimer          = 0f;
             _slowTimer          = 0f;
             _guardBreakTimer    = 0f;
@@ -561,7 +582,7 @@ namespace PromptFighters.Battle
         public void DebugSetBattleStats(float hp, float groundSpeed, float airSpeed,
                                         float jump, float guard, float newWeight)
         {
-            maxHP = Mathf.Clamp(hp, 1f, 500f);
+            maxHP = Mathf.Clamp(hp, 1f, 900f);
             CurrentHP = Mathf.Clamp(CurrentHP, 0f, maxHP);
             moveSpeed = Mathf.Clamp(groundSpeed, 0f, 20f);
             airMoveSpeed = Mathf.Clamp(airSpeed, 0f, 20f);

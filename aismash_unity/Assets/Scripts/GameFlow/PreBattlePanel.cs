@@ -1181,6 +1181,7 @@ namespace PromptFighters.GameFlow
                 : "Escキー: キャラ選択に戻る";
             return "1P: WASD 移動 / J K L 技 / A/Dはじき+J スマッシュ / G つかみ / 左Shift ガード    " +
                    "2P: 矢印 移動 / テンキー2 3 1 技 / ←/→はじき+2 スマッシュ / 0 つかみ / 右Shift ガード\n" +
+                   "Pad: Y ジャンプ / LT・LB つかみ / RT・RB ガード / B A X 技 / はじき+B スマッシュ    " +
                    $"{esc}    Rキー: 位置・HP・技状態をリセット";
         }
 
