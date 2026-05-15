@@ -115,6 +115,18 @@ namespace PromptFighters.Battle
 
         Vector2 ReadMoveVector()
         {
+            var gp = GetGamepad();
+            if (gp != null)
+            {
+                Vector2 stick = gp.leftStick.ReadValue();
+                if (stick.sqrMagnitude > 0.01f)
+                    return Vector2.ClampMagnitude(stick, 1f);
+
+                Vector2 dpad = gp.dpad.ReadValue();
+                if (dpad.sqrMagnitude > 0.01f)
+                    return Vector2.ClampMagnitude(dpad, 1f);
+            }
+
             return new Vector2(ReadMove(), ReadVertical());
         }
 

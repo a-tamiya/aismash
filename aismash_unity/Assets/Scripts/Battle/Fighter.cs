@@ -483,10 +483,13 @@ namespace PromptFighters.Battle
                 if (_airDodgeUsed) return false;
                 _airDodgeUsed = true;
                 _dodgeTimer = dodgeDuration;
-                Vector2 airDirection = input.sqrMagnitude > 0.04f ? input.normalized : Vector2.down;
-                Vector2 dodgeVelocity = airDirection * (airDodgeDistance / Mathf.Max(0.05f, _dodgeTimer));
-                SuppressDodgeGravity();
-                _rb.linearVelocity = dodgeVelocity;
+                if (input.sqrMagnitude >= 0.04f)
+                {
+                    Vector2 airDirection = input.normalized;
+                    Vector2 dodgeVelocity = airDirection * (airDodgeDistance / Mathf.Max(0.05f, _dodgeTimer));
+                    SuppressDodgeGravity();
+                    _rb.linearVelocity = dodgeVelocity;
+                }
             }
 
             ForceSprite(CharacterSpriteId.Dash, _dodgeTimer);

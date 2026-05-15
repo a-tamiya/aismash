@@ -61,7 +61,6 @@ namespace PromptFighters.Battle.Skills
             if (skills[i] == null)                return false;
             if (_isExecuting)                     return false;
             if (!_fighter.CanAct)                 return false;
-            if (slot == SkillSlot.SmashSide && !_fighter.IsGrounded) return false;
 
             BattleLogger.Instance?.LogSkillUse(_fighter.PlayerIndex, slot, skills[i].skill_name);
             StartCoroutine(ExecuteSkill(skills[i], 1f));
@@ -74,7 +73,6 @@ namespace PromptFighters.Battle.Skills
             if (skills[i] == null) return false;
             if (_isExecuting) return false;
             if (!_fighter.CanAct) return false;
-            if (slot == SkillSlot.SmashSide && !_fighter.IsGrounded) return false;
 
             float multiplier = Mathf.Clamp(powerMultiplier, 1f, 2f);
             BattleLogger.Instance?.LogSkillUse(_fighter.PlayerIndex, slot, skills[i].skill_name);
