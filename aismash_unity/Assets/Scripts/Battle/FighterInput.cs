@@ -17,9 +17,13 @@ namespace PromptFighters.Battle
         float _previousSmashAxis;
         Vector2 _previousDodgeInput;
         bool _previousGuardHeld;
+        bool _wasHoldingOpponent;
+        bool _throwInputReleasedAfterGrab = true;
         const float MaxSmashCharge = 1f;
         const float SmashFlickWindow = 0.18f;
         const float DodgeInputThreshold = 0.35f;
+        const float ThrowInputThreshold = 0.35f;
+        const float ThrowNeutralThreshold = 0.2f;
 
         void Awake()
         {
@@ -36,12 +40,31 @@ namespace PromptFighters.Battle
             // 対戦中またはトレーニング中だけ操作を受け付ける
             if (bm != null && !bm.IsFighting) return;
 
+            if (!_fighter.IsHoldingOpponent)
+            {
+                _wasHoldingOpponent = false;
+                _throwInputReleasedAfterGrab = true;
+            }
+
             if (_fighter.IsGrabbed) return;
             if (_fighter.IsHoldingOpponent)
             {
                 float throwDir = ReadMove();
-                if (throwDir > 0.35f) _fighter.ThrowHeld(_fighter.FacingRight);
-                else if (throwDir < -0.35f) _fighter.ThrowHeld(!_fighter.FacingRight);
+                if (!_wasHoldingOpponent)
+                {
+                    _wasHoldingOpponent = true;
+                    _throwInputReleasedAfterGrab = Mathf.Abs(throwDir) < ThrowNeutralThreshold;
+                }
+
+                if (!_throwInputReleasedAfterGrab)
+                {
+                    if (Mathf.Abs(throwDir) < ThrowNeutralThreshold)
+                        _throwInputReleasedAfterGrab = true;
+                    return;
+                }
+
+                if (throwDir > ThrowInputThreshold) _fighter.ThrowHeld(_fighter.FacingRight);
+                else if (throwDir < -ThrowInputThreshold) _fighter.ThrowHeld(!_fighter.FacingRight);
                 return;
             }
 
