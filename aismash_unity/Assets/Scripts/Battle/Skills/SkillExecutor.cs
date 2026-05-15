@@ -184,6 +184,10 @@ namespace PromptFighters.Battle.Skills
             p.GuardDamage    = skill.parameters.guard_damage;
             p.Element        = skill.element;
             p.EffectSprite   = _fighter.GetEffectSprite(skill.slot);
+            p.transform.localScale = new Vector3(
+                Mathf.Clamp(speed * lifetime * 0.08f, 0.75f, 1.8f),
+                Mathf.Clamp(a.size_y > 0f ? a.size_y * 0.55f : 0.75f, 0.55f, 1.35f),
+                1f);
         }
 
         static Vector2 DefaultMeleeOffset(SkillSlot slot, float range)

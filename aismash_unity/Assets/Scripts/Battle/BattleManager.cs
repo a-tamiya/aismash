@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 using PromptFighters.Battle.Skills;
 using PromptFighters.Utils;
 using System.Collections;
@@ -19,7 +20,7 @@ namespace PromptFighters.Battle
         public static BattleManager Instance { get; private set; }
 
         [Header("Settings")]
-        public float battleDuration  = 60f;
+        public float battleDuration  = 180f;
         public float countdownLength = 3f;
         public float trainingRespawnDelay = 1f;
 
@@ -30,6 +31,7 @@ namespace PromptFighters.Battle
         public Vector3 fighter2SpawnPos = new Vector3( 4f, -1.8f, 0f);
         public Vector3 nameplateOffset = new Vector3(0f, 2.35f, 0f);
         public float stageHalfWidth = 6.5f;
+        [Range(0.6f, 1.2f)] public float fighterScale = 0.88f;
 
         public float       TimeRemaining { get; private set; }
         public BattlePhase Phase         { get; private set; } = BattlePhase.Setup;
@@ -58,8 +60,12 @@ namespace PromptFighters.Battle
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
+            battleDuration = Mathf.Max(battleDuration, 180f);
+            fighterScale = Mathf.Clamp(fighterScale, 0.6f, 1.2f);
             if (GetComponent<BattleLogger>() == null)
                 gameObject.AddComponent<BattleLogger>();
+            if (GetComponent<BattleDebugTuner>() == null)
+                gameObject.AddComponent<BattleDebugTuner>();
         }
 
         void Start()
@@ -82,6 +88,8 @@ namespace PromptFighters.Battle
             ApplySprite(fighter2, new CharacterData());
 
             // Setup中はファイターを非アクティブな位置でスポーン
+            ApplyFighterScale(fighter1);
+            ApplyFighterScale(fighter2);
             fighter1?.ResetForBattle(fighter1SpawnPos, faceRight: true);
             fighter2?.ResetForBattle(fighter2SpawnPos, faceRight: false);
         }
@@ -199,10 +207,19 @@ namespace PromptFighters.Battle
 
         void ResetFightersAndSkillState()
         {
+            ApplyFighterScale(fighter1);
+            ApplyFighterScale(fighter2);
             fighter1?.ResetForBattle(fighter1SpawnPos, faceRight: true);
             fighter2?.ResetForBattle(fighter2SpawnPos, faceRight: false);
             fighter1?.GetComponent<SkillExecutor>()?.ResetSkillState();
             fighter2?.GetComponent<SkillExecutor>()?.ResetSkillState();
+        }
+
+        void ApplyFighterScale(Fighter fighter)
+        {
+            if (fighter == null) return;
+            float sign = fighter.transform.localScale.x < 0f ? -1f : 1f;
+            fighter.transform.localScale = new Vector3(sign * fighterScale, fighterScale, fighter.transform.localScale.z);
         }
 
         static void ApplySprite(Fighter fighter, CharacterData data)
@@ -257,6 +274,69 @@ namespace PromptFighters.Battle
             fighter1?.ResetForBattle(fighter1SpawnPos, faceRight: true);
             fighter2?.ResetForBattle(fighter2SpawnPos, faceRight: false);
             OnReturnedToSetup?.Invoke();
+        }
+    }
+
+    public class BattleDebugTuner : MonoBehaviour
+    {
+        bool _visible;
+        int _selectedPlayer;
+
+        void Update()
+        {
+            var kb = Keyboard.current;
+            if (kb != null && kb.f12Key.wasPressedThisFrame)
+                _visible = !_visible;
+        }
+
+        void OnGUI()
+        {
+            if (!_visible) return;
+
+            var bm = BattleManager.Instance;
+            if (bm == null) return;
+
+            GUI.depth = -100;
+            GUILayout.BeginArea(new Rect(16f, 16f, 330f, 430f), "DEBUG TUNER (F12)", GUI.skin.window);
+            _selectedPlayer = GUILayout.Toolbar(_selectedPlayer, new[] { "1P", "2P" });
+
+            Fighter fighter = _selectedPlayer == 0 ? bm.fighter1 : bm.fighter2;
+            if (fighter == null)
+            {
+                GUILayout.Label("Fighter not assigned.");
+                GUILayout.EndArea();
+                return;
+            }
+
+            float maxHp = Slider("Max HP", fighter.maxHP, 1f, 300f);
+            float currentHp = Slider("Current HP", fighter.CurrentHP, 0f, maxHp);
+            float ground = Slider("Ground Speed", fighter.moveSpeed, 0f, 14f);
+            float air = Slider("Air Speed", fighter.airMoveSpeed, 0f, 14f);
+            float jump = Slider("Jump Force", fighter.jumpForce, 0f, 24f);
+            float guard = Slider("Guard", fighter.maxGuardDurability, 1f, 150f);
+            float weight = Slider("Weight", fighter.weight, 0.2f, 2.5f);
+
+            fighter.DebugSetBattleStats(maxHp, ground, air, jump, guard, weight);
+            fighter.DebugSetCurrentHP(currentHp);
+
+            GUILayout.Space(8f);
+            if (GUILayout.Button("Reset Round"))
+                bm.ResetTrainingRound();
+            if (GUILayout.Button("Fill HP / Guard"))
+            {
+                fighter.DebugSetCurrentHP(fighter.maxHP);
+                fighter.DebugSetCurrentGuard(fighter.maxGuardDurability);
+                fighter.DebugSetBattleStats(fighter.maxHP, fighter.moveSpeed, fighter.airMoveSpeed,
+                    fighter.jumpForce, fighter.maxGuardDurability, fighter.weight);
+            }
+            GUILayout.Label("Training and battle values update immediately.");
+            GUILayout.EndArea();
+        }
+
+        static float Slider(string label, float value, float min, float max)
+        {
+            GUILayout.Label($"{label}: {value:0.##}");
+            return GUILayout.HorizontalSlider(value, min, max);
         }
     }
 }

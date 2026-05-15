@@ -29,7 +29,8 @@ namespace PromptFighters.UI
         void Refresh(float seconds)
         {
             if (timerText == null) return;
-            timerText.text  = Mathf.CeilToInt(seconds).ToString();
+            int totalSeconds = Mathf.CeilToInt(seconds);
+            timerText.text  = $"{totalSeconds / 60}:{totalSeconds % 60:00}";
             timerText.color = seconds <= urgentThreshold ? urgentColor : _normalColor;
         }
 

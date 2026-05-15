@@ -7,6 +7,38 @@ namespace PromptFighters.Utils
     // 外縁からのフラッドフィルに加えて、輪郭の内側に残りやすい純白背景も除去する。
     public static class WhiteBackgroundRemover
     {
+        public static Texture2D ApplyChromaGreen(Texture2D src,
+                                                 float greenThreshold = 0.68f,
+                                                 float maxRedBlue = 0.38f,
+                                                 float fadeRange = 0.16f)
+        {
+            int w = src.width;
+            int h = src.height;
+            var dst = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            dst.filterMode = src.filterMode;
+            dst.wrapMode = src.wrapMode;
+
+            Color[] pixels = src.GetPixels();
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                Color p = pixels[i];
+                float greenLead = p.g - Mathf.Max(p.r, p.b);
+                bool strongGreen = p.g >= greenThreshold &&
+                                   p.r <= maxRedBlue &&
+                                   p.b <= maxRedBlue &&
+                                   greenLead >= 0.22f;
+                if (!strongGreen) continue;
+
+                float t = Mathf.InverseLerp(0.22f, 0.22f + fadeRange, greenLead);
+                p.a = 1f - Mathf.Clamp01(t);
+                pixels[i] = p;
+            }
+
+            dst.SetPixels(pixels);
+            dst.Apply();
+            return dst;
+        }
+
         // threshold : この値以上の min(R,G,B) を「白とみなせる」上限 (0-1)
         // fadeRange : エッジをグラデーションで馴染ませる幅
         public static Texture2D Apply(Texture2D src,

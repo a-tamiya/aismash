@@ -19,7 +19,7 @@ namespace PromptFighters.Battle
         [Range(0.6f, 1.6f)] public float weight = 1f;
 
         [Header("Guard")]
-        [Range(0f, 1f)] public float guardDamageRatio = 0.15f;
+        [Range(0f, 1f)] public float guardDamageRatio = 0f;
         public float maxGuardDurability = 65f;
         public float guardTimeDrainPerSecond = 18f;
         public float guardHitDamageRatio = 0.45f;
@@ -113,6 +113,7 @@ namespace PromptFighters.Battle
             _rb.constraints = RigidbodyConstraints2D.FreezeRotation;
             _rootSprite     = GetComponent<SpriteRenderer>();
             EnsureVisualRenderer();
+            ApplyColliderScaleCorrection();
             _skillExecutor  = GetComponent<SkillExecutor>();
             CurrentHP       = maxHP;
             CurrentGuardDurability = maxGuardDurability;
@@ -307,7 +308,7 @@ namespace PromptFighters.Battle
             if (_grabbedBy != null) return;
 
             bool blocking = State == FighterState.Guarding && _guardBreakTimer <= 0f;
-            float actual  = blocking ? Mathf.Max(damage * guardDamageRatio, guardDamage) : damage;
+            float actual  = blocking ? Mathf.Max(0f, damage * guardDamageRatio) : damage;
             CurrentHP     = Mathf.Max(0f, CurrentHP - actual);
             OnHPChanged?.Invoke(CurrentHP, maxHP);
             if (blocking)
@@ -328,7 +329,8 @@ namespace PromptFighters.Battle
             OnDamageReceived?.Invoke(actual, blocking);
             if (!blocking && Opponent != null)
                 BattleLogger.Instance?.LogDamage(Opponent.PlayerIndex, actual);
-            DamagePopup.Spawn(transform.position, actual, blocking);
+            if (blocking) DamagePopup.SpawnText(transform.position, "GUARD", GuardColor, 1.6f);
+            else          DamagePopup.Spawn(transform.position, actual, false);
             if (!blocking) _hitFlashTimer = 0.08f;
             if (CurrentHP <= 0f) Die();
         }
@@ -551,7 +553,37 @@ namespace PromptFighters.Battle
             s.x = faceRight ? Mathf.Abs(s.x) : -Mathf.Abs(s.x);
             transform.localScale = s;
             ApplyVisualScaleCorrection();
+            ApplyColliderScaleCorrection();
             OnHPChanged?.Invoke(CurrentHP, maxHP);
+            OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
+        }
+
+        public void DebugSetBattleStats(float hp, float groundSpeed, float airSpeed,
+                                        float jump, float guard, float newWeight)
+        {
+            maxHP = Mathf.Clamp(hp, 1f, 500f);
+            CurrentHP = Mathf.Clamp(CurrentHP, 0f, maxHP);
+            moveSpeed = Mathf.Clamp(groundSpeed, 0f, 20f);
+            airMoveSpeed = Mathf.Clamp(airSpeed, 0f, 20f);
+            jumpForce = Mathf.Clamp(jump, 0f, 30f);
+            maxGuardDurability = Mathf.Clamp(guard, 1f, 200f);
+            CurrentGuardDurability = Mathf.Clamp(CurrentGuardDurability, 0f, maxGuardDurability);
+            weight = Mathf.Clamp(newWeight, 0.2f, 3f);
+            OnHPChanged?.Invoke(CurrentHP, maxHP);
+            OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
+        }
+
+        public void DebugSetCurrentHP(float hp)
+        {
+            CurrentHP = Mathf.Clamp(hp, 0f, maxHP);
+            OnHPChanged?.Invoke(CurrentHP, maxHP);
+            if (CurrentHP <= 0f) Die();
+            else if (State == FighterState.Dead) State = FighterState.Idle;
+        }
+
+        public void DebugSetCurrentGuard(float guard)
+        {
+            CurrentGuardDurability = Mathf.Clamp(guard, 0f, maxGuardDurability);
             OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
         }
 
@@ -681,6 +713,14 @@ namespace PromptFighters.Battle
             _visualRoot.localPosition = Vector3.zero;
             _visualRoot.localRotation = Quaternion.identity;
             _visualRoot.localScale = new Vector3(y / x, 1f, 1f);
+        }
+
+        void ApplyColliderScaleCorrection()
+        {
+            var col = GetComponent<BoxCollider2D>();
+            if (col == null) return;
+            col.size = new Vector2(0.78f, 1.75f);
+            col.offset = new Vector2(0f, 0.82f);
         }
 
         void Die()

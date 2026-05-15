@@ -17,7 +17,8 @@ namespace PromptFighters.AI
         const string GenerationsEndpoint = "https://api.openai.com/v1/images/generations";
         const string EditsEndpoint = "https://api.openai.com/v1/images/edits";
         const string Model = "gpt-image-2";
-        const string Size = "1024x1536";
+        const string CharacterSize = "1024x1536";
+        const string EffectSize = "1536x1024";
         const string Quality = "low";
 
         static string _cachedApiKey;
@@ -64,8 +65,8 @@ namespace PromptFighters.AI
         }
 
         // 全スプライト共通の制約サフィックス
-        const string CharSuffix   = "facing right, single character only, one character, complete full body from head to toe not cropped, pure white background, no text, no watermark, no shadow, no duplicate. Anime-style character with sharp, bold lines. Highly saturated and energetic color palette.";
-        const string EffectSuffix = "2D game visual effect only, no character figure, no text, pure white background, bright energetic colors, centered in frame";
+        const string CharSuffix   = "facing right, single character only, one character, complete full body from head to toe not cropped, flat chroma key green background (#00FF00), no text, no watermark, no shadow, no duplicate. Anime-style character with sharp, bold lines. Highly saturated and energetic color palette.";
+        const string EffectSuffix = "wide horizontal 2D game visual effect only, no character figure, no text, flat chroma key green background (#00FF00), bright energetic colors, centered in frame";
 
         // (id, filename, editPrompt) — ベース画像を参照して生成する14枚のバリエーション
         static readonly (CharacterSpriteId id, string filename, string prompt)[] EditEntries =
@@ -176,7 +177,7 @@ namespace PromptFighters.AI
             string body =
                 $"{{\"model\":\"{Model}\"," +
                 $"\"prompt\":\"{safePrompt}\"," +
-                $"\"n\":1,\"size\":\"{Size}\",\"quality\":\"{Quality}\"}}";
+                $"\"n\":1,\"size\":\"{CharacterSize}\",\"quality\":\"{Quality}\"}}";
 
             using var req = new UnityWebRequest(GenerationsEndpoint, "POST");
             req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
@@ -258,7 +259,7 @@ namespace PromptFighters.AI
             {
                 new MultipartFormDataSection("model",   Model),
                 new MultipartFormDataSection("prompt",  prompt),
-                new MultipartFormDataSection("size",    Size),
+                new MultipartFormDataSection("size",    IsEffectSprite(id) ? EffectSize : CharacterSize),
                 new MultipartFormDataSection("quality", Quality),
                 new MultipartFormDataSection("n",       "1"),
                 new MultipartFormFileSection("image[]", basePngBytes, "reference.png", "image/png"),
@@ -307,7 +308,7 @@ namespace PromptFighters.AI
             if (!ImageConversion.LoadImage(raw, rawBytes))
                 throw new Exception("Texture2D.LoadImage failed");
 
-            var processed = WhiteBackgroundRemover.Apply(raw, threshold: 0.97f, fadeRange: 0.02f);
+            var processed = WhiteBackgroundRemover.ApplyChromaGreen(raw);
             UnityEngine.Object.Destroy(raw);
 
             return Sprite.Create(
@@ -351,5 +352,11 @@ namespace PromptFighters.AI
 
         static string EscapeForJson(string s) =>
             s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", " ").Replace("\r", "");
+
+        static bool IsEffectSprite(CharacterSpriteId id) =>
+            id == CharacterSpriteId.EffectA ||
+            id == CharacterSpriteId.EffectB ||
+            id == CharacterSpriteId.EffectC ||
+            id == CharacterSpriteId.EffectSmash;
     }
 }

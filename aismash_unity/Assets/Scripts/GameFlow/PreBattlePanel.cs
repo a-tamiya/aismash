@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
 using TMPro;
 using PromptFighters.AI;
@@ -109,8 +110,7 @@ namespace PromptFighters.GameFlow
             {
                 AnimateTitle();
 
-                var kb = UnityEngine.InputSystem.Keyboard.current;
-                if (kb != null && (kb.enterKey.wasPressedThisFrame || kb.spaceKey.wasPressedThisFrame))
+                if (WasMenuConfirmPressed())
                 {
                     ShowCharacterSelect();
                 }
@@ -129,22 +129,22 @@ namespace PromptFighters.GameFlow
 
                 if (IsEditingText()) return;
 
-                if (kb != null && kb.spaceKey.wasPressedThisFrame) OnStartPressed();
-                if (kb != null && kb.tKey.wasPressedThisFrame) OnTrainingPressed();
-                if (kb != null && kb.gKey.wasPressedThisFrame) ShowGenerationSetupPanel();
+                if (WasMenuConfirmPressed()) OnStartPressed();
+                if (WasTrainingPressed()) OnTrainingPressed();
+                if (WasGeneratePressed()) ShowGenerationSetupPanel();
             }
 
             if (_trainingPanel != null && _trainingPanel.activeSelf)
             {
                 var kb = UnityEngine.InputSystem.Keyboard.current;
-                if (kb != null && kb.escapeKey.wasPressedThisFrame)
+                if (WasCancelPressed())
                 {
                     if (_generationTrainingActive && _generationCoroutine != null)
                         ReturnToGeneratingFromTraining();
                     else
                         BattleManager.Instance?.ReturnToSetup();
                 }
-                if (kb != null && kb.rKey.wasPressedThisFrame)
+                if (WasResetPressed())
                 {
                     BattleManager.Instance?.ResetTrainingRound();
                 }
@@ -152,11 +152,10 @@ namespace PromptFighters.GameFlow
 
             if (_generatingPanel != null && _generatingPanel.activeSelf)
             {
-                var kb = UnityEngine.InputSystem.Keyboard.current;
-                if (kb != null && kb.escapeKey.wasPressedThisFrame)
+                if (WasCancelPressed())
                     CancelGeneration();
                 // 生成中でもTキーでトレーニング。生成コルーチンは止めない。
-                if (kb != null && kb.tKey.wasPressedThisFrame)
+                if (WasTrainingPressed())
                 {
                     StartTrainingDuringGeneration();
                 }
@@ -164,10 +163,9 @@ namespace PromptFighters.GameFlow
 
             if (_skillConfirmPanel != null && _skillConfirmPanel.activeSelf)
             {
-                var kb = UnityEngine.InputSystem.Keyboard.current;
-                if (kb != null && kb.spaceKey.wasPressedThisFrame)
+                if (WasMenuConfirmPressed())
                     OnSkillConfirmBattlePressed();
-                if (kb != null && kb.escapeKey.wasPressedThisFrame)
+                if (WasCancelPressed())
                     ShowPanel();
             }
         }
@@ -889,6 +887,7 @@ namespace PromptFighters.GameFlow
                 StopCoroutine(_generationCoroutine);
                 _generationCoroutine = null;
             }
+            _generationTrainingActive = false;
             _generatingPanel?.SetActive(false);
             ShowPanel();
         }
@@ -961,6 +960,11 @@ namespace PromptFighters.GameFlow
 
             _generatingPanel?.SetActive(false);
             _generationCoroutine = null;
+            if (_generationTrainingActive)
+            {
+                BattleManager.Instance?.ReturnToSetup();
+                _generationTrainingActive = false;
+            }
             ShowSkillConfirmPanel();
         }
 
@@ -1238,6 +1242,47 @@ namespace PromptFighters.GameFlow
             if (EventSystem.current == null) return false;
             var selected = EventSystem.current.currentSelectedGameObject;
             return selected != null && selected.GetComponentInParent<TMP_InputField>() != null;
+        }
+
+        static bool WasMenuConfirmPressed()
+        {
+            var kb = Keyboard.current;
+            if (kb != null && (kb.enterKey.wasPressedThisFrame || kb.spaceKey.wasPressedThisFrame))
+                return true;
+            var gp = Gamepad.current;
+            return gp != null && (gp.buttonSouth.wasPressedThisFrame || gp.startButton.wasPressedThisFrame);
+        }
+
+        static bool WasCancelPressed()
+        {
+            var kb = Keyboard.current;
+            if (kb != null && kb.escapeKey.wasPressedThisFrame) return true;
+            var gp = Gamepad.current;
+            return gp != null && gp.buttonEast.wasPressedThisFrame;
+        }
+
+        static bool WasTrainingPressed()
+        {
+            var kb = Keyboard.current;
+            if (kb != null && kb.tKey.wasPressedThisFrame) return true;
+            var gp = Gamepad.current;
+            return gp != null && gp.selectButton.wasPressedThisFrame;
+        }
+
+        static bool WasGeneratePressed()
+        {
+            var kb = Keyboard.current;
+            if (kb != null && kb.gKey.wasPressedThisFrame) return true;
+            var gp = Gamepad.current;
+            return gp != null && gp.buttonNorth.wasPressedThisFrame;
+        }
+
+        static bool WasResetPressed()
+        {
+            var kb = Keyboard.current;
+            if (kb != null && kb.rKey.wasPressedThisFrame) return true;
+            var gp = Gamepad.current;
+            return gp != null && gp.leftStickButton.wasPressedThisFrame;
         }
 
         static bool IsAscii(string value)

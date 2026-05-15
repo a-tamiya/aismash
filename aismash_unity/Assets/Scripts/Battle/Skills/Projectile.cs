@@ -29,15 +29,16 @@ namespace PromptFighters.Battle.Skills
             var rb = go.AddComponent<Rigidbody2D>();
             rb.gravityScale = 0f;
             rb.constraints  = RigidbodyConstraints2D.FreezeRotation;
+            rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
 
             var col = go.AddComponent<BoxCollider2D>();
             col.isTrigger = true;
-            col.size      = new Vector2(0.5f, 0.5f);
+            col.size      = new Vector2(1.2f, 0.75f);
 
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sprite       = RuntimeSprite.Square();
             sr.sortingOrder = 10;
-            go.transform.localScale = new Vector3(0.5f, 0.5f, 1f);
+            go.transform.localScale = new Vector3(0.85f, 0.65f, 1f);
 
             var p = go.AddComponent<Projectile>();
             p.Owner     = owner;
@@ -54,6 +55,7 @@ namespace PromptFighters.Battle.Skills
             {
                 sr.sprite = EffectSprite;
                 sr.color = Color.white;
+                FitColliderToSprite(sr);
             }
             else
             {
@@ -63,9 +65,23 @@ namespace PromptFighters.Battle.Skills
             Destroy(gameObject, Lifetime);
         }
 
+        void FitColliderToSprite(SpriteRenderer sr)
+        {
+            var col = GetComponent<BoxCollider2D>();
+            if (col == null || sr?.sprite == null) return;
+
+            Vector2 spriteSize = sr.sprite.bounds.size;
+            if (spriteSize.x <= 0f || spriteSize.y <= 0f) return;
+
+            col.size = new Vector2(
+                Mathf.Clamp(spriteSize.x * 0.85f, 0.8f, 2.4f),
+                Mathf.Clamp(spriteSize.y * 0.75f, 0.55f, 1.6f));
+            col.offset = new Vector2(0f, spriteSize.y * 0.05f);
+        }
+
         void OnTriggerEnter2D(Collider2D other)
         {
-            var target = other.GetComponent<Fighter>();
+            var target = other.GetComponentInParent<Fighter>();
             if (target == null)
             {
                 // 壁・地面に当たった場合も消える

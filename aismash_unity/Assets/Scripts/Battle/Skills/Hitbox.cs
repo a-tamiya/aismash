@@ -63,7 +63,7 @@ namespace PromptFighters.Battle.Skills
         void OnTriggerEnter2D(Collider2D other)
         {
             if (_hitsLanded >= MaxHits) return;
-            var target = other.GetComponent<Fighter>();
+            var target = other.GetComponentInParent<Fighter>();
             if (target == null || target == Owner) return;
             if (_hitTargets.Contains(target)) return;
 
