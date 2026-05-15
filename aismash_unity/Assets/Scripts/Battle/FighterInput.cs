@@ -15,8 +15,11 @@ namespace PromptFighters.Battle
         float _smashCharge;
         float _lastSmashFlickTime = -10f;
         float _previousSmashAxis;
+        Vector2 _previousDodgeInput;
+        bool _previousGuardHeld;
         const float MaxSmashCharge = 1f;
         const float SmashFlickWindow = 0.18f;
+        const float DodgeInputThreshold = 0.35f;
 
         void Awake()
         {
@@ -44,24 +47,30 @@ namespace PromptFighters.Battle
 
             RecordSmashFlick();
             float smashMultiplier = UpdateSmashCharge();
+            bool guardHeld = ReadGuard();
             if (_smashHeld)
             {
                 _fighter.ShowSmashCharge(_smashCharge / MaxSmashCharge);
                 _fighter.Move(0f);
                 _fighter.SetGuard(false);
+                _previousGuardHeld = guardHeld;
                 return;
             }
 
-            float move = ReadMove();
-            float vertical = ReadVertical();
-            bool wantsDodge = !_fighter.IsGrounded || Mathf.Abs(move) > 0.35f || vertical < -0.35f;
-            if (wantsDodge && ReadDodgePressed() && _fighter.TryDodge(move, vertical))
+            Vector2 moveInput = ReadMoveVector();
+            if (ShouldStartDodge(moveInput, guardHeld) && _fighter.TryDodge(moveInput))
+            {
+                _previousDodgeInput = moveInput;
+                _previousGuardHeld = guardHeld;
                 return;
+            }
+            _previousDodgeInput = moveInput;
 
-            _fighter.Move(move);
-            _fighter.SetGuard(ReadGuard());
+            _fighter.Move(moveInput.x);
+            _fighter.SetGuard(guardHeld);
             if (ReadJumpPressed()) _fighter.Jump();
             if (ReadGrabPressed()) _fighter.TryStartGrab();
+            _previousGuardHeld = guardHeld;
 
             // スキルはEnded以外で使用可能
             if (_skills != null)
@@ -104,6 +113,11 @@ namespace PromptFighters.Battle
             return Mathf.Clamp(dir, -1f, 1f);
         }
 
+        Vector2 ReadMoveVector()
+        {
+            return new Vector2(ReadMove(), ReadVertical());
+        }
+
         float ReadVertical()
         {
             float dir = 0f;
@@ -133,6 +147,26 @@ namespace PromptFighters.Battle
             }
 
             return Mathf.Clamp(dir, -1f, 1f);
+        }
+
+        bool ShouldStartDodge(Vector2 input, bool guardHeld)
+        {
+            if (!guardHeld) return false;
+
+            bool horizontalPressed = Mathf.Abs(input.x) >= DodgeInputThreshold &&
+                                     Mathf.Abs(_previousDodgeInput.x) < DodgeInputThreshold;
+            bool verticalPressed = Mathf.Abs(input.y) >= DodgeInputThreshold &&
+                                   Mathf.Abs(_previousDodgeInput.y) < DodgeInputThreshold;
+
+            if (_fighter.IsGrounded)
+            {
+                bool downPressed = input.y <= -DodgeInputThreshold &&
+                                   _previousDodgeInput.y > -DodgeInputThreshold;
+                return _previousGuardHeld && (horizontalPressed || downPressed);
+            }
+
+            return input.sqrMagnitude >= DodgeInputThreshold * DodgeInputThreshold &&
+                   (ReadDodgePressed() || (_previousGuardHeld && (horizontalPressed || verticalPressed)));
         }
 
         bool ReadJumpPressed()

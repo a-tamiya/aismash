@@ -454,7 +454,7 @@ namespace PromptFighters.Battle
             OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
         }
 
-        public bool TryDodge(float horizontal, float vertical)
+        public bool TryDodge(Vector2 input)
         {
             if (!CanAct) return false;
             if (_skillExecutor != null && _skillExecutor.IsExecuting) return false;
@@ -462,11 +462,11 @@ namespace PromptFighters.Battle
             SetGuard(false);
             State = FighterState.Dodging;
             _controlLockTimer = Mathf.Max(_controlLockTimer, dodgeDuration);
-            float dir = Mathf.Abs(horizontal) > 0.35f ? Mathf.Sign(horizontal) : 0f;
+            float dir = Mathf.Abs(input.x) > 0.35f ? Mathf.Sign(input.x) : 0f;
 
             if (IsGrounded)
             {
-                _dodgeTimer = vertical < -0.35f && dir == 0f ? downDodgeDuration : dodgeDuration;
+                _dodgeTimer = input.y < -0.35f && dir == 0f ? downDodgeDuration : dodgeDuration;
                 _rb.linearVelocity = new Vector2(dir * (groundDodgeDistance / Mathf.Max(0.05f, _dodgeTimer)), _rb.linearVelocity.y);
                 if (dir > 0.1f && !FacingRight) Flip();
                 else if (dir < -0.1f && FacingRight) Flip();
@@ -474,9 +474,8 @@ namespace PromptFighters.Battle
             else
             {
                 _dodgeTimer = dodgeDuration;
-                Vector2 dodgeVelocity = dir != 0f
-                    ? new Vector2(dir * (airDodgeDistance / Mathf.Max(0.05f, _dodgeTimer)), 0f)
-                    : new Vector2(0f, -(dodgeFallDistance / Mathf.Max(0.05f, _dodgeTimer)));
+                Vector2 airDirection = input.sqrMagnitude > 0.04f ? input.normalized : Vector2.down;
+                Vector2 dodgeVelocity = airDirection * (airDodgeDistance / Mathf.Max(0.05f, _dodgeTimer));
                 _rb.linearVelocity = dodgeVelocity;
             }
 
