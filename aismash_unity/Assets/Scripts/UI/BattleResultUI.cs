@@ -12,24 +12,36 @@ namespace PromptFighters.UI
 {
     public class BattleResultUI : MonoBehaviour
     {
-        static readonly Color P1Color = new Color(0.4f, 0.75f, 1f);
-        static readonly Color P2Color = new Color(1f, 0.55f, 0.35f);
+        // ── Palette ────────────────────────────────────────────────────
+        static readonly Color BgOverlay  = new Color(0.01f, 0.02f, 0.05f, 0.90f);
+        static readonly Color BgPanel    = new Color(0.02f, 0.05f, 0.10f, 0.97f);
+        static readonly Color BgCard     = new Color(0.03f, 0.07f, 0.14f, 1.00f);
+        static readonly Color BgComment  = new Color(0.02f, 0.06f, 0.12f, 1.00f);
+        static readonly Color P1Col      = new Color(0.12f, 0.62f, 1.00f);
+        static readonly Color P2Col      = new Color(1.00f, 0.20f, 0.20f);
+        static readonly Color DrawCol    = new Color(1.00f, 0.82f, 0.10f);
+        static readonly Color TextWht    = Color.white;
+        static readonly Color TextDim    = new Color(0.55f, 0.68f, 0.82f);
+        static readonly Color TextMuted  = new Color(0.38f, 0.50f, 0.65f);
+        static readonly Color EdgeLine   = new Color(0.22f, 0.50f, 1.00f, 0.40f);
 
-        GameObject _overlay;
+        // ── State ──────────────────────────────────────────────────────
+        GameObject      _overlay;
+        Image           _winnerBand;
         TextMeshProUGUI _winnerText;
-        TextMeshProUGUI _p1NameText;
-        TextMeshProUGUI _p2NameText;
-        TextMeshProUGUI _p1StatsText;
-        TextMeshProUGUI _p2StatsText;
+        TextMeshProUGUI _p1NameText, _p2NameText;
+        TextMeshProUGUI _p1StatsText, _p2StatsText;
         TextMeshProUGUI _commentText;
         TextMeshProUGUI _promptText;
-        float _animTimer;
-        bool _visible;
-        int _winnerIndex;
 
+        bool  _visible;
+        int   _winnerIndex;
+        float _animTimer;
+
+        // ── Lifecycle ──────────────────────────────────────────────────
         void Start()
         {
-            BuildOverlay();
+            BuildUI();
             if (BattleManager.Instance != null)
             {
                 BattleManager.Instance.OnBattleEnd       += ShowResult;
@@ -37,134 +49,243 @@ namespace PromptFighters.UI
             }
         }
 
-        void BuildOverlay()
+        void Update()
+        {
+            if (!_visible) return;
+            _animTimer += Time.deltaTime;
+
+            // prompt pulse
+            if (_promptText != null)
+            {
+                float a = 0.55f + 0.45f * Mathf.Sin(_animTimer * 2.8f);
+                var c = _promptText.color; c.a = a; _promptText.color = c;
+            }
+
+            // restart input
+            var kb = Keyboard.current;
+            if (kb != null && (kb.spaceKey.wasPressedThisFrame || kb.enterKey.wasPressedThisFrame))
+            {
+                HidePanel();
+                BattleManager.Instance?.ReturnToSetup();
+            }
+        }
+
+        // ── UI Construction ────────────────────────────────────────────
+        void BuildUI()
         {
             var canvas = GetComponentInParent<Canvas>() ?? FindFirstObjectByType<Canvas>();
             Transform root = canvas != null ? canvas.transform : transform;
 
+            // ─ Overlay ──────────────────────────────────────────────
             _overlay = Make("ResultOverlay", root);
-            Stretch(_overlay.GetComponent<RectTransform>());
-            _overlay.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.82f);
+            StretchFill(_overlay.GetComponent<RectTransform>());
+            _overlay.AddComponent<Image>().color = BgOverlay;
 
-            // 勝者帯
-            var banner = Make("Banner", _overlay.transform);
-            var brt = banner.GetComponent<RectTransform>();
-            brt.anchorMin = new Vector2(0f, 0.72f);
-            brt.anchorMax = new Vector2(1f, 1f);
-            brt.offsetMin = brt.offsetMax = Vector2.zero;
-            banner.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.4f);
+            // ─ Main panel (centered card) ──────────────────────────
+            var panel = Make("ResultPanel", _overlay.transform);
+            var pRt = panel.GetComponent<RectTransform>();
+            pRt.anchorMin = pRt.anchorMax = new Vector2(0.5f, 0.5f);
+            pRt.sizeDelta = new Vector2(860f, 540f);
+            pRt.anchoredPosition = Vector2.zero;
+            panel.AddComponent<Image>().color = BgPanel;
 
-            _winnerText = MakeLabel(_overlay.transform, "WinnerText",
-                "", new Vector2(0, 180), new Vector2(900, 100), 72f, Color.white);
+            // panel border lines
+            AddLine(panel.transform, "BdT", 0,1,1,1, 0,-1f,0,0,    EdgeLine);
+            AddLine(panel.transform, "BdB", 0,0,1,0, 0, 0f,0,1f,   EdgeLine);
+            AddLine(panel.transform, "BdL", 0,0,0,1, 0, 0f,1f,0,   EdgeLine);
+            AddLine(panel.transform, "BdR", 1,0,1,1,-1f,0f,0,0,    EdgeLine);
+
+            // ─ Winner band (top strip) ────────────────────────────
+            var band = Make("WinnerBand", panel.transform);
+            Anch(band, 0,1,1,1, 0,-100f,0,0);
+            _winnerBand = band.AddComponent<Image>();
+            _winnerBand.color = new Color(0.10f, 0.62f, 1.00f, 0.18f);
+
+            // corner accent lines on band
+            AddLine(panel.transform, "BandLine", 0,1,1,1, 0,-100f,0,-98f, new Color(1,1,1,0.08f));
+
+            // winner label ("1P WIN" / "2P WIN" / "DRAW")
+            var wGo = Make("WinnerLabel", panel.transform);
+            Anch(wGo, 0,1,1,1, 0,-100f,0,-6f);
+            _winnerText = wGo.AddComponent<TextMeshProUGUI>();
+            _winnerText.text      = "1P WIN";
+            _winnerText.fontSize  = 68f;
             _winnerText.fontStyle = FontStyles.Bold;
+            _winnerText.alignment = TextAlignmentOptions.Center;
+            _winnerText.color     = P1Col;
+            UITheme.Apply(_winnerText);
 
-            // 中央区切り線
-            MakeRect(_overlay.transform, "Divider",
-                new Vector2(0, 40), new Vector2(3, 520), new Color(1f, 1f, 1f, 0.12f));
+            // ─ Vertical divider ──────────────────────────────────
+            AddLine(panel.transform, "Divider", 0.5f,0,0.5f,1, 0,24f,1f,-108f, new Color(1,1,1,0.08f));
 
-            // 1P情報（左）
-            _p1NameText = MakeLabel(_overlay.transform, "P1Name",
-                "", new Vector2(-380, 80), new Vector2(500, 44), 26f, P1Color);
-            _p1NameText.fontStyle = FontStyles.Bold;
-            _p1StatsText = MakeLabel(_overlay.transform, "P1Stats",
-                "", new Vector2(-380, -20), new Vector2(500, 180), 16f, new Color(0.88f, 0.93f, 1f));
-            _p1StatsText.alignment = TextAlignmentOptions.TopLeft;
+            // ─ P1 stats card (left) ───────────────────────────────
+            var c1 = BuildStatCard(panel.transform, true);
 
-            // 2P情報（右）
-            _p2NameText = MakeLabel(_overlay.transform, "P2Name",
-                "", new Vector2(380, 80), new Vector2(500, 44), 26f, P2Color);
-            _p2NameText.fontStyle = FontStyles.Bold;
-            _p2StatsText = MakeLabel(_overlay.transform, "P2Stats",
-                "", new Vector2(380, -20), new Vector2(500, 180), 16f, new Color(1f, 0.92f, 0.88f));
-            _p2StatsText.alignment = TextAlignmentOptions.TopRight;
+            // ─ P2 stats card (right) ─────────────────────────────
+            var c2 = BuildStatCard(panel.transform, false);
 
-            // AIコメント欄
-            MakeRect(_overlay.transform, "CommentBg",
-                new Vector2(0, -230), new Vector2(860, 120), new Color(0.05f, 0.08f, 0.12f, 0.85f));
-            _commentText = MakeLabel(_overlay.transform, "Comment",
-                "AIが試合を分析中...", new Vector2(0, -230), new Vector2(830, 110), 16f,
-                new Color(0.9f, 0.95f, 1f));
-            _commentText.textWrappingMode = TMPro.TextWrappingModes.Normal;
+            // ─ AI comment box ─────────────────────────────────────
+            var cmtBg = Make("CommentBg", panel.transform);
+            Anch(cmtBg, 0,0,1,0, 20f,58f,-20f,148f);
+            cmtBg.AddComponent<Image>().color = BgComment;
+            AddLine(cmtBg.transform, "CmtT", 0,1,1,1, 0,-1f,0,0, new Color(0.22f,0.50f,1f,0.35f));
 
-            // フッター
-            _promptText = MakeLabel(_overlay.transform, "PromptText",
-                "スペースキーでリスタート", new Vector2(0, -340), new Vector2(700, 32), 18f,
-                new Color(0.7f, 0.7f, 0.7f));
+            // "AI ANALYSIS" label
+            var cmtHeader = Make("CmtHeader", cmtBg.transform);
+            Anch(cmtHeader, 0,1,1,1, 10f,-20f,-10f,-2f);
+            var cmtH = cmtHeader.AddComponent<TextMeshProUGUI>();
+            cmtH.text = "■  AI ANALYSIS"; cmtH.fontSize = 9f;
+            cmtH.alignment = TextAlignmentOptions.Left; cmtH.color = new Color(0.28f,0.62f,1f,0.8f);
+            UITheme.Apply(cmtH);
+
+            var cmtGo = Make("CommentText", cmtBg.transform);
+            Anch(cmtGo, 0,0,1,1, 10f,6f,-10f,-22f);
+            _commentText = cmtGo.AddComponent<TextMeshProUGUI>();
+            _commentText.text = "AI が試合を分析中…";
+            _commentText.fontSize = 14f;
+            _commentText.alignment = TextAlignmentOptions.TopLeft;
+            _commentText.color = new Color(0.82f, 0.90f, 1.00f);
+            _commentText.textWrappingMode = TextWrappingModes.Normal;
+            UITheme.Apply(_commentText);
+
+            // ─ Restart prompt ─────────────────────────────────────
+            var prmtGo = Make("Prompt", panel.transform);
+            Anch(prmtGo, 0,0,1,0, 0,14f,0,38f);
+            _promptText = prmtGo.AddComponent<TextMeshProUGUI>();
+            _promptText.text = "[ SPACE / ENTER ]  REMATCH";
+            _promptText.fontSize = 13f;
+            _promptText.alignment = TextAlignmentOptions.Center;
+            _promptText.color = TextMuted;
+            UITheme.Apply(_promptText);
 
             _overlay.SetActive(false);
         }
 
+        GameObject BuildStatCard(Transform panel, bool isP1)
+        {
+            Color pCol = isP1 ? P1Col : P2Col;
+
+            var card = Make(isP1 ? "Card1P" : "Card2P", panel);
+            if (isP1) Anch(card, 0,0,0.5f,1, 16f,152f,-8f,-108f);
+            else      Anch(card, 0.5f,0,1f,1, 8f,152f,-16f,-108f);
+            card.AddComponent<Image>().color = BgCard;
+
+            // top accent line in player color
+            var cardTop = Make("CardTop", card.transform);
+            Anch(cardTop, 0,1,1,1, 0,-2f,0,0);
+            cardTop.AddComponent<Image>().color = new Color(pCol.r, pCol.g, pCol.b, 0.7f);
+
+            // player tag pill
+            var tagGo = Make("Tag", card.transform);
+            Anch(tagGo, 0,1,0,1, 8f,-30f,36f,-8f);
+            tagGo.AddComponent<Image>().color = new Color(pCol.r, pCol.g, pCol.b, 0.20f);
+            var tagTxt = Make("TagTxt", tagGo.transform);
+            FillRect(tagTxt.GetComponent<RectTransform>());
+            var tt = tagTxt.AddComponent<TextMeshProUGUI>();
+            tt.text = isP1 ? "1P" : "2P"; tt.fontSize = 11f; tt.fontStyle = FontStyles.Bold;
+            tt.alignment = TextAlignmentOptions.Center; tt.color = pCol;
+            UITheme.Apply(tt);
+
+            // character name
+            var nameGo = Make("CharName", card.transform);
+            Anch(nameGo, 0,1,1,1, 44f,-32f,-8f,-8f);
+            var nameTmp = isP1 ? null : null;
+            var nm = nameGo.AddComponent<TextMeshProUGUI>();
+            nm.text = isP1 ? "1P" : "2P"; nm.fontSize = 18f; nm.fontStyle = FontStyles.Bold;
+            nm.alignment = TextAlignmentOptions.Left; nm.color = TextWht;
+            nm.textWrappingMode = TextWrappingModes.NoWrap;
+            nm.overflowMode = TextOverflowModes.Ellipsis;
+            UITheme.Apply(nm);
+            if (isP1) _p1NameText = nm; else _p2NameText = nm;
+
+            // stats text
+            var statsGo = Make("Stats", card.transform);
+            Anch(statsGo, 0,0,1,1, 10f,8f,-10f,-38f);
+            var st = statsGo.AddComponent<TextMeshProUGUI>();
+            st.text = "---"; st.fontSize = 14f;
+            st.alignment = TextAlignmentOptions.TopLeft;
+            st.color = new Color(0.78f, 0.88f, 1.00f);
+            st.textWrappingMode = TextWrappingModes.Normal;
+            UITheme.Apply(st);
+            if (isP1) _p1StatsText = st; else _p2StatsText = st;
+
+            return card;
+        }
+
+        // ── Show / Hide ────────────────────────────────────────────────
         void ShowResult(int winnerIndex)
         {
             if (_overlay == null) return;
             _winnerIndex = winnerIndex;
             _overlay.SetActive(true);
-            _visible  = true;
+            _visible   = true;
             _animTimer = 0f;
 
-            Color accent = winnerIndex == 0 ? P1Color : winnerIndex == 1 ? P2Color : new Color(0.9f, 0.85f, 0.3f);
+            Color accent = winnerIndex == 0 ? P1Col : winnerIndex == 1 ? P2Col : DrawCol;
+
+            if (_winnerBand != null)
+                _winnerBand.color = new Color(accent.r, accent.g, accent.b, 0.15f);
 
             if (_winnerText != null)
             {
-                _winnerText.text  = winnerIndex == 0 ? "1P 勝利！" : winnerIndex == 1 ? "2P 勝利！" : "引き分け";
+                _winnerText.text  = winnerIndex == 0 ? "1P  WIN" : winnerIndex == 1 ? "2P  WIN" : "DRAW";
                 _winnerText.color = accent;
             }
 
+            // top accent line matches winner
             RefreshCharInfo();
             RefreshStats();
             StartCoroutine(GenerateComment());
+        }
+
+        void HidePanel()
+        {
+            _visible = false;
+            if (_overlay != null) _overlay.SetActive(false);
         }
 
         void RefreshCharInfo()
         {
             var bm = BattleManager.Instance;
             if (bm == null) return;
-
-            string p1Name = bm.Character1?.characterName ?? "1P";
-            string p2Name = bm.Character2?.characterName ?? "2P";
-            if (_p1NameText != null) _p1NameText.text = p1Name;
-            if (_p2NameText != null) _p2NameText.text = p2Name;
+            if (_p1NameText) _p1NameText.text = bm.Character1?.characterName ?? "1P";
+            if (_p2NameText) _p2NameText.text = bm.Character2?.characterName ?? "2P";
         }
 
         void RefreshStats()
         {
             if (BattleLogger.Instance == null) return;
-            var p1 = BattleLogger.Instance.P1;
-            var p2 = BattleLogger.Instance.P2;
-
-            if (_p1StatsText != null)
-                _p1StatsText.text = BuildStatsText(p1);
-            if (_p2StatsText != null)
-                _p2StatsText.text = BuildStatsText(p2);
+            if (_p1StatsText) _p1StatsText.text = BuildStats(BattleLogger.Instance.P1);
+            if (_p2StatsText) _p2StatsText.text = BuildStats(BattleLogger.Instance.P2);
         }
 
-        static string BuildStatsText(PlayerLog log)
+        static string BuildStats(PlayerLog log)
         {
             if (log == null) return "---";
             var sb = new StringBuilder();
-            sb.AppendLine($"与ダメージ: {log.totalDamageDealt:F0}");
-            sb.Append($"最多使用技: {log.MostUsedSkillName()}");
+            sb.AppendLine($"与ダメージ   {log.totalDamageDealt:F0}");
+            sb.Append($"最多使用技   {log.MostUsedSkillName()}");
             return sb.ToString();
         }
 
+        // ── AI comment (same HTTP logic as before) ─────────────────────
         IEnumerator GenerateComment()
         {
-            if (_commentText != null) _commentText.text = "AIが試合を分析中...";
+            if (_commentText != null) _commentText.text = "AI が試合を分析中…";
 
             var bm = BattleManager.Instance;
             if (bm == null) yield break;
 
-            string log = BuildMatchLog(bm, _winnerIndex);
-            string prompt = BuildCommentPrompt(log);
-            string body   = BuildBody(prompt);
+            string matchLog = BuildMatchLog(bm, _winnerIndex);
+            string prompt   = $"2D格闘ゲーム「プロンプトファイターズ」の試合結果を2〜3文で実況風にコメントしてください。日本語で、短く、テンポよく。\n試合データ: {matchLog}";
+            string body     = BuildBody(prompt);
 
             using var req = new UnityWebRequest(PromptFighters.AI.AICharacterClient.Endpoint, "POST");
-            req.uploadHandler   = new UploadHandlerRaw(System.Text.Encoding.UTF8.GetBytes(body));
+            req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
             req.downloadHandler = new DownloadHandlerBuffer();
             req.SetRequestHeader("Content-Type", "application/json");
             req.SetRequestHeader("Authorization", "Bearer " + PromptFighters.AI.AICharacterClient.ApiKey);
             req.timeout = 30;
-
             yield return req.SendWebRequest();
 
             if (req.result == UnityWebRequest.Result.Success)
@@ -178,7 +299,6 @@ namespace PromptFighters.UI
                 catch { }
             }
 
-            // フォールバックコメント
             if (_commentText != null)
                 _commentText.text = FallbackComment(_winnerIndex, bm);
         }
@@ -202,20 +322,16 @@ namespace PromptFighters.UI
             return sb.ToString();
         }
 
-        static string BuildCommentPrompt(string matchLog) =>
-            $"2D格闘ゲーム「プロンプトファイターズ」の試合結果を2〜3文で実況風にコメントしてください。日本語で、短く、テンポよく。\n試合データ: {matchLog}";
-
         static string BuildBody(string prompt)
         {
-            string esc = prompt
-                .Replace("\\", "\\\\").Replace("\"", "\\\"")
-                .Replace("\n", "\\n").Replace("\r", "");
+            string esc = prompt.Replace("\\","\\\\").Replace("\"","\\\"").Replace("\n","\\n").Replace("\r","");
             return $"{{\"model\":\"{PromptFighters.AI.AICharacterClient.Model}\",\"messages\":[{{\"role\":\"user\",\"content\":\"{esc}\"}}]}}";
         }
 
         [System.Serializable] class _Resp   { public _Choice[] choices; }
         [System.Serializable] class _Choice { public _Msg message; }
         [System.Serializable] class _Msg    { public string content; }
+
         static string ParseContent(string raw)
         {
             var r = JsonUtility.FromJson<_Resp>(raw);
@@ -226,76 +342,48 @@ namespace PromptFighters.UI
 
         static string FallbackComment(int winner, BattleManager bm)
         {
-            if (winner < 0) return "接戦の末、引き分けとなりました。両者互角の戦いでした。";
+            if (winner < 0) return "互角の戦いの末、引き分けとなりました。";
             string wName = winner == 0 ? bm.Character1?.characterName ?? "1P" : bm.Character2?.characterName ?? "2P";
-            return $"{wName}の勝利！自分の技の特徴をうまく活かして戦いを制しました。";
+            return $"{wName} の勝利！自らの技の特徴を最大限に活かし、完璧な戦いを見せた。";
         }
 
-        void Update()
-        {
-            if (!_visible) return;
-            _animTimer += Time.deltaTime;
-            if (_winnerText != null)
-            {
-                float pulse = 1f + 0.03f * Mathf.Sin(_animTimer * 3f);
-                _winnerText.transform.localScale = Vector3.one * pulse;
-            }
-
-            var kb = Keyboard.current;
-            if (kb != null && (kb.spaceKey.wasPressedThisFrame || kb.enterKey.wasPressedThisFrame))
-            {
-                HidePanel();
-                BattleManager.Instance?.ReturnToSetup();
-            }
-        }
-
-        void HidePanel()
-        {
-            _visible = false;
-            if (_overlay != null) _overlay.SetActive(false);
-        }
-
-        // UI ヘルパー
+        // ── UI Helpers ─────────────────────────────────────────────────
         static GameObject Make(string name, Transform parent)
         {
             var go = new GameObject(name);
+            go.layer = parent.gameObject.layer;
             go.AddComponent<RectTransform>().SetParent(parent, false);
             return go;
         }
 
-        static void Stretch(RectTransform rt)
+        static void StretchFill(RectTransform rt)
         {
-            rt.anchorMin = Vector2.zero;
-            rt.anchorMax = Vector2.one;
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
             rt.offsetMin = rt.offsetMax = Vector2.zero;
         }
 
-        static TextMeshProUGUI MakeLabel(Transform parent, string name, string text,
-            Vector2 pos, Vector2 size, float fontSize, Color color)
+        static void FillRect(RectTransform rt)
         {
-            var go = Make(name, parent);
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = pos;
-            rt.sizeDelta = size;
-            var tmp = go.AddComponent<TextMeshProUGUI>();
-            tmp.text      = text;
-            tmp.fontSize  = fontSize;
-            tmp.color     = color;
-            tmp.alignment = TextAlignmentOptions.Center;
-            tmp.textWrappingMode = TMPro.TextWrappingModes.Normal;
-            UITheme.Apply(tmp);
-            return tmp;
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = rt.offsetMax = Vector2.zero;
         }
 
-        static void MakeRect(Transform parent, string name, Vector2 pos, Vector2 size, Color color)
+        static void Anch(GameObject go,
+            float axMin, float ayMin, float axMax, float ayMax,
+            float oxMin, float oyMin, float oxMax, float oyMax)
+        {
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(axMin, ayMin); rt.anchorMax = new Vector2(axMax, ayMax);
+            rt.offsetMin = new Vector2(oxMin, oyMin); rt.offsetMax = new Vector2(oxMax, oyMax);
+        }
+
+        static void AddLine(Transform parent, string name,
+            float axMin, float ayMin, float axMax, float ayMax,
+            float oxMin, float oyMin, float oxMax, float oyMax, Color col)
         {
             var go = Make(name, parent);
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = pos;
-            rt.sizeDelta = size;
-            go.AddComponent<Image>().color = color;
+            Anch(go, axMin,ayMin, axMax,ayMax, oxMin,oyMin, oxMax,oyMax);
+            go.AddComponent<Image>().color = col;
         }
     }
 }
