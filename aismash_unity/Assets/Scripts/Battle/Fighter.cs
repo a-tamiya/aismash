@@ -89,6 +89,7 @@ namespace PromptFighters.Battle
         float _dodgeTimer;
         float _defaultGravityScale;
         bool _airDodgeUsed;
+        bool _isAirDodgeActive;
         bool _dodgeGravitySuppressed;
         int _airJumpsRemaining;
 
@@ -150,6 +151,10 @@ namespace PromptFighters.Battle
         {
             IsGrounded = groundCheck != null &&
                 Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
+            if (IsGrounded && _isAirDodgeActive && State == FighterState.Dodging)
+            {
+                EndAirDodgeOnLanding();
+            }
             if (IsGrounded && State != FighterState.Dodging)
             {
                 _airDodgeUsed = false;
@@ -493,10 +498,13 @@ namespace PromptFighters.Battle
         {
             if (!CanStartDodge()) return false;
             if (_skillExecutor != null && _skillExecutor.IsExecuting) return false;
+            bool isAirDodge = !IsGrounded;
+            if (isAirDodge && _airDodgeUsed) return false;
 
             SetGuard(false);
             State = FighterState.Dodging;
             _controlLockTimer = Mathf.Max(_controlLockTimer, dodgeDuration);
+            _isAirDodgeActive = isAirDodge;
             float dir = Mathf.Abs(input.x) > 0.35f ? Mathf.Sign(input.x) : 0f;
 
             if (IsGrounded)
@@ -508,7 +516,6 @@ namespace PromptFighters.Battle
             }
             else
             {
-                if (_airDodgeUsed) return false;
                 _airDodgeUsed = true;
                 _dodgeTimer = dodgeDuration;
                 if (input.sqrMagnitude >= 0.04f)
@@ -522,6 +529,17 @@ namespace PromptFighters.Battle
 
             ForceSprite(CharacterSpriteId.Dash, _dodgeTimer);
             return true;
+        }
+
+        void EndAirDodgeOnLanding()
+        {
+            _isAirDodgeActive = false;
+            _dodgeTimer = 0f;
+            _controlLockTimer = 0f;
+            _forcedSpriteTimer = 0f;
+            _forcedSprite = null;
+            RestoreDodgeGravity();
+            State = FighterState.Idle;
         }
 
         bool CanStartDodge()
@@ -683,6 +701,7 @@ namespace PromptFighters.Battle
             _isTryingGrab       = false;
             _dodgeTimer         = 0f;
             _airDodgeUsed       = false;
+            _isAirDodgeActive   = false;
             RestoreDodgeGravity();
             _forcedSprite       = null;
             _forcedSpriteTimer  = 0f;
@@ -759,6 +778,7 @@ namespace PromptFighters.Battle
             if (State != FighterState.Dodging) return;
             if (_dodgeTimer > 0f) return;
             RestoreDodgeGravity();
+            _isAirDodgeActive = false;
             _rb.linearVelocity = new Vector2(0f, _rb.linearVelocity.y);
             State = IsGrounded ? FighterState.Idle : FighterState.Falling;
         }
