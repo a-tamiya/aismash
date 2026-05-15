@@ -83,6 +83,9 @@ namespace PromptFighters.Battle
         float _smashChargeVisualTimer;
         float _smashChargeVisual01;
         float _dodgeTimer;
+        float _defaultGravityScale;
+        bool _airDodgeUsed;
+        bool _dodgeGravitySuppressed;
 
         // 状態異常タイマー
         float _burnTimer;
@@ -124,6 +127,7 @@ namespace PromptFighters.Battle
         {
             _rb             = GetComponent<Rigidbody2D>();
             _rb.constraints = RigidbodyConstraints2D.FreezeRotation;
+            _defaultGravityScale = _rb.gravityScale;
             maxHP           = Mathf.Max(maxHP, 300f);
             throwKnockbackScale = Mathf.Max(throwKnockbackScale, 1.1f);
             _rootSprite     = GetComponent<SpriteRenderer>();
@@ -138,6 +142,8 @@ namespace PromptFighters.Battle
         {
             IsGrounded = groundCheck != null &&
                 Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
+            if (IsGrounded && State != FighterState.Dodging)
+                _airDodgeUsed = false;
 
             // 自動振り向き: スキル実行中・スタン・死亡以外は常に相手を向く
             AutoFaceOpponent();
@@ -456,7 +462,7 @@ namespace PromptFighters.Battle
 
         public bool TryDodge(Vector2 input)
         {
-            if (!CanAct) return false;
+            if (!CanStartDodge()) return false;
             if (_skillExecutor != null && _skillExecutor.IsExecuting) return false;
 
             SetGuard(false);
@@ -473,14 +479,38 @@ namespace PromptFighters.Battle
             }
             else
             {
+                if (_airDodgeUsed) return false;
+                _airDodgeUsed = true;
                 _dodgeTimer = dodgeDuration;
                 Vector2 airDirection = input.sqrMagnitude > 0.04f ? input.normalized : Vector2.down;
                 Vector2 dodgeVelocity = airDirection * (airDodgeDistance / Mathf.Max(0.05f, _dodgeTimer));
+                SuppressDodgeGravity();
                 _rb.linearVelocity = dodgeVelocity;
             }
 
             ForceSprite(CharacterSpriteId.Dash, _dodgeTimer);
             return true;
+        }
+
+        bool CanStartDodge()
+        {
+            if (State == FighterState.Dead || State == FighterState.Stunned || State == FighterState.Grabbed || State == FighterState.Dodging) return false;
+            if (_isTryingGrab || _heldOpponent != null || _grabbedBy != null) return false;
+            if (_guardBreakTimer > 0f || _controlLockTimer > 0f || _skillRecoveryTimer > 0f) return false;
+            return true;
+        }
+
+        void SuppressDodgeGravity()
+        {
+            _dodgeGravitySuppressed = true;
+            _rb.gravityScale = 0f;
+        }
+
+        void RestoreDodgeGravity()
+        {
+            if (!_dodgeGravitySuppressed) return;
+            _dodgeGravitySuppressed = false;
+            _rb.gravityScale = _defaultGravityScale;
         }
 
         public bool TryStartGrab()
@@ -620,6 +650,8 @@ namespace PromptFighters.Battle
             _grabCooldownTimer  = 0f;
             _isTryingGrab       = false;
             _dodgeTimer         = 0f;
+            _airDodgeUsed       = false;
+            RestoreDodgeGravity();
             _forcedSprite       = null;
             _forcedSpriteTimer  = 0f;
             _idleAnimTimer      = 0f;
@@ -687,6 +719,7 @@ namespace PromptFighters.Battle
         {
             if (State != FighterState.Dodging) return;
             if (_dodgeTimer > 0f) return;
+            RestoreDodgeGravity();
             _rb.linearVelocity = new Vector2(0f, _rb.linearVelocity.y);
             State = IsGrounded ? FighterState.Idle : FighterState.Falling;
         }
@@ -813,6 +846,7 @@ namespace PromptFighters.Battle
 
         void Die()
         {
+            RestoreDodgeGravity();
             State = FighterState.Dead;
             _rb.linearVelocity = Vector2.zero;
             OnDeath?.Invoke();

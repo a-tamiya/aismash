@@ -165,8 +165,10 @@ namespace PromptFighters.Battle
                 return _previousGuardHeld && (horizontalPressed || downPressed);
             }
 
+            if (ReadDodgePressed()) return true;
             return input.sqrMagnitude >= DodgeInputThreshold * DodgeInputThreshold &&
-                   (ReadDodgePressed() || (_previousGuardHeld && (horizontalPressed || verticalPressed)));
+                   _previousGuardHeld &&
+                   (horizontalPressed || verticalPressed);
         }
 
         bool ReadJumpPressed()
