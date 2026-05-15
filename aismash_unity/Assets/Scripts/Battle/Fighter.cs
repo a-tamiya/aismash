@@ -17,6 +17,9 @@ namespace PromptFighters.Battle
         public float airMoveSpeed = 4f;
         public float jumpForce = 12f;
         public int maxAirJumps = 1;
+        [Range(0.2f, 0.5f)] public float walkSpeedRatio = 0.35f;
+        [Range(0.3f, 0.6f)] public float airJumpHeightMultiplier = 0.45f;
+        [Range(0.5f, 0.95f)] public float dashInputThreshold = 0.75f;
         [Range(0.6f, 1.6f)] public float weight = 1f;
 
         [Header("Guard")]
@@ -306,22 +309,30 @@ namespace PromptFighters.Battle
         public void Move(float direction)
         {
             if (!CanAct) return;
+            float input = Mathf.Clamp(direction, -1f, 1f);
+            float absInput = Mathf.Abs(input);
             float baseSpeed = IsGrounded ? moveSpeed : airMoveSpeed;
-            float speed = baseSpeed * (_slowTimer > 0f ? _slowFactor : 1f);
-            _rb.linearVelocity = new Vector2(direction * speed, _rb.linearVelocity.y);
-            if      (direction >  0.1f && !FacingRight) Flip();
-            else if (direction < -0.1f &&  FacingRight) Flip();
+            float modeScale = absInput > 0.01f && absInput < dashInputThreshold
+                ? walkSpeedRatio
+                : 1f;
+            float speed = baseSpeed * modeScale * (_slowTimer > 0f ? _slowFactor : 1f);
+            float velocityX = absInput > 0.01f ? Mathf.Sign(input) * speed : 0f;
+            _rb.linearVelocity = new Vector2(velocityX, _rb.linearVelocity.y);
+            if      (input >  0.1f && !FacingRight) Flip();
+            else if (input < -0.1f &&  FacingRight) Flip();
         }
 
         public void Jump()
         {
             if (!CanAct) return;
+            float force = jumpForce;
             if (!IsGrounded)
             {
                 if (_airJumpsRemaining <= 0) return;
                 _airJumpsRemaining--;
+                force = jumpForce * Mathf.Sqrt(Mathf.Clamp(airJumpHeightMultiplier, 0.3f, 0.6f));
             }
-            _rb.linearVelocity = new Vector2(_rb.linearVelocity.x, jumpForce);
+            _rb.linearVelocity = new Vector2(_rb.linearVelocity.x, force);
         }
 
         public void SetGuard(bool guarding)

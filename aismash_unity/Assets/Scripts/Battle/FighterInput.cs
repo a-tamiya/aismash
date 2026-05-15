@@ -46,8 +46,13 @@ namespace PromptFighters.Battle
             }
 
             RecordSmashFlick();
-            float smashMultiplier = UpdateSmashCharge();
             bool guardHeld = ReadGuard();
+            float smashMultiplier = guardHeld ? 0f : UpdateSmashCharge();
+            if (guardHeld)
+            {
+                _smashHeld = false;
+                _smashCharge = 0f;
+            }
             if (_smashHeld)
             {
                 _fighter.ShowSmashCharge(_smashCharge / MaxSmashCharge);
@@ -58,6 +63,19 @@ namespace PromptFighters.Battle
             }
 
             Vector2 moveInput = ReadMoveVector();
+            bool jumpPressed = ReadJumpPressed();
+            bool grabPressed = ReadGrabPressed();
+
+            if (guardHeld && _fighter.IsGrounded && (jumpPressed || grabPressed))
+            {
+                _fighter.SetGuard(false);
+                if (jumpPressed) _fighter.Jump();
+                else _fighter.TryStartGrab();
+                _previousDodgeInput = moveInput;
+                _previousGuardHeld = guardHeld;
+                return;
+            }
+
             if (ShouldStartDodge(moveInput, guardHeld) && _fighter.TryDodge(moveInput))
             {
                 _previousDodgeInput = moveInput;
@@ -68,12 +86,12 @@ namespace PromptFighters.Battle
 
             _fighter.Move(moveInput.x);
             _fighter.SetGuard(guardHeld && _fighter.IsGrounded);
-            if (ReadJumpPressed()) _fighter.Jump();
-            if (ReadGrabPressed()) _fighter.TryStartGrab();
+            if (jumpPressed) _fighter.Jump();
+            if (grabPressed) _fighter.TryStartGrab();
             _previousGuardHeld = guardHeld;
 
             // スキルはEnded以外で使用可能
-            if (_skills != null)
+            if (_skills != null && !guardHeld)
             {
                 if (ReadSkillPressed(SkillSlot.AttackA)) _skills.TryUseSkill(SkillSlot.AttackA);
                 if (ReadSkillPressed(SkillSlot.AttackB)) _skills.TryUseSkill(SkillSlot.AttackB);
