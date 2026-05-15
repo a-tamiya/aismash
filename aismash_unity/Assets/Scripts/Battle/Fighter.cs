@@ -874,15 +874,33 @@ namespace PromptFighters.Battle
             if (Opponent == null || PlayerIndex >= Opponent.PlayerIndex) return;
             if (State == FighterState.Dead || Opponent.State == FighterState.Dead) return;
 
+            // ドッジ中は貫通させる（横回避・空中回避で回り込み可能）
+            if (IsDodging || Opponent.IsDodging) return;
+
             const float minDist = 0.78f;
             float dx = transform.position.x - Opponent.transform.position.x;
             if (Mathf.Abs(dx) >= minDist) return;
 
+            float dy = transform.position.y - Opponent.transform.position.y;
             float overlap = minDist - Mathf.Abs(dx);
-            float dir = dx >= 0f ? 1f : -1f;
-            var shift = new Vector3(dir * overlap * 0.5f, 0f, 0f);
-            transform.position += shift;
-            Opponent.transform.position -= shift;
+
+            if (Mathf.Abs(dy) < 0.5f)
+            {
+                // 同じ高さ帯：横に均等に押し合う（地上での押し合い）
+                float dir = dx >= 0f ? 1f : -1f;
+                var shift = new Vector3(dir * overlap * 0.5f, 0f, 0f);
+                transform.position += shift;
+                Opponent.transform.position -= shift;
+            }
+            else
+            {
+                // 縦にずれている場合：上にいる方だけを横にスライドさせ、乗り上げを防ぐ
+                // 下にいる方（ジャンプ先の相手）の移動は妨げない → 飛び越えは可能
+                Fighter upper = dy > 0f ? this : Opponent;
+                float velX = upper._rb != null ? upper._rb.linearVelocity.x : 0f;
+                float pushDir = Mathf.Abs(velX) > 0.3f ? Mathf.Sign(velX) : (upper.FacingRight ? 1f : -1f);
+                upper.transform.position += new Vector3(pushDir * overlap, 0f, 0f);
+            }
         }
 
         void ClampToStage()
