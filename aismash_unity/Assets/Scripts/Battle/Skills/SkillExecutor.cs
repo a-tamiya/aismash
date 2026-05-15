@@ -10,6 +10,8 @@ namespace PromptFighters.Battle.Skills
     {
         public SkillData[] skills = new SkillData[4]; // index = SkillSlot
         public bool autoEquipSampleSkills = true;
+        const float MeleeHitboxScale = 0.85f;
+        const float ProjectileVisualScale = 0.82f;
 
         Fighter _fighter;
         bool _isExecuting;
@@ -149,7 +151,7 @@ namespace PromptFighters.Battle.Skills
             float offsetY = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : baseOffset.y;
             float height = a.size_y > 0f ? a.size_y : DefaultHitboxHeight(skill.slot);
             Vector2 offset = new Vector2(dirSign * offsetX, offsetY);
-            Vector2 size   = new Vector2(range, height);
+            Vector2 size   = new Vector2(range * MeleeHitboxScale, height * MeleeHitboxScale);
             float lifetime = skill.parameters.active_time > 0f ? skill.parameters.active_time : 0.12f;
 
             var hb = Hitbox.Spawn(_fighter, (Vector2)_fighter.transform.position + offset, size, lifetime);
@@ -185,8 +187,8 @@ namespace PromptFighters.Battle.Skills
             p.Element        = skill.element;
             p.EffectSprite   = _fighter.GetEffectSprite(skill.slot);
             p.transform.localScale = new Vector3(
-                Mathf.Clamp(speed * lifetime * 0.08f, 0.75f, 1.8f),
-                Mathf.Clamp(a.size_y > 0f ? a.size_y * 0.55f : 0.75f, 0.55f, 1.35f),
+                Mathf.Clamp(speed * lifetime * 0.08f * ProjectileVisualScale, 0.62f, 1.45f),
+                Mathf.Clamp((a.size_y > 0f ? a.size_y * 0.55f : 0.75f) * ProjectileVisualScale, 0.45f, 1.05f),
                 1f);
         }
 

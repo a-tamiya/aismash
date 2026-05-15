@@ -33,12 +33,12 @@ namespace PromptFighters.Battle.Skills
 
             var col = go.AddComponent<BoxCollider2D>();
             col.isTrigger = true;
-            col.size      = new Vector2(1.2f, 0.75f);
+            col.size      = new Vector2(1.0f, 0.62f);
 
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sprite       = RuntimeSprite.Square();
             sr.sortingOrder = 10;
-            go.transform.localScale = new Vector3(0.85f, 0.65f, 1f);
+            go.transform.localScale = new Vector3(0.7f, 0.52f, 1f);
 
             var p = go.AddComponent<Projectile>();
             p.Owner     = owner;
@@ -74,8 +74,8 @@ namespace PromptFighters.Battle.Skills
             if (spriteSize.x <= 0f || spriteSize.y <= 0f) return;
 
             col.size = new Vector2(
-                Mathf.Clamp(spriteSize.x * 0.85f, 0.8f, 2.4f),
-                Mathf.Clamp(spriteSize.y * 0.75f, 0.55f, 1.6f));
+                Mathf.Clamp(spriteSize.x * 0.68f, 0.62f, 1.9f),
+                Mathf.Clamp(spriteSize.y * 0.6f, 0.42f, 1.25f));
             col.offset = new Vector2(0f, spriteSize.y * 0.05f);
         }
 
