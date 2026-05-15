@@ -189,7 +189,6 @@ namespace PromptFighters.UI
             // character name
             var nameGo = Make("CharName", card.transform);
             Anch(nameGo, 0,1,1,1, 44f,-32f,-8f,-8f);
-            var nameTmp = isP1 ? null : null;
             var nm = nameGo.AddComponent<TextMeshProUGUI>();
             nm.text = isP1 ? "1P" : "2P"; nm.fontSize = 18f; nm.fontStyle = FontStyles.Bold;
             nm.alignment = TextAlignmentOptions.Left; nm.color = TextWht;
