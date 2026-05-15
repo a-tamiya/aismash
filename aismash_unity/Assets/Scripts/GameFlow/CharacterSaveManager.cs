@@ -179,7 +179,7 @@ namespace PromptFighters.GameFlow
             sb.AppendLine();
             sb.AppendLine("  ],");
             sb.AppendLine($"  \"grab_parameters\": {{\"range\": {d.grabParameters.range}, \"startup\": {d.grabParameters.startup}, \"recovery\": {d.grabParameters.recovery}}},");
-            sb.AppendLine($"  \"throw_parameters\": {{\"front_damage\": {d.throwParameters.front_damage}, \"front_knockback\": {d.throwParameters.front_knockback}, \"back_damage\": {d.throwParameters.back_damage}, \"back_knockback\": {d.throwParameters.back_knockback}}}");
+            sb.AppendLine($"  \"throw_parameters\": {{\"front_damage\": {d.throwParameters.front_damage}, \"front_knockback\": {d.throwParameters.front_knockback}, \"back_damage\": {d.throwParameters.back_damage}, \"back_knockback\": {d.throwParameters.back_knockback}, \"up_damage\": {d.throwParameters.up_damage}, \"up_knockback\": {d.throwParameters.up_knockback}}}");
             sb.Append("}");
             return sb.ToString();
         }

@@ -49,21 +49,25 @@ namespace PromptFighters.Battle
             if (_fighter.IsGrabbed) return;
             if (_fighter.IsHoldingOpponent)
             {
-                float throwDir = ReadMove();
+                Vector2 throwInput = ReadMoveVector();
+                float throwDir = throwInput.x;
                 if (!_wasHoldingOpponent)
                 {
                     _wasHoldingOpponent = true;
-                    _throwInputReleasedAfterGrab = Mathf.Abs(throwDir) < ThrowNeutralThreshold;
+                    _throwInputReleasedAfterGrab = throwInput.magnitude < ThrowNeutralThreshold;
                 }
 
                 if (!_throwInputReleasedAfterGrab)
                 {
-                    if (Mathf.Abs(throwDir) < ThrowNeutralThreshold)
+                    if (throwInput.magnitude < ThrowNeutralThreshold)
                         _throwInputReleasedAfterGrab = true;
                     return;
                 }
 
-                if (throwDir > ThrowInputThreshold) _fighter.ThrowHeld(_fighter.FacingRight);
+                if (throwInput.y > ThrowInputThreshold &&
+                    throwInput.y >= Mathf.Abs(throwInput.x))
+                    _fighter.ThrowHeldUp();
+                else if (throwDir > ThrowInputThreshold) _fighter.ThrowHeld(_fighter.FacingRight);
                 else if (throwDir < -ThrowInputThreshold) _fighter.ThrowHeld(!_fighter.FacingRight);
                 return;
             }

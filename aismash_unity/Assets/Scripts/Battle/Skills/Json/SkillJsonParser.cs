@@ -100,8 +100,10 @@ namespace PromptFighters.Battle.Skills.Json
             data.grabParameters.recovery = Mathf.Clamp(data.grabParameters.recovery, 0.08f, 0.22f);
             data.throwParameters.front_damage = Mathf.Clamp(data.throwParameters.front_damage, 8f, 12f);
             data.throwParameters.back_damage = Mathf.Clamp(data.throwParameters.back_damage, 8f, 12f);
+            data.throwParameters.up_damage = Mathf.Clamp(data.throwParameters.up_damage, 8f, 12f);
             data.throwParameters.front_knockback = Mathf.Clamp(data.throwParameters.front_knockback, 6f, 12f);
             data.throwParameters.back_knockback = Mathf.Clamp(data.throwParameters.back_knockback, 6f, 14f);
+            data.throwParameters.up_knockback = Mathf.Clamp(data.throwParameters.up_knockback, 6f, 14f);
         }
 
         // ParseOrFallback: 失敗時はキャラ名だけ入れてサンプル技で構築

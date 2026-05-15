@@ -27,8 +27,8 @@ namespace PromptFighters.Battle
         public float maxGuardDurability = 65f;
         public float guardTimeDrainPerSecond = 18f;
         public float guardHitDamageRatio = 0.45f;
-        public float guardRecoveryPerSecond = 10f;
-        public float guardRecoveryDelay = 1.0f;
+        public float guardRecoveryPerSecond = 8f;
+        public float guardRecoveryDelay = 0f;
         public float guardBreakLockDuration = 5f;
 
         [Header("Dodge")]
@@ -92,6 +92,8 @@ namespace PromptFighters.Battle
         bool _isAirDodgeActive;
         bool _dodgeGravitySuppressed;
         int _airJumpsRemaining;
+        Collider2D _bodyCollider;
+        Collider2D _ignoredOpponentCollider;
 
         // 状態異常タイマー
         float _burnTimer;
@@ -139,7 +141,10 @@ namespace PromptFighters.Battle
             grabReleaseRecovery = Mathf.Clamp(grabReleaseRecovery, 0.08f, 0.16f);
             throwGrabCooldown = Mathf.Clamp(throwGrabCooldown, 0.25f, 0.6f);
             throwKnockbackScale = Mathf.Max(throwKnockbackScale, 1.1f);
+            guardRecoveryDelay = 0f;
+            guardRecoveryPerSecond = 8f;
             _rootSprite     = GetComponent<SpriteRenderer>();
+            _bodyCollider   = GetComponent<Collider2D>();
             EnsureVisualRenderer();
             ApplyColliderScaleCorrection();
             _skillExecutor  = GetComponent<SkillExecutor>();
@@ -510,6 +515,7 @@ namespace PromptFighters.Battle
             if (IsGrounded)
             {
                 _dodgeTimer = input.y < -0.35f && dir == 0f ? downDodgeDuration : dodgeDuration;
+                if (dir != 0f) IgnoreOpponentCollisionDuringDodge();
                 _rb.linearVelocity = new Vector2(dir * (groundDodgeDistance / Mathf.Max(0.05f, _dodgeTimer)), _rb.linearVelocity.y);
                 if (dir > 0.1f && !FacingRight) Flip();
                 else if (dir < -0.1f && FacingRight) Flip();
@@ -518,6 +524,7 @@ namespace PromptFighters.Battle
             {
                 _airDodgeUsed = true;
                 _dodgeTimer = dodgeDuration;
+                IgnoreOpponentCollisionDuringDodge();
                 if (input.sqrMagnitude >= 0.04f)
                 {
                     Vector2 airDirection = input.normalized;
@@ -539,7 +546,27 @@ namespace PromptFighters.Battle
             _forcedSpriteTimer = 0f;
             _forcedSprite = null;
             RestoreDodgeGravity();
+            RestoreOpponentCollision();
             State = FighterState.Idle;
+        }
+
+        void IgnoreOpponentCollisionDuringDodge()
+        {
+            if (_bodyCollider == null || Opponent == null) return;
+            var opponentCollider = Opponent._bodyCollider != null
+                ? Opponent._bodyCollider
+                : Opponent.GetComponent<Collider2D>();
+            if (opponentCollider == null) return;
+
+            _ignoredOpponentCollider = opponentCollider;
+            Physics2D.IgnoreCollision(_bodyCollider, _ignoredOpponentCollider, true);
+        }
+
+        void RestoreOpponentCollision()
+        {
+            if (_bodyCollider != null && _ignoredOpponentCollider != null)
+                Physics2D.IgnoreCollision(_bodyCollider, _ignoredOpponentCollider, false);
+            _ignoredOpponentCollider = null;
         }
 
         bool CanStartDodge()
@@ -661,6 +688,23 @@ namespace PromptFighters.Battle
             return true;
         }
 
+        public bool ThrowHeldUp()
+        {
+            if (_heldOpponent == null) return false;
+
+            Fighter target = _heldOpponent;
+            ReleaseHeldOpponent(applyRecovery: false);
+
+            float damage = throwParameters.up_damage;
+            float throwForce = throwParameters.up_knockback * throwKnockbackScale;
+            Vector3 releaseOffset = new Vector3(0f, throwReleaseOffset * 0.8f, 0f);
+            target.transform.position = transform.position + releaseOffset;
+            target.TakeDamage(damage, throwForce, Vector2.up, 0.15f, damage);
+            ShowGrabSprite(0.25f);
+            _grabCooldownTimer = Mathf.Max(_grabCooldownTimer, throwGrabCooldown);
+            return true;
+        }
+
         void ReleaseHeldOpponent(bool applyRecovery)
         {
             if (_heldOpponent == null) return;
@@ -703,6 +747,7 @@ namespace PromptFighters.Battle
             _airDodgeUsed       = false;
             _isAirDodgeActive   = false;
             RestoreDodgeGravity();
+            RestoreOpponentCollision();
             _forcedSprite       = null;
             _forcedSpriteTimer  = 0f;
             _idleAnimTimer      = 0f;
@@ -778,6 +823,7 @@ namespace PromptFighters.Battle
             if (State != FighterState.Dodging) return;
             if (_dodgeTimer > 0f) return;
             RestoreDodgeGravity();
+            RestoreOpponentCollision();
             _isAirDodgeActive = false;
             _rb.linearVelocity = new Vector2(0f, _rb.linearVelocity.y);
             State = IsGrounded ? FighterState.Idle : FighterState.Falling;

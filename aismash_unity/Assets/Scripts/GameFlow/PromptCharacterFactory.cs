@@ -80,6 +80,8 @@ namespace PromptFighters.GameFlow
                     front_knockback = src.throwParameters.front_knockback,
                     back_damage = src.throwParameters.back_damage,
                     back_knockback = src.throwParameters.back_knockback,
+                    up_damage = src.throwParameters.up_damage,
+                    up_knockback = src.throwParameters.up_knockback,
                 },
             };
 
