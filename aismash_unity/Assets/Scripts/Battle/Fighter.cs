@@ -33,7 +33,8 @@ namespace PromptFighters.Battle
         public float maxGrabHoldSeconds = 3f;
         public float grabReleaseRecovery = 0.35f;
         public float throwGrabCooldown = 1.0f;
-        [Range(0.1f, 1f)] public float throwKnockbackScale = 0.55f;
+        [Range(0.1f, 2f)] public float throwKnockbackScale = 1.1f;
+        public float throwReleaseOffset = 1.25f;
 
         [Header("Ground Check")]
         public Transform groundCheck;
@@ -114,6 +115,7 @@ namespace PromptFighters.Battle
             _rb             = GetComponent<Rigidbody2D>();
             _rb.constraints = RigidbodyConstraints2D.FreezeRotation;
             maxHP           = Mathf.Max(maxHP, 300f);
+            throwKnockbackScale = Mathf.Max(throwKnockbackScale, 1.1f);
             _rootSprite     = GetComponent<SpriteRenderer>();
             EnsureVisualRenderer();
             ApplyColliderScaleCorrection();
@@ -468,6 +470,7 @@ namespace PromptFighters.Battle
             else
             {
                 BeginSkillRecovery(grabParameters.recovery);
+                ShowGrabSprite(grabParameters.recovery);
             }
 
             _isTryingGrab = false;
@@ -492,6 +495,7 @@ namespace PromptFighters.Battle
             _rb.linearVelocity = Vector2.zero;
             _stunTimer = 0f;
             _controlLockTimer = 0f;
+            ForceSprite(CharacterSpriteId.Damage, 0.2f);
         }
 
         void TickGrab()
@@ -500,9 +504,11 @@ namespace PromptFighters.Battle
 
             _grabHoldTimer -= Time.deltaTime;
             _rb.linearVelocity = Vector2.zero;
+            ShowGrabSprite(0.12f);
             Vector3 holdOffset = new Vector3(FacingRight ? 0.75f : -0.75f, 0f, 0f);
             _heldOpponent.transform.position = transform.position + holdOffset;
             _heldOpponent._rb.linearVelocity = Vector2.zero;
+            _heldOpponent.ForceSprite(CharacterSpriteId.Damage, 0.12f);
 
             if (_grabHoldTimer <= 0f)
                 ReleaseHeldOpponent(applyRecovery: true);
@@ -522,7 +528,10 @@ namespace PromptFighters.Battle
             float knockback = forward ? throwParameters.front_knockback : throwParameters.back_knockback;
             float throwForce = knockback * throwKnockbackScale;
             Vector2 kb = new Vector2(direction, 0.25f);
+            Vector3 releaseOffset = new Vector3(direction * throwReleaseOffset, 0f, 0f);
+            target.transform.position = transform.position + releaseOffset;
             target.TakeDamage(damage, throwForce, kb, 0.15f, damage);
+            ShowGrabSprite(0.25f);
             _grabCooldownTimer = Mathf.Max(_grabCooldownTimer, throwGrabCooldown);
             return true;
         }
@@ -535,7 +544,11 @@ namespace PromptFighters.Battle
                 _heldOpponent.State = FighterState.Idle;
             _heldOpponent = null;
             _grabHoldTimer = 0f;
-            if (applyRecovery) BeginSkillRecovery(grabReleaseRecovery);
+            if (applyRecovery)
+            {
+                BeginSkillRecovery(grabReleaseRecovery);
+                ShowGrabSprite(grabReleaseRecovery);
+            }
         }
 
         public void BeginSkillRecovery(float seconds)
