@@ -479,6 +479,8 @@ namespace PromptFighters.Battle
             moveSpeed = Mathf.Clamp(stats.groundMoveSpeed, 2.5f, 9.5f);
             airMoveSpeed = Mathf.Clamp(stats.airMoveSpeed, 2.0f, 8.5f);
             jumpForce = Mathf.Clamp(stats.jumpForce, 7f, 19f);
+            airJumpHeightMultiplier = Mathf.Clamp(stats.airJumpHeightMultiplier, 0.3f, 0.6f);
+            walkSpeedRatio = Mathf.Clamp(stats.walkSpeedRatio, 0.2f, 0.5f);
             maxGuardDurability = Mathf.Clamp(stats.guardDurability, 40f, 90f);
             weight = Mathf.Clamp(stats.weight > 0f ? stats.weight : 1f / Mathf.Max(0.6f, stats.lightness), 0.6f, 1.6f);
             groundDodgeDistance = Mathf.Clamp(stats.groundDodgeDistance, 1.2f, 3.8f);
@@ -702,13 +704,19 @@ namespace PromptFighters.Battle
         }
 
         public void DebugSetBattleStats(float hp, float groundSpeed, float airSpeed,
-                                        float jump, float guard, float newWeight)
+                                        float jump, float guard, float newWeight,
+                                        float newWalkSpeedRatio = -1f,
+                                        float newAirJumpHeightMultiplier = -1f)
         {
             maxHP = Mathf.Clamp(hp, 1f, 900f);
             CurrentHP = Mathf.Clamp(CurrentHP, 0f, maxHP);
             moveSpeed = Mathf.Clamp(groundSpeed, 0f, 20f);
             airMoveSpeed = Mathf.Clamp(airSpeed, 0f, 20f);
             jumpForce = Mathf.Clamp(jump, 0f, 30f);
+            if (newWalkSpeedRatio >= 0f)
+                walkSpeedRatio = Mathf.Clamp(newWalkSpeedRatio, 0.2f, 0.5f);
+            if (newAirJumpHeightMultiplier >= 0f)
+                airJumpHeightMultiplier = Mathf.Clamp(newAirJumpHeightMultiplier, 0.3f, 0.6f);
             maxGuardDurability = Mathf.Clamp(guard, 1f, 200f);
             CurrentGuardDurability = Mathf.Clamp(CurrentGuardDurability, 0f, maxGuardDurability);
             weight = Mathf.Clamp(newWeight, 0.2f, 3f);

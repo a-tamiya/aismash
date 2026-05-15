@@ -60,6 +60,8 @@ namespace PromptFighters.GameFlow
                     groundMoveSpeed = src.stats.groundMoveSpeed,
                     airMoveSpeed = src.stats.airMoveSpeed,
                     jumpForce = src.stats.jumpForce,
+                    airJumpHeightMultiplier = src.stats.airJumpHeightMultiplier,
+                    walkSpeedRatio = src.stats.walkSpeedRatio,
                     guardDurability = src.stats.guardDurability,
                     lightness = src.stats.lightness,
                     weight = src.stats.weight,
@@ -123,6 +125,8 @@ namespace PromptFighters.GameFlow
                 stats.groundMoveSpeed = 8.2f;
                 stats.airMoveSpeed = 7.2f;
                 stats.jumpForce = 16.5f;
+                stats.airJumpHeightMultiplier = 0.55f;
+                stats.walkSpeedRatio = 0.45f;
                 stats.guardDurability = 55f;
                 stats.lightness = 1.65f;
                 stats.weight = 0.6f;
@@ -134,6 +138,8 @@ namespace PromptFighters.GameFlow
                 stats.groundMoveSpeed = 2.9f;
                 stats.airMoveSpeed = 2.3f;
                 stats.jumpForce = 8.0f;
+                stats.airJumpHeightMultiplier = 0.32f;
+                stats.walkSpeedRatio = 0.25f;
                 stats.guardDurability = 85f;
                 stats.lightness = 0.55f;
                 stats.weight = 1.75f;
@@ -145,6 +151,8 @@ namespace PromptFighters.GameFlow
                 stats.groundMoveSpeed = 5.4f;
                 stats.airMoveSpeed = 8.0f;
                 stats.jumpForce = 17.5f;
+                stats.airJumpHeightMultiplier = 0.60f;
+                stats.walkSpeedRatio = 0.35f;
                 stats.guardDurability = 60f;
                 stats.lightness = 1.5f;
                 stats.weight = 0.7f;

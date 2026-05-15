@@ -765,7 +765,8 @@ namespace PromptFighters.GameFlow
             var s = data.stats ?? new CharacterStats();
             var sb = new System.Text.StringBuilder();
             sb.AppendLine($"地上 {s.groundMoveSpeed:F1}  空中 {s.airMoveSpeed:F1}");
-            sb.AppendLine($"ジャンプ {s.jumpForce:F1}  ガード {s.guardDurability:F0}  軽さ {s.lightness:F2}");
+            sb.AppendLine($"ジャンプ {s.jumpForce:F1}  2段 {s.airJumpHeightMultiplier:F2}  歩き {s.walkSpeedRatio:F2}");
+            sb.AppendLine($"ガード {s.guardDurability:F0}  軽さ {s.lightness:F2}");
             sb.AppendLine($"回避 地上{s.groundDodgeDistance:F1}  空中{s.airDodgeDistance:F1}");
             for (int i = 0; i < data.skills.Length; i++)
             {
@@ -784,6 +785,8 @@ namespace PromptFighters.GameFlow
             return $"地上移動 {s.groundMoveSpeed:F1}\n" +
                    $"空中移動 {s.airMoveSpeed:F1}\n" +
                    $"ジャンプ {s.jumpForce:F1}\n" +
+                   $"2段ジャンプ倍率 {s.airJumpHeightMultiplier:F2}\n" +
+                   $"歩き速度倍率 {s.walkSpeedRatio:F2}\n" +
                    $"ガード耐久 {s.guardDurability:F0}\n" +
                    $"軽さ {s.lightness:F2} / 重さ {s.weight:F2}\n" +
                    $"回避距離 地上 {s.groundDodgeDistance:F1} / 空中 {s.airDodgeDistance:F1}";
