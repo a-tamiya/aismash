@@ -1960,7 +1960,7 @@ MonoBehaviour:
   fighter1SpawnPos: {x: -4, y: -1.8, z: 0}
   fighter2SpawnPos: {x: 4, y: -1.8, z: 0}
   nameplateOffset: {x: 0, y: 2.35, z: 0}
-  stageHalfWidth: 6.5
+  stageHalfWidth: 7
 --- !u!4 &819546708
 Transform:
   m_ObjectHideFlags: 0

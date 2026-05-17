@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using PromptFighters.Battle.Skills;
 using PromptFighters.Utils;
+using PromptFighters.UI;
 using System.Collections;
 
 namespace PromptFighters.Battle
@@ -66,6 +67,10 @@ namespace PromptFighters.Battle
                 gameObject.AddComponent<BattleLogger>();
             if (GetComponent<BattleDebugTuner>() == null)
                 gameObject.AddComponent<BattleDebugTuner>();
+            if (GetComponent<CommentaryController>() == null)
+                gameObject.AddComponent<CommentaryController>();
+            if (GetComponent<AngelController>() == null)
+                gameObject.AddComponent<AngelController>();
         }
 
         void Start()

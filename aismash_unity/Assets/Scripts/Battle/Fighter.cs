@@ -126,6 +126,11 @@ namespace PromptFighters.Battle
         static readonly Color SlowColor       = new Color(0.6f, 0.8f, 1f);
         static readonly Color GuardBreakColor = new Color(0.6f, 0.3f, 0.7f);
 
+        // ====== ギミック用プロパティ ======
+        public float DamageMultiplier { get; private set; } = 1f;
+        public bool  IsInvincible     { get; private set; }
+        public bool  InputReversed    { get; private set; }
+
         public bool CanAct =>
             State != FighterState.Guarding &&
             State != FighterState.Dodging &&
@@ -383,8 +388,10 @@ namespace PromptFighters.Battle
             if (State == FighterState.Dead) return;
             if (State == FighterState.Dodging || _dodgeTimer > 0f) return;
             if (_grabbedBy != null) return;
+            if (IsInvincible) return;
 
             bool blocking = State == FighterState.Guarding && _guardBreakTimer <= 0f;
+            if (!blocking && Opponent != null) damage *= Opponent.DamageMultiplier;
             float actual  = blocking ? Mathf.Max(0f, damage * guardDamageRatio) : damage;
             CurrentHP     = Mathf.Max(0f, CurrentHP - actual);
             OnHPChanged?.Invoke(CurrentHP, maxHP);
@@ -999,6 +1006,71 @@ namespace PromptFighters.Battle
             var s = transform.localScale;
             s.x *= -1f;
             transform.localScale = s;
+        }
+
+        // ====== ギミック用メソッド ======
+
+        public void HealHP(float amount)
+        {
+            if (State == FighterState.Dead) return;
+            CurrentHP = Mathf.Min(maxHP, CurrentHP + amount);
+            OnHPChanged?.Invoke(CurrentHP, maxHP);
+            DamagePopup.SpawnText(transform.position, $"+{amount:0}", new Color(0.4f, 1f, 0.4f), 1.6f);
+        }
+
+        public void StartTemporarySpeedChange(float multiplier, float duration)
+            => StartCoroutine(TemporarySpeedChange(multiplier, duration));
+
+        public void StartTemporaryJumpChange(float multiplier, float duration)
+            => StartCoroutine(TemporaryJumpChange(multiplier, duration));
+
+        public void StartTemporaryDamageBoost(float multiplier, float duration)
+            => StartCoroutine(TemporaryDamageBoost(multiplier, duration));
+
+        public void StartTemporaryInvincible(float duration)
+            => StartCoroutine(TemporaryInvincible(duration));
+
+        public void StartTemporaryChaos(float duration)
+            => StartCoroutine(TemporaryChaos(duration));
+
+        System.Collections.IEnumerator TemporarySpeedChange(float multiplier, float duration)
+        {
+            float origGround = moveSpeed;
+            float origAir    = airMoveSpeed;
+            moveSpeed    = origGround * multiplier;
+            airMoveSpeed = origAir * multiplier;
+            yield return new WaitForSeconds(duration);
+            moveSpeed    = origGround;
+            airMoveSpeed = origAir;
+        }
+
+        System.Collections.IEnumerator TemporaryJumpChange(float multiplier, float duration)
+        {
+            float orig = jumpForce;
+            jumpForce  = orig * multiplier;
+            yield return new WaitForSeconds(duration);
+            jumpForce  = orig;
+        }
+
+        System.Collections.IEnumerator TemporaryDamageBoost(float multiplier, float duration)
+        {
+            DamageMultiplier = multiplier;
+            yield return new WaitForSeconds(duration);
+            DamageMultiplier = 1f;
+        }
+
+        System.Collections.IEnumerator TemporaryInvincible(float duration)
+        {
+            IsInvincible = true;
+            yield return new WaitForSeconds(duration);
+            IsInvincible = false;
+        }
+
+        System.Collections.IEnumerator TemporaryChaos(float duration)
+        {
+            InputReversed = true;
+            yield return new WaitForSeconds(duration);
+            InputReversed = false;
         }
 
         void OnDrawGizmosSelected()

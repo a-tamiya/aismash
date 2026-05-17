@@ -111,7 +111,8 @@ namespace PromptFighters.Battle
             }
             _previousDodgeInput = moveInput;
 
-            _fighter.Move(moveInput.x);
+            float moveX = _fighter.InputReversed ? -moveInput.x : moveInput.x;
+            _fighter.Move(moveX);
             _fighter.SetGuard(guardHeld && _fighter.IsGrounded);
             if (jumpPressed) _fighter.Jump();
             if (grabPressed) _fighter.TryStartGrab();
@@ -246,7 +247,7 @@ namespace PromptFighters.Battle
             if (kb != null)
             {
                 if (playerIndex == 0 && kb.leftShiftKey.isPressed)  return true;
-                if (playerIndex == 1 && kb.rightShiftKey.isPressed) return true;
+                if (playerIndex == 1 && kb.rightCtrlKey.isPressed) return true;
             }
             var gp = GetGamepad();
             return gp != null && (gp.rightShoulder.isPressed || gp.rightTrigger.isPressed);
@@ -258,7 +259,7 @@ namespace PromptFighters.Battle
             if (kb != null)
             {
                 if (playerIndex == 0 && kb.leftShiftKey.wasPressedThisFrame)  return true;
-                if (playerIndex == 1 && kb.rightShiftKey.wasPressedThisFrame) return true;
+                if (playerIndex == 1 && kb.rightCtrlKey.wasPressedThisFrame) return true;
             }
 
             var gp = GetGamepad();
