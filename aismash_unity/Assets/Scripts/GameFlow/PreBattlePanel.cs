@@ -73,6 +73,15 @@ namespace PromptFighters.GameFlow
         RectTransform _startButtonRect;
         bool _waitForMenuInputRelease;
 
+        // AI機能トグル
+        Image _commentaryToggleBg;
+        TextMeshProUGUI _commentaryToggleLabel;
+        Image _angelToggleBg;
+        TextMeshProUGUI _angelToggleLabel;
+
+        static readonly Color ToggleOnColor  = new Color(0.15f, 0.55f, 0.9f, 1f);
+        static readonly Color ToggleOffColor = new Color(0.18f, 0.18f, 0.22f, 1f);
+
         void Awake()
         {
             EnsureInputSystemUIInputModule();
@@ -243,9 +252,56 @@ namespace PromptFighters.GameFlow
             MakeLabel(_titlePanel.transform, "StartHelp", "スペース / エンターキー",
                 new Vector2(0, -178), new Vector2(320, 24), 13, new Color(0.8f, 0.88f, 1f));
 
+            // AI機能トグルボタン
+            MakeLabel(_titlePanel.transform, "AiToggleLabel", "AI機能",
+                new Vector2(-100f, -220f), new Vector2(80f, 24f), 13, new Color(0.72f, 0.84f, 1f));
+
+            var commentaryBtn = MakeButton(_titlePanel.transform, "CommentaryToggle",
+                CommentaryToggleText(),
+                new Vector2(20f, -220f), new Vector2(150f, 34f),
+                OnCommentaryToggle, ToggleOnColor);
+            _commentaryToggleBg   = commentaryBtn.GetComponent<Image>();
+            _commentaryToggleLabel = commentaryBtn.GetComponentInChildren<TextMeshProUGUI>();
+
+            var angelBtn = MakeButton(_titlePanel.transform, "AngelToggle",
+                AngelToggleText(),
+                new Vector2(180f, -220f), new Vector2(150f, 34f),
+                OnAngelToggle, ToggleOnColor);
+            _angelToggleBg   = angelBtn.GetComponent<Image>();
+            _angelToggleLabel = angelBtn.GetComponentInChildren<TextMeshProUGUI>();
+
+            RefreshToggleVisuals();
+
             MakeLabel(_titlePanel.transform, "Footer",
                 "1P: WASD + J/K/L/G    スマッシュ: A/Dはじき+J    2P: 矢印 + テンキー2/3/1/0",
                 new Vector2(0, -286), new Vector2(760, 28), 12, new Color(0.76f, 0.82f, 0.9f));
+        }
+
+        static string CommentaryToggleText() =>
+            PromptFighters.UI.CommentaryController.Enabled ? "実況 ON" : "実況 OFF";
+        static string AngelToggleText() =>
+            PromptFighters.UI.AngelController.Enabled ? "天使 ON" : "天使 OFF";
+
+        void OnCommentaryToggle()
+        {
+            PromptFighters.UI.CommentaryController.Enabled = !PromptFighters.UI.CommentaryController.Enabled;
+            RefreshToggleVisuals();
+        }
+
+        void OnAngelToggle()
+        {
+            PromptFighters.UI.AngelController.Enabled = !PromptFighters.UI.AngelController.Enabled;
+            RefreshToggleVisuals();
+        }
+
+        void RefreshToggleVisuals()
+        {
+            bool ce = PromptFighters.UI.CommentaryController.Enabled;
+            bool ae = PromptFighters.UI.AngelController.Enabled;
+            if (_commentaryToggleBg  != null) _commentaryToggleBg.color  = ce ? ToggleOnColor  : ToggleOffColor;
+            if (_commentaryToggleLabel != null) _commentaryToggleLabel.text = CommentaryToggleText();
+            if (_angelToggleBg       != null) _angelToggleBg.color       = ae ? ToggleOnColor  : ToggleOffColor;
+            if (_angelToggleLabel    != null) _angelToggleLabel.text    = AngelToggleText();
         }
 
         void BuildPanel()

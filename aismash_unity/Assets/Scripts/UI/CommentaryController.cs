@@ -11,6 +11,8 @@ namespace PromptFighters.UI
     // BattleManager の Awake で AddComponent される。
     public class CommentaryController : MonoBehaviour
     {
+        public static bool Enabled = true;
+
         public float commentaryInterval = 17f; // 実況間隔（秒）
 
         CanvasGroup _group;
@@ -29,7 +31,6 @@ namespace PromptFighters.UI
 
         void Start()
         {
-            // 既に対戦中だった場合（ドメインリロード後など）はすぐループ開始
             if (_bm != null && _bm.Phase == BattlePhase.Fighting)
                 OnBattleStart();
         }
@@ -93,6 +94,7 @@ namespace PromptFighters.UI
 
         void OnBattleStart()
         {
+            if (!Enabled) return;
             if (_loopRoutine != null) StopCoroutine(_loopRoutine);
             _loopRoutine = StartCoroutine(CommentaryLoop());
         }

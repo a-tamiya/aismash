@@ -13,6 +13,8 @@ namespace PromptFighters.UI
     // BattleManager の Awake で AddComponent される。
     public class AngelController : MonoBehaviour
     {
+        public static bool Enabled = true;
+
         public float recordSeconds = 3f;
         public float cooldownTime  = 30f;
 
@@ -43,6 +45,7 @@ namespace PromptFighters.UI
             var kb = Keyboard.current;
             if (kb == null) return;
 
+            if (!Enabled) return;
             if (_bm == null || _bm.Phase != BattlePhase.Fighting) return;
 
             // Tabキーで起動（クールダウン中・処理中は無効）
