@@ -10,7 +10,7 @@ namespace PromptFighters.Battle.Skills
     {
         public SkillData[] skills = new SkillData[4]; // index = SkillSlot
         public bool autoEquipSampleSkills = true;
-        const float HitboxVisualScale = 1f;
+        const float HitboxVisualScale = 0.9f;
 
         Fighter _fighter;
         bool _isExecuting;
@@ -220,6 +220,7 @@ namespace PromptFighters.Battle.Skills
         Hitbox SpawnConfiguredHitbox(SkillData skill, SkillAction a, float powerMultiplier,
                                      Vector2 position, Vector2 size, float lifetime)
         {
+            size *= HitboxVisualScale;
             var hb = Hitbox.Spawn(_fighter, position, size, lifetime);
             float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) * powerMultiplier;
             hb.Damage         = dmg;
@@ -259,8 +260,8 @@ namespace PromptFighters.Battle.Skills
             p.EffectSprite   = _fighter.GetEffectSprite(skill.slot);
             p.FlipEffectX    = !_fighter.FacingRight;
             p.DesiredWorldSize = new Vector2(
-                a.size_x > 0f ? a.size_x : Mathf.Clamp(speed * lifetime * 0.08f, 0.74f, 1.74f),
-                a.size_y > 0f ? a.size_y : 0.75f);
+                (a.size_x > 0f ? a.size_x : Mathf.Clamp(speed * lifetime * 0.08f, 0.74f, 1.74f)) * HitboxVisualScale,
+                (a.size_y > 0f ? a.size_y : 0.75f) * HitboxVisualScale);
         }
 
         static Vector2 DefaultMeleeOffset(SkillSlot slot, float range)

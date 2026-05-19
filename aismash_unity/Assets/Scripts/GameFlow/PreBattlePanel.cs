@@ -574,11 +574,11 @@ namespace PromptFighters.GameFlow
             var nameInput = MakeInputField(parent, isP1 ? "P1GenerateNameInput" : "P2GenerateNameInput",
                 "キャラクター名", new Vector2(cx, 220f), new Vector2(430f, 48f), false);
             var featureInput = MakeInputField(parent, isP1 ? "P1GenerateFeatureInput" : "P2GenerateFeatureInput",
-                "特徴・見た目・戦い方", new Vector2(cx, 80f), new Vector2(430f, 160f), true);
+                "特徴・見た目・戦い方", new Vector2(cx, 55f), new Vector2(430f, 210f), true);
 
             MakeLabel(parent, isP1 ? "P1GenNote" : "P2GenNote",
                 "例: 雷をまとった小柄な剣士。素早く跳び回り、遠距離から雷を飛ばす。",
-                new Vector2(cx, -40f), new Vector2(430f, 54f), 13f, new Color(0.72f, 0.78f, 0.9f));
+                new Vector2(cx, -78f), new Vector2(430f, 54f), 13f, new Color(0.72f, 0.78f, 0.9f));
 
             if (isP1)
             {
@@ -1451,7 +1451,7 @@ namespace PromptFighters.GameFlow
             text.color = Color.white;
             text.alignment = multiline ? TextAlignmentOptions.TopLeft : TextAlignmentOptions.Left;
             text.textWrappingMode = multiline ? TextWrappingModes.Normal : TextWrappingModes.NoWrap;
-            text.overflowMode = TextOverflowModes.Ellipsis;
+            text.overflowMode = multiline ? TextOverflowModes.Overflow : TextOverflowModes.Ellipsis;
             UITheme.Apply(text);
 
             var placeholderGo = CreateUIObject("Placeholder", viewport.transform);
@@ -1472,7 +1472,7 @@ namespace PromptFighters.GameFlow
             input.lineType = multiline
                 ? TMP_InputField.LineType.MultiLineNewline
                 : TMP_InputField.LineType.SingleLine;
-            input.characterLimit = multiline ? 120 : 28;
+            input.characterLimit = multiline ? 300 : 36;
             input.caretColor = Color.white;
             input.selectionColor = new Color(0.35f, 0.55f, 1f, 0.45f);
             return input;

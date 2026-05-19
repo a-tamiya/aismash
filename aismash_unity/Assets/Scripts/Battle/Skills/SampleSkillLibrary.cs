@@ -18,7 +18,7 @@ namespace PromptFighters.Battle.Skills
             {
                 damage = 4, range = 1.3f, startup = 0.04f, active_time = 0.1f,
                 recovery = 0.24f, hit_count = 3,
-                knockback = 3f, stun_time = 0.1f, guard_damage = 2f,
+                knockback = 3f, stun_time = 0.1f, guard_damage = 1.1f,
             },
             actions = new List<SkillAction>
             {
@@ -39,7 +39,7 @@ namespace PromptFighters.Battle.Skills
             {
                 damage = 10, range = 12f, startup = 0.08f, active_time = 0.1f,
                 recovery = 0.34f, hit_count = 1,
-                knockback = 5f, stun_time = 0.15f, guard_damage = 3f,
+                knockback = 5f, stun_time = 0.15f, guard_damage = 1.5f,
             },
             actions = new List<SkillAction>
             {
@@ -64,7 +64,7 @@ namespace PromptFighters.Battle.Skills
             {
                 damage = 8, range = 1.5f, startup = 0.06f, active_time = 0.12f,
                 recovery = 0.55f, hit_count = 1,
-                knockback = 4f, stun_time = 0.4f, guard_damage = 2f,
+                knockback = 4f, stun_time = 0.4f, guard_damage = 1.2f,
             },
             actions = new List<SkillAction>
             {
@@ -89,7 +89,7 @@ namespace PromptFighters.Battle.Skills
             {
                 damage = 7, range = 2.2f, startup = 0.12f, active_time = 0.12f,
                 recovery = 0.62f, hit_count = 1,
-                knockback = 4f, stun_time = 0.12f, guard_damage = 3f,
+                knockback = 4f, stun_time = 0.12f, guard_damage = 1.5f,
             },
             actions = new List<SkillAction>
             {
@@ -113,7 +113,7 @@ namespace PromptFighters.Battle.Skills
             {
                 damage = 24, range = 2f, startup = 0.15f, active_time = 0.15f,
                 recovery = 0.46f, hit_count = 1,
-                knockback = 10f, stun_time = 0.3f, guard_damage = 8f,
+                knockback = 10f, stun_time = 0.3f, guard_damage = 4.5f,
             },
             actions = new List<SkillAction>
             {

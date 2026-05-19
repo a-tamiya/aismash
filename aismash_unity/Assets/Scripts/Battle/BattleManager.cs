@@ -32,7 +32,7 @@ namespace PromptFighters.Battle
         public Vector3 fighter2SpawnPos = new Vector3( 4f, -1.8f, 0f);
         public Vector3 nameplateOffset = new Vector3(0f, 2.35f, 0f);
         public float stageHalfWidth = 6.5f;
-        [Range(0.6f, 1.35f)] public float fighterScale = 1.26f;
+        [Range(0.6f, 1.2f)] public float fighterScale = 1.12f;
 
         public float       TimeRemaining { get; private set; }
         public BattlePhase Phase         { get; private set; } = BattlePhase.Setup;
@@ -62,7 +62,7 @@ namespace PromptFighters.Battle
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             battleDuration = Mathf.Max(battleDuration, 180f);
-            fighterScale = Mathf.Clamp(fighterScale, 1.26f, 1.35f);
+            fighterScale = Mathf.Clamp(fighterScale, 1.08f, 1.12f);
             if (GetComponent<BattleLogger>() == null)
                 gameObject.AddComponent<BattleLogger>();
             if (GetComponent<BattleDebugTuner>() == null)

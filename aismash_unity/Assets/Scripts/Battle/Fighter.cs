@@ -26,7 +26,7 @@ namespace PromptFighters.Battle
         [Range(0f, 1f)] public float guardDamageRatio = 0f;
         public float maxGuardDurability = 65f;
         public float guardTimeDrainPerSecond = 18f;
-        public float guardHitDamageRatio = 0.45f;
+        public float guardHitDamageRatio = 0.25f;
         public float guardRecoveryPerSecond = 8f;
         public float guardRecoveryDelay = 0f;
         public float guardBreakLockDuration = 5f;
@@ -158,6 +158,7 @@ namespace PromptFighters.Battle
             throwKnockbackScale = Mathf.Max(throwKnockbackScale, 1.1f);
             guardRecoveryDelay = 0f;
             guardRecoveryPerSecond = 8f;
+            guardHitDamageRatio = Mathf.Min(guardHitDamageRatio, 0.25f);
             _rootSprite     = GetComponent<SpriteRenderer>();
             _bodyCollider   = GetComponent<Collider2D>();
             EnsureVisualRenderer();
