@@ -38,6 +38,10 @@ namespace PromptFighters.UI
         TextMeshProUGUI _effectLabel;
         Coroutine       _effectFade;
 
+        // 下部字幕欄（天使の発言）
+        CanvasGroup     _subtitleGroup;
+        TextMeshProUGUI _subtitleLabel;
+
         AudioSource _audioSource;
 
         void Awake()
@@ -91,6 +95,7 @@ namespace PromptFighters.UI
             // 1. 退屈メッセージを表示 + TTS
             string boredMsg = BoredMessages[Random.Range(0, BoredMessages.Length)];
             ShowBanner("[ 天使降臨中 ]", boredMsg);
+            ShowSubtitle(boredMsg);
 
             bool ttsDone = false;
             AITTSClient.Speak(this, boredMsg, _audioSource,
@@ -127,6 +132,7 @@ namespace PromptFighters.UI
 
             // 4. ギミック適用 + バナー更新 + 中央大表示 + TTS
             ShowBanner("[ 気まぐれ天使 ]", gimmick.message);
+            ShowSubtitle(gimmick.message);
             _applier.Apply(gimmick, _bm?.fighter1, _bm?.fighter2);
             ShowEffectCenter(BuildEffectText(gimmick));
             AITTSClient.Speak(this, gimmick.message, _audioSource,
@@ -136,6 +142,7 @@ namespace PromptFighters.UI
 
             yield return new WaitForSeconds(4f);
             HideBanner();
+            HideSubtitle();
 
             _busy = false;
         }
@@ -210,6 +217,14 @@ namespace PromptFighters.UI
 
         void HideBanner() => _bannerGroup.alpha = 0f;
 
+        void ShowSubtitle(string text)
+        {
+            _subtitleLabel.text  = text;
+            _subtitleGroup.alpha = 1f;
+        }
+
+        void HideSubtitle() => _subtitleGroup.alpha = 0f;
+
         void BuildUI()
         {
             var canvasGo = new GameObject("AngelCanvas");
@@ -244,7 +259,7 @@ namespace PromptFighters.UI
             bannerRect.anchorMin        = new Vector2(0f, 1f);
             bannerRect.anchorMax        = new Vector2(1f, 1f);
             bannerRect.pivot            = new Vector2(0.5f, 1f);
-            bannerRect.anchoredPosition = new Vector2(0f, -20f);
+            bannerRect.anchoredPosition = new Vector2(0f, -90f);  // HPバー(~74px)の下
             bannerRect.sizeDelta        = new Vector2(0f, 160f);
 
             _bannerGroup       = bannerGo.AddComponent<CanvasGroup>();
@@ -303,6 +318,38 @@ namespace PromptFighters.UI
             UITheme.Apply(_effectLabel, 80f, FontStyles.Bold);
             _effectLabel.color     = new Color(1f, 0.95f, 0.3f);
             _effectLabel.alignment = TextAlignmentOptions.Center;
+
+            // ── 下部字幕欄（天使の発言）──
+            var subGo = new GameObject("AngelSubtitle");
+            subGo.transform.SetParent(canvasGo.transform, false);
+
+            var subRect = subGo.AddComponent<RectTransform>();
+            subRect.anchorMin        = new Vector2(0f, 0f);
+            subRect.anchorMax        = new Vector2(1f, 0f);
+            subRect.pivot            = new Vector2(0.5f, 0f);
+            subRect.anchoredPosition = Vector2.zero;
+            subRect.sizeDelta        = new Vector2(0f, 90f);
+
+            _subtitleGroup       = subGo.AddComponent<CanvasGroup>();
+            _subtitleGroup.alpha = 0f;
+
+            var subBg = subGo.AddComponent<UnityEngine.UI.Image>();
+            subBg.color = new Color(0f, 0f, 0f, 0.55f);
+
+            var subTextGo = new GameObject("SubtitleText");
+            subTextGo.transform.SetParent(subGo.transform, false);
+            var subTextRect = subTextGo.AddComponent<RectTransform>();
+            subTextRect.anchorMin = Vector2.zero;
+            subTextRect.anchorMax = Vector2.one;
+            subTextRect.offsetMin = new Vector2(24f, 8f);
+            subTextRect.offsetMax = new Vector2(-24f, -8f);
+
+            _subtitleLabel = subTextGo.AddComponent<TextMeshProUGUI>();
+            UITheme.Apply(_subtitleLabel, 40f);
+            _subtitleLabel.color            = new Color(1f, 0.95f, 0.35f);
+            _subtitleLabel.alignment        = TextAlignmentOptions.Center;
+            _subtitleLabel.textWrappingMode = TextWrappingModes.Normal;
+            _subtitleLabel.overflowMode     = TextOverflowModes.Truncate;
 
             _audioSource             = canvasGo.AddComponent<AudioSource>();
             _audioSource.playOnAwake = false;

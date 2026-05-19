@@ -247,7 +247,7 @@ namespace PromptFighters.UI
 
             const float STRIPE = 3f;
             const float IPAD   = 5f;
-            const float NUM_W  = 58f;
+            const float NUM_W  = 76f;
             const float NAME_H = 17f;
             const float GUARD_H= 7f;
             Color pCol = isP1 ? P1Col : P2Col;
