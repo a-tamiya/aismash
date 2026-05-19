@@ -10,18 +10,21 @@ namespace PromptFighters.AI
     {
         const string Endpoint = "https://api.openai.com/v1/audio/speech";
         const string Model    = "tts-1";
-        const string Voice    = "nova"; // 日本語対応
+        public const string DefaultVoice    = "nova";
+        public const string CommentaryVoice = "onyx";    // 男性寄り
+        public const string AngelVoice      = "shimmer"; // 明るく天使っぽい印象
 
         public static Coroutine Speak(MonoBehaviour runner, string text,
             AudioSource audioSource,
             Action onComplete = null,
-            Action<string> onError = null)
+            Action<string> onError = null,
+            string voice = DefaultVoice)
         {
-            return runner.StartCoroutine(SpeakCoroutine(text, audioSource, onComplete, onError));
+            return runner.StartCoroutine(SpeakCoroutine(text, audioSource, onComplete, onError, voice));
         }
 
         static IEnumerator SpeakCoroutine(string text, AudioSource audioSource,
-            Action onComplete, Action<string> onError)
+            Action onComplete, Action<string> onError, string voice)
         {
             string key = AIImageClient.ApiKey;
             if (!AIImageClient.IsConfiguredApiKey(key))
@@ -35,7 +38,7 @@ namespace PromptFighters.AI
             string body =
                 $"{{\"model\":\"{Model}\"," +
                 $"\"input\":\"{safeText}\"," +
-                $"\"voice\":\"{Voice}\"," +
+                $"\"voice\":\"{SanitizeVoice(voice)}\"," +
                 $"\"response_format\":\"wav\"}}";
 
             using var req = new UnityWebRequest(Endpoint, "POST");
@@ -64,6 +67,11 @@ namespace PromptFighters.AI
             }
 
             onComplete?.Invoke();
+        }
+
+        static string SanitizeVoice(string voice)
+        {
+            return string.IsNullOrWhiteSpace(voice) ? DefaultVoice : voice;
         }
 
         // WAVバイト列（PCM16）を AudioClip に変換する

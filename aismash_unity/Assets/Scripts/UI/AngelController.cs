@@ -120,7 +120,8 @@ namespace PromptFighters.UI
 
             // TTSでセリフ読み上げ（失敗しても続行）
             AITTSClient.Speak(this, gimmick.message, _audioSource,
-                onError: err => Debug.LogWarning("[AngelTTS] " + err));
+                onError: err => Debug.LogWarning("[AngelTTS] " + err),
+                voice: AITTSClient.AngelVoice);
 
             yield return new WaitForSeconds(4f);
             HidePanel();

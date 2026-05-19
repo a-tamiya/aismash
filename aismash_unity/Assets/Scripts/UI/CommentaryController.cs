@@ -137,7 +137,8 @@ namespace PromptFighters.UI
 
             ShowText(result);
             AITTSClient.Speak(this, result, _audioSource,
-                onError: err => Debug.LogWarning("[CommentaryTTS] " + err));
+                onError: err => Debug.LogWarning("[CommentaryTTS] " + err),
+                voice: AITTSClient.CommentaryVoice);
 
             _isGenerating = false;
         }
