@@ -22,6 +22,7 @@ namespace PromptFighters.Battle.Skills
         public int          MaxHits  = 1;
         public float        Lifetime = 0.1f;
         public bool         FollowOwner;
+        public bool         HideVisual;
         public Vector2      OwnerLocalOffset;
         public Vector2      DesiredWorldSize;
 
@@ -54,7 +55,11 @@ namespace PromptFighters.Battle.Skills
         {
             Color ec = SkillEnumParser.ElementColor(Element);
             var sr = GetComponent<SpriteRenderer>();
-            if (EffectSprite != null)
+            if (HideVisual)
+            {
+                if (sr != null) sr.enabled = false;
+            }
+            else if (EffectSprite != null)
             {
                 sr.sprite = EffectSprite;
                 sr.color = Color.white;

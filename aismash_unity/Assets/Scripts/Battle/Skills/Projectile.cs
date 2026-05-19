@@ -17,6 +17,7 @@ namespace PromptFighters.Battle.Skills
         public Element    Element = Element.None;
         public Sprite     EffectSprite;
         public bool       FlipEffectX;
+        public bool       HideVisual;
         public float      Speed     = 8f;
         public float      Lifetime  = 2f;
         public Vector2    Direction = Vector2.right;
@@ -53,7 +54,12 @@ namespace PromptFighters.Battle.Skills
         void Start()
         {
             var sr = GetComponent<SpriteRenderer>();
-            if (EffectSprite != null)
+            if (HideVisual)
+            {
+                if (sr != null) sr.enabled = false;
+                FitColliderToDesiredWorldSize();
+            }
+            else if (EffectSprite != null)
             {
                 sr.sprite = EffectSprite;
                 sr.color = Color.white;
@@ -67,6 +73,18 @@ namespace PromptFighters.Battle.Skills
             }
             GetComponent<Rigidbody2D>().linearVelocity = Direction * Speed;
             Destroy(gameObject, Lifetime);
+        }
+
+        void FitColliderToDesiredWorldSize()
+        {
+            var col = GetComponent<BoxCollider2D>();
+            if (col == null) return;
+            col.size = Vector2.one;
+            col.offset = Vector2.zero;
+            transform.localScale = new Vector3(
+                Mathf.Max(0.05f, DesiredWorldSize.x),
+                Mathf.Max(0.05f, DesiredWorldSize.y),
+                1f);
         }
 
         void FitColliderAndVisualToWorldSize(SpriteRenderer sr)

@@ -230,6 +230,7 @@ namespace PromptFighters.Battle.Skills
             hb.GuardDamage    = skill.parameters.guard_damage;
             hb.Element        = skill.element;
             hb.EffectSprite   = a.hide_effect ? null : _fighter.GetEffectSprite(skill.slot);
+            hb.HideVisual     = a.hide_effect;
             hb.FlipEffectX    = !_fighter.FacingRight;
             hb.MaxHits        = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
             ApplyActionStatus(hb, a);
@@ -293,6 +294,7 @@ namespace PromptFighters.Battle.Skills
             hb.GuardDamage    = skill.parameters.guard_damage;
             hb.Element        = skill.element;
             hb.EffectSprite   = a.hide_effect ? null : _fighter.GetEffectSprite(skill.slot);
+            hb.HideVisual     = a.hide_effect;
             hb.FlipEffectX    = !_fighter.FacingRight;
             hb.MaxHits        = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
             ApplyActionStatus(hb, a);
@@ -321,6 +323,7 @@ namespace PromptFighters.Battle.Skills
             p.StatusChance   = Mathf.Clamp01(a.chance);
             p.Element        = skill.element;
             p.EffectSprite   = a.hide_effect ? null : _fighter.GetEffectSprite(skill.slot);
+            p.HideVisual     = a.hide_effect;
             p.FlipEffectX    = !_fighter.FacingRight;
             p.DesiredWorldSize = new Vector2(
                 (a.size_x > 0f ? a.size_x : Mathf.Clamp(speed * lifetime * 0.08f, 0.74f, 1.74f)) * HitboxVisualScale,
