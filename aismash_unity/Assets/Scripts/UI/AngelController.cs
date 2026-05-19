@@ -8,26 +8,29 @@ using PromptFighters.Battle;
 namespace PromptFighters.UI
 {
     // 気まぐれ天使コントローラー。
-    // 一定間隔で自動的に介入し、GPTがギミックを決定して適用する。
+    // 自動タイマーで降臨し、退屈メッセージ表示 + 10秒の音声入力を受け付けてギミックを決定する。
     // BattleManager の Awake で AddComponent される。
     public class AngelController : MonoBehaviour
     {
         public static bool Enabled = true;
+        public float recordSeconds = 10f;
 
-        public float minInterval = 25f;
-        public float maxInterval = 45f;
+        static readonly string[] BoredMessages =
+        {
+            "なんか退屈だなぁ…何か頼んでもいいよ？",
+            "ヒマすぎる…ちょっと手伝ってあげようか？",
+            "つまんないから、願い事を叶えてあげる！",
+            "ねぇねぇ、何かしてほしいことある？",
+            "気まぐれが発動！何か言ってみて♪",
+        };
 
-        enum AngelState { Idle, Processing, Displaying }
-
-        AngelState    _state = AngelState.Idle;
-        bool          _busy;
-        BattleManager      _bm;
+        bool _busy;
+        BattleManager       _bm;
         AngelGimmickApplier _applier;
-        Coroutine     _loopRoutine;
+        Coroutine           _loopRoutine;
 
-        // UI
         CanvasGroup       _group;
-        TextMeshProUGUI   _angelLabel;
+        TextMeshProUGUI   _titleLabel;
         TextMeshProUGUI   _statusLabel;
         AudioSource       _audioSource;
 
@@ -66,50 +69,71 @@ namespace PromptFighters.UI
 
         IEnumerator AngelLoop()
         {
-            yield return new WaitForSeconds(12f); // 試合開始直後は少し待つ
+            yield return new WaitForSeconds(10f); // 試合開始10秒後に最初の降臨
 
             while (true)
             {
-                yield return new WaitForSeconds(Random.Range(minInterval, maxInterval));
-                if (!_busy && Enabled && _bm != null && _bm.Phase == BattlePhase.Fighting)
-                    StartCoroutine(AngelSequence());
+                if (Enabled && _bm != null && _bm.Phase == BattlePhase.Fighting && !_busy)
+                    yield return StartCoroutine(AngelSequence());
+
+                yield return new WaitForSeconds(15f); // ギミック終了から15秒後に次の降臨
             }
         }
 
         IEnumerator AngelSequence()
         {
-            _busy  = true;
-            _state = AngelState.Processing;
-            ShowStatus("天使が状況を見ています...");
+            _busy = true;
 
+            // 1. 退屈メッセージを表示して TTS 再生
+            string boredMsg = BoredMessages[Random.Range(0, BoredMessages.Length)];
+            ShowDescend(boredMsg);
+
+            bool ttsDone = false;
+            AITTSClient.Speak(this, boredMsg, _audioSource,
+                onComplete: () => ttsDone = true,
+                onError: err => ttsDone = true,
+                voice: AITTSClient.AngelVoice,
+                volume: 1.6f);
+
+            // TTS が終わるか最大 5 秒待ってから録音開始
+            float waited = 0f;
+            while (!ttsDone && waited < 5f) { waited += Time.deltaTime; yield return null; }
+
+            // 2. 音声入力受付（recordSeconds 秒）
+            ShowListening();
+            string transcribed = null;
+            bool   recordDone  = false;
+            WhisperClient.RecordAndTranscribe(this, recordSeconds,
+                text => { transcribed = text; recordDone = true; },
+                err  => { Debug.LogWarning("[Angel] Whisper: " + err); recordDone = true; });
+            while (!recordDone) yield return null;
+
+            // 3. GPT でギミック決定
+            ShowStatus("天使が考え中...");
             var battleState = BuildBattleState();
             GimmickData gimmick = null;
             bool        decided = false;
-
-            AIAngelClient.DecideGimmick(this, "", battleState,
+            AIAngelClient.DecideGimmick(this, transcribed ?? "", battleState,
                 data => { gimmick = data; decided = true; },
                 err  => { Debug.LogWarning("[Angel] " + err); decided = true; });
-
             float timeout = 18f;
             while (!decided && timeout > 0f) { timeout -= Time.deltaTime; yield return null; }
 
             if (gimmick == null)
                 gimmick = new GimmickData { gimmick = "hp_recover", target = "weaker", value = 0.15f, message = "ちょっと退屈だから…HP少しあげる♪" };
 
-            _state = AngelState.Displaying;
-            ShowAngelMessage(gimmick.message);
-
+            // 4. ギミック適用＋メッセージ表示＋TTS
+            ShowGimmickMessage(gimmick.message);
             _applier.Apply(gimmick, _bm?.fighter1, _bm?.fighter2);
-
             AITTSClient.Speak(this, gimmick.message, _audioSource,
                 onError: err => Debug.LogWarning("[AngelTTS] " + err),
-                voice: AITTSClient.AngelVoice);
+                voice: AITTSClient.AngelVoice,
+                volume: 1.6f);
 
             yield return new WaitForSeconds(4f);
             HidePanel();
 
-            _busy  = false;
-            _state = AngelState.Idle;
+            _busy = false;
         }
 
         CommentaryBattleState BuildBattleState()
@@ -126,18 +150,32 @@ namespace PromptFighters.UI
             };
         }
 
-        void ShowStatus(string text)
+        void ShowDescend(string msg)
         {
-            _angelLabel.text  = "[ 気まぐれ天使 ]";
-            _statusLabel.text = text;
-            _group.alpha = 1f;
+            _titleLabel.text  = "[ 天使降臨中 ]";
+            _statusLabel.text = msg;
+            _group.alpha      = 1f;
         }
 
-        void ShowAngelMessage(string message)
+        void ShowListening()
         {
-            _angelLabel.text  = "[ 気まぐれ天使 ]";
-            _statusLabel.text = message;
-            _group.alpha = 1f;
+            _titleLabel.text  = "[ 天使降臨中 ]";
+            _statusLabel.text = $"お願い事を話してね！ ({recordSeconds:0}秒)";
+            _group.alpha      = 1f;
+        }
+
+        void ShowStatus(string text)
+        {
+            _titleLabel.text  = "[ 天使降臨中 ]";
+            _statusLabel.text = text;
+            _group.alpha      = 1f;
+        }
+
+        void ShowGimmickMessage(string msg)
+        {
+            _titleLabel.text  = "[ 気まぐれ天使 ]";
+            _statusLabel.text = msg;
+            _group.alpha      = 1f;
         }
 
         void HidePanel() => _group.alpha = 0f;
@@ -153,8 +191,7 @@ namespace PromptFighters.UI
             canvasGo.AddComponent<CanvasScaler>();
             canvasGo.AddComponent<GraphicRaycaster>();
 
-            // 右下にパネルを配置
-            var panelGo   = new GameObject("Panel");
+            var panelGo = new GameObject("Panel");
             panelGo.transform.SetParent(canvasGo.transform, false);
 
             var panelRect = panelGo.AddComponent<RectTransform>();
@@ -164,8 +201,7 @@ namespace PromptFighters.UI
             panelRect.anchoredPosition = new Vector2(-16f, 70f);
             panelRect.sizeDelta        = new Vector2(320f, 80f);
 
-            var bg = panelGo.AddComponent<Image>();
-            bg.color = new Color(0.55f, 0.18f, 0.72f, 0.85f);
+            panelGo.AddComponent<Image>().color = new Color(0.55f, 0.18f, 0.72f, 0.85f);
 
             _group       = panelGo.AddComponent<CanvasGroup>();
             _group.alpha = 0f;
@@ -178,10 +214,10 @@ namespace PromptFighters.UI
             titleRect.offsetMin = new Vector2(8f, 0f);
             titleRect.offsetMax = new Vector2(-8f, -4f);
 
-            _angelLabel = titleGo.AddComponent<TextMeshProUGUI>();
-            UITheme.Apply(_angelLabel, 14f, FontStyles.Bold);
-            _angelLabel.color     = new Color(1f, 0.9f, 0.5f);
-            _angelLabel.alignment = TextAlignmentOptions.Center;
+            _titleLabel = titleGo.AddComponent<TextMeshProUGUI>();
+            UITheme.Apply(_titleLabel, 14f, FontStyles.Bold);
+            _titleLabel.color     = new Color(1f, 0.9f, 0.5f);
+            _titleLabel.alignment = TextAlignmentOptions.Center;
 
             var msgGo = new GameObject("Message");
             msgGo.transform.SetParent(panelGo.transform, false);
@@ -196,9 +232,9 @@ namespace PromptFighters.UI
             _statusLabel.color     = Color.white;
             _statusLabel.alignment = TextAlignmentOptions.Center;
 
-            _audioSource = canvasGo.AddComponent<AudioSource>();
+            _audioSource             = canvasGo.AddComponent<AudioSource>();
             _audioSource.playOnAwake = false;
-            _audioSource.volume = 1f;
+            _audioSource.volume      = 1f;
         }
     }
 }

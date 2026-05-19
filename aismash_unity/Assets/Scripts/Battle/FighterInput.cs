@@ -20,7 +20,9 @@ namespace PromptFighters.Battle
         bool _previousGuardHeld;
         bool _wasHoldingOpponent;
         bool _throwInputReleasedAfterGrab = true;
+        float _airSkillFaceTimer;
         const float MaxSmashCharge = 1f;
+        const float AirSkillFaceWindow = 0.22f;
         const float SmashFlickWindow = 0.18f;
         const float DodgeInputThreshold = 0.35f;
         const float ThrowInputThreshold = 0.35f;
@@ -43,6 +45,8 @@ namespace PromptFighters.Battle
 
         void Update()
         {
+            if (_airSkillFaceTimer > 0f) _airSkillFaceTimer -= Time.deltaTime;
+
             if (_fighter.State == FighterState.Dead)
             {
                 GameAudioManager.Instance?.SetGroundMove(_fighter, false);
@@ -152,9 +156,14 @@ namespace PromptFighters.Battle
                 bool skillB = ReadSkillPressed(SkillSlot.AttackB);
                 bool skillC = ReadSkillPressed(SkillSlot.AttackC);
                 bool smash  = smashMultiplier > 0f;
-                // 空中技発動の瞬間だけ向き転換を許可
-                if (!_fighter.IsGrounded && (skillA || skillB || skillC || smash))
-                    _fighter.FaceTowardInput(moveX);
+                if (!_fighter.IsGrounded)
+                {
+                    // 空中技を押した瞬間 + その後 AirSkillFaceWindow 秒間は向き転換を受け付ける
+                    if (skillA || skillB || skillC || smash)
+                        _airSkillFaceTimer = AirSkillFaceWindow;
+                    if (_airSkillFaceTimer > 0f)
+                        _fighter.FaceTowardInput(moveX);
+                }
                 if (skillA) _skills.TryUseSkill(SkillSlot.AttackA);
                 if (skillB) _skills.TryUseSkill(SkillSlot.AttackB);
                 if (skillC) _skills.TryUseSkill(SkillSlot.AttackC);

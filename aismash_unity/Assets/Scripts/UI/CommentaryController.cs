@@ -142,7 +142,8 @@ namespace PromptFighters.UI
                 onComplete: () => ttsDone = true,
                 onError: err => { Debug.LogWarning("[CommentaryTTS] " + err); ttsDone = true; },
                 voice: AITTSClient.CommentaryVoice,
-                speed: AITTSClient.CommentarySpeed);
+                speed: AITTSClient.CommentarySpeed,
+                volume: 1.6f);
 
             _isGenerating = false;
             StartCoroutine(FadeOutAfterTTS(() => ttsDone));

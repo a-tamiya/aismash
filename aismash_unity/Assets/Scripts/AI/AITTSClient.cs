@@ -20,13 +20,14 @@ namespace PromptFighters.AI
             Action onComplete = null,
             Action<string> onError = null,
             string voice = DefaultVoice,
-            float speed = 1f)
+            float speed = 1f,
+            float volume = 1f)
         {
-            return runner.StartCoroutine(SpeakCoroutine(text, audioSource, onComplete, onError, voice, speed));
+            return runner.StartCoroutine(SpeakCoroutine(text, audioSource, onComplete, onError, voice, speed, volume));
         }
 
         static IEnumerator SpeakCoroutine(string text, AudioSource audioSource,
-            Action onComplete, Action<string> onError, string voice, float speed)
+            Action onComplete, Action<string> onError, string voice, float speed, float volume)
         {
             string key = AIImageClient.ApiKey;
             if (!AIImageClient.IsConfiguredApiKey(key))
@@ -65,8 +66,7 @@ namespace PromptFighters.AI
 
             if (audioSource != null)
             {
-                audioSource.clip = clip;
-                audioSource.Play();
+                audioSource.PlayOneShot(clip, volume);
                 yield return new WaitForSeconds(clip.length);
             }
 
