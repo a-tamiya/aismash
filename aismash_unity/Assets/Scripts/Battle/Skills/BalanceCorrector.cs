@@ -9,8 +9,8 @@ namespace PromptFighters.Battle.Skills
         // 技枠ごとの上限
         static readonly float[] MaxDamage     = { 14f, 14f, 12f, 30f }; // attack_a/b/c/smash_side
         static readonly float[] MaxStartup    = { 0.12f, 0.18f, 0.22f, 0.32f };
-        static readonly float[] MinRecovery   = { 0.14f, 0.20f, 0.30f, 0.20f };
-        static readonly float[] MaxRecovery   = { 0.55f, 0.88f, 1.20f, 0.70f };
+        static readonly float[] MinRecovery   = { 0.10f, 0.16f, 0.24f, 0.18f };
+        static readonly float[] MaxRecovery   = { 0.50f, 0.78f, 1.05f, 0.62f };
         static readonly float[] MaxRange      = { 3.4f, 22f, 3.6f, 4.2f };
         static readonly float[] MinKnockback  = { 0f,   0f,  0f,   4f };  // 横スマッシュは最低限吹き飛ぶ
         static readonly float[] MaxGuardDamage = { 2.0f, 2.6f, 2.8f, 5.0f };
@@ -28,12 +28,13 @@ namespace PromptFighters.Battle.Skills
             p.hit_count = Mathf.Clamp(p.hit_count, 1, 10);
 
             bool hasProjectile = HasAction(skill, "projectile");
-            bool hasMultiHitAction = HasMultiHitAction(skill);
+            int maxHitCount = Mathf.Clamp(MaxHitCount(skill), 1, 10);
+            p.hit_count = Mathf.Clamp(Mathf.Max(p.hit_count, maxHitCount), 1, 10);
 
             // ダメージ上限（多段ヒットは1ヒットあたりに按分）
             float totalMaxDmg = MaxDamage[si];
-            if (hasProjectile) totalMaxDmg *= 0.72f;
-            if (hasMultiHitAction) totalMaxDmg *= 0.9f;
+            if (hasProjectile) totalMaxDmg = Mathf.Min(totalMaxDmg * 0.5f, si == 3 ? 10f : 6f);
+            if (p.hit_count > 1) totalMaxDmg = Mathf.Min(totalMaxDmg, 6f);
             if (p.hit_count > 1)
             {
                 float perHitMax = totalMaxDmg / p.hit_count;
@@ -46,7 +47,6 @@ namespace PromptFighters.Battle.Skills
 
             // 後隙
             p.recovery = Mathf.Clamp(p.recovery, MinRecovery[si], MaxRecovery[si]);
-            p.recovery = Mathf.Clamp(p.recovery + 0.06f, MinRecovery[si], MaxRecovery[si]);
 
             // 射程（近接はヒットボックスサイズ、飛び道具は射程距離）
             p.range = Mathf.Clamp(p.range, 0.5f, MaxRange[si]);
@@ -68,6 +68,7 @@ namespace PromptFighters.Battle.Skills
             {
                 foreach (var a in skill.actions)
                 {
+                    a.hit_count = Mathf.Clamp(a.hit_count, 0, 10);
                     if (a.hit_count > 1 && p.hit_count < a.hit_count)
                         p.hit_count = Mathf.Clamp(a.hit_count, 1, 10);
                     if (a.damage_override >= 0f)
@@ -76,11 +77,15 @@ namespace PromptFighters.Battle.Skills
                         a.damage_override = Mathf.Clamp(a.damage_override, 0f, maxOverride);
                     }
 
-                    // apply_statusのduration上限
-                    if ((a.type == "apply_status" || a.type == "melee_hitbox" ||
-                         a.type == "body_hitbox" ||
-                         a.type == "area_hitbox" || a.type == "trap_hitbox" ||
-                         a.type == "projectile") && a.duration > 0f)
+                    if (a.type == "trap_hitbox")
+                    {
+                        a.duration = Mathf.Clamp(a.duration, 0f, 5f);
+                    }
+                    // apply_statusのduration上限。trap_hitboxのdurationは設置寿命として扱う。
+                    else if ((a.type == "apply_status" || a.type == "melee_hitbox" ||
+                              a.type == "body_hitbox" ||
+                              a.type == "area_hitbox" ||
+                              a.type == "projectile") && a.duration > 0f)
                     {
                         a.duration = a.status switch
                         {
@@ -126,12 +131,13 @@ namespace PromptFighters.Battle.Skills
             return false;
         }
 
-        static bool HasMultiHitAction(SkillData skill)
+        static int MaxHitCount(SkillData skill)
         {
-            if (skill?.actions == null) return false;
+            int max = 1;
+            if (skill?.actions == null) return max;
             foreach (var a in skill.actions)
-                if (a != null && a.hit_count > 1) return true;
-            return false;
+                if (a != null) max = Mathf.Max(max, a.hit_count);
+            return max;
         }
     }
 }
