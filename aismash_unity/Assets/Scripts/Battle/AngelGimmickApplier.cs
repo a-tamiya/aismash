@@ -11,10 +11,10 @@ namespace PromptFighters.Battle
         {
             if (data == null) return;
 
-            ApplySingle(data.gimmick, data.target, value, duration, p1, p2);
+            ApplySingle(data.gimmick, data.target, data.value, data.duration, p1, p2);
 
             if (!string.IsNullOrEmpty(data.gimmick2))
-                ApplySingle(data.gimmick2, data.target2, value2, duration2, p1, p2);
+                ApplySingle(data.gimmick2, data.target2, data.value2, data.duration2, p1, p2);
         }
 
         void ApplySingle(string gimmick, string targetKey, float value, float duration, Fighter p1, Fighter p2)
