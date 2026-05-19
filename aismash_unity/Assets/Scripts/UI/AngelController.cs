@@ -327,7 +327,7 @@ namespace PromptFighters.UI
             subRect.anchorMin        = new Vector2(0f, 0f);
             subRect.anchorMax        = new Vector2(1f, 0f);
             subRect.pivot            = new Vector2(0.5f, 0f);
-            subRect.anchoredPosition = Vector2.zero;
+            subRect.anchoredPosition = new Vector2(0f, 100f);  // 実況字幕(100px)の上
             subRect.sizeDelta        = new Vector2(0f, 90f);
 
             _subtitleGroup       = subGo.AddComponent<CanvasGroup>();
