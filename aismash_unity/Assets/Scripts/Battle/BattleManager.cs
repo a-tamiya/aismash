@@ -364,7 +364,7 @@ namespace PromptFighters.Battle
                 ButtonSkill(executor, "Pull Enemy", DebugPull());
                 ButtonSkill(executor, "Buff Speed", DebugBuff("speed"));
                 ButtonSkill(executor, "Buff Jump", DebugBuff("jump"));
-                ButtonSkill(executor, "Buff Invincible", DebugBuff("invincible"));
+                ButtonSkill(executor, "Buff Transparent", DebugBuff("transparent"));
                 ButtonSkill(executor, "Buff Damage", DebugBuff("damage"));
             }
 
@@ -523,13 +523,13 @@ namespace PromptFighters.Battle
             {
                 "speed" => "速度",
                 "jump" => "ジャンプ",
-                "invincible" => "無敵",
+                "transparent" => "透明",
                 _ => "攻撃",
             };
             float power = status switch
             {
                 "jump" => 1.35f,
-                "invincible" => 1f,
+                "transparent" => 1f,
                 _ => 1.45f,
             };
             return new SkillData
@@ -542,7 +542,7 @@ namespace PromptFighters.Battle
                 parameters = Params(0f, 0.5f, 0f, 0.02f, 0.14f, 1, 0f, 0f, 0f),
                 actions = new List<SkillAction>
                 {
-                    new SkillAction { type = "buff_self", time = 0f, status = status, power = power, duration = status == "invincible" ? 1.0f : 4.0f },
+                    new SkillAction { type = "buff_self", time = 0f, status = status, power = power, duration = status == "transparent" ? 1.0f : 4.0f },
                 },
             };
         }

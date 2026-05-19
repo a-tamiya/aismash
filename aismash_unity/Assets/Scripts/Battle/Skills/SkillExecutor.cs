@@ -233,8 +233,10 @@ namespace PromptFighters.Battle.Skills
             var hb = Hitbox.Spawn(_fighter, (Vector2)_fighter.transform.position + offset, size, lifetime);
             hb.FollowOwner = a.follow_owner;
             hb.OwnerLocalOffset = new Vector2(offsetX, offsetY);
-            float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) * powerMultiplier;
+            float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) *
+                        powerMultiplier * _fighter.DamageMultiplier;
             hb.Damage         = dmg;
+            hb.DamageIncludesOwnerBoost = true;
             hb.Knockback      = skill.parameters.knockback * powerMultiplier;
             hb.KnockbackDir   = KnockbackDir(a, 1f, 0.3f);
             hb.StunTime       = skill.parameters.stun_time;
@@ -297,8 +299,10 @@ namespace PromptFighters.Battle.Skills
         {
             size *= HitboxVisualScale;
             var hb = Hitbox.Spawn(_fighter, position, size, lifetime);
-            float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) * powerMultiplier;
+            float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) *
+                        powerMultiplier * _fighter.DamageMultiplier;
             hb.Damage         = dmg;
+            hb.DamageIncludesOwnerBoost = true;
             hb.Knockback      = skill.parameters.knockback * powerMultiplier;
             hb.KnockbackDir   = KnockbackDir(a, 1f, 0.25f);
             hb.StunTime       = skill.parameters.stun_time;
@@ -324,8 +328,10 @@ namespace PromptFighters.Battle.Skills
             float lifetime = a.projectile_lifetime > 0f ? a.projectile_lifetime : 1.5f;
 
             var p = Projectile.Spawn(_fighter, spawn, new Vector2(dirSign, 0f), speed, lifetime);
-            float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) * powerMultiplier;
+            float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) *
+                        powerMultiplier * _fighter.DamageMultiplier;
             p.Damage         = dmg;
+            p.DamageIncludesOwnerBoost = true;
             p.Knockback      = skill.parameters.knockback * powerMultiplier;
             p.StunTime       = skill.parameters.stun_time;
             p.GuardDamage    = skill.parameters.guard_damage;
@@ -405,14 +411,15 @@ namespace PromptFighters.Battle.Skills
 
             Vector2 delta = _fighter.Opponent.transform.position - _fighter.transform.position;
             float range = a.range > 0f ? a.range : 3f;
-            float height = a.size_y > 0f ? a.size_y : 1.5f;
+            float height = a.size_y > 0f ? a.size_y : 2.2f;
             if (Mathf.Abs(delta.x) > range || Mathf.Abs(delta.y) > height) return;
 
             float dir = Mathf.Sign(delta.x);
             if (dir == 0f) dir = _fighter.FacingRight ? 1f : -1f;
             if (!push) dir = -dir;
-            float power = a.power > 0f ? a.power : 4f;
-            _fighter.Opponent.ApplyImpulse(new Vector2(dir * power, a.knockback_y));
+            float power = Mathf.Clamp(a.power > 0f ? a.power : 4f, 1.5f, 8f);
+            float up = Mathf.Abs(a.knockback_y) > 0.01f ? a.knockback_y : 0.75f;
+            _fighter.Opponent.ApplyImpulse(new Vector2(dir * power, up), 0.24f);
         }
 
         void BuffSelf(SkillAction a)
@@ -428,6 +435,7 @@ namespace PromptFighters.Battle.Skills
                     _fighter.StartTemporaryJumpChange(Mathf.Clamp(multiplier, 1f, 1.5f), duration);
                     break;
                 case "invincible":
+                case "transparent":
                     _fighter.StartTemporaryInvincible(Mathf.Min(duration, 1.2f));
                     break;
                 default:

@@ -63,7 +63,7 @@ namespace PromptFighters.Battle.Skills
         public float  projectile_lifetime;
 
         // apply_status
-        public string status;     // "stun" / "burn" / "slow" / "guard_break"
+        public string status;     // "stun" / "burn" / "slow" / "guard_break" / "speed" / "jump" / "transparent" / "damage"
         public float  chance = 1f;
     }
 }

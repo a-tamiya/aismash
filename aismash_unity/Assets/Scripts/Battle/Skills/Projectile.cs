@@ -18,6 +18,7 @@ namespace PromptFighters.Battle.Skills
         public Sprite     EffectSprite;
         public bool       FlipEffectX;
         public bool       HideVisual;
+        public bool       DamageIncludesOwnerBoost;
         public float      Speed     = 8f;
         public float      Lifetime  = 2f;
         public Vector2    Direction = Vector2.right;
@@ -119,7 +120,7 @@ namespace PromptFighters.Battle.Skills
             if (dir == 0f) dir = 1f;
             var kb = new Vector2(dir * Knockback, Knockback * 0.3f);
 
-            target.TakeDamage(Damage, Knockback, kb, StunTime, GuardDamage);
+            target.TakeDamage(Damage, Knockback, kb, StunTime, GuardDamage, !DamageIncludesOwnerBoost);
             if (Status != StatusType.None && Random.value <= StatusChance)
                 target.ApplyStatus(Status, StatusDuration);
 

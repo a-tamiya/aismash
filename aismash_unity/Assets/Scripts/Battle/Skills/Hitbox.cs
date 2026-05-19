@@ -23,6 +23,7 @@ namespace PromptFighters.Battle.Skills
         public float        Lifetime = 0.1f;
         public bool         FollowOwner;
         public bool         HideVisual;
+        public bool         DamageIncludesOwnerBoost;
         public Vector2      OwnerLocalOffset;
         public Vector2      DesiredWorldSize;
 
@@ -141,7 +142,7 @@ namespace PromptFighters.Battle.Skills
             if (dir == 0f) dir = 1f;
             var kb = new Vector2(dir * Mathf.Abs(KnockbackDir.x), Mathf.Abs(KnockbackDir.y));
 
-            target.TakeDamage(Damage, Knockback, kb, StunTime, GuardDamage);
+            target.TakeDamage(Damage, Knockback, kb, StunTime, GuardDamage, !DamageIncludesOwnerBoost);
 
             if (Status != StatusType.None && Random.value <= StatusChance)
                 target.ApplyStatus(Status, StatusDuration);

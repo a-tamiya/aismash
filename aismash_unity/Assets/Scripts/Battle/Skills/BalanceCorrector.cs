@@ -12,11 +12,11 @@ namespace PromptFighters.Battle.Skills
         static readonly float[] MinRecovery   = { 0.10f, 0.16f, 0.24f, 0.18f };
         static readonly float[] MaxRecovery   = { 0.50f, 0.78f, 1.05f, 0.62f };
         static readonly float[] MaxRange      = { 3.4f, 22f, 3.6f, 4.2f };
-        static readonly float[] MinKnockback  = { 0f,   0f,  0f,   4f };  // 横スマッシュは最低限吹き飛ぶ
+        static readonly float[] MinKnockback  = { 2.2f, 2.4f, 2.8f, 6f };  // 技ハメ防止のため最低限離す
         static readonly float[] MaxGuardDamage = { 2.0f, 2.6f, 2.8f, 5.0f };
 
         const float MaxStunTime  = 1.5f;
-        const float MaxKnockback = 15f;
+        const float MaxKnockback = 18f;
 
         public static void Apply(SkillData skill)
         {
@@ -55,7 +55,7 @@ namespace PromptFighters.Battle.Skills
             p.stun_time = Mathf.Clamp(p.stun_time, 0f, MaxStunTime);
 
             // ノックバック（必殺技は最低値保証）
-            p.knockback = Mathf.Clamp(p.knockback, MinKnockback[si], MaxKnockback);
+            p.knockback = Mathf.Clamp(p.knockback * 1.25f, MinKnockback[si], MaxKnockback);
             p.guard_damage = Mathf.Clamp(p.guard_damage * 0.55f, 0f, MaxGuardDamage[si]);
 
             // startup: 0以上、スロットごとの上限を適用（極端に遅くならないよう）

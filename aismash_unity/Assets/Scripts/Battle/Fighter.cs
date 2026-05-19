@@ -124,6 +124,7 @@ namespace PromptFighters.Battle
         float _guardBreakTimer;
         float _guardRecoveryDelayTimer;
         float _hitFlashTimer;
+        float _transparencyTimer;
         Fighter _heldOpponent;
         Fighter _grabbedBy;
         float _grabHoldTimer;
@@ -215,6 +216,7 @@ namespace PromptFighters.Battle
                 if (_guardBreakTimer <= 0f) EndGuardBreak();
             }
             if (_hitFlashTimer      > 0f) _hitFlashTimer      -= Time.deltaTime;
+            if (_transparencyTimer  > 0f) _transparencyTimer  -= Time.deltaTime;
             if (_forcedSpriteTimer  > 0f)
             {
                 _forcedSpriteTimer -= Time.deltaTime;
@@ -245,6 +247,8 @@ namespace PromptFighters.Battle
                 _burnTickTimer = 0.5f;
                 CurrentHP = Mathf.Max(0f, CurrentHP - _burnDamagePerTick);
                 OnHPChanged?.Invoke(CurrentHP, maxHP);
+                DamagePopup.Spawn(transform.position, _burnDamagePerTick, false);
+                BattleLogger.Instance?.LogDamage(Opponent != null ? Opponent.PlayerIndex : PlayerIndex, _burnDamagePerTick);
                 if (CurrentHP <= 0f) Die();
             }
         }
@@ -273,7 +277,7 @@ namespace PromptFighters.Battle
             // ヒットフラッシュ中は白点滅
             if (_hitFlashTimer > 0f)
             {
-                _sprite.color = Color.white;
+                _sprite.color = WithDebugAlpha(Color.white);
                 return;
             }
 
@@ -289,7 +293,7 @@ namespace PromptFighters.Battle
             if (_guardBreakTimer > 0f)
             {
                 float pulse = (Mathf.Sin(Time.time * 18f) + 1f) * 0.5f;
-                _sprite.color = Color.Lerp(GuardBreakColor, Color.white, pulse * 0.35f);
+                _sprite.color = WithDebugAlpha(Color.Lerp(GuardBreakColor, Color.white, pulse * 0.35f));
                 return;
             }
 
@@ -297,7 +301,7 @@ namespace PromptFighters.Battle
             {
                 float pulse = (Mathf.Sin(Time.time * 28f) + 1f) * 0.5f;
                 Color chargeColor = Color.Lerp(new Color(1f, 0.85f, 0.15f), new Color(1f, 0.35f, 0.05f), _smashChargeVisual01);
-                _sprite.color = Color.Lerp(chargeColor, Color.white, pulse * 0.25f);
+                _sprite.color = WithDebugAlpha(Color.Lerp(chargeColor, Color.white, pulse * 0.25f));
                 return;
             }
 
@@ -307,7 +311,13 @@ namespace PromptFighters.Battle
                 else if (_slowTimer       > 0f) c = SlowColor;
             }
 
-            _sprite.color = c;
+            _sprite.color = WithDebugAlpha(c);
+        }
+
+        Color WithDebugAlpha(Color c)
+        {
+            if (_transparencyTimer > 0f) c.a = Mathf.Min(c.a, 0.32f);
+            return c;
         }
 
         void UpdateStateSprite()
@@ -434,7 +444,8 @@ namespace PromptFighters.Battle
 
         public void TakeDamage(float damage, float knockbackForce = 0f,
                                Vector2 knockbackDir = default, float stunDuration = 0f,
-                               float guardDamage = 0f)
+                               float guardDamage = 0f,
+                               bool applyOpponentDamageBoost = true)
         {
             if (State == FighterState.Dead) return;
             if (State == FighterState.Dodging || _dodgeTimer > 0f) return;
@@ -442,7 +453,7 @@ namespace PromptFighters.Battle
             if (IsInvincible) return;
 
             bool blocking = State == FighterState.Guarding && _guardBreakTimer <= 0f;
-            if (!blocking && Opponent != null) damage *= Opponent.DamageMultiplier;
+            if (!blocking && applyOpponentDamageBoost && Opponent != null) damage *= Opponent.DamageMultiplier;
             float actual  = blocking ? Mathf.Max(0f, damage * guardDamageRatio) : damage;
             CurrentHP     = Mathf.Max(0f, CurrentHP - actual);
             OnHPChanged?.Invoke(CurrentHP, maxHP);
@@ -494,10 +505,12 @@ namespace PromptFighters.Battle
             }
         }
 
-        public void ApplyImpulse(Vector2 impulse)
+        public void ApplyImpulse(Vector2 impulse, float controlLock = 0.12f)
         {
             if (State == FighterState.Dead) return;
             _rb.linearVelocity = new Vector2(impulse.x, _rb.linearVelocity.y + impulse.y);
+            if (controlLock > 0f && impulse.sqrMagnitude > 0.01f)
+                _controlLockTimer = Mathf.Max(_controlLockTimer, controlLock);
         }
 
         public void ShowSkillSprite(SkillSlot slot, float seconds)
@@ -1119,9 +1132,8 @@ namespace PromptFighters.Battle
 
         System.Collections.IEnumerator TemporaryInvincible(float duration)
         {
-            IsInvincible = true;
+            _transparencyTimer = Mathf.Max(_transparencyTimer, duration);
             yield return new WaitForSeconds(duration);
-            IsInvincible = false;
         }
 
         System.Collections.IEnumerator TemporaryChaos(float duration)
