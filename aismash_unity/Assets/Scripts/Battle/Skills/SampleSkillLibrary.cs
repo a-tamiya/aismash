@@ -17,7 +17,7 @@ namespace PromptFighters.Battle.Skills
             parameters  = new SkillParameters
             {
                 damage = 4, range = 1.3f, startup = 0.04f, active_time = 0.1f,
-                recovery = 0.15f, hit_count = 3,
+                recovery = 0.24f, hit_count = 3,
                 knockback = 3f, stun_time = 0.1f, guard_damage = 2f,
             },
             actions = new List<SkillAction>
@@ -38,7 +38,7 @@ namespace PromptFighters.Battle.Skills
             parameters  = new SkillParameters
             {
                 damage = 10, range = 12f, startup = 0.08f, active_time = 0.1f,
-                recovery = 0.25f, hit_count = 1,
+                recovery = 0.34f, hit_count = 1,
                 knockback = 5f, stun_time = 0.15f, guard_damage = 3f,
             },
             actions = new List<SkillAction>
@@ -47,6 +47,7 @@ namespace PromptFighters.Battle.Skills
                 {
                     type = "projectile", time = 0.08f,
                     projectile_speed = 10f, projectile_lifetime = 1.5f,
+                    size_x = 1.15f, size_y = 0.74f,
                     status = "burn", duration = 2f, chance = 0.5f,
                 },
             },
@@ -62,7 +63,7 @@ namespace PromptFighters.Battle.Skills
             parameters  = new SkillParameters
             {
                 damage = 8, range = 1.5f, startup = 0.06f, active_time = 0.12f,
-                recovery = 0.45f, hit_count = 1,
+                recovery = 0.55f, hit_count = 1,
                 knockback = 4f, stun_time = 0.4f, guard_damage = 2f,
             },
             actions = new List<SkillAction>
@@ -71,7 +72,32 @@ namespace PromptFighters.Battle.Skills
                 new SkillAction
                 {
                     type = "melee_hitbox", time = 0.06f, range = 1.5f, hit_count = 1,
+                    follow_owner = true,
                     status = "stun", duration = 0.4f, chance = 1f,
+                },
+            },
+        };
+
+        public static SkillData AreaTrap() => new SkillData
+        {
+            slot        = SkillSlot.AttackC,
+            skill_name  = "残響フィールド",
+            description = "少し前に残る範囲攻撃",
+            element     = Element.Wind,
+            risk_level  = RiskLevel.Medium,
+            parameters  = new SkillParameters
+            {
+                damage = 7, range = 2.2f, startup = 0.12f, active_time = 0.12f,
+                recovery = 0.62f, hit_count = 1,
+                knockback = 4f, stun_time = 0.12f, guard_damage = 3f,
+            },
+            actions = new List<SkillAction>
+            {
+                new SkillAction
+                {
+                    type = "trap_hitbox", time = 0.12f, duration = 0.45f,
+                    spawn_x = 1.6f, spawn_y = 0.45f, size_x = 1.8f, size_y = 0.9f,
+                    status = "slow", chance = 0.45f,
                 },
             },
         };
@@ -86,7 +112,7 @@ namespace PromptFighters.Battle.Skills
             parameters  = new SkillParameters
             {
                 damage = 24, range = 2f, startup = 0.15f, active_time = 0.15f,
-                recovery = 0.35f, hit_count = 1,
+                recovery = 0.46f, hit_count = 1,
                 knockback = 10f, stun_time = 0.3f, guard_damage = 8f,
             },
             actions = new List<SkillAction>
@@ -100,7 +126,7 @@ namespace PromptFighters.Battle.Skills
         {
             SkillSlot.AttackA   => CloseSlash(),
             SkillSlot.AttackB   => RangedFireball(),
-            SkillSlot.AttackC   => SpecialDashStun(),
+            SkillSlot.AttackC   => AreaTrap(),
             SkillSlot.SmashSide => UltimateFinisher(),
             _                  => CloseSlash(),
         };
@@ -109,7 +135,7 @@ namespace PromptFighters.Battle.Skills
         {
             executor.skills[(int)SkillSlot.AttackA]   = CloseSlash();
             executor.skills[(int)SkillSlot.AttackB]   = RangedFireball();
-            executor.skills[(int)SkillSlot.AttackC]   = SpecialDashStun();
+            executor.skills[(int)SkillSlot.AttackC]   = AreaTrap();
             executor.skills[(int)SkillSlot.SmashSide] = UltimateFinisher();
         }
 
@@ -118,7 +144,7 @@ namespace PromptFighters.Battle.Skills
         {
             data.skills[(int)SkillSlot.AttackA]   = CloseSlash();
             data.skills[(int)SkillSlot.AttackB]   = RangedFireball();
-            data.skills[(int)SkillSlot.AttackC]   = SpecialDashStun();
+            data.skills[(int)SkillSlot.AttackC]   = AreaTrap();
             data.skills[(int)SkillSlot.SmashSide] = UltimateFinisher();
         }
     }

@@ -10,8 +10,7 @@ namespace PromptFighters.Battle.Skills
     {
         public SkillData[] skills = new SkillData[4]; // index = SkillSlot
         public bool autoEquipSampleSkills = true;
-        const float MeleeHitboxScale = 1.02f;
-        const float ProjectileVisualScale = 0.98f;
+        const float HitboxVisualScale = 1f;
 
         Fighter _fighter;
         bool _isExecuting;
@@ -128,7 +127,7 @@ namespace PromptFighters.Battle.Skills
         {
             if (skill == null) return 0f;
             return skill.slot == SkillSlot.SmashSide
-                ? Mathf.Clamp(skill.parameters.recovery, 0.12f, 0.55f)
+                ? Mathf.Clamp(skill.parameters.recovery, 0.20f, 0.70f)
                 : skill.parameters.recovery;
         }
 
@@ -137,8 +136,14 @@ namespace PromptFighters.Battle.Skills
             switch (a.type)
             {
                 case "melee_hitbox":   SpawnMeleeHitbox(skill, a, powerMultiplier); break;
+                case "area_hitbox":    SpawnAreaHitbox(skill, a, powerMultiplier);  break;
+                case "trap_hitbox":    SpawnTrapHitbox(skill, a, powerMultiplier);  break;
                 case "projectile":     SpawnProjectile(skill, a, powerMultiplier);  break;
+                case "jump_attack":    DoJumpAttack(skill, a, powerMultiplier);     break;
                 case "dash":           DoDash(a);                  break;
+                case "push_enemy":     PushOrPullOpponent(a, push: true);  break;
+                case "pull_enemy":     PushOrPullOpponent(a, push: false); break;
+                case "buff_self":      BuffSelf(a);                 break;
                 case "apply_status":   ApplyOpponentStatus(a);     break;
                 case "delay":          /* no-op: time制御で表現 */ break;
                 default:
@@ -158,21 +163,76 @@ namespace PromptFighters.Battle.Skills
             float offsetY = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : baseOffset.y;
             float height = a.size_y > 0f ? a.size_y : DefaultHitboxHeight(skill.slot);
             Vector2 offset = new Vector2(dirSign * offsetX, offsetY);
-            Vector2 size   = new Vector2(range * MeleeHitboxScale, height * MeleeHitboxScale);
+            Vector2 size   = new Vector2(range * HitboxVisualScale, height * HitboxVisualScale);
             float lifetime = skill.parameters.active_time > 0f ? skill.parameters.active_time : 0.12f;
 
             var hb = Hitbox.Spawn(_fighter, (Vector2)_fighter.transform.position + offset, size, lifetime);
-            hb.transform.SetParent(_fighter.transform, worldPositionStays: true);
+            hb.FollowOwner = a.follow_owner;
+            hb.OwnerLocalOffset = new Vector2(offsetX, offsetY);
             float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) * powerMultiplier;
             hb.Damage         = dmg;
             hb.Knockback      = skill.parameters.knockback * powerMultiplier;
-            hb.KnockbackDir   = new Vector2(1f, 0.3f);
+            hb.KnockbackDir   = KnockbackDir(a, 1f, 0.3f);
             hb.StunTime       = skill.parameters.stun_time;
             hb.GuardDamage    = skill.parameters.guard_damage;
             hb.Element        = skill.element;
             hb.EffectSprite   = _fighter.GetEffectSprite(skill.slot);
             hb.FlipEffectX    = !_fighter.FacingRight;
             hb.MaxHits        = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
+            ApplyActionStatus(hb, a);
+        }
+
+        void SpawnAreaHitbox(SkillData skill, SkillAction a, float powerMultiplier)
+        {
+            float dirSign = _fighter.FacingRight ? 1f : -1f;
+            float width = a.size_x > 0f ? a.size_x : (a.range > 0f ? a.range : skill.parameters.range);
+            if (width <= 0f) width = 2f;
+            float height = a.size_y > 0f ? a.size_y : width;
+            float offsetX = !Mathf.Approximately(a.spawn_x, 0f) ? a.spawn_x : width * 0.2f;
+            float offsetY = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 0.6f;
+            float lifetime = a.duration > 0f ? a.duration : Mathf.Max(skill.parameters.active_time, 0.12f);
+
+            var hb = SpawnConfiguredHitbox(
+                skill, a, powerMultiplier,
+                (Vector2)_fighter.transform.position + new Vector2(dirSign * offsetX, offsetY),
+                new Vector2(width, height),
+                lifetime);
+            hb.FollowOwner = a.follow_owner;
+            hb.OwnerLocalOffset = new Vector2(offsetX, offsetY);
+        }
+
+        void SpawnTrapHitbox(SkillData skill, SkillAction a, float powerMultiplier)
+        {
+            float dirSign = _fighter.FacingRight ? 1f : -1f;
+            float width = a.size_x > 0f ? a.size_x : Mathf.Max(0.8f, a.range > 0f ? a.range : skill.parameters.range);
+            float height = a.size_y > 0f ? a.size_y : 0.9f;
+            float offsetX = !Mathf.Approximately(a.spawn_x, 0f) ? a.spawn_x : width * 0.8f;
+            float offsetY = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 0.35f;
+            float lifetime = a.duration > 0f ? a.duration : Mathf.Max(skill.parameters.active_time, 0.35f);
+
+            SpawnConfiguredHitbox(
+                skill, a, powerMultiplier,
+                (Vector2)_fighter.transform.position + new Vector2(dirSign * offsetX, offsetY),
+                new Vector2(width, height),
+                lifetime);
+        }
+
+        Hitbox SpawnConfiguredHitbox(SkillData skill, SkillAction a, float powerMultiplier,
+                                     Vector2 position, Vector2 size, float lifetime)
+        {
+            var hb = Hitbox.Spawn(_fighter, position, size, lifetime);
+            float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) * powerMultiplier;
+            hb.Damage         = dmg;
+            hb.Knockback      = skill.parameters.knockback * powerMultiplier;
+            hb.KnockbackDir   = KnockbackDir(a, 1f, 0.25f);
+            hb.StunTime       = skill.parameters.stun_time;
+            hb.GuardDamage    = skill.parameters.guard_damage;
+            hb.Element        = skill.element;
+            hb.EffectSprite   = _fighter.GetEffectSprite(skill.slot);
+            hb.FlipEffectX    = !_fighter.FacingRight;
+            hb.MaxHits        = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
+            ApplyActionStatus(hb, a);
+            return hb;
         }
 
         void SpawnProjectile(SkillData skill, SkillAction a, float powerMultiplier)
@@ -192,13 +252,15 @@ namespace PromptFighters.Battle.Skills
             p.Knockback      = skill.parameters.knockback * powerMultiplier;
             p.StunTime       = skill.parameters.stun_time;
             p.GuardDamage    = skill.parameters.guard_damage;
+            p.Status         = SkillEnumParser.ParseStatus(a.status);
+            p.StatusDuration = a.duration;
+            p.StatusChance   = Mathf.Clamp01(a.chance);
             p.Element        = skill.element;
             p.EffectSprite   = _fighter.GetEffectSprite(skill.slot);
             p.FlipEffectX    = !_fighter.FacingRight;
-            p.transform.localScale = new Vector3(
-                Mathf.Clamp(speed * lifetime * 0.08f * ProjectileVisualScale, 0.74f, 1.74f),
-                Mathf.Clamp((a.size_y > 0f ? a.size_y * 0.55f : 0.75f) * ProjectileVisualScale, 0.54f, 1.26f),
-                1f);
+            p.DesiredWorldSize = new Vector2(
+                a.size_x > 0f ? a.size_x : Mathf.Clamp(speed * lifetime * 0.08f, 0.74f, 1.74f),
+                a.size_y > 0f ? a.size_y : 0.75f);
         }
 
         static Vector2 DefaultMeleeOffset(SkillSlot slot, float range)
@@ -236,7 +298,38 @@ namespace PromptFighters.Battle.Skills
             float dirSign = _fighter.FacingRight ? 1f : -1f;
             if (a.direction == "backward") dirSign = -dirSign;
             float power = a.power > 0f ? a.power : 5f;
-            _fighter.ApplyImpulse(new Vector2(dirSign * power, 0f));
+            float up = a.knockback_y;
+            _fighter.ApplyImpulse(new Vector2(dirSign * power, up));
+        }
+
+        void DoJumpAttack(SkillData skill, SkillAction a, float powerMultiplier)
+        {
+            float lift = a.power > 0f ? a.power : 5f;
+            _fighter.ApplyImpulse(new Vector2(0f, lift));
+            SpawnAreaHitbox(skill, a, powerMultiplier);
+        }
+
+        void PushOrPullOpponent(SkillAction a, bool push)
+        {
+            if (_fighter.Opponent == null) return;
+
+            Vector2 delta = _fighter.Opponent.transform.position - _fighter.transform.position;
+            float range = a.range > 0f ? a.range : 3f;
+            float height = a.size_y > 0f ? a.size_y : 1.5f;
+            if (Mathf.Abs(delta.x) > range || Mathf.Abs(delta.y) > height) return;
+
+            float dir = Mathf.Sign(delta.x);
+            if (dir == 0f) dir = _fighter.FacingRight ? 1f : -1f;
+            if (!push) dir = -dir;
+            float power = a.power > 0f ? a.power : 4f;
+            _fighter.Opponent.ApplyImpulse(new Vector2(dir * power, a.knockback_y));
+        }
+
+        void BuffSelf(SkillAction a)
+        {
+            float duration = Mathf.Max(0.1f, a.duration);
+            float multiplier = a.power > 0f ? a.power : 1.2f;
+            _fighter.StartTemporaryDamageBoost(Mathf.Clamp(multiplier, 1f, 1.6f), duration);
         }
 
         // apply_status は相手に状態異常を付与する。近距離内でchance判定あり。
@@ -247,6 +340,22 @@ namespace PromptFighters.Battle.Skills
             if (st == StatusType.None) return;
             if (UnityEngine.Random.value > a.chance) return;
             _fighter.Opponent.ApplyStatus(st, a.duration);
+        }
+
+        static Vector2 KnockbackDir(SkillAction a, float defaultX, float defaultY)
+        {
+            float x = !Mathf.Approximately(a.knockback_x, 0f) ? Mathf.Abs(a.knockback_x) : defaultX;
+            float y = !Mathf.Approximately(a.knockback_y, 0f) ? Mathf.Abs(a.knockback_y) : defaultY;
+            return new Vector2(x, y);
+        }
+
+        static void ApplyActionStatus(Hitbox hb, SkillAction a)
+        {
+            var st = SkillEnumParser.ParseStatus(a.status);
+            if (st == StatusType.None) return;
+            hb.Status = st;
+            hb.StatusDuration = a.duration;
+            hb.StatusChance = Mathf.Clamp01(a.chance);
         }
     }
 }

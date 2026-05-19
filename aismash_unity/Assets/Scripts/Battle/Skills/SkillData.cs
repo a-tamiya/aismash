@@ -37,7 +37,7 @@ namespace PromptFighters.Battle.Skills
     public class SkillAction
     {
         // 共通
-        public string type;       // "melee_hitbox" / "projectile" / "dash" / "apply_status" / "buff_self" / "delay"
+        public string type;       // "melee_hitbox" / "projectile" / "area_hitbox" / "trap_hitbox" / "dash" / "apply_status" / "buff_self" / "delay"
         public float  time;       // 技開始からの時間オフセット
 
         // 共通オプション
@@ -45,9 +45,13 @@ namespace PromptFighters.Battle.Skills
         public float  range;
         public float  spawn_x;
         public float  spawn_y;
+        public float  size_x;
         public float  size_y;
         public int    hit_count = 1;
         public float  damage_override = -1f; // -1なら parameters.damage を使用
+        public bool   follow_owner;
+        public float  knockback_x;
+        public float  knockback_y;
 
         // dash / buff_self
         public float  power;

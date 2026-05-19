@@ -21,6 +21,9 @@ namespace PromptFighters.Battle.Skills
         public bool         FlipEffectX;
         public int          MaxHits  = 1;
         public float        Lifetime = 0.1f;
+        public bool         FollowOwner;
+        public Vector2      OwnerLocalOffset;
+        public Vector2      DesiredWorldSize;
 
         readonly HashSet<Fighter> _hitTargets = new HashSet<Fighter>();
         int _hitsLanded;
@@ -42,6 +45,7 @@ namespace PromptFighters.Battle.Skills
             var hb = go.AddComponent<Hitbox>();
             hb.Owner    = owner;
             hb.Lifetime = lifetime;
+            hb.DesiredWorldSize = size;
             return hb;
         }
 
@@ -54,12 +58,41 @@ namespace PromptFighters.Battle.Skills
                 sr.sprite = EffectSprite;
                 sr.color = Color.white;
                 sr.flipX = FlipEffectX;
+                FitColliderAndVisualToWorldSize(sr);
             }
             else
             {
                 sr.color = new Color(ec.r, ec.g, ec.b, 0.65f);
             }
             Destroy(gameObject, Lifetime);
+        }
+
+        void LateUpdate()
+        {
+            if (!FollowOwner || Owner == null) return;
+            float dirSign = Owner.FacingRight ? 1f : -1f;
+            transform.position = (Vector2)Owner.transform.position +
+                new Vector2(dirSign * OwnerLocalOffset.x, OwnerLocalOffset.y);
+        }
+
+        void FitColliderAndVisualToWorldSize(SpriteRenderer sr)
+        {
+            var col = GetComponent<BoxCollider2D>();
+            if (col == null || sr?.sprite == null) return;
+
+            Vector2 spriteSize = sr.sprite.bounds.size;
+            if (spriteSize.x <= 0f || spriteSize.y <= 0f) return;
+
+            Vector2 targetSize = DesiredWorldSize;
+            if (targetSize.x <= 0f || targetSize.y <= 0f)
+                targetSize = spriteSize;
+
+            col.size = spriteSize;
+            col.offset = Vector2.zero;
+            transform.localScale = new Vector3(
+                targetSize.x / spriteSize.x,
+                targetSize.y / spriteSize.y,
+                1f);
         }
 
         void OnTriggerEnter2D(Collider2D other)

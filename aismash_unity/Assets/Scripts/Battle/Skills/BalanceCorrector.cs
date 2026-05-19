@@ -9,8 +9,8 @@ namespace PromptFighters.Battle.Skills
         // 技枠ごとの上限
         static readonly float[] MaxDamage     = { 14f, 14f, 12f, 30f }; // attack_a/b/c/smash_side
         static readonly float[] MaxStartup    = { 0.12f, 0.18f, 0.22f, 0.32f };
-        static readonly float[] MinRecovery   = { 0.08f, 0.14f, 0.22f, 0.12f };
-        static readonly float[] MaxRecovery   = { 0.45f, 0.75f, 1.05f, 0.55f };
+        static readonly float[] MinRecovery   = { 0.14f, 0.20f, 0.30f, 0.20f };
+        static readonly float[] MaxRecovery   = { 0.55f, 0.88f, 1.20f, 0.70f };
         static readonly float[] MaxRange      = { 3.4f, 22f, 3.6f, 4.2f };
         static readonly float[] MinKnockback  = { 0f,   0f,  0f,   4f };  // 横スマッシュは最低限吹き飛ぶ
 
@@ -37,6 +37,7 @@ namespace PromptFighters.Battle.Skills
 
             // 後隙
             p.recovery = Mathf.Clamp(p.recovery, MinRecovery[si], MaxRecovery[si]);
+            p.recovery = Mathf.Clamp(p.recovery + 0.06f, MinRecovery[si], MaxRecovery[si]);
 
             // 射程（近接はヒットボックスサイズ、飛び道具は射程距離）
             p.range = Mathf.Clamp(p.range, 0.5f, MaxRange[si]);
@@ -64,7 +65,9 @@ namespace PromptFighters.Battle.Skills
                         a.damage_override = Mathf.Clamp(a.damage_override, 0f, totalMaxDmg);
 
                     // apply_statusのduration上限
-                    if (a.type == "apply_status" && a.duration > 0f)
+                    if ((a.type == "apply_status" || a.type == "melee_hitbox" ||
+                         a.type == "area_hitbox" || a.type == "trap_hitbox" ||
+                         a.type == "projectile") && a.duration > 0f)
                     {
                         a.duration = a.status switch
                         {
@@ -77,12 +80,25 @@ namespace PromptFighters.Battle.Skills
                         a.chance = Mathf.Clamp01(a.chance);
                     }
 
-                    // melee_hitboxのrangeはヒットボックスサイズなので上限を適用
-                    if (a.type == "melee_hitbox")
-                        a.range = Mathf.Clamp(a.range, 0.5f, 3.6f);
+                    if (a.type == "melee_hitbox" || a.type == "area_hitbox" || a.type == "trap_hitbox")
+                    {
+                        a.range = Mathf.Clamp(a.range, 0f, 4.2f);
+                        if (a.size_x > 0f) a.size_x = Mathf.Clamp(a.size_x, 0.45f, 4.5f);
+                        if (a.size_y > 0f) a.size_y = Mathf.Clamp(a.size_y, 0.35f, 3.0f);
+                    }
+
+                    if (a.type == "projectile")
+                    {
+                        a.projectile_speed = Mathf.Clamp(a.projectile_speed, 0f, 18f);
+                        a.projectile_lifetime = Mathf.Clamp(a.projectile_lifetime, 0f, 2.8f);
+                        if (a.size_x > 0f) a.size_x = Mathf.Clamp(a.size_x, 0.45f, 2.4f);
+                        if (a.size_y > 0f) a.size_y = Mathf.Clamp(a.size_y, 0.35f, 1.8f);
+                    }
 
                     // dashのpowerに上限
-                    if (a.type == "dash" && a.power > 15f) a.power = 15f;
+                    if ((a.type == "dash" || a.type == "jump_attack" ||
+                         a.type == "push_enemy" || a.type == "pull_enemy") && a.power > 15f)
+                        a.power = 15f;
                 }
             }
         }

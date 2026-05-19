@@ -20,6 +20,7 @@ namespace PromptFighters.Battle.Skills
         public float      Speed     = 8f;
         public float      Lifetime  = 2f;
         public Vector2    Direction = Vector2.right;
+        public Vector2    DesiredWorldSize = new Vector2(1.2f, 0.74f);
 
         public static Projectile Spawn(Fighter owner, Vector2 worldPos, Vector2 dir,
                                        float speed, float lifetime)
@@ -34,7 +35,7 @@ namespace PromptFighters.Battle.Skills
 
             var col = go.AddComponent<BoxCollider2D>();
             col.isTrigger = true;
-            col.size      = new Vector2(1.2f, 0.74f);
+            col.size      = Vector2.one;
 
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sprite       = RuntimeSprite.Square();
@@ -57,17 +58,18 @@ namespace PromptFighters.Battle.Skills
                 sr.sprite = EffectSprite;
                 sr.color = Color.white;
                 sr.flipX = FlipEffectX;
-                FitColliderToSprite(sr);
+                FitColliderAndVisualToWorldSize(sr);
             }
             else
             {
                 sr.color = SkillEnumParser.ElementColor(Element);
+                FitColliderAndVisualToWorldSize(sr);
             }
             GetComponent<Rigidbody2D>().linearVelocity = Direction * Speed;
             Destroy(gameObject, Lifetime);
         }
 
-        void FitColliderToSprite(SpriteRenderer sr)
+        void FitColliderAndVisualToWorldSize(SpriteRenderer sr)
         {
             var col = GetComponent<BoxCollider2D>();
             if (col == null || sr?.sprite == null) return;
@@ -75,10 +77,12 @@ namespace PromptFighters.Battle.Skills
             Vector2 spriteSize = sr.sprite.bounds.size;
             if (spriteSize.x <= 0f || spriteSize.y <= 0f) return;
 
-            col.size = new Vector2(
-                Mathf.Clamp(spriteSize.x * 0.82f, 0.74f, 2.28f),
-                Mathf.Clamp(spriteSize.y * 0.72f, 0.5f, 1.5f));
-            col.offset = new Vector2(0f, spriteSize.y * 0.05f);
+            col.size = spriteSize;
+            col.offset = Vector2.zero;
+            transform.localScale = new Vector3(
+                DesiredWorldSize.x / spriteSize.x,
+                DesiredWorldSize.y / spriteSize.y,
+                1f);
         }
 
         void OnTriggerEnter2D(Collider2D other)

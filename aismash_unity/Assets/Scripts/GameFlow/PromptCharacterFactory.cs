@@ -30,8 +30,24 @@ namespace PromptFighters.GameFlow
             };
 
             data.skills[(int)SkillSlot.AttackA] = BuildCloseSkill(safeName, element);
-            data.skills[(int)SkillSlot.AttackB] = BuildRangedSkill(safeName, element);
-            data.skills[(int)SkillSlot.AttackC] = BuildSpecialSkill(safeName, element);
+            if (PrefersRanged(safeFeatures) && !PrefersClose(safeFeatures))
+            {
+                data.skills[(int)SkillSlot.AttackA] = BuildRangedSkill(safeName, element, SkillSlot.AttackA);
+                data.skills[(int)SkillSlot.AttackB] = BuildRangedSkill(safeName, element, SkillSlot.AttackB);
+                data.skills[(int)SkillSlot.AttackC] = BuildTrapSkill(safeName, element);
+            }
+            else if (PrefersClose(safeFeatures) && !PrefersRanged(safeFeatures))
+            {
+                data.skills[(int)SkillSlot.AttackA] = BuildCloseSkill(safeName, element);
+                data.skills[(int)SkillSlot.AttackB] = BuildDashSkill(safeName, element);
+                data.skills[(int)SkillSlot.AttackC] = BuildAreaSkill(safeName, element);
+            }
+            else
+            {
+                data.skills[(int)SkillSlot.AttackA] = BuildCloseSkill(safeName, element);
+                data.skills[(int)SkillSlot.AttackB] = BuildRangedSkill(safeName, element, SkillSlot.AttackB);
+                data.skills[(int)SkillSlot.AttackC] = BuildTrapSkill(safeName, element);
+            }
             data.skills[(int)SkillSlot.SmashSide] = BuildUltimateSkill(safeName, element);
             return data;
         }
@@ -117,6 +133,18 @@ namespace PromptFighters.GameFlow
             return false;
         }
 
+        static bool PrefersRanged(string features)
+        {
+            string text = features.ToLowerInvariant();
+            return ContainsAny(text, "ranged", "shoot", "gun", "bow", "magic", "beam", "遠距離", "射撃", "弓", "銃", "砲", "魔法", "ビーム", "弾");
+        }
+
+        static bool PrefersClose(string features)
+        {
+            string text = features.ToLowerInvariant();
+            return ContainsAny(text, "close", "melee", "sword", "punch", "kick", "slash", "近距離", "接近", "剣", "刀", "殴", "蹴", "斬", "格闘");
+        }
+
         static CharacterStats InferStats(string features)
         {
             string text = features.ToLowerInvariant();
@@ -179,21 +207,44 @@ namespace PromptFighters.GameFlow
             return skill;
         }
 
-        static SkillData BuildRangedSkill(string name, Element element)
+        static SkillData BuildRangedSkill(string name, Element element, SkillSlot slot)
         {
             var skill = SampleSkillLibrary.RangedFireball();
+            skill.slot = slot;
             skill.skill_name = $"{ElementLabel(element)} Shot";
             skill.description = $"{name} fires a ranged attack shaped by the prompt.";
             skill.element = element;
             return skill;
         }
 
-        static SkillData BuildSpecialSkill(string name, Element element)
+        static SkillData BuildDashSkill(string name, Element element)
         {
             var skill = SampleSkillLibrary.SpecialDashStun();
             skill.skill_name = $"{ElementLabel(element)} Step";
             skill.description = $"{name} bursts forward and disrupts the opponent.";
             skill.element = element;
+            return skill;
+        }
+
+        static SkillData BuildTrapSkill(string name, Element element)
+        {
+            var skill = SampleSkillLibrary.AreaTrap();
+            skill.skill_name = $"{ElementLabel(element)} Field";
+            skill.description = $"{name} leaves an effect that controls space.";
+            skill.element = element;
+            return skill;
+        }
+
+        static SkillData BuildAreaSkill(string name, Element element)
+        {
+            var skill = SampleSkillLibrary.AreaTrap();
+            skill.skill_name = $"{ElementLabel(element)} Arc";
+            skill.description = $"{name} sweeps a wide area nearby.";
+            skill.element = element;
+            skill.actions[0].type = "area_hitbox";
+            skill.actions[0].follow_owner = true;
+            skill.actions[0].spawn_x = 1.0f;
+            skill.actions[0].spawn_y = 0.65f;
             return skill;
         }
 
@@ -245,8 +296,12 @@ namespace PromptFighters.GameFlow
                     spawn_x = action.spawn_x,
                     spawn_y = action.spawn_y,
                     size_y = action.size_y,
+                    size_x = action.size_x,
                     hit_count = action.hit_count,
                     damage_override = action.damage_override,
+                    follow_owner = action.follow_owner,
+                    knockback_x = action.knockback_x,
+                    knockback_y = action.knockback_y,
                     power = action.power,
                     direction = action.direction,
                     projectile_speed = action.projectile_speed,
