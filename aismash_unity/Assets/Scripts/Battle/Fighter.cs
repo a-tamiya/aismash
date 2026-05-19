@@ -18,7 +18,9 @@ namespace PromptFighters.Battle
         public float jumpForce = 12f;
         public int maxAirJumps = 1;
         [Range(0.45f, 0.85f)] public float shortHopMultiplier = 0.62f;
-        public float fastFallSpeed = 13f;
+        public float fastFallSpeed = 9f;
+        public float fastFallMinAirTime = 0.18f;
+        public float fastFallMaxUpwardSpeed = 1.2f;
         [Range(0.2f, 0.5f)] public float walkSpeedRatio = 0.35f;
         [Range(0.3f, 0.6f)] public float airJumpHeightMultiplier = 0.45f;
         [Range(0.5f, 0.95f)] public float dashInputThreshold = 0.75f;
@@ -107,6 +109,8 @@ namespace PromptFighters.Battle
         bool _airDodgeUsed;
         bool _isAirDodgeActive;
         bool _dodgeGravitySuppressed;
+        bool _fastFallUsed;
+        float _airTime;
         int _airJumpsRemaining;
         Collider2D _bodyCollider;
         Collider2D _ignoredOpponentCollider;
@@ -188,7 +192,13 @@ namespace PromptFighters.Battle
             if (IsGrounded && State != FighterState.Dodging)
             {
                 _airDodgeUsed = false;
+                _fastFallUsed = false;
+                _airTime = 0f;
                 _airJumpsRemaining = maxAirJumps;
+            }
+            else if (!IsGrounded)
+            {
+                _airTime += Time.deltaTime;
             }
 
             if (_stunTimer          > 0f) _stunTimer          -= Time.deltaTime;
@@ -383,6 +393,8 @@ namespace PromptFighters.Battle
                 force = jumpForce * Mathf.Sqrt(Mathf.Clamp(airJumpHeightMultiplier, 0.3f, 0.6f));
             }
             _rb.linearVelocity = new Vector2(_rb.linearVelocity.x, force);
+            _airTime = 0f;
+            _fastFallUsed = false;
             OnJumped?.Invoke();
         }
 
@@ -390,9 +402,14 @@ namespace PromptFighters.Battle
         {
             if (State == FighterState.Dead || State == FighterState.Stunned || State == FighterState.Grabbed) return;
             if (IsGrounded || _dodgeTimer > 0f || _dodgeGravitySuppressed) return;
+            if (_fastFallUsed || _airTime < fastFallMinAirTime) return;
+            if (_rb.linearVelocity.y > fastFallMaxUpwardSpeed) return;
             float targetY = -Mathf.Abs(fastFallSpeed);
             if (_rb.linearVelocity.y > targetY)
+            {
                 _rb.linearVelocity = new Vector2(_rb.linearVelocity.x, targetY);
+                _fastFallUsed = true;
+            }
         }
 
         public void SetGuard(bool guarding)
@@ -797,6 +814,8 @@ namespace PromptFighters.Battle
             _dodgeTimer         = 0f;
             _airDodgeUsed       = false;
             _isAirDodgeActive   = false;
+            _fastFallUsed       = false;
+            _airTime            = 0f;
             RestoreDodgeGravity();
             RestoreOpponentCollision();
             _forcedSprite       = null;
