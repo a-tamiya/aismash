@@ -920,8 +920,10 @@ namespace PromptFighters.GameFlow
             bool hasP2Input = HasCharacterInput(false);
             if (!hasP1Input && !hasP2Input) return;
 
-            var preset1 = GetPreset(true);
-            var preset2 = GetPreset(false);
+            var preset1 = PromptCharacterFactory.Clone(GetPreset(true));
+            var preset2 = PromptCharacterFactory.Clone(GetPreset(false));
+            EnsureSpriteSet(preset1);
+            EnsureSpriteSet(preset2);
             _generationSetupPanel?.SetActive(false);
             ShowGeneratingPanel();
             _generationCoroutine = StartCoroutine(GenerateBothChars(preset1, preset2, hasP1Input, hasP2Input));
@@ -1015,9 +1017,12 @@ namespace PromptFighters.GameFlow
                     _p2NameInput?.text, _p2FeatureInput?.text, preset2);
             }
 
-            // 画像生成（base_visual_prompt が取得できていれば OpenAI Image API へ）
-            UpdateGeneratingStatus("キャラクター画像を生成中...");
-            yield return GenerateImages(_pendingData1, _pendingData2);
+            // 画像生成は新規生成した側だけ行う。既存キャラ側は選択中スプライトをそのまま使う。
+            if (genP1 || genP2)
+            {
+                UpdateGeneratingStatus("キャラクター画像を生成中...");
+                yield return GenerateImages(_pendingData1, _pendingData2, genP1, genP2);
+            }
 
             _generatingPanel?.SetActive(false);
             _generationCoroutine = null;
@@ -1029,11 +1034,11 @@ namespace PromptFighters.GameFlow
             ShowSkillConfirmPanel();
         }
 
-        IEnumerator GenerateImages(CharacterData data1, CharacterData data2)
+        IEnumerator GenerateImages(CharacterData data1, CharacterData data2, bool generateP1, bool generateP2)
         {
             bool img1Done = false, img2Done = false;
 
-            if (data1 != null && !string.IsNullOrEmpty(data1.visualPrompt))
+            if (generateP1 && data1 != null && !string.IsNullOrEmpty(data1.visualPrompt))
             {
                 AIImageClient.GenerateSpriteSet(this, data1.visualPrompt,
                     msg => UpdateGeneratingStatus("1P " + msg),
@@ -1048,7 +1053,7 @@ namespace PromptFighters.GameFlow
             }
             else img1Done = true;
 
-            if (data2 != null && !string.IsNullOrEmpty(data2.visualPrompt))
+            if (generateP2 && data2 != null && !string.IsNullOrEmpty(data2.visualPrompt))
             {
                 AIImageClient.GenerateSpriteSet(this, data2.visualPrompt,
                     msg => UpdateGeneratingStatus("2P " + msg),
