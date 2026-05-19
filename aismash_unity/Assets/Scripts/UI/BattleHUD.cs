@@ -160,7 +160,6 @@ namespace PromptFighters.UI
             _hudRoot = MakeUI("HUDRoot", transform);
             FillParent(_hudRoot);
             BuildTopBar();
-            BuildSkillBars();
         }
 
         void BuildTopBar()

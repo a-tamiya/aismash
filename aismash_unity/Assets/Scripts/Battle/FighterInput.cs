@@ -21,8 +21,11 @@ namespace PromptFighters.Battle
         bool _wasHoldingOpponent;
         bool _throwInputReleasedAfterGrab = true;
         float _airSkillFaceTimer;
+        float _airDodgeBuffer;
+        Vector2 _bufferedDodgeInput;
         const float MaxSmashCharge = 1f;
         const float AirSkillFaceWindow = 0.22f;
+        const float AirDodgeBufferWindow = 0.12f;
         const float SmashFlickWindow = 0.18f;
         const float DodgeInputThreshold = 0.35f;
         const float ThrowInputThreshold = 0.35f;
@@ -46,6 +49,7 @@ namespace PromptFighters.Battle
         void Update()
         {
             if (_airSkillFaceTimer > 0f) _airSkillFaceTimer -= Time.deltaTime;
+            if (_airDodgeBuffer   > 0f) _airDodgeBuffer    -= Time.deltaTime;
 
             if (_fighter.State == FighterState.Dead)
             {
@@ -122,11 +126,32 @@ namespace PromptFighters.Battle
             if (guardHeld && _fighter.IsGrounded && (jumpPressed || grabPressed))
             {
                 _fighter.SetGuard(false);
-                if (jumpPressed) JumpFromInput(moveInput);
+                if (jumpPressed)
+                {
+                    JumpFromInput(moveInput);
+                    // ジャンプと同時にガード+方向 → 離地後すぐ空中回避できるようバッファ
+                    if (moveInput.sqrMagnitude >= DodgeInputThreshold * DodgeInputThreshold)
+                    {
+                        _airDodgeBuffer   = AirDodgeBufferWindow;
+                        _bufferedDodgeInput = moveInput;
+                    }
+                }
                 else _fighter.TryStartGrab();
                 _previousDodgeInput = moveInput;
                 _previousGuardHeld = guardHeld;
                 return;
+            }
+
+            // 離地直後のバッファ空中回避（絶）
+            if (_airDodgeBuffer > 0f && !_fighter.IsGrounded)
+            {
+                if (_fighter.TryDodge(_bufferedDodgeInput))
+                {
+                    _airDodgeBuffer = 0f;
+                    _previousDodgeInput = _bufferedDodgeInput;
+                    _previousGuardHeld = guardHeld;
+                    return;
+                }
             }
 
             if (ShouldStartDodge(moveInput, guardHeld) && _fighter.TryDodge(moveInput))
