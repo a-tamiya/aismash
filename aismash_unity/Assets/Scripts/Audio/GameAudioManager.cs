@@ -16,6 +16,7 @@ namespace PromptFighters.Audio
         AudioSource _sfxSource;
         AudioSource _moveSource;
 
+        AudioClip _lobbyBgm;
         AudioClip _battleBgm;
         AudioClip _countdown;
         AudioClip _go;
@@ -33,6 +34,10 @@ namespace PromptFighters.Audio
         AudioClip _lightHit;
         AudioClip _moveLoop;
         AudioClip _mediumHit;
+        AudioClip _buff;
+        AudioClip _heal;
+        AudioClip _debuff;
+        AudioClip _teleport;
 
         BattleManager _battle;
         int _lastCountdownNumber;
@@ -55,6 +60,7 @@ namespace PromptFighters.Audio
         void Start()
         {
             BindBattle(BattleManager.Instance);
+            StartLobbyBgm();
         }
 
         void OnDestroy()
@@ -73,7 +79,7 @@ namespace PromptFighters.Audio
             _battle.OnCountdownChanged += HandleCountdown;
             _battle.OnBattleStart += HandleBattleStart;
             _battle.OnBattleEnd += HandleBattleEnd;
-            _battle.OnReturnedToSetup += StopBgm;
+            _battle.OnReturnedToSetup += HandleReturnedToSetup;
             BindFighterEvents();
         }
 
@@ -84,7 +90,7 @@ namespace PromptFighters.Audio
             _battle.OnCountdownChanged -= HandleCountdown;
             _battle.OnBattleStart -= HandleBattleStart;
             _battle.OnBattleEnd -= HandleBattleEnd;
-            _battle.OnReturnedToSetup -= StopBgm;
+            _battle.OnReturnedToSetup -= HandleReturnedToSetup;
             UnbindFighterEvents();
             _battle = null;
         }
@@ -109,23 +115,28 @@ namespace PromptFighters.Audio
 
         void LoadClips()
         {
-            _battleBgm = Load("Audio/BGM/maou_game_battle21");
-            _countdown = Load("Audio/SFX/カウントダウン");
-            _go = Load("Audio/SFX/GO");
-            _ko = Load("Audio/SFX/K.O.");
-            _guardBreak = Load("Audio/SFX/ガードが割れる");
-            _guard = Load("Audio/SFX/ガード音");
-            _grab = Load("Audio/SFX/つかみ発生");
-            _jump = Load("Audio/SFX/ジャンプ");
-            _land = Load("Audio/SFX/ジャンプの着地");
-            _smashHit = Load("Audio/SFX/スマッシュヒット音");
-            _menu = Load("Audio/SFX/メニューボタン音");
-            _projectile = Load("Audio/SFX/遠距離攻撃");
-            _meleeWhiff = Load("Audio/SFX/近距離攻撃空振り");
-            _dodge = Load("Audio/SFX/移動回避と空中回避");
-            _lightHit = Load("Audio/SFX/小パンチ");
-            _moveLoop = Load("Audio/SFX/地上移動");
-            _mediumHit = Load("Audio/SFX/中パンチ");
+            _lobbyBgm    = Load("Audio/BGM/ロビーBGM");
+            _battleBgm   = Load("Audio/BGM/maou_game_battle21");
+            _countdown   = Load("Audio/SFX/カウントダウン");
+            _go          = Load("Audio/SFX/GO");
+            _ko          = Load("Audio/SFX/K.O.");
+            _guardBreak  = Load("Audio/SFX/ガードが割れる");
+            _guard       = Load("Audio/SFX/ガード音");
+            _grab        = Load("Audio/SFX/つかみ発生");
+            _jump        = Load("Audio/SFX/ジャンプ");
+            _land        = Load("Audio/SFX/ジャンプの着地");
+            _smashHit    = Load("Audio/SFX/スマッシュヒット音");
+            _menu        = Load("Audio/SFX/メニューボタン音");
+            _projectile  = Load("Audio/SFX/遠距離攻撃");
+            _meleeWhiff  = Load("Audio/SFX/近距離攻撃空振り");
+            _dodge       = Load("Audio/SFX/移動回避と空中回避");
+            _lightHit    = Load("Audio/SFX/小パンチ");
+            _moveLoop    = Load("Audio/SFX/地上移動");
+            _mediumHit   = Load("Audio/SFX/中パンチ");
+            _buff        = Load("Audio/SFX/バフ");
+            _heal        = Load("Audio/SFX/回復");
+            _debuff      = Load("Audio/SFX/デバフ");
+            _teleport    = Load("Audio/SFX/テレポート");
         }
 
         static AudioClip Load(string path)
@@ -139,6 +150,7 @@ namespace PromptFighters.Audio
         {
             int n = Mathf.CeilToInt(seconds);
             if (n <= 0 || n == _lastCountdownNumber) return;
+            if (_lastCountdownNumber == 0) StopBgm(); // カウントダウン開始でロビーBGM停止
             _lastCountdownNumber = n;
             PlayOneShot(_countdown, 0.72f);
         }
@@ -147,7 +159,7 @@ namespace PromptFighters.Audio
         {
             _lastCountdownNumber = 0;
             PlayOneShot(_go, 0.9f);
-            StartBgm();
+            StartBattleBgm();
         }
 
         void HandleBattleEnd(int _)
@@ -156,12 +168,26 @@ namespace PromptFighters.Audio
             PlayOneShot(_ko, 0.95f);
         }
 
-        void StartBgm()
+        void HandleReturnedToSetup()
+        {
+            StopBgm();
+            StartLobbyBgm();
+        }
+
+        void StartLobbyBgm()
+        {
+            if (_lobbyBgm == null || _bgmSource == null) return;
+            _bgmSource.clip = _lobbyBgm;
+            _bgmSource.volume = bgmVolume * 0.85f;
+            _bgmSource.Play();
+        }
+
+        void StartBattleBgm()
         {
             if (_battleBgm == null || _bgmSource == null) return;
-            if (_bgmSource.clip != _battleBgm) _bgmSource.clip = _battleBgm;
+            _bgmSource.clip = _battleBgm;
             _bgmSource.volume = bgmVolume;
-            if (!_bgmSource.isPlaying) _bgmSource.Play();
+            _bgmSource.Play();
         }
 
         void StopBgm()
@@ -213,7 +239,9 @@ namespace PromptFighters.Audio
                 return;
             }
 
-            PlayOneShot(damage >= 16f ? _smashHit : _mediumHit, 0.75f);
+            if      (damage >= 16f) PlayOneShot(_smashHit,  0.75f);
+            else if (damage >=  8f) PlayOneShot(_mediumHit, 0.75f);
+            else                    PlayOneShot(_lightHit,  0.68f);
         }
 
         void HandleGuardBroken() => PlayOneShot(_guardBreak, 0.9f);
@@ -231,9 +259,14 @@ namespace PromptFighters.Audio
         }
 
         public void PlayMeleeWhiff() => PlayOneShot(_meleeWhiff, 0.62f);
-        public void PlayGrab() => PlayOneShot(_grab, 0.62f);
+        public void PlayGrab()       => PlayOneShot(_grab,       0.62f);
+        public void PlayMenu()       => PlayOneShot(_menu,       0.62f);
 
-        public void PlayMenu() => PlayOneShot(_menu, 0.62f);
+        // 天使ギミック用
+        public void PlayGimmickBuff()     => PlayOneShot(_buff,     0.78f);
+        public void PlayGimmickHeal()     => PlayOneShot(_heal,     0.78f);
+        public void PlayGimmickDebuff()   => PlayOneShot(_debuff,   0.78f);
+        public void PlayGimmickSummon()   => PlayOneShot(_teleport, 0.82f);
 
         public void SetGroundMove(Fighter fighter, bool active)
         {

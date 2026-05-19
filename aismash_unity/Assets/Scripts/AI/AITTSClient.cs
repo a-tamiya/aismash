@@ -9,7 +9,7 @@ namespace PromptFighters.AI
     public static class AITTSClient
     {
         const string Endpoint = "https://api.openai.com/v1/audio/speech";
-        const string Model    = "tts-1-hd";
+        const string Model    = "tts-1";
         public const string DefaultVoice    = "nova";
         public const string CommentaryVoice = "onyx";    // 男性寄り
         public const string AngelVoice      = "shimmer"; // 明るく天使っぽい印象

@@ -83,6 +83,7 @@ namespace PromptFighters.UI
             StopWakeRecognizer();
             // 録音フェーズ
             _state = AngelState.Recording;
+            PromptFighters.Audio.GameAudioManager.Instance?.PlayGimmickSummon();
             ShowStatus("呼びました？ 3秒だけ願いを聞きます！");
 
             string transcribed  = null;

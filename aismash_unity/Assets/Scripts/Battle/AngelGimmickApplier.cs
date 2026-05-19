@@ -1,5 +1,6 @@
 using UnityEngine;
 using PromptFighters.AI;
+using PromptFighters.Audio;
 
 namespace PromptFighters.Battle
 {
@@ -20,28 +21,38 @@ namespace PromptFighters.Battle
                 case "hp_recover":
                     HealIfAlive(target1, data.value);
                     HealIfAlive(target2, data.value);
+                    GameAudioManager.Instance?.PlayGimmickHeal();
                     break;
                 case "speed_boost":
+                    target1?.StartTemporarySpeedChange(data.value, data.duration);
+                    target2?.StartTemporarySpeedChange(data.value, data.duration);
+                    GameAudioManager.Instance?.PlayGimmickBuff();
+                    break;
                 case "speed_down":
                     target1?.StartTemporarySpeedChange(data.value, data.duration);
                     target2?.StartTemporarySpeedChange(data.value, data.duration);
+                    GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "jump_boost":
                     target1?.StartTemporaryJumpChange(data.value, data.duration);
                     target2?.StartTemporaryJumpChange(data.value, data.duration);
+                    GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "damage_boost":
                     target1?.StartTemporaryDamageBoost(data.value, data.duration);
                     target2?.StartTemporaryDamageBoost(data.value, data.duration);
+                    GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "transparent":
                 case "invincible":
                     target1?.StartTemporaryInvincible(data.duration);
                     target2?.StartTemporaryInvincible(data.duration);
+                    GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "chaos":
                     target1?.StartTemporaryChaos(data.duration);
                     target2?.StartTemporaryChaos(data.duration);
+                    GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
             }
         }
