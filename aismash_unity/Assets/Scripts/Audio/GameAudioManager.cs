@@ -266,7 +266,7 @@ namespace PromptFighters.Audio
         public void PlayGimmickBuff()     => PlayOneShot(_buff,     0.78f);
         public void PlayGimmickHeal()     => PlayOneShot(_heal,     0.78f);
         public void PlayGimmickDebuff()   => PlayOneShot(_debuff,   0.78f);
-        public void PlayGimmickSummon()   => PlayOneShot(_teleport, 0.82f);
+        public void PlayTeleport()         => PlayOneShot(_teleport, 0.82f);
 
         public void SetGroundMove(Fighter fighter, bool active)
         {

@@ -396,6 +396,7 @@ namespace PromptFighters.Battle.Skills
             if (bm != null)
                 pos.x = Mathf.Clamp(pos.x, bm.StageMinX + 0.5f, bm.StageMaxX - 0.5f);
             _fighter.transform.position = pos;
+            PromptFighters.Audio.GameAudioManager.Instance?.PlayTeleport();
         }
 
         void DoJumpAttack(SkillData skill, SkillAction a, float powerMultiplier)
