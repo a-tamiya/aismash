@@ -17,6 +17,8 @@ namespace PromptFighters.Battle
         public float airMoveSpeed = 4f;
         public float jumpForce = 12f;
         public int maxAirJumps = 1;
+        [Range(0.45f, 0.85f)] public float shortHopMultiplier = 0.62f;
+        public float fastFallSpeed = 13f;
         [Range(0.2f, 0.5f)] public float walkSpeedRatio = 0.35f;
         [Range(0.3f, 0.6f)] public float airJumpHeightMultiplier = 0.45f;
         [Range(0.5f, 0.95f)] public float dashInputThreshold = 0.75f;
@@ -74,6 +76,7 @@ namespace PromptFighters.Battle
         public bool IsHoldingOpponent => _heldOpponent != null;
         public bool IsGrabbed => _grabbedBy != null;
         public bool IsDodging => State == FighterState.Dodging || _dodgeTimer > 0f;
+        public bool IsSkillLocked => _skillRecoveryTimer > 0f || (_skillExecutor != null && _skillExecutor.IsExecuting);
 
         public event System.Action<float, float> OnHPChanged;
         public event System.Action<float, float> OnGuardChanged;
@@ -341,7 +344,7 @@ namespace PromptFighters.Battle
 
         public void Move(float direction)
         {
-            if (!CanAct) return;
+            if (!CanAct && !(CanAirDriftDuringSkill() && Mathf.Abs(direction) > 0.01f)) return;
             float input = Mathf.Clamp(direction, -1f, 1f);
             float absInput = Mathf.Abs(input);
             float baseSpeed = IsGrounded ? moveSpeed : airMoveSpeed;
@@ -355,10 +358,24 @@ namespace PromptFighters.Battle
             else if (input < -0.1f &&  FacingRight) Flip();
         }
 
-        public void Jump()
+        bool CanAirDriftDuringSkill()
+        {
+            return !IsGrounded &&
+                   IsSkillLocked &&
+                   State != FighterState.Dodging &&
+                   State != FighterState.Stunned &&
+                   State != FighterState.Grabbed &&
+                   State != FighterState.Dead &&
+                   _heldOpponent == null &&
+                   _grabbedBy == null &&
+                   _guardBreakTimer <= 0f &&
+                   _controlLockTimer <= 0f;
+        }
+
+        public void Jump(float forceMultiplier = 1f)
         {
             if (!CanAct) return;
-            float force = jumpForce;
+            float force = jumpForce * Mathf.Clamp(forceMultiplier, 0.45f, 1f);
             if (!IsGrounded)
             {
                 if (_airJumpsRemaining <= 0) return;
@@ -367,6 +384,15 @@ namespace PromptFighters.Battle
             }
             _rb.linearVelocity = new Vector2(_rb.linearVelocity.x, force);
             OnJumped?.Invoke();
+        }
+
+        public void FastFall()
+        {
+            if (State == FighterState.Dead || State == FighterState.Stunned || State == FighterState.Grabbed) return;
+            if (IsGrounded || _dodgeTimer > 0f || _dodgeGravitySuppressed) return;
+            float targetY = -Mathf.Abs(fastFallSpeed);
+            if (_rb.linearVelocity.y > targetY)
+                _rb.linearVelocity = new Vector2(_rb.linearVelocity.x, targetY);
         }
 
         public void SetGuard(bool guarding)

@@ -25,6 +25,8 @@ namespace PromptFighters.Battle
         const float DodgeInputThreshold = 0.35f;
         const float ThrowInputThreshold = 0.35f;
         const float ThrowNeutralThreshold = 0.2f;
+        const float ShortHopThreshold = -0.35f;
+        const float FastFallThreshold = -0.55f;
 
         void Awake()
         {
@@ -116,7 +118,7 @@ namespace PromptFighters.Battle
             if (guardHeld && _fighter.IsGrounded && (jumpPressed || grabPressed))
             {
                 _fighter.SetGuard(false);
-                if (jumpPressed) _fighter.Jump();
+                if (jumpPressed) JumpFromInput(moveInput);
                 else _fighter.TryStartGrab();
                 _previousDodgeInput = moveInput;
                 _previousGuardHeld = guardHeld;
@@ -137,7 +139,9 @@ namespace PromptFighters.Battle
                 _fighter,
                 Mathf.Abs(moveX) > 0.18f && _fighter.IsGrounded && _fighter.CanAct);
             _fighter.SetGuard(guardHeld && _fighter.IsGrounded);
-            if (jumpPressed) _fighter.Jump();
+            if (jumpPressed) JumpFromInput(moveInput);
+            if (!_fighter.IsGrounded && moveInput.y <= FastFallThreshold)
+                _fighter.FastFall();
             if (grabPressed) _fighter.TryStartGrab();
             _previousGuardHeld = guardHeld;
 
@@ -149,6 +153,12 @@ namespace PromptFighters.Battle
                 if (ReadSkillPressed(SkillSlot.AttackC)) _skills.TryUseSkill(SkillSlot.AttackC);
                 if (smashMultiplier > 0f) _skills.TryUseSkill(SkillSlot.SmashSide, smashMultiplier);
             }
+        }
+
+        void JumpFromInput(Vector2 moveInput)
+        {
+            bool shortHop = _fighter.IsGrounded && moveInput.y <= ShortHopThreshold;
+            _fighter.Jump(shortHop ? _fighter.shortHopMultiplier : 1f);
         }
 
         float ReadMove()
