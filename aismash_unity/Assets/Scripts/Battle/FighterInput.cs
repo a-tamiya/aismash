@@ -148,10 +148,17 @@ namespace PromptFighters.Battle
             // スキルはEnded以外で使用可能
             if (_skills != null && !guardHeld)
             {
-                if (ReadSkillPressed(SkillSlot.AttackA)) _skills.TryUseSkill(SkillSlot.AttackA);
-                if (ReadSkillPressed(SkillSlot.AttackB)) _skills.TryUseSkill(SkillSlot.AttackB);
-                if (ReadSkillPressed(SkillSlot.AttackC)) _skills.TryUseSkill(SkillSlot.AttackC);
-                if (smashMultiplier > 0f) _skills.TryUseSkill(SkillSlot.SmashSide, smashMultiplier);
+                bool skillA = ReadSkillPressed(SkillSlot.AttackA);
+                bool skillB = ReadSkillPressed(SkillSlot.AttackB);
+                bool skillC = ReadSkillPressed(SkillSlot.AttackC);
+                bool smash  = smashMultiplier > 0f;
+                // 空中技発動の瞬間だけ向き転換を許可
+                if (!_fighter.IsGrounded && (skillA || skillB || skillC || smash))
+                    _fighter.FaceTowardInput(moveX);
+                if (skillA) _skills.TryUseSkill(SkillSlot.AttackA);
+                if (skillB) _skills.TryUseSkill(SkillSlot.AttackB);
+                if (skillC) _skills.TryUseSkill(SkillSlot.AttackC);
+                if (smash)  _skills.TryUseSkill(SkillSlot.SmashSide, smashMultiplier);
             }
         }
 

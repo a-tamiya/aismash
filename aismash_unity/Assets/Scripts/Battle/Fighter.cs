@@ -388,8 +388,11 @@ namespace PromptFighters.Battle
             float speed = baseSpeed * modeScale * (_slowTimer > 0f ? _slowFactor : 1f);
             float velocityX = absInput > 0.01f ? Mathf.Sign(input) * speed : 0f;
             _rb.linearVelocity = new Vector2(velocityX, _rb.linearVelocity.y);
-            if      (input >  0.1f && !FacingRight) Flip();
-            else if (input < -0.1f &&  FacingRight) Flip();
+            if (IsGrounded)
+            {
+                if      (input >  0.1f && !FacingRight) Flip();
+                else if (input < -0.1f &&  FacingRight) Flip();
+            }
         }
 
         bool CanAirDriftDuringSkill()
@@ -478,8 +481,9 @@ namespace PromptFighters.Battle
 
             if (knockbackForce > 0f && (!blocking || knockbackForce > 6f))
             {
+                const float KnockbackBoost = 1.4f;
                 float weightScale = 1f / Mathf.Max(0.4f, weight);
-                _rb.linearVelocity = knockbackDir.normalized * knockbackForce * weightScale;
+                _rb.linearVelocity = knockbackDir.normalized * knockbackForce * weightScale * KnockbackBoost;
                 _controlLockTimer  = 0.2f;
             }
 
@@ -1099,6 +1103,12 @@ namespace PromptFighters.Battle
             var s = transform.localScale;
             s.x *= -1f;
             transform.localScale = s;
+        }
+
+        public void FaceTowardInput(float input)
+        {
+            if      (input >  0.1f && !FacingRight) Flip();
+            else if (input < -0.1f &&  FacingRight) Flip();
         }
 
         // ====== ギミック用メソッド ======

@@ -411,14 +411,14 @@ namespace PromptFighters.Battle.Skills
             if (_fighter.Opponent == null) return;
 
             Vector2 delta = _fighter.Opponent.transform.position - _fighter.transform.position;
-            float range = a.range > 0f ? a.range : 3f;
-            float height = a.size_y > 0f ? a.size_y : 2.2f;
+            float range = a.range > 0f ? a.range : 5f;
+            float height = a.size_y > 0f ? a.size_y : 3.5f;
             if (Mathf.Abs(delta.x) > range || Mathf.Abs(delta.y) > height) return;
 
             float dir = Mathf.Sign(delta.x);
             if (dir == 0f) dir = _fighter.FacingRight ? 1f : -1f;
             if (!push) dir = -dir;
-            float power = Mathf.Clamp(a.power > 0f ? a.power : 4f, 1.5f, 8f);
+            float power = Mathf.Clamp(a.power > 0f ? a.power : 5.5f, 1.5f, 10f);
             float up = Mathf.Abs(a.knockback_y) > 0.01f ? a.knockback_y : 0.75f;
             _fighter.Opponent.ApplyImpulse(new Vector2(dir * power, up), 0.24f);
         }

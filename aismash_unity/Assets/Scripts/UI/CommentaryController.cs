@@ -90,6 +90,7 @@ namespace PromptFighters.UI
 
             _audioSource = canvasGo.AddComponent<AudioSource>();
             _audioSource.playOnAwake = false;
+            _audioSource.volume = 1f;
         }
 
         void OnBattleStart()

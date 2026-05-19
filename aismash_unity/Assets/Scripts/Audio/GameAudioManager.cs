@@ -9,7 +9,7 @@ namespace PromptFighters.Audio
     {
         public static GameAudioManager Instance { get; private set; }
 
-        [Range(0f, 1f)] public float bgmVolume = 0.38f;
+        [Range(0f, 1f)] public float bgmVolume = 0.22f;
         [Range(0f, 1f)] public float sfxVolume = 0.82f;
 
         AudioSource _bgmSource;
