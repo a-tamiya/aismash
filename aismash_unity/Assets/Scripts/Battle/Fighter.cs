@@ -167,6 +167,8 @@ namespace PromptFighters.Battle
             grabReleaseRecovery = Mathf.Clamp(grabReleaseRecovery, 0.08f, 0.16f);
             throwGrabCooldown = Mathf.Clamp(throwGrabCooldown, 0.25f, 0.6f);
             throwKnockbackScale = Mathf.Max(throwKnockbackScale, 1.1f);
+            maxGuardDurability *= 2f;
+            guardTimeDrainPerSecond *= 0.5f;
             guardRecoveryDelay = 0f;
             guardRecoveryPerSecond = 8f;
             guardHitDamageRatio = Mathf.Min(guardHitDamageRatio, 0.25f);
@@ -576,7 +578,7 @@ namespace PromptFighters.Battle
             jumpForce = Mathf.Clamp(stats.jumpForce, 7f, 19f);
             airJumpHeightMultiplier = Mathf.Clamp(stats.airJumpHeightMultiplier, 0.3f, 0.6f);
             walkSpeedRatio = Mathf.Clamp(stats.walkSpeedRatio, 0.2f, 0.5f);
-            maxGuardDurability = Mathf.Clamp(stats.guardDurability, 40f, 90f);
+            maxGuardDurability = Mathf.Clamp(stats.guardDurability, 40f, 90f) * 2f;
             weight = Mathf.Clamp(stats.weight > 0f ? stats.weight : 1f / Mathf.Max(0.6f, stats.lightness), 0.6f, 1.6f);
             groundDodgeDistance = Mathf.Clamp(stats.groundDodgeDistance, 1.2f, 3.8f);
             airDodgeDistance = Mathf.Clamp(stats.airDodgeDistance, 0.8f, 3.2f);
@@ -868,7 +870,7 @@ namespace PromptFighters.Battle
                 walkSpeedRatio = Mathf.Clamp(newWalkSpeedRatio, 0.2f, 0.5f);
             if (newAirJumpHeightMultiplier >= 0f)
                 airJumpHeightMultiplier = Mathf.Clamp(newAirJumpHeightMultiplier, 0.3f, 0.6f);
-            maxGuardDurability = Mathf.Clamp(guard, 1f, 200f);
+            maxGuardDurability = Mathf.Clamp(guard, 1f, 400f);
             CurrentGuardDurability = Mathf.Clamp(CurrentGuardDurability, 0f, maxGuardDurability);
             weight = Mathf.Clamp(newWeight, 0.2f, 3f);
             OnHPChanged?.Invoke(CurrentHP, maxHP);
@@ -941,7 +943,7 @@ namespace PromptFighters.Battle
         void EndGuardBreak()
         {
             _guardBreakTimer = 0f;
-            CurrentGuardDurability = Mathf.Max(CurrentGuardDurability, maxGuardDurability * 0.35f);
+            CurrentGuardDurability = maxGuardDurability;
             _guardRecoveryDelayTimer = guardRecoveryDelay;
             if (State == FighterState.Stunned && _stunTimer <= 0f) State = FighterState.Idle;
             OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);

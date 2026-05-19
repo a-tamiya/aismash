@@ -328,7 +328,7 @@ namespace PromptFighters.Battle
             float jump = Slider("Jump Force", fighter.jumpForce, 0f, 24f);
             float airJump = Slider("Double Jump Height", fighter.airJumpHeightMultiplier, 0.3f, 0.6f);
             float walk = Slider("Walk Ratio", fighter.walkSpeedRatio, 0.2f, 0.5f);
-            float guard = Slider("Guard", fighter.maxGuardDurability, 1f, 150f);
+            float guard = Slider("Guard", fighter.maxGuardDurability, 1f, 300f);
             float weight = Slider("Weight", fighter.weight, 0.2f, 2.5f);
 
             fighter.DebugSetBattleStats(maxHp, ground, air, jump, guard, weight, walk, airJump);
