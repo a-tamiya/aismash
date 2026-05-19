@@ -19,7 +19,7 @@ namespace PromptFighters.UI
         public static bool Enabled = true;
 
         public float recordSeconds = 3f;
-        public float cooldownTime  = 30f;
+        public float cooldownTime  = 15f;
         public string[] wakeWords = { "天使", "妖精", "エンジェル" };
 
         enum AngelState { Idle, Recording, Processing, Displaying }

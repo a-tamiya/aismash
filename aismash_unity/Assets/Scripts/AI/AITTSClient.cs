@@ -9,22 +9,24 @@ namespace PromptFighters.AI
     public static class AITTSClient
     {
         const string Endpoint = "https://api.openai.com/v1/audio/speech";
-        const string Model    = "tts-1";
+        const string Model    = "tts-1-hd";
         public const string DefaultVoice    = "nova";
         public const string CommentaryVoice = "onyx";    // 男性寄り
         public const string AngelVoice      = "shimmer"; // 明るく天使っぽい印象
+        public const float  CommentarySpeed = 1.15f;     // やや速めで迫力を出す
 
         public static Coroutine Speak(MonoBehaviour runner, string text,
             AudioSource audioSource,
             Action onComplete = null,
             Action<string> onError = null,
-            string voice = DefaultVoice)
+            string voice = DefaultVoice,
+            float speed = 1f)
         {
-            return runner.StartCoroutine(SpeakCoroutine(text, audioSource, onComplete, onError, voice));
+            return runner.StartCoroutine(SpeakCoroutine(text, audioSource, onComplete, onError, voice, speed));
         }
 
         static IEnumerator SpeakCoroutine(string text, AudioSource audioSource,
-            Action onComplete, Action<string> onError, string voice)
+            Action onComplete, Action<string> onError, string voice, float speed)
         {
             string key = AIImageClient.ApiKey;
             if (!AIImageClient.IsConfiguredApiKey(key))
@@ -35,10 +37,12 @@ namespace PromptFighters.AI
 
             string safeText = text
                 .Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", " ");
+            float clampedSpeed = Mathf.Clamp(speed, 0.25f, 4f);
             string body =
                 $"{{\"model\":\"{Model}\"," +
                 $"\"input\":\"{safeText}\"," +
                 $"\"voice\":\"{SanitizeVoice(voice)}\"," +
+                $"\"speed\":{clampedSpeed.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}," +
                 $"\"response_format\":\"wav\"}}";
 
             using var req = new UnityWebRequest(Endpoint, "POST");

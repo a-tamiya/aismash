@@ -136,11 +136,15 @@ namespace PromptFighters.UI
                 result = BuildFallbackCommentary(state);
 
             ShowText(result);
+            bool ttsDone = false;
             AITTSClient.Speak(this, result, _audioSource,
-                onError: err => Debug.LogWarning("[CommentaryTTS] " + err),
-                voice: AITTSClient.CommentaryVoice);
+                onComplete: () => ttsDone = true,
+                onError: err => { Debug.LogWarning("[CommentaryTTS] " + err); ttsDone = true; },
+                voice: AITTSClient.CommentaryVoice,
+                speed: AITTSClient.CommentarySpeed);
 
             _isGenerating = false;
+            StartCoroutine(FadeOutAfterTTS(() => ttsDone));
         }
 
         CommentaryBattleState BuildState()
@@ -180,16 +184,28 @@ namespace PromptFighters.UI
         {
             _label.text = text;
             if (_fadeRoutine != null) StopCoroutine(_fadeRoutine);
-            _fadeRoutine = StartCoroutine(FadeRoutine(5f));
+            _fadeRoutine = StartCoroutine(FadeInAndHold());
         }
 
-        IEnumerator FadeRoutine(float displaySeconds)
+        IEnumerator FadeInAndHold()
         {
             float t = 0f;
             while (t < 0.3f) { t += Time.deltaTime; _group.alpha = t / 0.3f; yield return null; }
             _group.alpha = 1f;
-            yield return new WaitForSeconds(displaySeconds);
-            t = 0f;
+        }
+
+        IEnumerator FadeOutAfterTTS(System.Func<bool> isDone)
+        {
+            float waited = 0f;
+            while (!isDone() && waited < 25f) { waited += Time.deltaTime; yield return null; }
+            yield return new WaitForSeconds(1.5f);
+            if (_fadeRoutine != null) StopCoroutine(_fadeRoutine);
+            _fadeRoutine = StartCoroutine(FadeOutOnly());
+        }
+
+        IEnumerator FadeOutOnly()
+        {
+            float t = 0f;
             while (t < 0.5f) { t += Time.deltaTime; _group.alpha = 1f - t / 0.5f; yield return null; }
             _group.alpha = 0f;
         }

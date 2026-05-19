@@ -122,6 +122,8 @@ namespace PromptFighters.Battle
         float _slowTimer;
         float _slowFactor = 0.5f;
         float _guardBreakTimer;
+        float _speedBoostTimer;
+        float _jumpBoostTimer;
         float _guardRecoveryDelayTimer;
         float _hitFlashTimer;
         float _transparencyTimer;
@@ -131,11 +133,15 @@ namespace PromptFighters.Battle
         float _grabCooldownTimer;
         bool _isTryingGrab;
 
-        static readonly Color GuardColor      = new Color(0.4f, 0.6f, 1f);
-        static readonly Color StunColor       = new Color(1f, 0.8f, 0f);
-        static readonly Color BurnColor       = new Color(1f, 0.5f, 0.3f);
-        static readonly Color SlowColor       = new Color(0.6f, 0.8f, 1f);
-        static readonly Color GuardBreakColor = new Color(0.6f, 0.3f, 0.7f);
+        static readonly Color GuardColor       = new Color(0.4f, 0.6f, 1f);
+        static readonly Color StunColor        = new Color(1f, 0.8f, 0f);
+        static readonly Color BurnColor        = new Color(1f, 0.5f, 0.3f);
+        static readonly Color SlowColor        = new Color(0.6f, 0.8f, 1f);
+        static readonly Color GuardBreakColor  = new Color(0.6f, 0.3f, 0.7f);
+        static readonly Color SpeedBoostColor  = new Color(0.3f, 1f, 0.4f);
+        static readonly Color JumpBoostColor   = new Color(0.4f, 0.85f, 1f);
+        static readonly Color DamageBoostColor = new Color(1f, 0.55f, 0.1f);
+        static readonly Color ChaosColor       = new Color(0.85f, 0.3f, 1f);
 
         // ====== ギミック用プロパティ ======
         public float DamageMultiplier { get; private set; } = 1f;
@@ -219,6 +225,8 @@ namespace PromptFighters.Battle
             }
             if (_hitFlashTimer      > 0f) _hitFlashTimer      -= Time.deltaTime;
             if (_transparencyTimer  > 0f) _transparencyTimer  -= Time.deltaTime;
+            if (_speedBoostTimer    > 0f) _speedBoostTimer    -= Time.deltaTime;
+            if (_jumpBoostTimer     > 0f) _jumpBoostTimer     -= Time.deltaTime;
             if (_forcedSpriteTimer  > 0f)
             {
                 _forcedSpriteTimer -= Time.deltaTime;
@@ -309,8 +317,12 @@ namespace PromptFighters.Battle
 
             if (State != FighterState.Guarding && State != FighterState.Dodging && State != FighterState.Stunned)
             {
-                if      (_burnTimer       > 0f) c = BurnColor;
-                else if (_slowTimer       > 0f) c = SlowColor;
+                if      (_burnTimer        > 0f)  c = BurnColor;
+                else if (_slowTimer        > 0f)  c = SlowColor;
+                else if (DamageMultiplier  > 1f)  c = Color.Lerp(DamageBoostColor, Color.white, (Mathf.Sin(Time.time * 6f) + 1f) * 0.25f);
+                else if (_speedBoostTimer  > 0f)  c = Color.Lerp(SpeedBoostColor,  Color.white, (Mathf.Sin(Time.time * 6f) + 1f) * 0.25f);
+                else if (_jumpBoostTimer   > 0f)  c = Color.Lerp(JumpBoostColor,   Color.white, (Mathf.Sin(Time.time * 6f) + 1f) * 0.25f);
+                else if (InputReversed          )  c = Color.Lerp(ChaosColor,       Color.white, (Mathf.Sin(Time.time * 10f) + 1f) * 0.3f);
             }
 
             _sprite.color = WithDebugAlpha(c);
@@ -826,6 +838,8 @@ namespace PromptFighters.Battle
             _burnTimer          = 0f;
             _slowTimer          = 0f;
             _guardBreakTimer    = 0f;
+            _speedBoostTimer    = 0f;
+            _jumpBoostTimer     = 0f;
             _guardRecoveryDelayTimer = 0f;
             _hitFlashTimer      = 0f;
             _heldOpponent       = null;
@@ -1116,8 +1130,12 @@ namespace PromptFighters.Battle
         {
             float origGround = moveSpeed;
             float origAir    = airMoveSpeed;
+            _speedBoostTimer = duration;
             moveSpeed    = origGround * multiplier;
             airMoveSpeed = origAir * multiplier;
+            string label = multiplier >= 1f ? "SPEED UP!" : "SPEED DOWN!";
+            Color  col   = multiplier >= 1f ? SpeedBoostColor : SlowColor;
+            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, label, col, 2.2f);
             yield return new WaitForSeconds(duration);
             moveSpeed    = origGround;
             airMoveSpeed = origAir;
@@ -1126,7 +1144,9 @@ namespace PromptFighters.Battle
         System.Collections.IEnumerator TemporaryJumpChange(float multiplier, float duration)
         {
             float orig = jumpForce;
+            _jumpBoostTimer = duration;
             jumpForce  = orig * multiplier;
+            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "JUMP UP!", JumpBoostColor, 2.2f);
             yield return new WaitForSeconds(duration);
             jumpForce  = orig;
         }
@@ -1134,19 +1154,24 @@ namespace PromptFighters.Battle
         System.Collections.IEnumerator TemporaryDamageBoost(float multiplier, float duration)
         {
             DamageMultiplier = multiplier;
+            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "POWER UP!", DamageBoostColor, 2.2f);
             yield return new WaitForSeconds(duration);
             DamageMultiplier = 1f;
         }
 
         System.Collections.IEnumerator TemporaryInvincible(float duration)
         {
+            IsInvincible = true;
             _transparencyTimer = Mathf.Max(_transparencyTimer, duration);
+            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "INVINCIBLE!", new Color(1f, 1f, 0.3f), 2.2f);
             yield return new WaitForSeconds(duration);
+            IsInvincible = false;
         }
 
         System.Collections.IEnumerator TemporaryChaos(float duration)
         {
             InputReversed = true;
+            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "CHAOS!", ChaosColor, 2.2f);
             yield return new WaitForSeconds(duration);
             InputReversed = false;
         }
