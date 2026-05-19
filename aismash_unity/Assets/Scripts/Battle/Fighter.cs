@@ -36,11 +36,11 @@ namespace PromptFighters.Battle
         public float guardBreakLockDuration = 5f;
 
         [Header("Dodge")]
-        public float groundDodgeDistance = 2.2f;
-        public float airDodgeDistance = 1.8f;
+        public float groundDodgeDistance = 4.2f;
+        public float airDodgeDistance = 3.5f;
         public float dodgeDuration = 0.28f;
-        public float downDodgeDuration = 0.24f;
-        public float dodgeFallDistance = 1.7f;
+        public float downDodgeDuration = 0.22f;
+        public float dodgeFallDistance = 3.5f;
 
         [Header("Grab / Throw")]
         public GrabParameters grabParameters = new GrabParameters();
@@ -599,8 +599,8 @@ namespace PromptFighters.Battle
             walkSpeedRatio = Mathf.Clamp(stats.walkSpeedRatio, 0.2f, 0.5f);
             maxGuardDurability = Mathf.Clamp(stats.guardDurability, 40f, 90f) * 2f;
             weight = Mathf.Clamp(stats.weight > 0f ? stats.weight : 1f / Mathf.Max(0.6f, stats.lightness), 0.6f, 1.6f);
-            groundDodgeDistance = Mathf.Clamp(stats.groundDodgeDistance, 1.2f, 3.8f);
-            airDodgeDistance = Mathf.Clamp(stats.airDodgeDistance, 0.8f, 3.2f);
+            groundDodgeDistance = Mathf.Clamp(stats.groundDodgeDistance, 1.2f, 5.5f);
+            airDodgeDistance = Mathf.Clamp(stats.airDodgeDistance, 0.8f, 5.0f);
             CurrentGuardDurability = Mathf.Min(CurrentGuardDurability, maxGuardDurability);
             OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
         }
@@ -620,9 +620,12 @@ namespace PromptFighters.Battle
 
             if (IsGrounded)
             {
-                _dodgeTimer = input.y < -0.35f && dir == 0f ? downDodgeDuration : dodgeDuration;
+                bool isDownDodge = input.y < -0.35f && dir == 0f;
+                _dodgeTimer = isDownDodge ? downDodgeDuration : dodgeDuration;
                 if (dir != 0f) IgnoreOpponentCollisionDuringDodge();
-                _rb.linearVelocity = new Vector2(dir * (groundDodgeDistance / Mathf.Max(0.05f, _dodgeTimer)), _rb.linearVelocity.y);
+                float vx = dir * (groundDodgeDistance / Mathf.Max(0.05f, _dodgeTimer));
+                float vy = isDownDodge ? -(dodgeFallDistance / Mathf.Max(0.05f, _dodgeTimer)) : _rb.linearVelocity.y;
+                _rb.linearVelocity = new Vector2(vx, vy);
             }
             else
             {
