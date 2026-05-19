@@ -41,14 +41,6 @@ namespace PromptFighters.GameFlow
                 }
             }
 
-            // プリセットが0件のときはサンプル技で最低1キャラ用意
-            if (_cache.Count == 0)
-            {
-                var fallback = new CharacterData { characterName = "サンプルキャラ" };
-                SampleSkillLibrary.EquipDefaults(fallback);
-                _cache.Add(fallback);
-            }
-
             return _cache;
         }
 

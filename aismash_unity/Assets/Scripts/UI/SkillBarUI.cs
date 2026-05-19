@@ -23,13 +23,11 @@ namespace PromptFighters.UI
         static readonly string[] Keys2P = { "Num2", "Num3", "Num1", "←/→+Num2" };
         static readonly string[] SlotLabels = { "Attack A", "Attack B", "Attack C", "Smash" };
 
-        void Start()
-        {
-            BuildUI();
-        }
+        void Start() { }
 
         void BuildUI()
         {
+            return; // 下部スキルバーは非表示
             var canvas = GetComponentInParent<Canvas>();
             if (canvas == null) return;
 
