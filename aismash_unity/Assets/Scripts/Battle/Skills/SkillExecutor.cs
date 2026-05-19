@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using PromptFighters.Audio;
 using PromptFighters.Battle.Skills.Json;
 
 namespace PromptFighters.Battle.Skills
@@ -62,6 +63,7 @@ namespace PromptFighters.Battle.Skills
             if (!_fighter.CanAct)                 return false;
 
             BattleLogger.Instance?.LogSkillUse(_fighter.PlayerIndex, slot, skills[i].skill_name);
+            GameAudioManager.Instance?.PlaySkill(skills[i]);
             StartCoroutine(ExecuteSkill(skills[i], 1f));
             return true;
         }
@@ -75,6 +77,7 @@ namespace PromptFighters.Battle.Skills
 
             float multiplier = Mathf.Clamp(powerMultiplier, 1f, 2f);
             BattleLogger.Instance?.LogSkillUse(_fighter.PlayerIndex, slot, skills[i].skill_name);
+            GameAudioManager.Instance?.PlaySkill(skills[i]);
             StartCoroutine(ExecuteSkill(skills[i], multiplier));
             return true;
         }

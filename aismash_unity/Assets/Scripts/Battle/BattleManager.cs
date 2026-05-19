@@ -65,6 +65,9 @@ namespace PromptFighters.Battle
             fighterScale = Mathf.Clamp(fighterScale, 1.08f, 1.12f);
             if (GetComponent<BattleLogger>() == null)
                 gameObject.AddComponent<BattleLogger>();
+            if (PromptFighters.Audio.GameAudioManager.Instance == null &&
+                GetComponent<PromptFighters.Audio.GameAudioManager>() == null)
+                gameObject.AddComponent<PromptFighters.Audio.GameAudioManager>();
             if (GetComponent<BattleDebugTuner>() == null)
                 gameObject.AddComponent<BattleDebugTuner>();
             if (GetComponent<CommentaryController>() == null)

@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using PromptFighters.Audio;
 using PromptFighters.Battle.Skills;
 
 namespace PromptFighters.Battle
@@ -32,13 +33,27 @@ namespace PromptFighters.Battle
             _skills  = GetComponent<SkillExecutor>();
         }
 
+        void OnDisable()
+        {
+            if (_fighter != null)
+                GameAudioManager.Instance?.SetGroundMove(_fighter, false);
+        }
+
         void Update()
         {
-            if (_fighter.State == FighterState.Dead) return;
+            if (_fighter.State == FighterState.Dead)
+            {
+                GameAudioManager.Instance?.SetGroundMove(_fighter, false);
+                return;
+            }
 
             var bm = BattleManager.Instance;
             // 対戦中またはトレーニング中だけ操作を受け付ける
-            if (bm != null && !bm.IsFighting) return;
+            if (bm != null && !bm.IsFighting)
+            {
+                GameAudioManager.Instance?.SetGroundMove(_fighter, false);
+                return;
+            }
 
             if (!_fighter.IsHoldingOpponent)
             {
@@ -46,9 +61,14 @@ namespace PromptFighters.Battle
                 _throwInputReleasedAfterGrab = true;
             }
 
-            if (_fighter.IsGrabbed) return;
+            if (_fighter.IsGrabbed)
+            {
+                GameAudioManager.Instance?.SetGroundMove(_fighter, false);
+                return;
+            }
             if (_fighter.IsHoldingOpponent)
             {
+                GameAudioManager.Instance?.SetGroundMove(_fighter, false);
                 Vector2 throwInput = ReadMoveVector();
                 float throwDir = throwInput.x;
                 if (!_wasHoldingOpponent)
@@ -113,6 +133,9 @@ namespace PromptFighters.Battle
 
             float moveX = _fighter.InputReversed ? -moveInput.x : moveInput.x;
             _fighter.Move(moveX);
+            GameAudioManager.Instance?.SetGroundMove(
+                _fighter,
+                Mathf.Abs(moveX) > 0.18f && _fighter.IsGrounded && _fighter.CanAct);
             _fighter.SetGuard(guardHeld && _fighter.IsGrounded);
             if (jumpPressed) _fighter.Jump();
             if (grabPressed) _fighter.TryStartGrab();

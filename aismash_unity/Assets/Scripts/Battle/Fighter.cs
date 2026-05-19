@@ -80,6 +80,8 @@ namespace PromptFighters.Battle
         public event System.Action               OnGuardBroken;
         public event System.Action               OnDeath;
         public event System.Action<float, bool>  OnDamageReceived; // (damage, wasBlocked)
+        public event System.Action               OnJumped;
+        public event System.Action               OnLanded;
 
         Rigidbody2D _rb;
         SpriteRenderer _sprite;
@@ -170,8 +172,11 @@ namespace PromptFighters.Battle
 
         void Update()
         {
+            bool wasGrounded = IsGrounded;
             IsGrounded = groundCheck != null &&
                 Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
+            if (!wasGrounded && IsGrounded && BattleManager.Instance != null && BattleManager.Instance.IsFighting)
+                OnLanded?.Invoke();
             if (IsGrounded && _isAirDodgeActive && State == FighterState.Dodging)
             {
                 EndAirDodgeOnLanding();
@@ -360,6 +365,7 @@ namespace PromptFighters.Battle
                 force = jumpForce * Mathf.Sqrt(Mathf.Clamp(airJumpHeightMultiplier, 0.3f, 0.6f));
             }
             _rb.linearVelocity = new Vector2(_rb.linearVelocity.x, force);
+            OnJumped?.Invoke();
         }
 
         public void SetGuard(bool guarding)

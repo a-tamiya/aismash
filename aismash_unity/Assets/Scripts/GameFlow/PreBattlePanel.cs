@@ -1494,7 +1494,11 @@ namespace PromptFighters.GameFlow
             cols.highlightedColor = new Color(0.4f, 0.4f, 0.6f);
             cols.pressedColor     = new Color(0.1f, 0.1f, 0.1f);
             btn.colors = cols;
-            btn.onClick.AddListener(() => onClick?.Invoke());
+            btn.onClick.AddListener(() =>
+            {
+                PromptFighters.Audio.GameAudioManager.Instance?.PlayMenu();
+                onClick?.Invoke();
+            });
 
             var textGo = CreateUIObject("Label", go.transform);
             StretchFull(textGo.GetComponent<RectTransform>());
