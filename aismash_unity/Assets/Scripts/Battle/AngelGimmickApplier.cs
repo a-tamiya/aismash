@@ -141,36 +141,122 @@ namespace PromptFighters.Battle
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "obstacle":
-                    SpawnObstacle(Mathf.Max(duration, 5f));
+                case "obstacle_platform":
+                    SpawnPlatform(Mathf.Max(value, 1f), Mathf.Max(duration, 5f), targetKey, p1, p2);
+                    GameAudioManager.Instance?.PlayGimmickBuff();
+                    break;
+                case "obstacle_wall":
+                    SpawnWall(Mathf.Max(value, 1f), Mathf.Max(duration, 5f), targetKey, p1, p2);
+                    GameAudioManager.Instance?.PlayGimmickBuff();
+                    break;
+                case "obstacle_bounce":
+                    SpawnBouncePad(Mathf.Max(duration, 6f), targetKey, p1, p2);
+                    GameAudioManager.Instance?.PlayGimmickBuff();
+                    break;
+                case "obstacle_rain":
+                    SpawnRain(Mathf.Max((int)value, 2), Mathf.Max(duration, 8f));
+                    GameAudioManager.Instance?.PlayGimmickDebuff();
+                    break;
+                case "obstacle_tilt":
+                    SpawnTiltedPlatform(Mathf.Max(value, 1f), Mathf.Max(duration, 5f), targetKey, p1, p2);
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
             }
         }
 
-        void SpawnObstacle(float duration)
+        // ── 足場・地形生成 ───────────────────────────────────────────
+
+        Vector3 ObstaclePos(string posHint, Fighter p1, Fighter p2, float y)
         {
             var bm = BattleManager.Instance;
-            float stageMinX = bm != null ? bm.StageMinX : -4f;
-            float stageMaxX = bm != null ? bm.StageMaxX :  4f;
-            float midX = (stageMinX + stageMaxX) * 0.5f + Random.Range(-2f, 2f);
+            float minX = bm?.StageMinX ?? -5f;
+            float maxX = bm?.StageMaxX ??  5f;
+            float x;
+            if      (posHint == "player1" && p1 != null) x = p1.transform.position.x + Random.Range(-0.5f, 0.5f);
+            else if (posHint == "player2" && p2 != null) x = p2.transform.position.x + Random.Range(-0.5f, 0.5f);
+            else x = (minX + maxX) * 0.5f + Random.Range(-2.5f, 2.5f);
+            return new Vector3(Mathf.Clamp(x, minX + 1.2f, maxX - 1.2f), y, 0f);
+        }
 
-            var go = new GameObject("AngelObstacle");
-            go.transform.position = new Vector3(midX, 1.2f, 0f);
-
+        static GameObject MakeStaticObstacle(string name, Vector3 pos, Vector3 scale, Color col)
+        {
+            var go = new GameObject(name);
+            go.transform.position = pos;
+            go.transform.localScale = scale;
             var rb = go.AddComponent<Rigidbody2D>();
             rb.bodyType = RigidbodyType2D.Static;
-
-            var col = go.AddComponent<BoxCollider2D>();
-            col.size = new Vector2(1.8f, 0.6f);
-
+            go.AddComponent<BoxCollider2D>().size = Vector2.one;
             var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite = UnityEngine.Sprite.Create(
-                Texture2D.whiteTexture,
-                new Rect(0, 0, 1, 1),
-                new Vector2(0.5f, 0.5f), 1f);
-            sr.color = new Color(1f, 0.85f, 0.1f, 0.92f);
-            go.transform.localScale = new Vector3(1.8f, 0.6f, 1f);
+            sr.sprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0,0,1,1), new Vector2(0.5f,0.5f), 1f);
+            sr.color = col;
+            return go;
+        }
 
+        void SpawnPlatform(float widthScale, float duration, string posHint, Fighter p1, Fighter p2)
+        {
+            float w = Mathf.Clamp(widthScale * 1.8f, 1f, 9f);
+            float h = 0.4f;
+            var go = MakeStaticObstacle("AngelPlatform",
+                ObstaclePos(posHint, p1, p2, Random.Range(1.5f, 3.5f)),
+                new Vector3(w, h, 1f),
+                new Color(1f, 0.85f, 0.1f, 0.93f));
+            StartCoroutine(DestroyAfter(go, duration));
+        }
+
+        void SpawnWall(float heightScale, float duration, string posHint, Fighter p1, Fighter p2)
+        {
+            float h = Mathf.Clamp(heightScale * 1.6f, 1f, 7f);
+            float w = 0.45f;
+            var go = MakeStaticObstacle("AngelWall",
+                ObstaclePos(posHint, p1, p2, h * 0.5f),
+                new Vector3(w, h, 1f),
+                new Color(0.4f, 0.65f, 1f, 0.93f));
+            StartCoroutine(DestroyAfter(go, duration));
+        }
+
+        void SpawnBouncePad(float duration, string posHint, Fighter p1, Fighter p2)
+        {
+            var go = MakeStaticObstacle("AngelBounce",
+                ObstaclePos(posHint, p1, p2, 0.25f),
+                new Vector3(2f, 0.3f, 1f),
+                new Color(0.15f, 1f, 0.45f, 0.95f));
+            go.AddComponent<AngelBouncePad>();
+            StartCoroutine(DestroyAfter(go, duration));
+        }
+
+        void SpawnRain(int count, float duration)
+        {
+            var bm = BattleManager.Instance;
+            float minX = bm?.StageMinX ?? -5f;
+            float maxX = bm?.StageMaxX ??  5f;
+            count = Mathf.Clamp(count, 2, 10);
+            for (int i = 0; i < count; i++)
+            {
+                float x = Mathf.Lerp(minX + 0.5f, maxX - 0.5f,
+                    (float)i / Mathf.Max(count - 1, 1)) + Random.Range(-0.6f, 0.6f);
+                float sz = Random.Range(0.5f, 1.3f);
+                var go = new GameObject("AngelRain");
+                go.transform.position = new Vector3(x, Random.Range(7f, 11f), 0f);
+                go.transform.localScale = new Vector3(sz, sz, 1f);
+                var rb = go.AddComponent<Rigidbody2D>();
+                rb.gravityScale = Random.Range(1.8f, 3.5f);
+                go.AddComponent<BoxCollider2D>().size = Vector2.one;
+                var sr = go.AddComponent<SpriteRenderer>();
+                sr.sprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0,0,1,1), new Vector2(0.5f,0.5f), 1f);
+                sr.color = new Color(Random.Range(0.7f,1f), Random.Range(0.2f,0.8f), Random.Range(0.1f,0.5f), 0.9f);
+                StartCoroutine(DestroyAfter(go, duration));
+            }
+        }
+
+        void SpawnTiltedPlatform(float widthScale, float duration, string posHint, Fighter p1, Fighter p2)
+        {
+            float w = Mathf.Clamp(widthScale * 1.8f, 1f, 7f);
+            float angle = Random.Range(15f, 40f) * (Random.value > 0.5f ? 1f : -1f);
+            var go = MakeStaticObstacle("AngelTilt",
+                ObstaclePos(posHint, p1, p2, Random.Range(1.5f, 3f)),
+                new Vector3(w, 0.4f, 1f),
+                new Color(1f, 0.5f, 0.15f, 0.93f));
+            go.transform.rotation = Quaternion.Euler(0f, 0f, angle);
             StartCoroutine(DestroyAfter(go, duration));
         }
 
@@ -183,7 +269,7 @@ namespace PromptFighters.Battle
         static void HealIfAlive(Fighter f, float ratio)
         {
             if (f == null || f.State == FighterState.Dead) return;
-            f.HealHP(f.maxHP * Mathf.Clamp(ratio, 0f, 0.3f));
+            f.HealHP(f.maxHP * Mathf.Clamp(ratio, 0f, 1f));
         }
 
         static Fighter ResolveTarget(string target, Fighter p1, Fighter p2, bool primary)
@@ -206,6 +292,20 @@ namespace PromptFighters.Battle
                 default:
                     return primary ? p1 : p2;
             }
+        }
+    }
+
+    // 踏んだファイターを上方向に弾くバウンスパッド
+    public class AngelBouncePad : MonoBehaviour
+    {
+        void OnCollisionEnter2D(Collision2D col)
+        {
+            var f = col.gameObject.GetComponent<Fighter>();
+            if (f == null) return;
+            f.ApplyImpulse(new Vector2(0f, 22f), 0.12f);
+            PromptFighters.UI.DamagePopup.SpawnText(
+                transform.position + Vector3.up * 0.5f,
+                "BOUNCE!", new Color(0.15f, 1f, 0.45f), 1.5f);
         }
     }
 }

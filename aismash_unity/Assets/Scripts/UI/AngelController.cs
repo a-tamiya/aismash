@@ -187,7 +187,12 @@ namespace PromptFighters.UI
             "gravity_down" => "重力低下 ↑↑",
             "size_up"      => "巨大化",
             "size_down"    => "縮小化",
-            "obstacle"     => "障害物出現 ！",
+            "obstacle"          => "足場出現 ！",
+            "obstacle_platform" => "足場出現 ！",
+            "obstacle_wall"     => "壁出現 ！",
+            "obstacle_bounce"   => "バウンスパッド ！",
+            "obstacle_rain"     => "障害物の雨 ！",
+            "obstacle_tilt"     => "斜め足場出現 ！",
             _              => g,
         };
 
