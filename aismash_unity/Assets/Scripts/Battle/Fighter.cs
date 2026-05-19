@@ -476,14 +476,17 @@ namespace PromptFighters.Battle
             {
                 case StatusType.Stun:
                     _stunTimer = Mathf.Max(_stunTimer, Mathf.Min(duration, 1.5f));
+                    DamagePopup.SpawnText(transform.position, "STUN", StunColor, 1.8f);
                     break;
                 case StatusType.Burn:
                     _burnTimer     = Mathf.Max(_burnTimer, duration);
                     _burnTickTimer = Mathf.Min(_burnTickTimer, 0.5f);
                     if (_burnTickTimer <= 0f) _burnTickTimer = 0.5f;
+                    DamagePopup.SpawnText(transform.position, "BURN", BurnColor, 1.8f);
                     break;
                 case StatusType.Slow:
                     _slowTimer = Mathf.Max(_slowTimer, duration);
+                    DamagePopup.SpawnText(transform.position, "SLOW", SlowColor, 1.8f);
                     break;
                 case StatusType.GuardBreak:
                     BreakGuard(Mathf.Max(1.5f, duration));
@@ -662,6 +665,7 @@ namespace PromptFighters.Battle
         {
             if (!CanAct || Opponent == null) return false;
             if (_grabCooldownTimer > 0f) return false;
+            PromptFighters.Audio.GameAudioManager.Instance?.PlayGrab();
             ShowGrabSprite(grabParameters.startup + 0.08f);
             StartCoroutine(ExecuteGrab());
             return true;

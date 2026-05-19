@@ -164,7 +164,8 @@ namespace PromptFighters.Battle.Skills
             {
                 var a = skill.actions[i];
                 if (a == null) continue;
-                bool melee = a.type == "melee_hitbox" || a.type == "area_hitbox" || a.type == "jump_attack";
+                bool melee = a.type == "melee_hitbox" || a.type == "body_hitbox" ||
+                              a.type == "area_hitbox" || a.type == "jump_attack";
                 if (!melee) continue;
                 hasMelee = true;
                 float duration = a.duration > 0f ? a.duration : Mathf.Max(skill.parameters.active_time, 0.08f);
@@ -186,11 +187,13 @@ namespace PromptFighters.Battle.Skills
             switch (a.type)
             {
                 case "melee_hitbox":   SpawnMeleeHitbox(skill, a, powerMultiplier); break;
+                case "body_hitbox":    SpawnBodyHitbox(skill, a, powerMultiplier);  break;
                 case "area_hitbox":    SpawnAreaHitbox(skill, a, powerMultiplier);  break;
                 case "trap_hitbox":    SpawnTrapHitbox(skill, a, powerMultiplier);  break;
                 case "projectile":     SpawnProjectile(skill, a, powerMultiplier);  break;
                 case "jump_attack":    DoJumpAttack(skill, a, powerMultiplier);     break;
                 case "dash":           DoDash(a);                  break;
+                case "teleport":       DoTeleport(a);              break;
                 case "push_enemy":     PushOrPullOpponent(a, push: true);  break;
                 case "pull_enemy":     PushOrPullOpponent(a, push: false); break;
                 case "buff_self":      BuffSelf(a);                 break;
@@ -226,10 +229,20 @@ namespace PromptFighters.Battle.Skills
             hb.StunTime       = skill.parameters.stun_time;
             hb.GuardDamage    = skill.parameters.guard_damage;
             hb.Element        = skill.element;
-            hb.EffectSprite   = _fighter.GetEffectSprite(skill.slot);
+            hb.EffectSprite   = a.hide_effect ? null : _fighter.GetEffectSprite(skill.slot);
             hb.FlipEffectX    = !_fighter.FacingRight;
             hb.MaxHits        = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
             ApplyActionStatus(hb, a);
+        }
+
+        void SpawnBodyHitbox(SkillData skill, SkillAction a, float powerMultiplier)
+        {
+            a.follow_owner = true;
+            a.hide_effect = true;
+            if (a.range <= 0f) a.range = 0.85f;
+            if (a.size_y <= 0f) a.size_y = 1.45f;
+            if (Mathf.Approximately(a.spawn_y, 0f)) a.spawn_y = 0.75f;
+            SpawnMeleeHitbox(skill, a, powerMultiplier);
         }
 
         void SpawnAreaHitbox(SkillData skill, SkillAction a, float powerMultiplier)
@@ -279,7 +292,7 @@ namespace PromptFighters.Battle.Skills
             hb.StunTime       = skill.parameters.stun_time;
             hb.GuardDamage    = skill.parameters.guard_damage;
             hb.Element        = skill.element;
-            hb.EffectSprite   = _fighter.GetEffectSprite(skill.slot);
+            hb.EffectSprite   = a.hide_effect ? null : _fighter.GetEffectSprite(skill.slot);
             hb.FlipEffectX    = !_fighter.FacingRight;
             hb.MaxHits        = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
             ApplyActionStatus(hb, a);
@@ -307,7 +320,7 @@ namespace PromptFighters.Battle.Skills
             p.StatusDuration = a.duration;
             p.StatusChance   = Mathf.Clamp01(a.chance);
             p.Element        = skill.element;
-            p.EffectSprite   = _fighter.GetEffectSprite(skill.slot);
+            p.EffectSprite   = a.hide_effect ? null : _fighter.GetEffectSprite(skill.slot);
             p.FlipEffectX    = !_fighter.FacingRight;
             p.DesiredWorldSize = new Vector2(
                 (a.size_x > 0f ? a.size_x : Mathf.Clamp(speed * lifetime * 0.08f, 0.74f, 1.74f)) * HitboxVisualScale,
@@ -353,6 +366,18 @@ namespace PromptFighters.Battle.Skills
             _fighter.ApplyImpulse(new Vector2(dirSign * power, up));
         }
 
+        void DoTeleport(SkillAction a)
+        {
+            float dirSign = _fighter.FacingRight ? 1f : -1f;
+            if (a.direction == "backward") dirSign = -dirSign;
+            float distance = Mathf.Clamp(a.power > 0f ? a.power : 2.2f, 0.5f, 4f);
+            Vector3 pos = _fighter.transform.position + new Vector3(dirSign * distance, 0f, 0f);
+            var bm = PromptFighters.Battle.BattleManager.Instance;
+            if (bm != null)
+                pos.x = Mathf.Clamp(pos.x, bm.StageMinX + 0.5f, bm.StageMaxX - 0.5f);
+            _fighter.transform.position = pos;
+        }
+
         void DoJumpAttack(SkillData skill, SkillAction a, float powerMultiplier)
         {
             float lift = a.power > 0f ? a.power : 5f;
@@ -380,7 +405,21 @@ namespace PromptFighters.Battle.Skills
         {
             float duration = Mathf.Max(0.1f, a.duration);
             float multiplier = a.power > 0f ? a.power : 1.2f;
-            _fighter.StartTemporaryDamageBoost(Mathf.Clamp(multiplier, 1f, 1.6f), duration);
+            switch (a.status)
+            {
+                case "speed":
+                    _fighter.StartTemporarySpeedChange(Mathf.Clamp(multiplier, 1f, 1.7f), duration);
+                    break;
+                case "jump":
+                    _fighter.StartTemporaryJumpChange(Mathf.Clamp(multiplier, 1f, 1.5f), duration);
+                    break;
+                case "invincible":
+                    _fighter.StartTemporaryInvincible(Mathf.Min(duration, 1.2f));
+                    break;
+                default:
+                    _fighter.StartTemporaryDamageBoost(Mathf.Clamp(multiplier, 1f, 1.6f), duration);
+                    break;
+            }
         }
 
         // apply_status は相手に状態異常を付与する。近距離内でchance判定あり。

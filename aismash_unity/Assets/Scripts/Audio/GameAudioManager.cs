@@ -22,6 +22,7 @@ namespace PromptFighters.Audio
         AudioClip _ko;
         AudioClip _guardBreak;
         AudioClip _guard;
+        AudioClip _grab;
         AudioClip _jump;
         AudioClip _land;
         AudioClip _smashHit;
@@ -114,6 +115,7 @@ namespace PromptFighters.Audio
             _ko = Load("Audio/SFX/K.O.");
             _guardBreak = Load("Audio/SFX/ガードが割れる");
             _guard = Load("Audio/SFX/ガード音");
+            _grab = Load("Audio/SFX/つかみ発生");
             _jump = Load("Audio/SFX/ジャンプ");
             _land = Load("Audio/SFX/ジャンプの着地");
             _smashHit = Load("Audio/SFX/スマッシュヒット音");
@@ -229,6 +231,7 @@ namespace PromptFighters.Audio
         }
 
         public void PlayMeleeWhiff() => PlayOneShot(_meleeWhiff, 0.62f);
+        public void PlayGrab() => PlayOneShot(_grab, 0.62f);
 
         public void PlayMenu() => PlayOneShot(_menu, 0.62f);
 

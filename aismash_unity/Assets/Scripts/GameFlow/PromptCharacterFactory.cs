@@ -302,6 +302,7 @@ namespace PromptFighters.GameFlow
                     follow_owner = action.follow_owner,
                     knockback_x = action.knockback_x,
                     knockback_y = action.knockback_y,
+                    hide_effect = action.hide_effect,
                     power = action.power,
                     direction = action.direction,
                     projectile_speed = action.projectile_speed,

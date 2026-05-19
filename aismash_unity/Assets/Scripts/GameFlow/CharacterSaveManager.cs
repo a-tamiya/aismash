@@ -221,8 +221,13 @@ namespace PromptFighters.GameFlow
             if (a.range > 0f)                        sb.Append($",\"range\":{a.range}");
             if (a.spawn_x > 0f)                      sb.Append($",\"spawn_x\":{a.spawn_x}");
             if (!Mathf.Approximately(a.spawn_y, 0f)) sb.Append($",\"spawn_y\":{a.spawn_y}");
+            if (a.size_x > 0f)                       sb.Append($",\"size_x\":{a.size_x}");
             if (a.size_y > 0f)                       sb.Append($",\"size_y\":{a.size_y}");
             if (a.hit_count > 0)                     sb.Append($",\"hit_count\":{a.hit_count}");
+            if (a.follow_owner)                      sb.Append(",\"follow_owner\":true");
+            if (a.hide_effect)                       sb.Append(",\"hide_effect\":true");
+            if (!Mathf.Approximately(a.knockback_x, 0f)) sb.Append($",\"knockback_x\":{a.knockback_x}");
+            if (!Mathf.Approximately(a.knockback_y, 0f)) sb.Append($",\"knockback_y\":{a.knockback_y}");
             if (a.projectile_speed > 0f)             sb.Append($",\"projectile_speed\":{a.projectile_speed}");
             if (a.projectile_lifetime > 0f)          sb.Append($",\"projectile_lifetime\":{a.projectile_lifetime}");
             if (!string.IsNullOrEmpty(a.status))     sb.Append($",\"status\":{Q(a.status)},\"duration\":{a.duration},\"chance\":{a.chance}");

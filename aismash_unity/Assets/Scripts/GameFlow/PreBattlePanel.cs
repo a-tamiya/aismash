@@ -146,7 +146,7 @@ namespace PromptFighters.GameFlow
             if (_trainingPanel != null && _trainingPanel.activeSelf)
             {
                 var kb = UnityEngine.InputSystem.Keyboard.current;
-                if (WasCancelPressed())
+                if (WasKeyboardCancelPressed())
                 {
                     if (_generationTrainingActive && _generationCoroutine != null)
                         ReturnToGeneratingFromTraining();
@@ -1040,7 +1040,7 @@ namespace PromptFighters.GameFlow
 
             if (generateP1 && data1 != null && !string.IsNullOrEmpty(data1.visualPrompt))
             {
-                AIImageClient.GenerateSpriteSet(this, data1.visualPrompt,
+                AIImageClient.GenerateSpriteSet(this, data1,
                     msg => UpdateGeneratingStatus("1P " + msg),
                     sprites =>
                     {
@@ -1055,7 +1055,7 @@ namespace PromptFighters.GameFlow
 
             if (generateP2 && data2 != null && !string.IsNullOrEmpty(data2.visualPrompt))
             {
-                AIImageClient.GenerateSpriteSet(this, data2.visualPrompt,
+                AIImageClient.GenerateSpriteSet(this, data2,
                     msg => UpdateGeneratingStatus("2P " + msg),
                     sprites =>
                     {
@@ -1340,6 +1340,12 @@ namespace PromptFighters.GameFlow
             if (kb != null && kb.escapeKey.wasPressedThisFrame) return true;
             var gp = Gamepad.current;
             return gp != null && gp.buttonEast.wasPressedThisFrame;
+        }
+
+        static bool WasKeyboardCancelPressed()
+        {
+            var kb = Keyboard.current;
+            return kb != null && kb.escapeKey.wasPressedThisFrame;
         }
 
         static bool WasTrainingPressed()

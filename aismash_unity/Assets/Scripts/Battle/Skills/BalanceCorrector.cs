@@ -24,8 +24,16 @@ namespace PromptFighters.Battle.Skills
             var p  = skill.parameters;
             int si = (int)skill.slot;
 
+            // ヒット数（上限を超えないよう）
+            p.hit_count = Mathf.Clamp(p.hit_count, 1, 10);
+
+            bool hasProjectile = HasAction(skill, "projectile");
+            bool hasMultiHitAction = HasMultiHitAction(skill);
+
             // ダメージ上限（多段ヒットは1ヒットあたりに按分）
             float totalMaxDmg = MaxDamage[si];
+            if (hasProjectile) totalMaxDmg *= 0.72f;
+            if (hasMultiHitAction) totalMaxDmg *= 0.9f;
             if (p.hit_count > 1)
             {
                 float perHitMax = totalMaxDmg / p.hit_count;
@@ -50,9 +58,6 @@ namespace PromptFighters.Battle.Skills
             p.knockback = Mathf.Clamp(p.knockback, MinKnockback[si], MaxKnockback);
             p.guard_damage = Mathf.Clamp(p.guard_damage * 0.55f, 0f, MaxGuardDamage[si]);
 
-            // ヒット数（上限を超えないよう）
-            p.hit_count = Mathf.Clamp(p.hit_count, 1, 10);
-
             // startup: 0以上、スロットごとの上限を適用（極端に遅くならないよう）
             p.startup     = Mathf.Clamp(p.startup, 0f, MaxStartup[si]);
             p.active_time = Mathf.Max(0.05f, p.active_time);
@@ -63,11 +68,17 @@ namespace PromptFighters.Battle.Skills
             {
                 foreach (var a in skill.actions)
                 {
+                    if (a.hit_count > 1 && p.hit_count < a.hit_count)
+                        p.hit_count = Mathf.Clamp(a.hit_count, 1, 10);
                     if (a.damage_override >= 0f)
-                        a.damage_override = Mathf.Clamp(a.damage_override, 0f, totalMaxDmg);
+                    {
+                        float maxOverride = totalMaxDmg / Mathf.Max(1, a.hit_count);
+                        a.damage_override = Mathf.Clamp(a.damage_override, 0f, maxOverride);
+                    }
 
                     // apply_statusのduration上限
                     if ((a.type == "apply_status" || a.type == "melee_hitbox" ||
+                         a.type == "body_hitbox" ||
                          a.type == "area_hitbox" || a.type == "trap_hitbox" ||
                          a.type == "projectile") && a.duration > 0f)
                     {
@@ -82,7 +93,8 @@ namespace PromptFighters.Battle.Skills
                         a.chance = Mathf.Clamp01(a.chance);
                     }
 
-                    if (a.type == "melee_hitbox" || a.type == "area_hitbox" || a.type == "trap_hitbox")
+                    if (a.type == "melee_hitbox" || a.type == "body_hitbox" ||
+                        a.type == "area_hitbox" || a.type == "trap_hitbox")
                     {
                         a.range = Mathf.Clamp(a.range, 0f, 4.2f);
                         if (a.size_x > 0f) a.size_x = Mathf.Clamp(a.size_x, 0.45f, 4.5f);
@@ -99,10 +111,27 @@ namespace PromptFighters.Battle.Skills
 
                     // dashのpowerに上限
                     if ((a.type == "dash" || a.type == "jump_attack" ||
-                         a.type == "push_enemy" || a.type == "pull_enemy") && a.power > 15f)
+                         a.type == "push_enemy" || a.type == "pull_enemy" ||
+                         a.type == "teleport") && a.power > 15f)
                         a.power = 15f;
                 }
             }
+        }
+
+        static bool HasAction(SkillData skill, string type)
+        {
+            if (skill?.actions == null) return false;
+            foreach (var a in skill.actions)
+                if (a != null && a.type == type) return true;
+            return false;
+        }
+
+        static bool HasMultiHitAction(SkillData skill)
+        {
+            if (skill?.actions == null) return false;
+            foreach (var a in skill.actions)
+                if (a != null && a.hit_count > 1) return true;
+            return false;
         }
     }
 }

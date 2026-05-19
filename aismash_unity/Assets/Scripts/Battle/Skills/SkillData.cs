@@ -37,7 +37,7 @@ namespace PromptFighters.Battle.Skills
     public class SkillAction
     {
         // 共通
-        public string type;       // "melee_hitbox" / "projectile" / "area_hitbox" / "trap_hitbox" / "dash" / "apply_status" / "buff_self" / "delay"
+        public string type;       // "melee_hitbox" / "body_hitbox" / "projectile" / "area_hitbox" / "trap_hitbox" / "dash" / "teleport" / "apply_status" / "buff_self" / "delay"
         public float  time;       // 技開始からの時間オフセット
 
         // 共通オプション
@@ -52,6 +52,7 @@ namespace PromptFighters.Battle.Skills
         public bool   follow_owner;
         public float  knockback_x;
         public float  knockback_y;
+        public bool   hide_effect;
 
         // dash / buff_self
         public float  power;

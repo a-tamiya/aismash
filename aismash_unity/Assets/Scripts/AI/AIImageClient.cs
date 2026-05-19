@@ -66,26 +66,37 @@ namespace PromptFighters.AI
 
         // 全スプライト共通の制約サフィックス
         const string CharSuffix   = "facing right, single character only, one character, complete full body from head to toe not cropped, flat chroma key green background (#00FF00), no text, no watermark, no shadow, no duplicate. Anime-style character with sharp, bold lines. Highly saturated and energetic color palette.";
-        const string EffectSuffix = "wide horizontal 2D game visual effect only, no character figure, no text, flat chroma key green background (#00FF00), bright energetic colors, centered in frame";
+        const string EffectSuffix = "2D game visual effect only, no character figure, no text, flat chroma key green background (#00FF00), bright energetic colors, centered in frame";
 
         // (id, filename, editPrompt) — ベース画像を参照して生成する14枚のバリエーション
-        static readonly (CharacterSpriteId id, string filename, string prompt)[] EditEntries =
+        static readonly (CharacterSpriteId id, string filename, string prompt, string size)[] BaseEditEntries =
         {
-            (CharacterSpriteId.Idle2,      "idle2",       $"slightly different weight shift idle pose, same character, {CharSuffix}"),
-            (CharacterSpriteId.Idle3,      "idle3",       $"lively idle pose with slight arm movement, same character, {CharSuffix}"),
-            (CharacterSpriteId.Jump,       "jump",        $"jumping airborne pose feet off ground, same character, {CharSuffix}"),
-            (CharacterSpriteId.Damage,     "damage",      $"hurt recoil reaction flinching backward, same character, {CharSuffix}"),
-            (CharacterSpriteId.Grab,       "grab",        $"grabbing grappling reach-out pose arms extended forward right, same character, {CharSuffix}"),
-            (CharacterSpriteId.Dash,       "dash",        $"fast dashing sprint pose leaning forward to the right, same character, {CharSuffix}"),
-            (CharacterSpriteId.AttackA,    "attack_a",    $"attack A punching or slashing to the right, same character, {CharSuffix}"),
-            (CharacterSpriteId.AttackB,    "attack_b",    $"attack B projectile launch aiming to the right, same character, {CharSuffix}"),
-            (CharacterSpriteId.AttackC,    "attack_c",    $"attack C special technique toward the right, same character, {CharSuffix}"),
-            (CharacterSpriteId.SmashSide,  "smash_side",  $"powerful side smash heavy swing to the right, same character, {CharSuffix}"),
-            (CharacterSpriteId.EffectA,    "effect_a",    $"attack A visual effect, {EffectSuffix}"),
-            (CharacterSpriteId.EffectB,    "effect_b",    $"projectile visual effect, {EffectSuffix}"),
-            (CharacterSpriteId.EffectC,    "effect_c",    $"special attack visual effect, {EffectSuffix}"),
-            (CharacterSpriteId.EffectSmash,"effect_smash",$"large powerful smash effect, {EffectSuffix}"),
+            (CharacterSpriteId.Idle2,      "idle2",       $"slightly different weight shift idle pose, same character, {CharSuffix}", CharacterSize),
+            (CharacterSpriteId.Idle3,      "idle3",       $"lively idle pose with slight arm movement, same character, {CharSuffix}", CharacterSize),
+            (CharacterSpriteId.Jump,       "jump",        $"jumping airborne pose feet off ground, same character, {CharSuffix}", CharacterSize),
+            (CharacterSpriteId.Damage,     "damage",      $"hurt recoil reaction flinching backward, same character, {CharSuffix}", CharacterSize),
+            (CharacterSpriteId.Grab,       "grab",        $"grabbing grappling reach-out pose arms extended forward right, same character, {CharSuffix}", CharacterSize),
+            (CharacterSpriteId.Dash,       "dash",        $"fast dashing sprint pose leaning forward to the right, same character, {CharSuffix}", CharacterSize),
+            (CharacterSpriteId.AttackA,    "attack_a",    $"attack A punching or slashing to the right, same character, {CharSuffix}", CharacterSize),
+            (CharacterSpriteId.AttackB,    "attack_b",    $"attack B projectile launch aiming to the right, same character, {CharSuffix}", CharacterSize),
+            (CharacterSpriteId.AttackC,    "attack_c",    $"attack C special technique toward the right, same character, {CharSuffix}", CharacterSize),
+            (CharacterSpriteId.SmashSide,  "smash_side",  $"powerful side smash heavy swing to the right, same character, {CharSuffix}", CharacterSize),
+            (CharacterSpriteId.EffectA,    "effect_a",    $"attack A visual effect, {EffectSuffix}", EffectSize),
+            (CharacterSpriteId.EffectB,    "effect_b",    $"projectile visual effect, {EffectSuffix}", EffectSize),
+            (CharacterSpriteId.EffectC,    "effect_c",    $"special attack visual effect, {EffectSuffix}", EffectSize),
+            (CharacterSpriteId.EffectSmash,"effect_smash",$"large powerful smash effect, {EffectSuffix}", EffectSize),
         };
+
+        public static Coroutine GenerateSpriteSet(MonoBehaviour runner,
+            CharacterData data,
+            Action<string> onProgress,
+            Action<CharacterSpriteSet> onSuccess,
+            Action<string> onError,
+            string saveDir = null)
+        {
+            return runner.StartCoroutine(
+                GenerateSpriteSetCoroutine(runner, data?.visualPrompt ?? "", data, onProgress, onSuccess, onError, saveDir));
+        }
 
         // saveDir: PNG保存先ディレクトリ（null なら保存しない）
         public static Coroutine GenerateSpriteSet(MonoBehaviour runner,
@@ -96,12 +107,13 @@ namespace PromptFighters.AI
             string saveDir = null)
         {
             return runner.StartCoroutine(
-                GenerateSpriteSetCoroutine(runner, baseVisualPrompt, onProgress, onSuccess, onError, saveDir));
+                GenerateSpriteSetCoroutine(runner, baseVisualPrompt, null, onProgress, onSuccess, onError, saveDir));
         }
 
         static IEnumerator GenerateSpriteSetCoroutine(
             MonoBehaviour runner,
             string baseVisualPrompt,
+            CharacterData data,
             Action<string> onProgress,
             Action<CharacterSpriteSet> onSuccess,
             Action<string> onError,
@@ -140,14 +152,22 @@ namespace PromptFighters.AI
 
             // Step 2: 残り14枚を並列生成 (images/edits)
             onProgress?.Invoke($"バリエーション画像を並列生成中... (14枚)");
-            int pending = EditEntries.Length;
+            var editEntries = BuildEditEntries(data);
+            int pending = editEntries.Count;
 
-            foreach (var (id, filename, editPrompt) in EditEntries)
+            foreach (var entry in editEntries)
             {
+                var (id, filename, editPrompt, size) = entry;
+                if (string.IsNullOrEmpty(editPrompt))
+                {
+                    set.Set(id, null);
+                    pending--;
+                    continue;
+                }
                 // baseVisualPrompt（外見説明）+ ポーズ指示（CharSuffixを既に含む）
                 string fullPrompt = baseVisualPrompt + ", " + editPrompt;
                 runner.StartCoroutine(GenerateEditCoroutine(
-                    id, filename, fullPrompt, baseRawBytes, key, saveDir,
+                    id, filename, fullPrompt, size, baseRawBytes, key, saveDir,
                     (spriteId, fname, sprite) =>
                     {
                         set.Set(spriteId, sprite);
@@ -165,6 +185,63 @@ namespace PromptFighters.AI
             yield return new WaitUntil(() => pending == 0);
 
             onSuccess?.Invoke(set);
+        }
+
+        static List<(CharacterSpriteId id, string filename, string prompt, string size)> BuildEditEntries(CharacterData data)
+        {
+            var entries = new List<(CharacterSpriteId id, string filename, string prompt, string size)>(BaseEditEntries);
+            if (data?.skills == null) return entries;
+
+            ConfigureEffect(entries, data.GetSkill(SkillSlot.AttackA), CharacterSpriteId.EffectA, "effect_a");
+            ConfigureEffect(entries, data.GetSkill(SkillSlot.AttackB), CharacterSpriteId.EffectB, "effect_b");
+            ConfigureEffect(entries, data.GetSkill(SkillSlot.AttackC), CharacterSpriteId.EffectC, "effect_c");
+            ConfigureEffect(entries, data.GetSkill(SkillSlot.SmashSide), CharacterSpriteId.EffectSmash, "effect_smash");
+            return entries;
+        }
+
+        static void ConfigureEffect(List<(CharacterSpriteId id, string filename, string prompt, string size)> entries,
+                                    SkillData skill, CharacterSpriteId id, string filename)
+        {
+            int index = entries.FindIndex(e => e.id == id);
+            if (index < 0 || skill == null) return;
+            if (!NeedsSeparateEffect(skill))
+            {
+                entries[index] = (id, filename, null, EffectSize);
+                return;
+            }
+
+            bool vertical = PrefersVerticalEffect(skill);
+            string orientation = vertical
+                ? "tall vertical 2D game visual effect, rising column or upward slash"
+                : "wide horizontal 2D game visual effect, side slash, beam, wave, or projectile trail";
+            entries[index] = (id, filename, $"{skill.skill_name} {orientation}, {EffectSuffix}",
+                vertical ? CharacterSize : EffectSize);
+        }
+
+        static bool NeedsSeparateEffect(SkillData skill)
+        {
+            if (skill.actions == null || skill.actions.Count == 0) return false;
+            foreach (var a in skill.actions)
+            {
+                if (a == null || a.hide_effect) continue;
+                if (a.type == "projectile" || a.type == "area_hitbox" || a.type == "trap_hitbox" ||
+                    a.type == "melee_hitbox" || a.type == "jump_attack")
+                    return true;
+            }
+            return false;
+        }
+
+        static bool PrefersVerticalEffect(SkillData skill)
+        {
+            if (skill.actions == null) return false;
+            foreach (var a in skill.actions)
+            {
+                if (a == null) continue;
+                if (a.type == "jump_attack") return true;
+                if (a.size_y > 0f && a.size_y > Mathf.Max(a.size_x, a.range) * 1.15f) return true;
+                if (a.knockback_y > 0.7f) return true;
+            }
+            return false;
         }
 
         // /v1/images/generations でベース画像を生成し、(Sprite, rawBytes) を返す
@@ -251,7 +328,7 @@ namespace PromptFighters.AI
         // /v1/images/edits でベース画像を参照してバリエーションを生成する
         static IEnumerator GenerateEditCoroutine(
             CharacterSpriteId id, string filename, string prompt,
-            byte[] basePngBytes, string key, string saveDir,
+            string size, byte[] basePngBytes, string key, string saveDir,
             Action<CharacterSpriteId, string, Sprite> onSuccess,
             Action<CharacterSpriteId, string> onError)
         {
@@ -259,7 +336,7 @@ namespace PromptFighters.AI
             {
                 new MultipartFormDataSection("model",   Model),
                 new MultipartFormDataSection("prompt",  prompt),
-                new MultipartFormDataSection("size",    IsEffectSprite(id) ? EffectSize : CharacterSize),
+                new MultipartFormDataSection("size",    string.IsNullOrEmpty(size) ? CharacterSize : size),
                 new MultipartFormDataSection("quality", Quality),
                 new MultipartFormDataSection("n",       "1"),
                 new MultipartFormFileSection("image[]", basePngBytes, "reference.png", "image/png"),

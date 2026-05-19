@@ -26,6 +26,7 @@ namespace PromptFighters.Battle.Skills
         public Vector2      DesiredWorldSize;
 
         readonly HashSet<Fighter> _hitTargets = new HashSet<Fighter>();
+        readonly Dictionary<Fighter, float> _nextHitTimes = new Dictionary<Fighter, float>();
         int _hitsLanded;
 
         public static Hitbox Spawn(Fighter owner, Vector2 worldPos, Vector2 size, float lifetime)
@@ -97,15 +98,30 @@ namespace PromptFighters.Battle.Skills
 
         void OnTriggerEnter2D(Collider2D other)
         {
+            TryHit(other);
+        }
+
+        void OnTriggerStay2D(Collider2D other)
+        {
+            TryHit(other);
+        }
+
+        void TryHit(Collider2D other)
+        {
             if (_hitsLanded >= MaxHits) return;
             var target = other.GetComponentInParent<Fighter>();
             if (target == null || target == Owner) return;
             if (target.IsDodging) return;
-            if (_hitTargets.Contains(target)) return;
+            if (MaxHits <= 1 && _hitTargets.Contains(target)) return;
+            if (MaxHits > 1 &&
+                _nextHitTimes.TryGetValue(target, out float nextTime) &&
+                Time.time < nextTime) return;
 
             _hitTargets.Add(target);
             ApplyHit(target);
             _hitsLanded++;
+            if (MaxHits > 1)
+                _nextHitTimes[target] = Time.time + Mathf.Max(0.04f, Lifetime / Mathf.Max(1, MaxHits));
             if (_hitsLanded >= MaxHits)
             {
                 // コライダーを無効化してビジュアルは lifetime まで表示し続ける
