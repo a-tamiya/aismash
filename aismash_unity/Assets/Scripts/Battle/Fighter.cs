@@ -1137,6 +1137,22 @@ namespace PromptFighters.Battle
         public void StartTemporaryChaos(float duration)
             => StartCoroutine(TemporaryChaos(duration));
 
+        public void DrainHP(float ratio)
+        {
+            if (State == FighterState.Dead) return;
+            float dmg = maxHP * Mathf.Clamp(ratio, 0.01f, 0.6f);
+            CurrentHP = Mathf.Max(0f, CurrentHP - dmg);
+            OnHPChanged?.Invoke(CurrentHP, maxHP);
+            DamagePopup.Spawn(transform.position, dmg, false);
+            if (CurrentHP <= 0f) Die();
+        }
+
+        public void StartTemporaryGravityChange(float multiplier, float duration)
+            => StartCoroutine(TemporaryGravityChange(multiplier, duration));
+
+        public void StartTemporarySizeChange(float multiplier, float duration)
+            => StartCoroutine(TemporarySizeChange(multiplier, duration));
+
         System.Collections.IEnumerator TemporarySpeedChange(float multiplier, float duration)
         {
             float origGround = moveSpeed;
@@ -1155,19 +1171,45 @@ namespace PromptFighters.Battle
         System.Collections.IEnumerator TemporaryJumpChange(float multiplier, float duration)
         {
             float orig = jumpForce;
-            _jumpBoostTimer = duration;
-            jumpForce  = orig * multiplier;
-            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "JUMP UP!", JumpBoostColor, 2.2f);
+            if (multiplier >= 1f) _jumpBoostTimer = duration;
+            jumpForce = orig * multiplier;
+            string jumpLabel = multiplier >= 1f ? "JUMP UP!" : "JUMP DOWN!";
+            Color  jumpCol   = multiplier >= 1f ? JumpBoostColor : SlowColor;
+            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, jumpLabel, jumpCol, 2.2f);
             yield return new WaitForSeconds(duration);
-            jumpForce  = orig;
+            jumpForce = orig;
         }
 
         System.Collections.IEnumerator TemporaryDamageBoost(float multiplier, float duration)
         {
             DamageMultiplier = multiplier;
-            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "POWER UP!", DamageBoostColor, 2.2f);
+            string dmgLabel = multiplier >= 1f ? "POWER UP!" : "POWER DOWN!";
+            Color  dmgCol   = multiplier >= 1f ? DamageBoostColor : SlowColor;
+            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, dmgLabel, dmgCol, 2.2f);
             yield return new WaitForSeconds(duration);
             DamageMultiplier = 1f;
+        }
+
+        System.Collections.IEnumerator TemporaryGravityChange(float multiplier, float duration)
+        {
+            _rb.gravityScale = _defaultGravityScale * multiplier;
+            string gravLabel = multiplier > 1f ? "HEAVY!" : "FLOAT!";
+            Color  gravCol   = multiplier > 1f ? new Color(0.6f, 0.4f, 1f) : new Color(0.5f, 1f, 0.9f);
+            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, gravLabel, gravCol, 2.2f);
+            yield return new WaitForSeconds(duration);
+            if (!_dodgeGravitySuppressed) _rb.gravityScale = _defaultGravityScale;
+        }
+
+        System.Collections.IEnumerator TemporarySizeChange(float multiplier, float duration)
+        {
+            EnsureVisualRenderer();
+            if (_visualRoot == null) yield break;
+            Vector3 orig = _visualRoot.localScale;
+            _visualRoot.localScale = new Vector3(orig.x * multiplier, orig.y * multiplier, orig.z);
+            string sizeLabel = multiplier > 1f ? "BIG!" : "SMALL!";
+            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, sizeLabel, new Color(1f, 0.85f, 0.2f), 2.2f);
+            yield return new WaitForSeconds(duration);
+            if (_visualRoot != null) _visualRoot.localScale = orig;
         }
 
         System.Collections.IEnumerator TemporaryInvincible(float duration)

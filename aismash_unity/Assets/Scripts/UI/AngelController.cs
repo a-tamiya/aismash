@@ -168,13 +168,26 @@ namespace PromptFighters.UI
         static string EffectLabel(string g) => g switch
         {
             "hp_recover"   => "HP 回復",
+            "hp_full"      => "HP 全回復！",
+            "hp_drain"     => "HP 削減",
+            "hp_swap"      => "HP 入れ替え！",
             "speed_boost"  => "スピード UP ↑",
             "speed_down"   => "スピード DOWN ↓",
             "jump_boost"   => "ジャンプ UP ↑",
+            "jump_down"    => "ジャンプ DOWN ↓",
             "damage_boost" => "パワー UP ↑",
+            "damage_down"  => "パワー DOWN ↓",
             "transparent"  => "無敵化 ✦",
             "invincible"   => "無敵化 ✦",
             "chaos"        => "操作混乱 ！",
+            "freeze"       => "行動不能 ！",
+            "burn"         => "バーン状態",
+            "guard_break"  => "ガード破壊 ！",
+            "gravity_up"   => "重力増加 ↓↓",
+            "gravity_down" => "重力低下 ↑↑",
+            "size_up"      => "巨大化",
+            "size_down"    => "縮小化",
+            "obstacle"     => "障害物出現 ！",
             _              => g,
         };
 

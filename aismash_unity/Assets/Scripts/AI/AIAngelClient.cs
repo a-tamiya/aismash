@@ -9,19 +9,21 @@ namespace PromptFighters.AI
     [Serializable]
     public class GimmickData
     {
-        // hp_recover / speed_boost / speed_down / jump_boost / damage_boost / transparent / invincible / chaos
         public string gimmick;
-        // player1 / player2 / both / weaker / stronger
         public string target;
         public float  value;
         public float  duration;
         public string message;
 
-        // P1/P2 に別々のギミックを適用する場合の 2 つ目（省略可）
         public string gimmick2;
         public string target2;
         public float  value2;
         public float  duration2;
+
+        public string gimmick3;
+        public string target3;
+        public float  value3;
+        public float  duration3;
     }
 
     public static class AIAngelClient
@@ -92,7 +94,7 @@ namespace PromptFighters.AI
 
         static string BuildPrompt(string voiceText, CommentaryBattleState s)
         {
-            return $"あなたは2D格闘ゲームを見守る「気まぐれ天使」AIです。観客の声と試合状況から、面白いギミックを決めてください。\n\n観客の声：「{voiceText}」\n\n試合状況：\n- {s.player1Name} HP: {s.player1HpRatio * 100f:0}%\n- {s.player2Name} HP: {s.player2HpRatio * 100f:0}%\n- 残り時間: {s.timeRemaining:0}秒\n\n【ルール】\n- 特定の指示がない場合は、負けている（HP少ない）プレイヤーが有利になるようにしてください。\n- P1とP2に別々のギミックを指示された場合は gimmick2/target2/value2/duration2 も使ってください。\n\nギミック種類：\n- hp_recover: HP回復（value=回復割合0.05〜0.25）\n- speed_boost: 移動速度上昇（value=倍率1.3〜2.0、duration=秒5〜10）\n- speed_down: 移動速度低下（value=倍率0.3〜0.7、duration=秒5〜10）\n- jump_boost: ジャンプ力上昇（value=倍率1.3〜2.0、duration=秒5〜10）\n- damage_boost: ダメージ上昇（value=倍率1.2〜1.6、duration=秒5〜10）\n- transparent: 無敵化（duration=秒3〜6）\n- chaos: 移動キー反転（duration=秒4〜8）\n\ntarget: player1 / player2 / both / weaker（HP少ない方）/ stronger（HP多い方）\n\nmessageは天使のセリフ（日本語・気まぐれで可愛い口調・30字以内）。プレイヤーを「弱い子」「かわいそう」など蔑むような表現は使わず、あくまで気まぐれで干渉する口調にしてください。\n\nJSONのみ出力（gimmick2は不要なら省略可）：\n{{\"gimmick\":\"...\",\"target\":\"...\",\"value\":0.0,\"duration\":0.0,\"gimmick2\":\"\",\"target2\":\"\",\"value2\":0.0,\"duration2\":0.0,\"message\":\"...\"}}";
+            return $"あなたは2D格闘ゲームを見守る「気まぐれ天使」AIです。気まぐれにギミックを発動して試合をかき乱します。\n\n観客の声：「{voiceText}」\n\n試合状況：\n- {s.player1Name} HP: {s.player1HpRatio * 100f:0}%\n- {s.player2Name} HP: {s.player2HpRatio * 100f:0}%\n- 残り時間: {s.timeRemaining:0}秒\n\n【天使の性格・ルール】\n- 観客の声がある場合はそれに応答してください\n- ただし強すぎる願い（即死・永続無敵など）ほど言うことを聞かない。機嫌を損ねて願った側にデバフをかけてもよい\n- 観客の声がない場合は試合を面白くする介入をする（負けている側を有利にするなど）\n- gimmick2/gimmick3を積極的に使い複合効果を出すこと\n- value/durationは観客の要求内容に応じて自由に決めてよい\n\n【ギミック一覧】\nバフ: hp_recover（value=回復割合）, hp_full（全回復）, speed_boost（value=速度倍率）, jump_boost（value=ジャンプ倍率）, damage_boost（value=ダメージ倍率）, invincible（無敵 duration=秒）, gravity_down（浮く value=重力倍率0.1〜0.8）\nデバフ: hp_drain（value=削減割合）, speed_down（value=速度倍率0.1〜0.9）, jump_down（value=ジャンプ倍率0.1〜0.9）, damage_down（value=ダメージ倍率0.1〜0.9）, chaos（操作反転 duration=秒）, freeze（行動不能 duration=秒1〜5）, burn（炎上 duration=秒）, guard_break（ガード破壊）, gravity_up（重力増加 value=倍率1.5〜5.0）\n特殊: hp_swap（HPを入れ替え target不要）, size_up（巨大化 value=倍率）, size_down（縮小 value=倍率0.3〜0.8）, obstacle（障害物設置 duration=秒）\n\ntarget: player1 / player2 / both / weaker / stronger / random\n\nmessageはプレイヤーへの人格攻撃なしで天使のセリフ（日本語・気まぐれな口調・30字以内）\n\nJSONのみ出力（不要フィールドは空文字/0でOK）：\n{{\"gimmick\":\"...\",\"target\":\"...\",\"value\":0.0,\"duration\":0.0,\"gimmick2\":\"\",\"target2\":\"\",\"value2\":0.0,\"duration2\":0.0,\"gimmick3\":\"\",\"target3\":\"\",\"value3\":0.0,\"duration3\":0.0,\"message\":\"...\"}}";
         }
 
         static string BuildBody(string prompt)
