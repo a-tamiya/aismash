@@ -18,7 +18,7 @@ namespace PromptFighters.Battle
         public float jumpForce = 12f;
         public int maxAirJumps = 1;
         [Range(0.45f, 0.85f)] public float shortHopMultiplier = 0.62f;
-        public float fastFallSpeed = 9f;
+        public float fastFallSpeed = 7.5f;
         public float fastFallMinAirTime = 0.18f;
         public float fastFallMaxUpwardSpeed = 1.2f;
         [Range(0.2f, 0.5f)] public float walkSpeedRatio = 0.35f;
