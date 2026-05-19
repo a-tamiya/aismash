@@ -161,7 +161,61 @@ namespace PromptFighters.Battle
                     SpawnTiltedPlatform(Mathf.Max(value, 1f), Mathf.Max(duration, 5f), targetKey, p1, p2);
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
+
+                // ── アクション系ギミック ────────────────────────────────
+                case "teleport":
+                    TeleportFighter(target1);
+                    TeleportFighter(target2);
+                    GameAudioManager.Instance?.PlayGimmickBuff();
+                    break;
+                case "position_swap":
+                    if (p1 != null && p2 != null)
+                    {
+                        float tmpX = p1.transform.position.x;
+                        p1.transform.position = new Vector3(p2.transform.position.x, p1.transform.position.y, 0f);
+                        p2.transform.position = new Vector3(tmpX, p2.transform.position.y, 0f);
+                        GameAudioManager.Instance?.PlayGimmickBuff();
+                    }
+                    break;
+                case "launch":
+                    float lv = Mathf.Clamp(value, 0.5f, 5f);
+                    target1?.ApplyImpulse(new Vector2(Random.Range(-1f,1f) * lv * 4f, lv * 7f), 0.3f);
+                    target2?.ApplyImpulse(new Vector2(Random.Range(-1f,1f) * lv * 4f, lv * 7f), 0.3f);
+                    GameAudioManager.Instance?.PlayGimmickDebuff();
+                    break;
+                case "slow":
+                    target1?.ApplyStatus(StatusType.Slow, Mathf.Max(duration, 5f));
+                    target2?.ApplyStatus(StatusType.Slow, Mathf.Max(duration, 5f));
+                    GameAudioManager.Instance?.PlayGimmickDebuff();
+                    break;
+                case "reflect":
+                    target1?.StartTemporaryReflect(Mathf.Max(duration, 4f));
+                    target2?.StartTemporaryReflect(Mathf.Max(duration, 4f));
+                    GameAudioManager.Instance?.PlayGimmickBuff();
+                    break;
+                case "hp_set":
+                    if (target1 != null) target1.DebugSetCurrentHP(target1.maxHP * Mathf.Clamp01(value));
+                    if (target2 != null) target2.DebugSetCurrentHP(target2.maxHP * Mathf.Clamp01(value));
+                    GameAudioManager.Instance?.PlayGimmickHeal();
+                    break;
+                case "guard_fill":
+                    target1?.FillGuard();
+                    target2?.FillGuard();
+                    GameAudioManager.Instance?.PlayGimmickBuff();
+                    break;
             }
+        }
+
+        void TeleportFighter(Fighter f)
+        {
+            if (f == null) return;
+            var bm = BattleManager.Instance;
+            float minX = bm?.StageMinX ?? -5f;
+            float maxX = bm?.StageMaxX ??  5f;
+            float x = Random.Range(minX + 1f, maxX - 1f);
+            f.transform.position = new Vector3(x, Mathf.Max(f.transform.position.y, 0.5f), 0f);
+            PromptFighters.UI.DamagePopup.SpawnText(
+                f.transform.position + Vector3.up, "WARP!", new Color(0.8f, 0.3f, 1f), 1.5f);
         }
 
         // ── 足場・地形生成 ───────────────────────────────────────────

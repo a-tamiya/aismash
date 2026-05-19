@@ -169,6 +169,14 @@ namespace PromptFighters.UI
                 totalDamageP1    = logger?.P1.totalDamageDealt ?? 0f,
                 totalDamageP2    = logger?.P2.totalDamageDealt ?? 0f,
                 recentEvents     = logger?.RecentEventsSummary() ?? "",
+                lastSkillP1      = logger?.P1.lastSkillName ?? "---",
+                lastSkillP2      = logger?.P2.lastSkillName ?? "---",
+                hitStreakP1      = logger?.P1.hitStreak ?? 0,
+                hitStreakP2      = logger?.P2.hitStreak ?? 0,
+                recentHitsP1     = logger?.P1RecentHits ?? 0,
+                recentHitsP2     = logger?.P2RecentHits ?? 0,
+                guardBreaksP1    = logger?.P1.guardBreaksDealt ?? 0,
+                guardBreaksP2    = logger?.P2.guardBreaksDealt ?? 0,
             };
         }
 

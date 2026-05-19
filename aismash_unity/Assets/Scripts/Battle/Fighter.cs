@@ -115,6 +115,9 @@ namespace PromptFighters.Battle
         Collider2D _bodyCollider;
         Collider2D _ignoredOpponentCollider;
 
+        float _reflectTimer;
+        static readonly Color ReflectColor = new Color(1f, 0.3f, 0.95f);
+
         // 状態異常タイマー
         float _burnTimer;
         float _burnTickTimer;
@@ -147,6 +150,7 @@ namespace PromptFighters.Battle
         public float DamageMultiplier { get; private set; } = 1f;
         public bool  IsInvincible     { get; private set; }
         public bool  InputReversed    { get; private set; }
+        public bool  IsReflecting     => _reflectTimer > 0f;
 
         public bool CanAct =>
             State != FighterState.Guarding &&
@@ -225,6 +229,7 @@ namespace PromptFighters.Battle
             }
             if (_hitFlashTimer      > 0f) _hitFlashTimer      -= Time.deltaTime;
             if (_transparencyTimer  > 0f) _transparencyTimer  -= Time.deltaTime;
+            if (_reflectTimer       > 0f) _reflectTimer       -= Time.deltaTime;
             if (_speedBoostTimer > 0f) _speedBoostTimer -= Time.deltaTime;
             if (_jumpBoostTimer  > 0f) _jumpBoostTimer  -= Time.deltaTime;
             if (_forcedSpriteTimer  > 0f)
@@ -323,6 +328,7 @@ namespace PromptFighters.Battle
                 else if (_speedBoostTimer  > 0f)  c = Color.Lerp(SpeedBoostColor,  Color.white, (Mathf.Sin(Time.time * 6f) + 1f) * 0.25f);
                 else if (_jumpBoostTimer   > 0f)  c = Color.Lerp(JumpBoostColor,   Color.white, (Mathf.Sin(Time.time * 6f) + 1f) * 0.25f);
                 else if (InputReversed          )  c = Color.Lerp(ChaosColor,       Color.white, (Mathf.Sin(Time.time * 10f) + 1f) * 0.3f);
+                else if (_reflectTimer     > 0f)  c = Color.Lerp(ReflectColor,     Color.white, (Mathf.Sin(Time.time * 12f) + 1f) * 0.3f);
             }
 
             _sprite.color = WithDebugAlpha(c);
@@ -468,6 +474,13 @@ namespace PromptFighters.Battle
             if (State == FighterState.Dodging || _dodgeTimer > 0f) return;
             if (_grabbedBy != null) return;
             if (IsInvincible) return;
+
+            if (IsReflecting && Opponent != null && !Opponent.IsReflecting)
+            {
+                DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "REFLECT!", ReflectColor, 1.5f);
+                Opponent.TakeDamage(damage, knockbackForce, -knockbackDir, stunDuration, guardDamage, false);
+                return;
+            }
 
             bool blocking = State == FighterState.Guarding && _guardBreakTimer <= 0f;
             if (!blocking && applyOpponentDamageBoost && Opponent != null) damage *= Opponent.DamageMultiplier;
@@ -857,6 +870,7 @@ namespace PromptFighters.Battle
             _isAirDodgeActive   = false;
             _fastFallUsed       = false;
             _airTime            = 0f;
+            _reflectTimer       = 0f;
             RestoreDodgeGravity();
             RestoreOpponentCollision();
             _forcedSprite       = null;
@@ -960,6 +974,7 @@ namespace PromptFighters.Battle
             OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
             OnGuardBroken?.Invoke();
             BattleLogger.Instance?.LogEvent($"{PlayerLabel()}のガードが割れた");
+            if (Opponent != null) BattleLogger.Instance?.LogGuardBreak(Opponent.PlayerIndex);
             DamagePopup.SpawnText(transform.position, "GUARD BREAK", GuardBreakColor, 3.2f);
         }
 
@@ -1152,6 +1167,23 @@ namespace PromptFighters.Battle
 
         public void StartTemporarySizeChange(float multiplier, float duration)
             => StartCoroutine(TemporarySizeChange(multiplier, duration));
+
+        public void StartTemporaryReflect(float duration)
+        {
+            _reflectTimer = Mathf.Max(_reflectTimer, duration);
+            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "REFLECT!", ReflectColor, 2.2f);
+        }
+
+        public void FillGuard()
+        {
+            if (State == FighterState.Dead) return;
+            _guardBreakTimer = 0f;
+            CurrentGuardDurability = maxGuardDurability;
+            _guardRecoveryDelayTimer = 0f;
+            if (State == FighterState.Stunned && _stunTimer <= 0f) State = FighterState.Idle;
+            OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
+            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "GUARD UP!", new Color(0.28f, 0.72f, 1f), 1.8f);
+        }
 
         System.Collections.IEnumerator TemporarySpeedChange(float multiplier, float duration)
         {

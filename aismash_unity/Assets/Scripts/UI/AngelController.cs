@@ -192,8 +192,15 @@ namespace PromptFighters.UI
             "obstacle_wall"     => "壁出現 ！",
             "obstacle_bounce"   => "バウンスパッド ！",
             "obstacle_rain"     => "障害物の雨 ！",
-            "obstacle_tilt"     => "斜め足場出現 ！",
-            _              => g,
+            "obstacle_tilt"  => "斜め足場出現 ！",
+            "teleport"       => "瞬間移動 ！",
+            "position_swap"  => "位置入れ替え ！",
+            "launch"         => "吹き飛ばし ！",
+            "slow"           => "スロー状態",
+            "reflect"        => "ダメージ反射 ✦",
+            "hp_set"         => "HP強制変更 ！",
+            "guard_fill"     => "ガード全回復",
+            _                => g,
         };
 
         void ShowEffectCenter(string text)
@@ -214,8 +221,9 @@ namespace PromptFighters.UI
 
         CommentaryBattleState BuildBattleState()
         {
-            var f1 = _bm?.fighter1;
-            var f2 = _bm?.fighter2;
+            var f1     = _bm?.fighter1;
+            var f2     = _bm?.fighter2;
+            var logger = BattleLogger.Instance;
             return new CommentaryBattleState
             {
                 player1Name    = _bm?.Character1?.characterName ?? "1P",
@@ -223,6 +231,19 @@ namespace PromptFighters.UI
                 player2Name    = _bm?.Character2?.characterName ?? "2P",
                 player2HpRatio = f2 != null ? f2.CurrentHP / f2.maxHP : 0f,
                 timeRemaining  = _bm?.TimeRemaining ?? 0f,
+                mostUsedSkillP1 = logger?.P1.MostUsedSkillName() ?? "",
+                mostUsedSkillP2 = logger?.P2.MostUsedSkillName() ?? "",
+                totalDamageP1   = logger?.P1.totalDamageDealt ?? 0f,
+                totalDamageP2   = logger?.P2.totalDamageDealt ?? 0f,
+                recentEvents    = logger?.RecentEventsSummary() ?? "",
+                lastSkillP1     = logger?.P1.lastSkillName ?? "---",
+                lastSkillP2     = logger?.P2.lastSkillName ?? "---",
+                hitStreakP1     = logger?.P1.hitStreak ?? 0,
+                hitStreakP2     = logger?.P2.hitStreak ?? 0,
+                recentHitsP1    = logger?.P1RecentHits ?? 0,
+                recentHitsP2    = logger?.P2RecentHits ?? 0,
+                guardBreaksP1   = logger?.P1.guardBreaksDealt ?? 0,
+                guardBreaksP2   = logger?.P2.guardBreaksDealt ?? 0,
             };
         }
 

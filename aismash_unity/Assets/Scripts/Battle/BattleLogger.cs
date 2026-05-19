@@ -7,10 +7,14 @@ namespace PromptFighters.Battle
 {
     public class PlayerLog
     {
-        public readonly int[]   skillUseCounts = new int[4];
-        public readonly string[] skillNames    = new string[4];
-        public float totalDamageDealt;
-        public float totalDamageReceived;
+        public readonly int[]    skillUseCounts = new int[4];
+        public readonly string[] skillNames     = new string[4];
+        public float  totalDamageDealt;
+        public float  totalDamageReceived;
+        public int    hitStreak;
+        public int    maxHitStreak;
+        public string lastSkillName = "---";
+        public int    guardBreaksDealt;
 
         public int MostUsedSlot()
         {
@@ -34,7 +38,19 @@ namespace PromptFighters.Battle
 
         public PlayerLog P1 { get; private set; } = new PlayerLog();
         public PlayerLog P2 { get; private set; } = new PlayerLog();
-        readonly Queue<string> _recentEvents = new Queue<string>();
+        readonly Queue<string> _recentEvents  = new Queue<string>();
+        readonly Queue<float>  _p1RecentHits  = new Queue<float>();
+        readonly Queue<float>  _p2RecentHits  = new Queue<float>();
+
+        public int P1RecentHits => CountRecent(_p1RecentHits, 5f);
+        public int P2RecentHits => CountRecent(_p2RecentHits, 5f);
+
+        int CountRecent(Queue<float> q, float window)
+        {
+            float cutoff = Time.time - window;
+            while (q.Count > 0 && q.Peek() < cutoff) q.Dequeue();
+            return q.Count;
+        }
 
         void Awake()
         {
@@ -58,6 +74,8 @@ namespace PromptFighters.Battle
             P1 = new PlayerLog();
             P2 = new PlayerLog();
             _recentEvents.Clear();
+            _p1RecentHits.Clear();
+            _p2RecentHits.Clear();
         }
 
         // SkillExecutor から呼ぶ
@@ -68,6 +86,7 @@ namespace PromptFighters.Battle
             var log = playerIndex == 0 ? P1 : P2;
             log.skillUseCounts[(int)slot]++;
             log.skillNames[(int)slot] = skillName;
+            log.lastSkillName = skillName;
             LogEvent($"{Label(playerIndex)}が「{skillName}」を使用");
         }
 
@@ -76,12 +95,24 @@ namespace PromptFighters.Battle
         {
             if (BattleManager.Instance == null || !BattleManager.Instance.IsFighting) return;
             if (BattleManager.Instance.IsTraining) return;
-            var log = attackerPlayerIndex == 0 ? P1 : P2;
-            log.totalDamageDealt += damage;
+            var attacker = attackerPlayerIndex == 0 ? P1 : P2;
             var receiver = attackerPlayerIndex == 0 ? P2 : P1;
+            attacker.totalDamageDealt += damage;
             receiver.totalDamageReceived += damage;
+            attacker.hitStreak++;
+            attacker.maxHitStreak = Mathf.Max(attacker.maxHitStreak, attacker.hitStreak);
+            receiver.hitStreak = 0;
+            if (attackerPlayerIndex == 0) _p1RecentHits.Enqueue(Time.time);
+            else                          _p2RecentHits.Enqueue(Time.time);
             if (damage >= 8f)
                 LogEvent($"{Label(attackerPlayerIndex)}が{damage:0}ダメージの大技をヒット");
+        }
+
+        public void LogGuardBreak(int attackerIndex)
+        {
+            if (BattleManager.Instance == null || !BattleManager.Instance.IsFighting) return;
+            var log = attackerIndex == 0 ? P1 : P2;
+            log.guardBreaksDealt++;
         }
 
         public void LogEvent(string text)
