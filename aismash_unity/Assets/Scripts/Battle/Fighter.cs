@@ -82,6 +82,7 @@ namespace PromptFighters.Battle
         public event System.Action<float, bool>  OnDamageReceived; // (damage, wasBlocked)
         public event System.Action               OnJumped;
         public event System.Action               OnLanded;
+        public event System.Action               OnDodged;
 
         Rigidbody2D _rb;
         SpriteRenderer _sprite;
@@ -560,6 +561,7 @@ namespace PromptFighters.Battle
             }
 
             ForceSprite(CharacterSpriteId.Dash, _dodgeTimer);
+            OnDodged?.Invoke();
             return true;
         }
 

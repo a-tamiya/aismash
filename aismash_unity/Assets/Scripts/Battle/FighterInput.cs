@@ -169,6 +169,19 @@ namespace PromptFighters.Battle
                     if (kb.rightArrowKey.isPressed) dir += 1f;
                 }
             }
+            else
+            {
+                if (playerIndex == 0)
+                {
+                    if (LegacyKey(KeyCode.A)) dir -= 1f;
+                    if (LegacyKey(KeyCode.D)) dir += 1f;
+                }
+                else
+                {
+                    if (LegacyKey(KeyCode.LeftArrow))  dir -= 1f;
+                    if (LegacyKey(KeyCode.RightArrow)) dir += 1f;
+                }
+            }
 
             var gp = GetGamepad();
             if (gp != null)
@@ -217,6 +230,19 @@ namespace PromptFighters.Battle
                     if (kb.upArrowKey.isPressed)   dir += 1f;
                 }
             }
+            else
+            {
+                if (playerIndex == 0)
+                {
+                    if (LegacyKey(KeyCode.S)) dir -= 1f;
+                    if (LegacyKey(KeyCode.W)) dir += 1f;
+                }
+                else
+                {
+                    if (LegacyKey(KeyCode.DownArrow)) dir -= 1f;
+                    if (LegacyKey(KeyCode.UpArrow))   dir += 1f;
+                }
+            }
 
             var gp = GetGamepad();
             if (gp != null)
@@ -260,6 +286,11 @@ namespace PromptFighters.Battle
                 if (playerIndex == 0 && kb.wKey.wasPressedThisFrame)        return true;
                 if (playerIndex == 1 && kb.upArrowKey.wasPressedThisFrame)  return true;
             }
+            else
+            {
+                if (playerIndex == 0 && LegacyKeyDown(KeyCode.W)) return true;
+                if (playerIndex == 1 && LegacyKeyDown(KeyCode.UpArrow)) return true;
+            }
             var gp = GetGamepad();
             return gp != null && gp.buttonNorth.wasPressedThisFrame;
         }
@@ -271,6 +302,11 @@ namespace PromptFighters.Battle
             {
                 if (playerIndex == 0 && kb.leftShiftKey.isPressed)  return true;
                 if (playerIndex == 1 && kb.rightCtrlKey.isPressed) return true;
+            }
+            else
+            {
+                if (playerIndex == 0 && LegacyKey(KeyCode.LeftShift)) return true;
+                if (playerIndex == 1 && LegacyKey(KeyCode.RightControl)) return true;
             }
             var gp = GetGamepad();
             return gp != null && (gp.rightShoulder.isPressed || gp.rightTrigger.isPressed);
@@ -284,6 +320,11 @@ namespace PromptFighters.Battle
                 if (playerIndex == 0 && kb.leftShiftKey.wasPressedThisFrame)  return true;
                 if (playerIndex == 1 && kb.rightCtrlKey.wasPressedThisFrame) return true;
             }
+            else
+            {
+                if (playerIndex == 0 && LegacyKeyDown(KeyCode.LeftShift)) return true;
+                if (playerIndex == 1 && LegacyKeyDown(KeyCode.RightControl)) return true;
+            }
 
             var gp = GetGamepad();
             return gp != null && (gp.rightShoulder.wasPressedThisFrame || gp.rightTrigger.wasPressedThisFrame);
@@ -296,6 +337,11 @@ namespace PromptFighters.Battle
             {
                 if (playerIndex == 0 && kb.gKey.wasPressedThisFrame) return true;
                 if (playerIndex == 1 && kb.numpad0Key.wasPressedThisFrame) return true;
+            }
+            else
+            {
+                if (playerIndex == 0 && LegacyKeyDown(KeyCode.G)) return true;
+                if (playerIndex == 1 && LegacyKeyDown(KeyCode.Keypad0)) return true;
             }
 
             var gp = GetGamepad();
@@ -326,6 +372,27 @@ namespace PromptFighters.Battle
                     }
                 }
             }
+            else
+            {
+                if (playerIndex == 0)
+                {
+                    switch (slot)
+                    {
+                        case SkillSlot.AttackA: if (LegacyKeyDown(KeyCode.J)) return true; break;
+                        case SkillSlot.AttackB: if (LegacyKeyDown(KeyCode.K)) return true; break;
+                        case SkillSlot.AttackC: if (LegacyKeyDown(KeyCode.L)) return true; break;
+                    }
+                }
+                else
+                {
+                    switch (slot)
+                    {
+                        case SkillSlot.AttackA: if (LegacyKeyDown(KeyCode.Keypad2)) return true; break;
+                        case SkillSlot.AttackB: if (LegacyKeyDown(KeyCode.Keypad3)) return true; break;
+                        case SkillSlot.AttackC: if (LegacyKeyDown(KeyCode.Keypad1)) return true; break;
+                    }
+                }
+            }
 
             var gp = GetGamepad();
             if (gp != null)
@@ -350,6 +417,12 @@ namespace PromptFighters.Battle
                 rightButtonPressed |= playerIndex == 0
                     ? kb.jKey.isPressed
                     : kb.numpad2Key.isPressed;
+            }
+            else
+            {
+                rightButtonPressed |= playerIndex == 0
+                    ? LegacyKey(KeyCode.J)
+                    : LegacyKey(KeyCode.Keypad2);
             }
 
             var gp = GetGamepad();
@@ -394,6 +467,13 @@ namespace PromptFighters.Battle
                     : kb.leftArrowKey.wasPressedThisFrame || kb.rightArrowKey.wasPressedThisFrame;
                 if (keyboardFlick) _lastSmashFlickTime = Time.time;
             }
+            else
+            {
+                bool keyboardFlick = playerIndex == 0
+                    ? LegacyKeyDown(KeyCode.A) || LegacyKeyDown(KeyCode.D)
+                    : LegacyKeyDown(KeyCode.LeftArrow) || LegacyKeyDown(KeyCode.RightArrow);
+                if (keyboardFlick) _lastSmashFlickTime = Time.time;
+            }
 
             var gp = GetGamepad();
             if (gp != null)
@@ -412,6 +492,18 @@ namespace PromptFighters.Battle
         {
             var all = Gamepad.all;
             return all.Count > playerIndex ? all[playerIndex] : null;
+        }
+
+        static bool LegacyKey(KeyCode key)
+        {
+            try { return Input.GetKey(key); }
+            catch (System.InvalidOperationException) { return false; }
+        }
+
+        static bool LegacyKeyDown(KeyCode key)
+        {
+            try { return Input.GetKeyDown(key); }
+            catch (System.InvalidOperationException) { return false; }
         }
     }
 }

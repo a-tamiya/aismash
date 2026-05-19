@@ -27,6 +27,8 @@ namespace PromptFighters.Audio
         AudioClip _smashHit;
         AudioClip _menu;
         AudioClip _projectile;
+        AudioClip _meleeWhiff;
+        AudioClip _dodge;
         AudioClip _lightHit;
         AudioClip _moveLoop;
         AudioClip _mediumHit;
@@ -117,6 +119,8 @@ namespace PromptFighters.Audio
             _smashHit = Load("Audio/SFX/スマッシュヒット音");
             _menu = Load("Audio/SFX/メニューボタン音");
             _projectile = Load("Audio/SFX/遠距離攻撃");
+            _meleeWhiff = Load("Audio/SFX/近距離攻撃空振り");
+            _dodge = Load("Audio/SFX/移動回避と空中回避");
             _lightHit = Load("Audio/SFX/小パンチ");
             _moveLoop = Load("Audio/SFX/地上移動");
             _mediumHit = Load("Audio/SFX/中パンチ");
@@ -186,6 +190,7 @@ namespace PromptFighters.Audio
             fighter.OnGuardBroken += HandleGuardBroken;
             fighter.OnJumped += HandleJumped;
             fighter.OnLanded += HandleLanded;
+            fighter.OnDodged += HandleDodged;
         }
 
         void UnbindFighter(Fighter fighter)
@@ -194,6 +199,7 @@ namespace PromptFighters.Audio
             fighter.OnGuardBroken -= HandleGuardBroken;
             fighter.OnJumped -= HandleJumped;
             fighter.OnLanded -= HandleLanded;
+            fighter.OnDodged -= HandleDodged;
             SetGroundMove(fighter, false);
         }
 
@@ -211,23 +217,18 @@ namespace PromptFighters.Audio
         void HandleGuardBroken() => PlayOneShot(_guardBreak, 0.9f);
         void HandleJumped() => PlayOneShot(_jump, 0.58f);
         void HandleLanded() => PlayOneShot(_land, 0.46f);
+        void HandleDodged() => PlayOneShot(_dodge, 0.7f);
 
         public void PlaySkill(SkillData skill)
         {
-            if (skill?.slot == SkillSlot.SmashSide)
-            {
-                PlayOneShot(_smashHit, 0.42f);
-                return;
-            }
-
             if (HasAction(skill, "projectile"))
             {
                 PlayOneShot(_projectile, 0.64f);
                 return;
             }
-
-            PlayOneShot(skill?.parameters.damage >= 9f ? _mediumHit : _lightHit, 0.55f);
         }
+
+        public void PlayMeleeWhiff() => PlayOneShot(_meleeWhiff, 0.62f);
 
         public void PlayMenu() => PlayOneShot(_menu, 0.62f);
 

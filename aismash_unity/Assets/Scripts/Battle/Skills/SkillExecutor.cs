@@ -15,6 +15,8 @@ namespace PromptFighters.Battle.Skills
 
         Fighter _fighter;
         bool _isExecuting;
+        bool _currentSkillHit;
+        int _skillSerial;
 
         public bool  IsExecuting               => _isExecuting;
         public SkillData GetSkill(SkillSlot s) => skills[(int)s];
@@ -52,6 +54,7 @@ namespace PromptFighters.Battle.Skills
         public void ResetSkillState()
         {
             _isExecuting = false;
+            UnsubscribeCurrentSkillHit();
             StopAllCoroutines();
         }
 
@@ -85,10 +88,17 @@ namespace PromptFighters.Battle.Skills
         IEnumerator ExecuteSkill(SkillData skill, float powerMultiplier)
         {
             _isExecuting = true;
+            int serial = ++_skillSerial;
+            _currentSkillHit = false;
+            if (_fighter.Opponent != null)
+                _fighter.Opponent.OnDamageReceived += MarkCurrentSkillHit;
             float recovery = EffectiveRecovery(skill);
             float totalDuration = skill.parameters.startup + skill.parameters.active_time + recovery;
             _fighter.BeginSkillRecovery(totalDuration);
             _fighter.ShowSkillSprite(skill.slot, totalDuration);
+            float whiffDelay = WhiffCheckDelay(skill);
+            if (whiffDelay > 0f)
+                StartCoroutine(PlayWhiffIfMissed(serial, whiffDelay));
 
             // スキル発動フラッシュ
             var sr = _fighter.VisualRenderer;
@@ -124,6 +134,43 @@ namespace PromptFighters.Battle.Skills
             while (Time.time - t0 < totalDuration) yield return null;
 
             _isExecuting = false;
+            UnsubscribeCurrentSkillHit();
+        }
+
+        void MarkCurrentSkillHit(float damage, bool wasBlocked)
+        {
+            _currentSkillHit = true;
+        }
+
+        void UnsubscribeCurrentSkillHit()
+        {
+            if (_fighter != null && _fighter.Opponent != null)
+                _fighter.Opponent.OnDamageReceived -= MarkCurrentSkillHit;
+        }
+
+        IEnumerator PlayWhiffIfMissed(int serial, float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            if (_isExecuting && serial == _skillSerial && !_currentSkillHit)
+                GameAudioManager.Instance?.PlayMeleeWhiff();
+        }
+
+        static float WhiffCheckDelay(SkillData skill)
+        {
+            if (skill?.actions == null) return 0f;
+            float latest = 0f;
+            bool hasMelee = false;
+            for (int i = 0; i < skill.actions.Count; i++)
+            {
+                var a = skill.actions[i];
+                if (a == null) continue;
+                bool melee = a.type == "melee_hitbox" || a.type == "area_hitbox" || a.type == "jump_attack";
+                if (!melee) continue;
+                hasMelee = true;
+                float duration = a.duration > 0f ? a.duration : Mathf.Max(skill.parameters.active_time, 0.08f);
+                latest = Mathf.Max(latest, a.time + duration);
+            }
+            return hasMelee ? latest + 0.03f : 0f;
         }
 
         static float EffectiveRecovery(SkillData skill)
