@@ -68,7 +68,7 @@ namespace PromptFighters.UI
             panelRect.anchorMax = new Vector2(1f, 0f);
             panelRect.pivot     = new Vector2(0.5f, 0f);
             panelRect.anchoredPosition = Vector2.zero;
-            panelRect.sizeDelta = new Vector2(0f, 58f);
+            panelRect.sizeDelta = new Vector2(0f, 100f);
 
             panelGo.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.72f);
 
@@ -84,9 +84,11 @@ namespace PromptFighters.UI
             textRect.offsetMax = new Vector2(-20f, -4f);
 
             _label = textGo.AddComponent<TextMeshProUGUI>();
-            UITheme.Apply(_label, 20f, FontStyles.Bold);
+            UITheme.Apply(_label, 26f, FontStyles.Bold);
             _label.color     = Color.white;
             _label.alignment = TextAlignmentOptions.Center;
+            _label.textWrappingMode = TextWrappingModes.Normal;
+            _label.overflowMode = TextOverflowModes.Truncate;
 
             _audioSource = canvasGo.AddComponent<AudioSource>();
             _audioSource.playOnAwake = false;

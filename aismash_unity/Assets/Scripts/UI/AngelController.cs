@@ -216,23 +216,36 @@ namespace PromptFighters.UI
             DontDestroyOnLoad(canvasGo);
 
             var canvas = canvasGo.AddComponent<Canvas>();
-            canvas.renderMode   = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 55;
-            canvasGo.AddComponent<CanvasScaler>();
+            // ステージ背景(-10) と ファイター(0) の間に挿入
+            if (Camera.main != null)
+            {
+                canvas.renderMode    = RenderMode.ScreenSpaceCamera;
+                canvas.worldCamera   = Camera.main;
+                canvas.planeDistance = 5f;
+                canvas.sortingOrder  = -5;
+            }
+            else
+            {
+                canvas.renderMode   = RenderMode.ScreenSpaceOverlay;
+                canvas.sortingOrder = 55;
+            }
+
+            var scaler = canvasGo.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode        = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.matchWidthOrHeight  = 0.5f;
             canvasGo.AddComponent<GraphicRaycaster>();
 
-            // ── 上部バナー（天使降臨中）──
+            // ── 上部バナー（背景なし・全幅）──
             var bannerGo = new GameObject("AngelBanner");
             bannerGo.transform.SetParent(canvasGo.transform, false);
 
             var bannerRect = bannerGo.AddComponent<RectTransform>();
-            bannerRect.anchorMin        = new Vector2(0.5f, 1f);
-            bannerRect.anchorMax        = new Vector2(0.5f, 1f);
+            bannerRect.anchorMin        = new Vector2(0f, 1f);
+            bannerRect.anchorMax        = new Vector2(1f, 1f);
             bannerRect.pivot            = new Vector2(0.5f, 1f);
-            bannerRect.anchoredPosition = new Vector2(0f, -16f);
-            bannerRect.sizeDelta        = new Vector2(580f, 110f);
-
-            bannerGo.AddComponent<Image>().color = new Color(0.45f, 0.12f, 0.62f, 0.90f);
+            bannerRect.anchoredPosition = new Vector2(0f, -20f);
+            bannerRect.sizeDelta        = new Vector2(0f, 160f);
 
             _bannerGroup       = bannerGo.AddComponent<CanvasGroup>();
             _bannerGroup.alpha = 0f;
@@ -240,42 +253,40 @@ namespace PromptFighters.UI
             var titleGo = new GameObject("Title");
             titleGo.transform.SetParent(bannerGo.transform, false);
             var titleRect = titleGo.AddComponent<RectTransform>();
-            titleRect.anchorMin = new Vector2(0f, 0.52f);
+            titleRect.anchorMin = new Vector2(0f, 0.5f);
             titleRect.anchorMax = Vector2.one;
-            titleRect.offsetMin = new Vector2(10f, 0f);
-            titleRect.offsetMax = new Vector2(-10f, -6f);
+            titleRect.offsetMin = new Vector2(20f, 0f);
+            titleRect.offsetMax = new Vector2(-20f, -8f);
 
             _titleLabel = titleGo.AddComponent<TextMeshProUGUI>();
-            UITheme.Apply(_titleLabel, 22f, FontStyles.Bold);
-            _titleLabel.color     = new Color(1f, 0.9f, 0.4f);
-            _titleLabel.alignment = TextAlignmentOptions.Center;
+            UITheme.Apply(_titleLabel, 72f, FontStyles.Bold);
+            _titleLabel.color            = new Color(1f, 0.95f, 0.35f);
+            _titleLabel.alignment        = TextAlignmentOptions.Center;
+            _titleLabel.textWrappingMode = TextWrappingModes.NoWrap;
 
             var msgGo = new GameObject("Status");
             msgGo.transform.SetParent(bannerGo.transform, false);
             var msgRect = msgGo.AddComponent<RectTransform>();
             msgRect.anchorMin = Vector2.zero;
-            msgRect.anchorMax = new Vector2(1f, 0.52f);
-            msgRect.offsetMin = new Vector2(10f, 6f);
-            msgRect.offsetMax = new Vector2(-10f, 0f);
+            msgRect.anchorMax = new Vector2(1f, 0.5f);
+            msgRect.offsetMin = new Vector2(20f, 4f);
+            msgRect.offsetMax = new Vector2(-20f, 0f);
 
             _statusLabel = msgGo.AddComponent<TextMeshProUGUI>();
-            UITheme.Apply(_statusLabel, 18f);
+            UITheme.Apply(_statusLabel, 44f);
             _statusLabel.color     = Color.white;
             _statusLabel.alignment = TextAlignmentOptions.Center;
 
-            // ── 中央大表示（ギミック効果）──
+            // ── 中央大表示（ギミック効果・背景なし）──
             var effectGo = new GameObject("EffectDisplay");
             effectGo.transform.SetParent(canvasGo.transform, false);
 
             var effectRect = effectGo.AddComponent<RectTransform>();
-            effectRect.anchorMin = new Vector2(0.5f, 0.5f);
-            effectRect.anchorMax = new Vector2(0.5f, 0.5f);
-            effectRect.pivot     = new Vector2(0.5f, 0.5f);
+            effectRect.anchorMin        = new Vector2(0f, 0.5f);
+            effectRect.anchorMax        = new Vector2(1f, 0.5f);
+            effectRect.pivot            = new Vector2(0.5f, 0.5f);
             effectRect.anchoredPosition = Vector2.zero;
-            effectRect.sizeDelta = new Vector2(700f, 180f);
-
-            var effectBg = effectGo.AddComponent<Image>();
-            effectBg.color = new Color(0f, 0f, 0f, 0.55f);
+            effectRect.sizeDelta        = new Vector2(0f, 200f);
 
             _effectGroup       = effectGo.AddComponent<CanvasGroup>();
             _effectGroup.alpha = 0f;
@@ -289,7 +300,7 @@ namespace PromptFighters.UI
             effectTextRect.offsetMax = new Vector2(-16f, -8f);
 
             _effectLabel = effectTextGo.AddComponent<TextMeshProUGUI>();
-            UITheme.Apply(_effectLabel, 40f, FontStyles.Bold);
+            UITheme.Apply(_effectLabel, 80f, FontStyles.Bold);
             _effectLabel.color     = new Color(1f, 0.95f, 0.3f);
             _effectLabel.alignment = TextAlignmentOptions.Center;
 

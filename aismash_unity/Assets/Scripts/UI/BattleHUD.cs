@@ -290,6 +290,8 @@ namespace PromptFighters.UI
             numTmp.fontStyle = FontStyles.Bold;
             numTmp.alignment = isP1 ? TextAlignmentOptions.Right : TextAlignmentOptions.Left;
             numTmp.color = TextWht;
+            numTmp.textWrappingMode = TextWrappingModes.NoWrap;
+            numTmp.overflowMode = TextOverflowModes.Overflow;
             UITheme.Apply(numTmp);
             hpNum = numTmp;
 
