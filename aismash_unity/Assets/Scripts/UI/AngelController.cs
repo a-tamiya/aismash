@@ -8,12 +8,11 @@ using PromptFighters.Battle;
 namespace PromptFighters.UI
 {
     // 気まぐれ天使コントローラー。
-    // 自動タイマーで降臨し、退屈メッセージ表示 + 10秒の音声入力を受け付けてギミックを決定する。
-    // BattleManager の Awake で AddComponent される。
+    // 自動タイマーで降臨 → 退屈メッセージ + 音声入力受付 → ギミック決定 → 中央大表示。
     public class AngelController : MonoBehaviour
     {
         public static bool Enabled = true;
-        public float recordSeconds = 10f;
+        public float recordSeconds = 5f;
 
         static readonly string[] BoredMessages =
         {
@@ -24,15 +23,22 @@ namespace PromptFighters.UI
             "気まぐれが発動！何か言ってみて♪",
         };
 
-        bool _busy;
-        BattleManager       _bm;
+        bool          _busy;
+        BattleManager _bm;
         AngelGimmickApplier _applier;
-        Coroutine           _loopRoutine;
+        Coroutine     _loopRoutine;
 
-        CanvasGroup       _group;
-        TextMeshProUGUI   _titleLabel;
-        TextMeshProUGUI   _statusLabel;
-        AudioSource       _audioSource;
+        // 上部バナー（天使降臨中）
+        CanvasGroup     _bannerGroup;
+        TextMeshProUGUI _titleLabel;
+        TextMeshProUGUI _statusLabel;
+
+        // 中央大表示（ギミック効果）
+        CanvasGroup     _effectGroup;
+        TextMeshProUGUI _effectLabel;
+        Coroutine       _effectFade;
+
+        AudioSource _audioSource;
 
         void Awake()
         {
@@ -69,14 +75,12 @@ namespace PromptFighters.UI
 
         IEnumerator AngelLoop()
         {
-            yield return new WaitForSeconds(10f); // 試合開始10秒後に最初の降臨
-
+            yield return new WaitForSeconds(10f);
             while (true)
             {
                 if (Enabled && _bm != null && _bm.Phase == BattlePhase.Fighting && !_busy)
                     yield return StartCoroutine(AngelSequence());
-
-                yield return new WaitForSeconds(15f); // ギミック終了から15秒後に次の降臨
+                yield return new WaitForSeconds(15f);
             }
         }
 
@@ -84,23 +88,22 @@ namespace PromptFighters.UI
         {
             _busy = true;
 
-            // 1. 退屈メッセージを表示して TTS 再生
+            // 1. 退屈メッセージを表示 + TTS
             string boredMsg = BoredMessages[Random.Range(0, BoredMessages.Length)];
-            ShowDescend(boredMsg);
+            ShowBanner("[ 天使降臨中 ]", boredMsg);
 
             bool ttsDone = false;
             AITTSClient.Speak(this, boredMsg, _audioSource,
                 onComplete: () => ttsDone = true,
                 onError: err => ttsDone = true,
                 voice: AITTSClient.AngelVoice,
-                volume: 1.6f);
+                volume: 2.2f);
 
-            // TTS が終わるか最大 5 秒待ってから録音開始
             float waited = 0f;
             while (!ttsDone && waited < 5f) { waited += Time.deltaTime; yield return null; }
 
-            // 2. 音声入力受付（recordSeconds 秒）
-            ShowListening();
+            // 2. 音声入力受付
+            ShowBanner("[ 天使降臨中 ]", $"お願い事を話してね！ ({recordSeconds:0}秒)");
             string transcribed = null;
             bool   recordDone  = false;
             WhisperClient.RecordAndTranscribe(this, recordSeconds,
@@ -108,8 +111,8 @@ namespace PromptFighters.UI
                 err  => { Debug.LogWarning("[Angel] Whisper: " + err); recordDone = true; });
             while (!recordDone) yield return null;
 
-            // 3. GPT でギミック決定
-            ShowStatus("天使が考え中...");
+            // 3. ギミック決定
+            ShowBanner("[ 天使降臨中 ]", "天使が考え中...");
             var battleState = BuildBattleState();
             GimmickData gimmick = null;
             bool        decided = false;
@@ -122,18 +125,66 @@ namespace PromptFighters.UI
             if (gimmick == null)
                 gimmick = new GimmickData { gimmick = "hp_recover", target = "weaker", value = 0.15f, message = "ちょっと退屈だから…HP少しあげる♪" };
 
-            // 4. ギミック適用＋メッセージ表示＋TTS
-            ShowGimmickMessage(gimmick.message);
+            // 4. ギミック適用 + バナー更新 + 中央大表示 + TTS
+            ShowBanner("[ 気まぐれ天使 ]", gimmick.message);
             _applier.Apply(gimmick, _bm?.fighter1, _bm?.fighter2);
+            ShowEffectCenter(BuildEffectText(gimmick));
             AITTSClient.Speak(this, gimmick.message, _audioSource,
                 onError: err => Debug.LogWarning("[AngelTTS] " + err),
                 voice: AITTSClient.AngelVoice,
-                volume: 1.6f);
+                volume: 2.2f);
 
             yield return new WaitForSeconds(4f);
-            HidePanel();
+            HideBanner();
 
             _busy = false;
+        }
+
+        static string BuildEffectText(GimmickData g)
+        {
+            string line1 = $"{TargetLabel(g.target)} {EffectLabel(g.gimmick)}";
+            if (!string.IsNullOrEmpty(g.gimmick2))
+                line1 += $"\n{TargetLabel(g.target2)} {EffectLabel(g.gimmick2)}";
+            return line1;
+        }
+
+        static string TargetLabel(string t) => t switch
+        {
+            "player1"  => "P1",
+            "player2"  => "P2",
+            "both"     => "両者",
+            "weaker"   => "弱い方",
+            "stronger" => "強い方",
+            _          => t,
+        };
+
+        static string EffectLabel(string g) => g switch
+        {
+            "hp_recover"   => "HP 回復",
+            "speed_boost"  => "スピード UP ↑",
+            "speed_down"   => "スピード DOWN ↓",
+            "jump_boost"   => "ジャンプ UP ↑",
+            "damage_boost" => "パワー UP ↑",
+            "transparent"  => "無敵化 ✦",
+            "invincible"   => "無敵化 ✦",
+            "chaos"        => "操作混乱 ！",
+            _              => g,
+        };
+
+        void ShowEffectCenter(string text)
+        {
+            _effectLabel.text = text;
+            if (_effectFade != null) StopCoroutine(_effectFade);
+            _effectFade = StartCoroutine(EffectFadeRoutine());
+        }
+
+        IEnumerator EffectFadeRoutine()
+        {
+            _effectGroup.alpha = 1f;
+            yield return new WaitForSeconds(3f);
+            float t = 0f;
+            while (t < 0.6f) { t += Time.deltaTime; _effectGroup.alpha = 1f - t / 0.6f; yield return null; }
+            _effectGroup.alpha = 0f;
         }
 
         CommentaryBattleState BuildBattleState()
@@ -150,35 +201,14 @@ namespace PromptFighters.UI
             };
         }
 
-        void ShowDescend(string msg)
+        void ShowBanner(string title, string status)
         {
-            _titleLabel.text  = "[ 天使降臨中 ]";
-            _statusLabel.text = msg;
-            _group.alpha      = 1f;
+            _titleLabel.text  = title;
+            _statusLabel.text = status;
+            _bannerGroup.alpha = 1f;
         }
 
-        void ShowListening()
-        {
-            _titleLabel.text  = "[ 天使降臨中 ]";
-            _statusLabel.text = $"お願い事を話してね！ ({recordSeconds:0}秒)";
-            _group.alpha      = 1f;
-        }
-
-        void ShowStatus(string text)
-        {
-            _titleLabel.text  = "[ 天使降臨中 ]";
-            _statusLabel.text = text;
-            _group.alpha      = 1f;
-        }
-
-        void ShowGimmickMessage(string msg)
-        {
-            _titleLabel.text  = "[ 気まぐれ天使 ]";
-            _statusLabel.text = msg;
-            _group.alpha      = 1f;
-        }
-
-        void HidePanel() => _group.alpha = 0f;
+        void HideBanner() => _bannerGroup.alpha = 0f;
 
         void BuildUI()
         {
@@ -191,46 +221,77 @@ namespace PromptFighters.UI
             canvasGo.AddComponent<CanvasScaler>();
             canvasGo.AddComponent<GraphicRaycaster>();
 
-            var panelGo = new GameObject("Panel");
-            panelGo.transform.SetParent(canvasGo.transform, false);
+            // ── 上部バナー（天使降臨中）──
+            var bannerGo = new GameObject("AngelBanner");
+            bannerGo.transform.SetParent(canvasGo.transform, false);
 
-            var panelRect = panelGo.AddComponent<RectTransform>();
-            panelRect.anchorMin        = new Vector2(1f, 0f);
-            panelRect.anchorMax        = new Vector2(1f, 0f);
-            panelRect.pivot            = new Vector2(1f, 0f);
-            panelRect.anchoredPosition = new Vector2(-16f, 70f);
-            panelRect.sizeDelta        = new Vector2(320f, 80f);
+            var bannerRect = bannerGo.AddComponent<RectTransform>();
+            bannerRect.anchorMin        = new Vector2(0.5f, 1f);
+            bannerRect.anchorMax        = new Vector2(0.5f, 1f);
+            bannerRect.pivot            = new Vector2(0.5f, 1f);
+            bannerRect.anchoredPosition = new Vector2(0f, -16f);
+            bannerRect.sizeDelta        = new Vector2(580f, 110f);
 
-            panelGo.AddComponent<Image>().color = new Color(0.55f, 0.18f, 0.72f, 0.85f);
+            bannerGo.AddComponent<Image>().color = new Color(0.45f, 0.12f, 0.62f, 0.90f);
 
-            _group       = panelGo.AddComponent<CanvasGroup>();
-            _group.alpha = 0f;
+            _bannerGroup       = bannerGo.AddComponent<CanvasGroup>();
+            _bannerGroup.alpha = 0f;
 
             var titleGo = new GameObject("Title");
-            titleGo.transform.SetParent(panelGo.transform, false);
+            titleGo.transform.SetParent(bannerGo.transform, false);
             var titleRect = titleGo.AddComponent<RectTransform>();
-            titleRect.anchorMin = new Vector2(0f, 0.55f);
+            titleRect.anchorMin = new Vector2(0f, 0.52f);
             titleRect.anchorMax = Vector2.one;
-            titleRect.offsetMin = new Vector2(8f, 0f);
-            titleRect.offsetMax = new Vector2(-8f, -4f);
+            titleRect.offsetMin = new Vector2(10f, 0f);
+            titleRect.offsetMax = new Vector2(-10f, -6f);
 
             _titleLabel = titleGo.AddComponent<TextMeshProUGUI>();
-            UITheme.Apply(_titleLabel, 14f, FontStyles.Bold);
-            _titleLabel.color     = new Color(1f, 0.9f, 0.5f);
+            UITheme.Apply(_titleLabel, 22f, FontStyles.Bold);
+            _titleLabel.color     = new Color(1f, 0.9f, 0.4f);
             _titleLabel.alignment = TextAlignmentOptions.Center;
 
-            var msgGo = new GameObject("Message");
-            msgGo.transform.SetParent(panelGo.transform, false);
+            var msgGo = new GameObject("Status");
+            msgGo.transform.SetParent(bannerGo.transform, false);
             var msgRect = msgGo.AddComponent<RectTransform>();
             msgRect.anchorMin = Vector2.zero;
-            msgRect.anchorMax = new Vector2(1f, 0.55f);
-            msgRect.offsetMin = new Vector2(8f, 4f);
-            msgRect.offsetMax = new Vector2(-8f, 0f);
+            msgRect.anchorMax = new Vector2(1f, 0.52f);
+            msgRect.offsetMin = new Vector2(10f, 6f);
+            msgRect.offsetMax = new Vector2(-10f, 0f);
 
             _statusLabel = msgGo.AddComponent<TextMeshProUGUI>();
-            UITheme.Apply(_statusLabel, 13f);
+            UITheme.Apply(_statusLabel, 18f);
             _statusLabel.color     = Color.white;
             _statusLabel.alignment = TextAlignmentOptions.Center;
+
+            // ── 中央大表示（ギミック効果）──
+            var effectGo = new GameObject("EffectDisplay");
+            effectGo.transform.SetParent(canvasGo.transform, false);
+
+            var effectRect = effectGo.AddComponent<RectTransform>();
+            effectRect.anchorMin = new Vector2(0.5f, 0.5f);
+            effectRect.anchorMax = new Vector2(0.5f, 0.5f);
+            effectRect.pivot     = new Vector2(0.5f, 0.5f);
+            effectRect.anchoredPosition = Vector2.zero;
+            effectRect.sizeDelta = new Vector2(700f, 180f);
+
+            var effectBg = effectGo.AddComponent<Image>();
+            effectBg.color = new Color(0f, 0f, 0f, 0.55f);
+
+            _effectGroup       = effectGo.AddComponent<CanvasGroup>();
+            _effectGroup.alpha = 0f;
+
+            var effectTextGo = new GameObject("EffectText");
+            effectTextGo.transform.SetParent(effectGo.transform, false);
+            var effectTextRect = effectTextGo.AddComponent<RectTransform>();
+            effectTextRect.anchorMin = Vector2.zero;
+            effectTextRect.anchorMax = Vector2.one;
+            effectTextRect.offsetMin = new Vector2(16f, 8f);
+            effectTextRect.offsetMax = new Vector2(-16f, -8f);
+
+            _effectLabel = effectTextGo.AddComponent<TextMeshProUGUI>();
+            UITheme.Apply(_effectLabel, 40f, FontStyles.Bold);
+            _effectLabel.color     = new Color(1f, 0.95f, 0.3f);
+            _effectLabel.alignment = TextAlignmentOptions.Center;
 
             _audioSource             = canvasGo.AddComponent<AudioSource>();
             _audioSource.playOnAwake = false;

@@ -124,7 +124,6 @@ namespace PromptFighters.Battle
         float _guardBreakTimer;
         float _speedBoostTimer;
         float _jumpBoostTimer;
-        float _noFlipAfterDodgeTimer;
         float _guardRecoveryDelayTimer;
         float _hitFlashTimer;
         float _transparencyTimer;
@@ -226,9 +225,8 @@ namespace PromptFighters.Battle
             }
             if (_hitFlashTimer      > 0f) _hitFlashTimer      -= Time.deltaTime;
             if (_transparencyTimer  > 0f) _transparencyTimer  -= Time.deltaTime;
-            if (_speedBoostTimer         > 0f) _speedBoostTimer         -= Time.deltaTime;
-            if (_jumpBoostTimer          > 0f) _jumpBoostTimer          -= Time.deltaTime;
-            if (_noFlipAfterDodgeTimer   > 0f) _noFlipAfterDodgeTimer   -= Time.deltaTime;
+            if (_speedBoostTimer > 0f) _speedBoostTimer -= Time.deltaTime;
+            if (_jumpBoostTimer  > 0f) _jumpBoostTimer  -= Time.deltaTime;
             if (_forcedSpriteTimer  > 0f)
             {
                 _forcedSpriteTimer -= Time.deltaTime;
@@ -390,7 +388,7 @@ namespace PromptFighters.Battle
             float speed = baseSpeed * modeScale * (_slowTimer > 0f ? _slowFactor : 1f);
             float velocityX = absInput > 0.01f ? Mathf.Sign(input) * speed : 0f;
             _rb.linearVelocity = new Vector2(velocityX, _rb.linearVelocity.y);
-            if (IsGrounded && _noFlipAfterDodgeTimer <= 0f)
+            if (IsGrounded)
             {
                 if      (input >  0.1f && !FacingRight) Flip();
                 else if (input < -0.1f &&  FacingRight) Flip();
@@ -625,8 +623,6 @@ namespace PromptFighters.Battle
                 _dodgeTimer = input.y < -0.35f && dir == 0f ? downDodgeDuration : dodgeDuration;
                 if (dir != 0f) IgnoreOpponentCollisionDuringDodge();
                 _rb.linearVelocity = new Vector2(dir * (groundDodgeDistance / Mathf.Max(0.05f, _dodgeTimer)), _rb.linearVelocity.y);
-                if (dir > 0.1f && !FacingRight) Flip();
-                else if (dir < -0.1f && FacingRight) Flip();
             }
             else
             {
@@ -844,9 +840,8 @@ namespace PromptFighters.Battle
             _burnTimer          = 0f;
             _slowTimer          = 0f;
             _guardBreakTimer    = 0f;
-            _speedBoostTimer        = 0f;
-            _jumpBoostTimer         = 0f;
-            _noFlipAfterDodgeTimer  = 0f;
+            _speedBoostTimer = 0f;
+            _jumpBoostTimer  = 0f;
             _guardRecoveryDelayTimer = 0f;
             _hitFlashTimer      = 0f;
             _heldOpponent       = null;
@@ -937,7 +932,6 @@ namespace PromptFighters.Battle
             if (_dodgeTimer > 0f) return;
             RestoreDodgeGravity();
             RestoreOpponentCollision();
-            if (!_isAirDodgeActive && IsGrounded) _noFlipAfterDodgeTimer = 0.35f;
             _isAirDodgeActive = false;
             _rb.linearVelocity = new Vector2(0f, _rb.linearVelocity.y);
             State = IsGrounded ? FighterState.Idle : FighterState.Falling;

@@ -143,7 +143,7 @@ namespace PromptFighters.UI
                 onError: err => { Debug.LogWarning("[CommentaryTTS] " + err); ttsDone = true; },
                 voice: AITTSClient.CommentaryVoice,
                 speed: AITTSClient.CommentarySpeed,
-                volume: 1.6f);
+                volume: 2.2f);
 
             _isGenerating = false;
             StartCoroutine(FadeOutAfterTTS(() => ttsDone));

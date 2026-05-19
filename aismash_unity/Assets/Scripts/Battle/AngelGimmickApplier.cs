@@ -11,47 +11,55 @@ namespace PromptFighters.Battle
         {
             if (data == null) return;
 
-            Fighter target1 = ResolveTarget(data.target, p1, p2, primary: true);
-            Fighter target2 = data.target == "both"
-                ? ResolveTarget(data.target, p1, p2, primary: false)
+            ApplySingle(data.gimmick, data.target, value, duration, p1, p2);
+
+            if (!string.IsNullOrEmpty(data.gimmick2))
+                ApplySingle(data.gimmick2, data.target2, value2, duration2, p1, p2);
+        }
+
+        void ApplySingle(string gimmick, string targetKey, float value, float duration, Fighter p1, Fighter p2)
+        {
+            Fighter target1 = ResolveTarget(targetKey, p1, p2, primary: true);
+            Fighter target2 = targetKey == "both"
+                ? ResolveTarget(targetKey, p1, p2, primary: false)
                 : null;
 
-            switch (data.gimmick)
+            switch (gimmick)
             {
                 case "hp_recover":
-                    HealIfAlive(target1, data.value);
-                    HealIfAlive(target2, data.value);
+                    HealIfAlive(target1, value);
+                    HealIfAlive(target2, value);
                     GameAudioManager.Instance?.PlayGimmickHeal();
                     break;
                 case "speed_boost":
-                    target1?.StartTemporarySpeedChange(data.value, data.duration);
-                    target2?.StartTemporarySpeedChange(data.value, data.duration);
+                    target1?.StartTemporarySpeedChange(value, duration);
+                    target2?.StartTemporarySpeedChange(value, duration);
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "speed_down":
-                    target1?.StartTemporarySpeedChange(data.value, data.duration);
-                    target2?.StartTemporarySpeedChange(data.value, data.duration);
+                    target1?.StartTemporarySpeedChange(value, duration);
+                    target2?.StartTemporarySpeedChange(value, duration);
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "jump_boost":
-                    target1?.StartTemporaryJumpChange(data.value, data.duration);
-                    target2?.StartTemporaryJumpChange(data.value, data.duration);
+                    target1?.StartTemporaryJumpChange(value, duration);
+                    target2?.StartTemporaryJumpChange(value, duration);
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "damage_boost":
-                    target1?.StartTemporaryDamageBoost(data.value, data.duration);
-                    target2?.StartTemporaryDamageBoost(data.value, data.duration);
+                    target1?.StartTemporaryDamageBoost(value, duration);
+                    target2?.StartTemporaryDamageBoost(value, duration);
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "transparent":
                 case "invincible":
-                    target1?.StartTemporaryInvincible(data.duration);
-                    target2?.StartTemporaryInvincible(data.duration);
+                    target1?.StartTemporaryInvincible(duration);
+                    target2?.StartTemporaryInvincible(duration);
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "chaos":
-                    target1?.StartTemporaryChaos(data.duration);
-                    target2?.StartTemporaryChaos(data.duration);
+                    target1?.StartTemporaryChaos(duration);
+                    target2?.StartTemporaryChaos(duration);
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
             }
