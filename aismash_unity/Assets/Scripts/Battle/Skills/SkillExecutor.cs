@@ -85,6 +85,17 @@ namespace PromptFighters.Battle.Skills
             return true;
         }
 
+        public bool TryUseDebugSkill(SkillData skill, float powerMultiplier = 1f)
+        {
+            if (skill == null) return false;
+            ResetSkillState();
+            float multiplier = Mathf.Clamp(powerMultiplier, 1f, 2f);
+            BattleLogger.Instance?.LogSkillUse(_fighter.PlayerIndex, skill.slot, skill.skill_name);
+            GameAudioManager.Instance?.PlaySkill(skill);
+            StartCoroutine(ExecuteSkill(skill, multiplier));
+            return true;
+        }
+
         IEnumerator ExecuteSkill(SkillData skill, float powerMultiplier)
         {
             _isExecuting = true;

@@ -4,6 +4,7 @@ using PromptFighters.Battle.Skills;
 using PromptFighters.Utils;
 using PromptFighters.UI;
 using System.Collections;
+using System.Collections.Generic;
 
 namespace PromptFighters.Battle
 {
@@ -289,6 +290,7 @@ namespace PromptFighters.Battle
     {
         bool _visible;
         int _selectedPlayer;
+        Vector2 _scroll;
 
         void Update()
         {
@@ -305,13 +307,16 @@ namespace PromptFighters.Battle
             if (bm == null) return;
 
             GUI.depth = -100;
-            GUILayout.BeginArea(new Rect(16f, 16f, 330f, 430f), "DEBUG TUNER (F12)", GUI.skin.window);
+            GUILayout.BeginArea(new Rect(16f, 16f, 360f, 620f), "DEBUG TUNER (F12)", GUI.skin.window);
+            _scroll = GUILayout.BeginScrollView(_scroll);
             _selectedPlayer = GUILayout.Toolbar(_selectedPlayer, new[] { "1P", "2P" });
 
             Fighter fighter = _selectedPlayer == 0 ? bm.fighter1 : bm.fighter2;
+            Fighter opponent = _selectedPlayer == 0 ? bm.fighter2 : bm.fighter1;
             if (fighter == null)
             {
                 GUILayout.Label("Fighter not assigned.");
+                GUILayout.EndScrollView();
                 GUILayout.EndArea();
                 return;
             }
@@ -339,7 +344,50 @@ namespace PromptFighters.Battle
                 fighter.DebugSetBattleStats(fighter.maxHP, fighter.moveSpeed, fighter.airMoveSpeed,
                     fighter.jumpForce, fighter.maxGuardDurability, fighter.weight);
             }
+
+            GUILayout.Space(10f);
+            GUILayout.Label("Debug Skills");
+            var executor = fighter.GetComponent<SkillExecutor>();
+            if (executor == null)
+            {
+                GUILayout.Label("SkillExecutor not found.");
+            }
+            else
+            {
+                ButtonSkill(executor, "Body Melee", DebugBodyMelee());
+                ButtonSkill(executor, "Ranged Projectile", DebugProjectile());
+                ButtonSkill(executor, "Trap / Slow Field", DebugTrap());
+                ButtonSkill(executor, "Dash Attack", DebugDashAttack());
+                ButtonSkill(executor, "Teleport Forward", DebugTeleport("forward"));
+                ButtonSkill(executor, "Teleport Back", DebugTeleport("backward"));
+                ButtonSkill(executor, "Push Enemy", DebugPush());
+                ButtonSkill(executor, "Pull Enemy", DebugPull());
+                ButtonSkill(executor, "Buff Speed", DebugBuff("speed"));
+                ButtonSkill(executor, "Buff Jump", DebugBuff("jump"));
+                ButtonSkill(executor, "Buff Invincible", DebugBuff("invincible"));
+                ButtonSkill(executor, "Buff Damage", DebugBuff("damage"));
+            }
+
+            GUILayout.Space(8f);
+            GUILayout.Label("Apply Status To Opponent");
+            if (opponent == null)
+            {
+                GUILayout.Label("Opponent not assigned.");
+            }
+            else
+            {
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button("STUN")) opponent.ApplyStatus(StatusType.Stun, 0.8f);
+                if (GUILayout.Button("BURN")) opponent.ApplyStatus(StatusType.Burn, 4f);
+                GUILayout.EndHorizontal();
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button("SLOW")) opponent.ApplyStatus(StatusType.Slow, 4f);
+                if (GUILayout.Button("GUARD BREAK")) opponent.ApplyStatus(StatusType.GuardBreak, 1.8f);
+                GUILayout.EndHorizontal();
+            }
+
             GUILayout.Label("Training and battle values update immediately.");
+            GUILayout.EndScrollView();
             GUILayout.EndArea();
         }
 
@@ -347,6 +395,156 @@ namespace PromptFighters.Battle
         {
             GUILayout.Label($"{label}: {value:0.##}");
             return GUILayout.HorizontalSlider(value, min, max);
+        }
+
+        static void ButtonSkill(SkillExecutor executor, string label, SkillData skill)
+        {
+            if (GUILayout.Button(label))
+                executor.TryUseDebugSkill(skill);
+        }
+
+        static SkillParameters Params(float damage, float range, float startup, float active, float recovery,
+                                      int hits, float knockback, float stun = 0.08f, float guard = 0.5f) =>
+            new SkillParameters
+            {
+                damage = damage,
+                range = range,
+                startup = startup,
+                active_time = active,
+                recovery = recovery,
+                hit_count = hits,
+                knockback = knockback,
+                stun_time = stun,
+                guard_damage = guard,
+            };
+
+        static SkillData DebugBodyMelee() => new SkillData
+        {
+            slot = SkillSlot.AttackA,
+            skill_name = "DBG 体術近接",
+            description = "エフェクトなし本体判定",
+            element = Element.Physical,
+            risk_level = RiskLevel.Low,
+            parameters = Params(2f, 0.9f, 0.02f, 0.16f, 0.18f, 3, 2.5f),
+            actions = new List<SkillAction>
+            {
+                new SkillAction { type = "body_hitbox", time = 0.02f, range = 0.9f, size_y = 1.25f, spawn_x = 0.55f, spawn_y = 0.65f, hit_count = 3, follow_owner = true, hide_effect = true },
+            },
+        };
+
+        static SkillData DebugProjectile() => new SkillData
+        {
+            slot = SkillSlot.AttackB,
+            skill_name = "DBG 遠距離弾",
+            description = "低火力の火球",
+            element = Element.Fire,
+            risk_level = RiskLevel.Medium,
+            parameters = Params(5f, 12f, 0.04f, 0.08f, 0.28f, 1, 3.5f, 0.05f, 0.6f),
+            actions = new List<SkillAction>
+            {
+                new SkillAction { type = "projectile", time = 0.04f, spawn_x = 0.9f, spawn_y = 0.9f, size_x = 1.2f, size_y = 0.7f, projectile_speed = 10f, projectile_lifetime = 1.5f, status = "burn", duration = 2f, chance = 1f },
+            },
+        };
+
+        static SkillData DebugTrap() => new SkillData
+        {
+            slot = SkillSlot.AttackC,
+            skill_name = "DBG 設置スロー",
+            description = "5秒残る低火力罠",
+            element = Element.Ice,
+            risk_level = RiskLevel.Medium,
+            parameters = Params(2f, 2.4f, 0.05f, 0.1f, 0.24f, 1, 2f, 0.05f, 0.5f),
+            actions = new List<SkillAction>
+            {
+                new SkillAction { type = "trap_hitbox", time = 0.05f, duration = 5f, spawn_x = 1.6f, spawn_y = 0.35f, size_x = 2.4f, size_y = 0.9f, status = "slow", chance = 1f },
+            },
+        };
+
+        static SkillData DebugDashAttack() => new SkillData
+        {
+            slot = SkillSlot.AttackC,
+            skill_name = "DBG 突進攻撃",
+            description = "移動しながら近接",
+            element = Element.Lightning,
+            risk_level = RiskLevel.Medium,
+            parameters = Params(4f, 1.25f, 0.03f, 0.12f, 0.32f, 1, 4f, 0.18f, 0.7f),
+            actions = new List<SkillAction>
+            {
+                new SkillAction { type = "dash", time = 0f, power = 7f, direction = "forward" },
+                new SkillAction { type = "melee_hitbox", time = 0.04f, range = 1.25f, size_y = 1.1f, spawn_x = 1.0f, spawn_y = 0.55f, follow_owner = true, status = "stun", duration = 0.35f, chance = 1f },
+            },
+        };
+
+        static SkillData DebugTeleport(string direction) => new SkillData
+        {
+            slot = SkillSlot.AttackC,
+            skill_name = direction == "backward" ? "DBG 後方テレポート" : "DBG 前方テレポート",
+            description = "短距離ワープ",
+            element = Element.Dark,
+            risk_level = RiskLevel.Low,
+            parameters = Params(0f, 0.5f, 0f, 0.02f, 0.12f, 1, 0f, 0f, 0f),
+            actions = new List<SkillAction>
+            {
+                new SkillAction { type = "teleport", time = 0f, power = 2.8f, direction = direction },
+            },
+        };
+
+        static SkillData DebugPush() => new SkillData
+        {
+            slot = SkillSlot.AttackC,
+            skill_name = "DBG 押し出し",
+            description = "風で相手を押す",
+            element = Element.Wind,
+            risk_level = RiskLevel.Low,
+            parameters = Params(0f, 2.3f, 0.02f, 0.08f, 0.22f, 1, 0f, 0f, 0f),
+            actions = new List<SkillAction>
+            {
+                new SkillAction { type = "push_enemy", time = 0.02f, range = 2.3f, power = 6f },
+            },
+        };
+
+        static SkillData DebugPull() => new SkillData
+        {
+            slot = SkillSlot.AttackC,
+            skill_name = "DBG 引き寄せ",
+            description = "重力で相手を引く",
+            element = Element.Dark,
+            risk_level = RiskLevel.Low,
+            parameters = Params(0f, 3.0f, 0.02f, 0.08f, 0.22f, 1, 0f, 0f, 0f),
+            actions = new List<SkillAction>
+            {
+                new SkillAction { type = "pull_enemy", time = 0.02f, range = 3.0f, power = 5.5f },
+            },
+        };
+
+        static SkillData DebugBuff(string status)
+        {
+            string label = status switch
+            {
+                "speed" => "速度",
+                "jump" => "ジャンプ",
+                "invincible" => "無敵",
+                _ => "攻撃",
+            };
+            float power = status switch
+            {
+                "jump" => 1.35f,
+                "invincible" => 1f,
+                _ => 1.45f,
+            };
+            return new SkillData
+            {
+                slot = SkillSlot.AttackC,
+                skill_name = "DBG " + label + "バフ",
+                description = "自己強化",
+                element = Element.Wind,
+                risk_level = RiskLevel.Low,
+                parameters = Params(0f, 0.5f, 0f, 0.02f, 0.14f, 1, 0f, 0f, 0f),
+                actions = new List<SkillAction>
+                {
+                    new SkillAction { type = "buff_self", time = 0f, status = status, power = power, duration = status == "invincible" ? 1.0f : 4.0f },
+                },
+            };
         }
     }
 }
