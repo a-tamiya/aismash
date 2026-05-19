@@ -34,6 +34,7 @@ namespace PromptFighters.Battle
                     target1?.StartTemporaryDamageBoost(data.value, data.duration);
                     target2?.StartTemporaryDamageBoost(data.value, data.duration);
                     break;
+                case "transparent":
                 case "invincible":
                     target1?.StartTemporaryInvincible(data.duration);
                     target2?.StartTemporaryInvincible(data.duration);

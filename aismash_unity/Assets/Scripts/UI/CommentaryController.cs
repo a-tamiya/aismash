@@ -132,12 +132,12 @@ namespace PromptFighters.UI
             float timeout = 14f;
             while (!done && timeout > 0f) { timeout -= Time.deltaTime; yield return null; }
 
-            if (!string.IsNullOrEmpty(result))
-            {
-                ShowText(result);
-                AITTSClient.Speak(this, result, _audioSource,
-                    onError: err => Debug.LogWarning("[CommentaryTTS] " + err));
-            }
+            if (string.IsNullOrEmpty(result))
+                result = BuildFallbackCommentary(state);
+
+            ShowText(result);
+            AITTSClient.Speak(this, result, _audioSource,
+                onError: err => Debug.LogWarning("[CommentaryTTS] " + err));
 
             _isGenerating = false;
         }
@@ -157,7 +157,22 @@ namespace PromptFighters.UI
                 timeRemaining    = _bm.TimeRemaining,
                 mostUsedSkillP1  = logger?.P1.MostUsedSkillName() ?? "",
                 mostUsedSkillP2  = logger?.P2.MostUsedSkillName() ?? "",
+                totalDamageP1    = logger?.P1.totalDamageDealt ?? 0f,
+                totalDamageP2    = logger?.P2.totalDamageDealt ?? 0f,
+                recentEvents     = logger?.RecentEventsSummary() ?? "",
             };
+        }
+
+        static string BuildFallbackCommentary(CommentaryBattleState s)
+        {
+            if (!string.IsNullOrEmpty(s.recentEvents))
+                return "試合が動いています！ " + s.recentEvents;
+
+            float diff = s.player1HpRatio - s.player2HpRatio;
+            if (Mathf.Abs(diff) < 0.12f)
+                return "互角の展開です。次の一撃で流れが変わりそうです。";
+            string lead = diff > 0f ? s.player1Name : s.player2Name;
+            return lead + "がリードしています。相手は反撃のきっかけが欲しいところです。";
         }
 
         void ShowText(string text)

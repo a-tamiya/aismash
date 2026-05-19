@@ -5,6 +5,9 @@ using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using PromptFighters.AI;
 using PromptFighters.Battle;
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+using UnityEngine.Windows.Speech;
+#endif
 
 namespace PromptFighters.UI
 {
@@ -17,6 +20,7 @@ namespace PromptFighters.UI
 
         public float recordSeconds = 3f;
         public float cooldownTime  = 30f;
+        public string[] wakeWords = { "天使", "妖精", "エンジェル" };
 
         enum AngelState { Idle, Recording, Processing, Displaying }
 
@@ -30,12 +34,25 @@ namespace PromptFighters.UI
         TextMeshProUGUI   _angelLabel;
         TextMeshProUGUI   _statusLabel;
         AudioSource       _audioSource;
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+        KeywordRecognizer _keywordRecognizer;
+#endif
 
         void Awake()
         {
             _bm      = GetComponent<BattleManager>();
             _applier = gameObject.AddComponent<AngelGimmickApplier>();
             BuildUI();
+        }
+
+        void OnEnable()
+        {
+            StartWakeRecognizer();
+        }
+
+        void OnDisable()
+        {
+            StopWakeRecognizer();
         }
 
         void Update()
@@ -48,16 +65,25 @@ namespace PromptFighters.UI
             if (!Enabled) return;
             if (_bm == null || _bm.Phase != BattlePhase.Fighting) return;
 
-            // Tabキーで起動（クールダウン中・処理中は無効）
+            // Tabキーでも起動できる（音声呼び出しの保険）
             if (_state == AngelState.Idle && _cooldown <= 0f && kb.tabKey.wasPressedThisFrame)
-                StartCoroutine(AngelSequence());
+                TryStartAngelSequence();
+        }
+
+        void TryStartAngelSequence()
+        {
+            if (!Enabled) return;
+            if (_bm == null || _bm.Phase != BattlePhase.Fighting) return;
+            if (_state != AngelState.Idle || _cooldown > 0f) return;
+            StartCoroutine(AngelSequence());
         }
 
         IEnumerator AngelSequence()
         {
+            StopWakeRecognizer();
             // 録音フェーズ
             _state = AngelState.Recording;
-            ShowStatus("録音中... 何か叫んでください！ (3秒)");
+            ShowStatus("呼びました？ 3秒だけ願いを聞きます！");
 
             string transcribed  = null;
             bool   recordDone   = false;
@@ -101,6 +127,12 @@ namespace PromptFighters.UI
 
             _cooldown = cooldownTime;
             _state    = AngelState.Idle;
+            StartWakeRecognizer();
+        }
+
+        void OnDestroy()
+        {
+            StopWakeRecognizer();
         }
 
         CommentaryBattleState BuildBattleState()
@@ -192,5 +224,33 @@ namespace PromptFighters.UI
             _audioSource = canvasGo.AddComponent<AudioSource>();
             _audioSource.playOnAwake = false;
         }
+
+        void StartWakeRecognizer()
+        {
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+            if (_keywordRecognizer != null || wakeWords == null || wakeWords.Length == 0) return;
+            _keywordRecognizer = new KeywordRecognizer(wakeWords);
+            _keywordRecognizer.OnPhraseRecognized += OnWakeWordRecognized;
+            _keywordRecognizer.Start();
+#endif
+        }
+
+        void StopWakeRecognizer()
+        {
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+            if (_keywordRecognizer == null) return;
+            if (_keywordRecognizer.IsRunning) _keywordRecognizer.Stop();
+            _keywordRecognizer.OnPhraseRecognized -= OnWakeWordRecognized;
+            _keywordRecognizer.Dispose();
+            _keywordRecognizer = null;
+#endif
+        }
+
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+        void OnWakeWordRecognized(PhraseRecognizedEventArgs args)
+        {
+            TryStartAngelSequence();
+        }
+#endif
     }
 }

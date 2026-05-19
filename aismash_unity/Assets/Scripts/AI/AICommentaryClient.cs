@@ -15,6 +15,9 @@ namespace PromptFighters.AI
         public float  timeRemaining;
         public string mostUsedSkillP1;
         public string mostUsedSkillP2;
+        public float  totalDamageP1;
+        public float  totalDamageP2;
+        public string recentEvents;
     }
 
     public static class AICommentaryClient
@@ -71,8 +74,11 @@ namespace PromptFighters.AI
                 skills += $"\n{s.player1Name}の多用技: {s.mostUsedSkillP1}";
             if (!string.IsNullOrEmpty(s.mostUsedSkillP2) && s.mostUsedSkillP2 != "---")
                 skills += $"\n{s.player2Name}の多用技: {s.mostUsedSkillP2}";
+            string events = string.IsNullOrEmpty(s.recentEvents)
+                ? ""
+                : $"\n直近の出来事: {s.recentEvents}";
 
-            return $"2D格闘ゲームの試合実況を1〜2文で熱く行ってください（日本語・スポーツ実況風）。\n状況:\n{s.player1Name} HP:{s.player1HpRatio * 100f:0}% vs {s.player2Name} HP:{s.player2HpRatio * 100f:0}%\n残り{s.timeRemaining:0}秒{skills}\n\n実況（1〜2文のみ、前置き不要）:";
+            return $"2D格闘ゲームの試合実況を1〜2文で熱く行ってください（日本語・スポーツ実況風）。直近の出来事があれば必ず拾い、同じ言い回しを避けてください。\n状況:\n{s.player1Name} HP:{s.player1HpRatio * 100f:0}% 与ダメ:{s.totalDamageP1:0} vs {s.player2Name} HP:{s.player2HpRatio * 100f:0}% 与ダメ:{s.totalDamageP2:0}\n残り{s.timeRemaining:0}秒{skills}{events}\n\n実況（1〜2文のみ、前置き不要）:";
         }
 
         static string BuildBody(string prompt)

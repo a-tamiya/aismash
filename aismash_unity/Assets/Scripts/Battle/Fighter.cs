@@ -490,16 +490,19 @@ namespace PromptFighters.Battle
                 case StatusType.Stun:
                     _stunTimer = Mathf.Max(_stunTimer, Mathf.Min(duration, 1.5f));
                     DamagePopup.SpawnText(transform.position, "STUN", StunColor, 1.8f);
+                    BattleLogger.Instance?.LogEvent($"{PlayerLabel()}がスタン");
                     break;
                 case StatusType.Burn:
                     _burnTimer     = Mathf.Max(_burnTimer, duration);
                     _burnTickTimer = Mathf.Min(_burnTickTimer, 0.5f);
                     if (_burnTickTimer <= 0f) _burnTickTimer = 0.5f;
                     DamagePopup.SpawnText(transform.position, "BURN", BurnColor, 1.8f);
+                    BattleLogger.Instance?.LogEvent($"{PlayerLabel()}がバーン状態");
                     break;
                 case StatusType.Slow:
                     _slowTimer = Mathf.Max(_slowTimer, duration);
                     DamagePopup.SpawnText(transform.position, "SLOW", SlowColor, 1.8f);
+                    BattleLogger.Instance?.LogEvent($"{PlayerLabel()}がスロー状態");
                     break;
                 case StatusType.GuardBreak:
                     BreakGuard(Mathf.Max(1.5f, duration));
@@ -937,8 +940,11 @@ namespace PromptFighters.Battle
             _rb.linearVelocity = Vector2.zero;
             OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
             OnGuardBroken?.Invoke();
+            BattleLogger.Instance?.LogEvent($"{PlayerLabel()}のガードが割れた");
             DamagePopup.SpawnText(transform.position, "GUARD BREAK", GuardBreakColor, 3.2f);
         }
+
+        string PlayerLabel() => PlayerIndex == 0 ? "1P" : "2P";
 
         void EndGuardBreak()
         {
