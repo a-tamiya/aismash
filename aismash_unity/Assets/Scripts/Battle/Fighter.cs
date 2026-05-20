@@ -496,7 +496,8 @@ namespace PromptFighters.Battle
             {
                 const float KnockbackBoost = 1.4f;
                 float weightScale = 1f / Mathf.Max(0.4f, weight);
-                _rb.linearVelocity = knockbackDir.normalized * knockbackForce * weightScale * KnockbackBoost;
+                float effectiveKnockback = blocking ? knockbackForce * 0.3f : knockbackForce;
+                _rb.linearVelocity = knockbackDir.normalized * effectiveKnockback * weightScale * KnockbackBoost;
                 _controlLockTimer  = 0.2f;
             }
 

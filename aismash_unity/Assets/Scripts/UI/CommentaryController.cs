@@ -95,6 +95,8 @@ namespace PromptFighters.UI
             _audioSource.volume = 1f;
         }
 
+        public void StopVoice() => _audioSource?.Stop();
+
         void OnBattleStart()
         {
             if (!Enabled) return;

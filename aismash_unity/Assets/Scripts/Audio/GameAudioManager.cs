@@ -2,6 +2,7 @@ using UnityEngine;
 using System.Collections.Generic;
 using PromptFighters.Battle;
 using PromptFighters.Battle.Skills;
+using PromptFighters.UI;
 
 namespace PromptFighters.Audio
 {
@@ -172,6 +173,8 @@ namespace PromptFighters.Audio
         {
             StopBgm();
             StartLobbyBgm();
+            FindObjectOfType<CommentaryController>()?.StopVoice();
+            FindObjectOfType<AngelController>()?.StopVoice();
         }
 
         void StartLobbyBgm()

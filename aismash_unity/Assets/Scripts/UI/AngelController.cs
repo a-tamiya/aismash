@@ -51,6 +51,8 @@ namespace PromptFighters.UI
             BuildUI();
         }
 
+        public void StopVoice() => _audioSource?.Stop();
+
         void OnEnable()
         {
             if (_bm == null) return;
