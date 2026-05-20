@@ -96,6 +96,9 @@ namespace PromptFighters.Battle
                 if (throwInput.y > ThrowInputThreshold &&
                     throwInput.y >= Mathf.Abs(throwInput.x))
                     _fighter.ThrowHeldUp();
+                else if (throwInput.y < -ThrowInputThreshold &&
+                    -throwInput.y >= Mathf.Abs(throwInput.x))
+                    _fighter.ThrowHeldDown();
                 else if (throwDir > ThrowInputThreshold) _fighter.ThrowHeld(_fighter.FacingRight);
                 else if (throwDir < -ThrowInputThreshold) _fighter.ThrowHeld(!_fighter.FacingRight);
                 return;

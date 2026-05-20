@@ -864,6 +864,26 @@ namespace PromptFighters.Battle
             return true;
         }
 
+        public bool ThrowHeldDown()
+        {
+            if (_heldOpponent == null) return false;
+
+            Fighter target = _heldOpponent;
+            ReleaseHeldOpponent(applyRecovery: false);
+
+            float direction = FacingRight ? 1f : -1f;
+            float damage = throwParameters.down_damage;
+            float throwForce = throwParameters.down_knockback * throwKnockbackScale;
+            // 斜め上前方向に飛ばす（コンボがつながりやすい）
+            Vector2 kb = new Vector2(direction * 0.55f, 1.3f);
+            Vector3 releaseOffset = new Vector3(direction * throwReleaseOffset * 0.5f, throwReleaseOffset * 0.3f, 0f);
+            target.transform.position = transform.position + releaseOffset;
+            target.TakeDamage(damage, throwForce, kb, 0.08f, damage);
+            ShowGrabSprite(0.25f);
+            _grabCooldownTimer = Mathf.Max(_grabCooldownTimer, throwGrabCooldown);
+            return true;
+        }
+
         void ReleaseHeldOpponent(bool applyRecovery)
         {
             if (_heldOpponent == null) return;

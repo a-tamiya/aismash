@@ -106,5 +106,7 @@ namespace PromptFighters.Battle.Skills
         public float back_knockback = 10f;
         public float up_damage = 10f;
         public float up_knockback = 9f;
+        public float down_damage = 8f;
+        public float down_knockback = 7f;
     }
 }
