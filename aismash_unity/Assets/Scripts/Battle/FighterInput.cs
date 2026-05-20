@@ -108,7 +108,10 @@ namespace PromptFighters.Battle
 
             RecordSmashFlick();
             bool guardHeld = ReadGuard();
-            float smashMultiplier = guardHeld ? 0f : UpdateSmashCharge();
+            // AttackAがチャージ技のときはJキーをスマッシュに使わせない
+            bool attackAChargeable = _skills?.GetSkill(SkillSlot.AttackA)?.chargeable == true;
+            if (attackAChargeable) { _smashHeld = false; _smashCharge = 0f; }
+            float smashMultiplier = (guardHeld || attackAChargeable) ? 0f : UpdateSmashCharge();
             if (guardHeld)
             {
                 _smashHeld = false;
