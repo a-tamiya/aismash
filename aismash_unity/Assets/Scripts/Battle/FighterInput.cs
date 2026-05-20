@@ -521,8 +521,14 @@ namespace PromptFighters.Battle
 
         Gamepad GetGamepad()
         {
-            var all = Gamepad.all;
-            return all.Count > playerIndex ? all[playerIndex] : null;
+            int active = 0;
+            foreach (var gp in Gamepad.all)
+            {
+                if (gp.lastUpdateTime <= 0) continue; // ゴーストデバイスをスキップ
+                if (active == playerIndex) return gp;
+                active++;
+            }
+            return null;
         }
 
         static bool LegacyKey(KeyCode key)

@@ -376,31 +376,21 @@ namespace PromptFighters.GameFlow
 
         void RefreshGamepadLabels()
         {
-            var all = UnityEngine.InputSystem.Gamepad.all;
-            UpdateGpLabel(_p1GamepadLabel, all, 0);
-            UpdateGpLabel(_p2GamepadLabel, all, 1);
+            var active = new System.Collections.Generic.List<UnityEngine.InputSystem.Gamepad>();
+            foreach (var gp in UnityEngine.InputSystem.Gamepad.all)
+                if (gp.lastUpdateTime > 0) active.Add(gp);
+
+            UpdateGpLabel(active, _p1GamepadLabel, 0);
+            UpdateGpLabel(active, _p2GamepadLabel, 1);
         }
 
-        static void UpdateGpLabel(TextMeshProUGUI label,
-            UnityEngine.InputSystem.Utilities.ReadOnlyArray<UnityEngine.InputSystem.Gamepad> all,
-            int index)
+        static void UpdateGpLabel(System.Collections.Generic.List<UnityEngine.InputSystem.Gamepad> active, TextMeshProUGUI label, int index)
         {
             if (label == null) return;
-            if (all.Count > index)
+            if (index < active.Count)
             {
-                var gp = all[index];
-                // lastUpdateTime が 0 以下 = 一度も実入力がない → ゴーストデバイス
-                bool active = gp.lastUpdateTime > 0;
-                if (active)
-                {
-                    label.text  = $"● コントローラー接続中 ({gp.displayName})";
-                    label.color = new Color(0.3f, 0.9f, 0.3f);
-                }
-                else
-                {
-                    label.text  = $"● 未接続 (ゴーストデバイス検出)";
-                    label.color = new Color(0.9f, 0.6f, 0.1f);
-                }
+                label.text  = $"● コントローラー接続中 ({active[index].displayName})";
+                label.color = new Color(0.3f, 0.9f, 0.3f);
             }
             else
             {
