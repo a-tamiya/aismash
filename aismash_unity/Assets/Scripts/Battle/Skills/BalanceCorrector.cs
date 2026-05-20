@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 namespace PromptFighters.Battle.Skills
 {
@@ -23,6 +24,7 @@ namespace PromptFighters.Battle.Skills
             if (skill == null) return;
             var p  = skill.parameters;
             int si = (int)skill.slot;
+            EnsureUsableActions(skill);
 
             // ヒット数（上限を超えないよう）
             p.hit_count = Mathf.Clamp(p.hit_count, 1, 10);
@@ -200,6 +202,51 @@ namespace PromptFighters.Battle.Skills
             if (skill?.actions == null) return false;
             foreach (var a in skill.actions)
                 if (a != null && a.type == type) return true;
+            return false;
+        }
+
+        static void EnsureUsableActions(SkillData skill)
+        {
+            if (skill.actions == null)
+                skill.actions = new List<SkillAction>();
+
+            if (skill.actions.Count == 0 || !HasGameplayAction(skill))
+            {
+                skill.actions.Add(new SkillAction
+                {
+                    type = skill.slot == SkillSlot.SmashSide ? "area_hitbox" : "melee_hitbox",
+                    time = 0f,
+                    spawn_x = skill.slot == SkillSlot.SmashSide ? 1.35f : 0.9f,
+                    spawn_y = skill.slot == SkillSlot.AttackC ? 0.35f : 0.75f,
+                    size_x = skill.slot == SkillSlot.SmashSide ? 2.2f : 1.1f,
+                    size_y = skill.slot == SkillSlot.SmashSide ? 1.4f : 0.9f,
+                    hit_count = 1
+                });
+            }
+        }
+
+        static bool HasGameplayAction(SkillData skill)
+        {
+            if (skill?.actions == null) return false;
+            foreach (var a in skill.actions)
+            {
+                if (a == null || string.IsNullOrEmpty(a.type)) continue;
+                switch (a.type)
+                {
+                    case "melee_hitbox":
+                    case "body_hitbox":
+                    case "projectile":
+                    case "area_hitbox":
+                    case "trap_hitbox":
+                    case "beam":
+                    case "jump_attack":
+                    case "summon":
+                    case "counter":
+                    case "reflector":
+                    case "buff_self":
+                        return true;
+                }
+            }
             return false;
         }
 

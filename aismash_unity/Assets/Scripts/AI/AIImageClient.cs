@@ -211,7 +211,9 @@ namespace PromptFighters.AI
             }
 
             bool vertical = PrefersVerticalEffect(skill);
-            string orientation = vertical
+            string orientation = HasAction(skill, "summon")
+                ? "summoned creature or minion sprite for a 2D fighting game skill, clear full body, transparent background"
+                : vertical
                 ? "tall vertical 2D game visual effect, rising column or upward slash"
                 : "wide horizontal 2D game visual effect, side slash, beam, wave, or projectile trail";
             entries[index] = (id, filename, $"{skill.skill_name} {orientation}, {EffectSuffix}",
@@ -225,6 +227,7 @@ namespace PromptFighters.AI
             {
                 if (a == null || a.hide_effect) continue;
                 if (a.type == "projectile" || a.type == "area_hitbox" || a.type == "trap_hitbox" ||
+                    a.type == "summon" ||
                     a.type == "melee_hitbox" || a.type == "jump_attack")
                     return true;
             }
@@ -241,6 +244,14 @@ namespace PromptFighters.AI
                 if (a.size_y > 0f && a.size_y > Mathf.Max(a.size_x, a.range) * 1.15f) return true;
                 if (a.knockback_y > 0.7f) return true;
             }
+            return false;
+        }
+
+        static bool HasAction(SkillData skill, string type)
+        {
+            if (skill?.actions == null) return false;
+            foreach (var a in skill.actions)
+                if (a != null && a.type == type) return true;
             return false;
         }
 
