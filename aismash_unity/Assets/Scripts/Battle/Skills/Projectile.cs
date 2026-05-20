@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using PromptFighters.UI;
 
 namespace PromptFighters.Battle.Skills
 {
@@ -225,6 +226,21 @@ namespace PromptFighters.Battle.Skills
                 return;
             }
             if (target.IsDodging) return;
+
+            // リフレクター: 速度・威力を1.2倍にして逆ベクトルで反射、オーナーを切り替え
+            if (target.IsReflecting && Owner != null && !Owner.IsReflecting)
+            {
+                var rb = GetComponent<Rigidbody2D>();
+                if (rb != null) rb.linearVelocity = -rb.linearVelocity * 1.2f;
+                Direction  = -Direction;
+                Speed     *= 1.2f;
+                Damage    *= 1.2f;
+                Knockback *= 1.2f;
+                Owner = target;
+                _boomerangHitSet?.Clear();
+                DamagePopup.SpawnText(target.transform.position + Vector3.up * 0.5f, "REFLECT!", new Color(1f, 0.3f, 0.95f), 1.5f);
+                return;
+            }
 
             float dir = FixedKnockbackDir ? 1f : Mathf.Sign(Direction.x);
             if (dir == 0f) dir = 1f;

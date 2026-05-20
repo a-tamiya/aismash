@@ -534,12 +534,7 @@ namespace PromptFighters.Battle
                 return;
             }
 
-            if (IsReflecting && Opponent != null && !Opponent.IsReflecting)
-            {
-                DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "REFLECT!", ReflectColor, 1.5f);
-                Opponent.TakeDamage(damage, knockbackForce, -knockbackDir, stunDuration, guardDamage, false);
-                return;
-            }
+            // リフレクターは飛び道具のみ反射（Projectile.cs で処理）。近接打撃は通常通り受ける。
 
             bool blocking = State == FighterState.Guarding && _guardBreakTimer <= 0f;
             if (!blocking && applyOpponentDamageBoost && Opponent != null) damage *= Opponent.DamageMultiplier;

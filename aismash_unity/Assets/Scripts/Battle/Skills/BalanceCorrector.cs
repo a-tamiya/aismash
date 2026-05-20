@@ -63,9 +63,9 @@ namespace PromptFighters.Battle.Skills
             p.active_time = Mathf.Max(0.05f, p.active_time);
             p.recovery    = Mathf.Max(MinRecovery[si], p.recovery);
 
-            // 設置技: キャラのロックアウト時間はactive_timeを短く打ち切る
-            // トラップの実寿命は action.duration が担う
-            if (HasAction(skill, "trap_hitbox"))
+            // 設置・召喚技: キャラのロックアウト時間はactive_timeを短く打ち切る
+            // 実寿命は action.duration が担う
+            if (HasAction(skill, "trap_hitbox") || HasAction(skill, "summon"))
                 p.active_time = Mathf.Min(p.active_time, 0.10f);
 
             // スキルレベルのチャージ・フォローアップ制限
