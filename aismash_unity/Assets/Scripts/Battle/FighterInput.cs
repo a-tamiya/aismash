@@ -420,27 +420,35 @@ namespace PromptFighters.Battle
             {
                 float maxCharge = skillDef.max_charge_time > 0f ? skillDef.max_charge_time : 0.8f;
 
-                // リリースを最優先で処理（IsExecuting/CanAct より前）
                 if (ReadSkillReleased(slot))
                 {
-                    if (_skillChargeTimers[i] > 0f && !_skills.IsExecuting && _fighter.CanAct)
+                    if (!_skills.IsExecuting && _fighter.CanAct)
                     {
                         float chargeLevel = Mathf.Clamp01(_skillChargeTimers[i] / maxCharge);
                         _skills.TryUseSkill(slot, 1f + chargeLevel * 0.8f);
                     }
-                    _skillChargeTimers[i] = 0f; // 発射成否に関わらずリセット
+                    _skillChargeTimers[i] = 0f;
                     return;
                 }
 
-                // 実行中・行動不能中はチャージを一時停止（タイマーは保持）
                 if (_skills.IsExecuting || !_fighter.CanAct)
                     return;
 
-                // チャージ蓄積
                 if (ReadSkillHeld(slot))
                 {
-                    _skillChargeTimers[i] += Time.deltaTime;
-                    _fighter.ShowSkillCharge(Mathf.Clamp01(_skillChargeTimers[i] / maxCharge));
+                    if (pressed && _skillChargeTimers[i] <= 0f)
+                        _skillChargeTimers[i] = Time.deltaTime;
+                    else
+                        _skillChargeTimers[i] += Time.deltaTime;
+
+                    float chargeRate = Mathf.Clamp01(_skillChargeTimers[i] / maxCharge);
+                    _fighter.ShowSkillCharge(chargeRate);
+
+                    if (_skillChargeTimers[i] >= maxCharge)
+                    {
+                        _skills.TryUseSkill(slot, 1.8f);
+                        _skillChargeTimers[i] = 0f;
+                    }
                 }
             }
             else

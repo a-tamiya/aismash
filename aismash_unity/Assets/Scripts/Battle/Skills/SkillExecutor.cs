@@ -12,6 +12,7 @@ namespace PromptFighters.Battle.Skills
         public SkillData[] skills = new SkillData[4]; // index = SkillSlot
         public bool autoEquipSampleSkills = true;
         const float HitboxVisualScale = 0.9f;
+        const int MaxFollowUpCount = 3;
 
         Fighter _fighter;
         float _sizeScale = 1f;
@@ -24,6 +25,7 @@ namespace PromptFighters.Battle.Skills
         float _followUpTimer;
         SkillData _followUpSkill;
         SkillSlot _followUpSlot;
+        int _followUpCount;
 
         public bool      IsExecuting               => _isExecuting;
         public bool      IsFollowUpReady           => _followUpReady && _followUpTimer > 0f;
@@ -77,6 +79,7 @@ namespace PromptFighters.Battle.Skills
             _followUpTimer = 0f;
             _followUpSkill = null;
             _followUpSlot  = SkillSlot.AttackA;
+            _followUpCount = 0;
             UnsubscribeCurrentSkillHit();
             StopAllCoroutines();
         }
@@ -85,17 +88,18 @@ namespace PromptFighters.Battle.Skills
         {
             if (!IsFollowUpReady) return false;
             var skill = _followUpSkill;
+            int nextFollowUpCount = Mathf.Clamp(_followUpCount + 1, 1, MaxFollowUpCount);
             _followUpReady = false;
             _followUpTimer = 0f;
             _followUpSkill = null;
             ResetSkillState();
-            BattleLogger.Instance?.LogSkillUse(_fighter.PlayerIndex, skill.slot, skill.skill_name + "（派生）");
+            BattleLogger.Instance?.LogSkillUse(_fighter.PlayerIndex, skill.slot, skill.skill_name + $"（派生{nextFollowUpCount}）");
             GameAudioManager.Instance?.PlaySkill(skill);
-            StartCoroutine(ExecuteFollowUp(skill));
+            StartCoroutine(ExecuteFollowUp(skill, nextFollowUpCount));
             return true;
         }
 
-        IEnumerator ExecuteFollowUp(SkillData skill)
+        IEnumerator ExecuteFollowUp(SkillData skill, int followUpCount)
         {
             _isExecuting = true;
             _currentSkillHit = false;
@@ -113,6 +117,7 @@ namespace PromptFighters.Battle.Skills
                         totalTime = Mathf.Max(totalTime, a.time + (a.duration > 0f ? a.duration : 0.12f));
 
             _fighter.BeginSkillRecovery(totalTime);
+            bool pullForCombo = followUpCount < MaxFollowUpCount;
 
             while (idx < total)
             {
@@ -120,26 +125,15 @@ namespace PromptFighters.Battle.Skills
                 if (a == null) { idx++; continue; }
                 if (Time.time - t0 >= a.time)
                 {
-                    bool isLast = (idx == total - 1);
-                    if (!isLast)
-                    {
-                        // 非最終段: 相手を引き寄せてコンボを繋ぐ
-                        string savedDir = a.knockback_direction;
-                        float savedKb   = skill.parameters.knockback;
-                        a.knockback_direction      = "toward";
-                        skill.parameters.knockback = Mathf.Min(savedKb, 2.5f);
-                        ExecuteAction(skill, a, 1f);
-                        a.knockback_direction      = savedDir;
-                        skill.parameters.knockback = savedKb;
-                    }
-                    else
-                    {
-                        ExecuteAction(skill, a, 1f);
-                    }
+                    ExecuteActionWithOptionalComboPull(skill, a, pullForCombo);
                     idx++;
                 }
                 else yield return null;
             }
+
+            if (skill.follow_up_actions?.Count > 0 && followUpCount < MaxFollowUpCount)
+                OpenFollowUpWindow(skill, followUpCount);
+
             while (Time.time - t0 < totalTime) yield return null;
             _isExecuting = false;
             UnsubscribeCurrentSkillHit();
@@ -241,18 +235,11 @@ namespace PromptFighters.Battle.Skills
                 }
             }
 
+            if (skill.follow_up_actions?.Count > 0)
+                OpenFollowUpWindow(skill, 0);
+
             // recovery（後隙）が終わるまで待機
             while (Time.time - t0 < totalDuration) yield return null;
-
-            // follow_up: ヒット確認できたら受付ウィンドウを開く（同じスロットのボタン限定）
-            if (_currentSkillHit && skill.follow_up_actions?.Count > 0)
-            {
-                float window = skill.follow_up_window > 0f ? skill.follow_up_window : 0.5f;
-                _followUpReady = true;
-                _followUpTimer = window;
-                _followUpSkill = skill;
-                _followUpSlot  = skill.slot;
-            }
 
             _isExecuting = false;
             UnsubscribeCurrentSkillHit();
@@ -756,6 +743,42 @@ namespace PromptFighters.Battle.Skills
             hb.Status = st;
             hb.StatusDuration = a.duration;
             hb.StatusChance = Mathf.Clamp01(a.chance);
+        }
+
+        void OpenFollowUpWindow(SkillData skill, int followUpCount)
+        {
+            float window = skill.follow_up_window > 0f ? skill.follow_up_window : 0.5f;
+            _followUpReady = true;
+            _followUpTimer = window;
+            _followUpSkill = skill;
+            _followUpSlot  = skill.slot;
+            _followUpCount = Mathf.Clamp(followUpCount, 0, MaxFollowUpCount);
+        }
+
+        void ExecuteActionWithOptionalComboPull(SkillData skill, SkillAction action, bool pullForCombo)
+        {
+            if (!pullForCombo)
+            {
+                ExecuteAction(skill, action, 1f);
+                return;
+            }
+
+            string savedDir = action.knockback_direction;
+            float savedKnockback = skill.parameters.knockback;
+            float savedKnockbackX = action.knockback_x;
+            float savedKnockbackY = action.knockback_y;
+
+            action.knockback_direction = "toward";
+            action.knockback_x = savedKnockbackX > 0f ? Mathf.Min(savedKnockbackX, 0.55f) : 0.55f;
+            action.knockback_y = savedKnockbackY > 0f ? Mathf.Min(savedKnockbackY, 0.18f) : 0.18f;
+            skill.parameters.knockback = Mathf.Min(savedKnockback, 1.8f);
+
+            ExecuteAction(skill, action, 1f);
+
+            action.knockback_direction = savedDir;
+            action.knockback_x = savedKnockbackX;
+            action.knockback_y = savedKnockbackY;
+            skill.parameters.knockback = savedKnockback;
         }
     }
 }
