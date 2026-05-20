@@ -57,18 +57,10 @@ namespace PromptFighters.Battle.Skills
             var sr = GetComponent<SpriteRenderer>();
             if (HideVisual)
             {
-                if (DebugSettings.ShowHitboxes && sr != null)
-                {
-                    sr.enabled = true;
-                    sr.sprite  = RuntimeSprite.Square();
-                    sr.color   = new Color(1f, 0.35f, 0f, 0.55f);
-                    FitColliderAndVisualToWorldSize(sr);
-                }
-                else
-                {
-                    if (sr != null) sr.enabled = false;
-                    FitColliderToDesiredWorldSize();
-                }
+                sr.sprite  = RuntimeSprite.Square();
+                sr.color   = new Color(1f, 0.35f, 0f, 0.55f);
+                sr.enabled = false; // Update()で毎フレーム切り替え
+                FitColliderAndVisualToWorldSize(sr);
             }
             else if (EffectSprite != null)
             {
@@ -84,6 +76,13 @@ namespace PromptFighters.Battle.Skills
             }
             GetComponent<Rigidbody2D>().linearVelocity = Direction * Speed;
             Destroy(gameObject, Lifetime);
+        }
+
+        void Update()
+        {
+            if (!HideVisual) return;
+            var sr = GetComponent<SpriteRenderer>();
+            if (sr != null) sr.enabled = DebugSettings.ShowHitboxes;
         }
 
         void FitColliderToDesiredWorldSize()

@@ -30,6 +30,7 @@ namespace PromptFighters.Battle.Skills
         readonly HashSet<Fighter> _hitTargets = new HashSet<Fighter>();
         readonly Dictionary<Fighter, float> _nextHitTimes = new Dictionary<Fighter, float>();
         int _hitsLanded;
+        bool _visualReady; // Start()後にtrueになる
 
         public static Hitbox Spawn(Fighter owner, Vector2 worldPos, Vector2 size, float lifetime)
         {
@@ -58,13 +59,11 @@ namespace PromptFighters.Battle.Skills
             var sr = GetComponent<SpriteRenderer>();
             if (HideVisual)
             {
-                if (DebugSettings.ShowHitboxes && sr != null)
-                {
-                    sr.enabled = true;
-                    sr.sprite  = RuntimeSprite.Square();
-                    sr.color   = new Color(1f, 0.35f, 0f, 0.55f); // 橙: 食らわせ判定
-                }
-                else if (sr != null) sr.enabled = false;
+                // サイズだけ確定させ、表示はUpdateで毎フレーム制御する
+                sr.sprite = RuntimeSprite.Square();
+                sr.color  = new Color(1f, 0.35f, 0f, 0.55f); // 橙: 攻撃判定（デバッグ用）
+                // サイズをワールドスケールに合わせて確定
+                sr.enabled = false; // 初期は非表示、Update()で切り替え
             }
             else if (EffectSprite != null)
             {
@@ -77,7 +76,15 @@ namespace PromptFighters.Battle.Skills
             {
                 sr.color = new Color(ec.r, ec.g, ec.b, 0.65f);
             }
+            _visualReady = true;
             Destroy(gameObject, Lifetime);
+        }
+
+        void Update()
+        {
+            if (!_visualReady || !HideVisual) return;
+            var sr = GetComponent<SpriteRenderer>();
+            if (sr != null) sr.enabled = DebugSettings.ShowHitboxes;
         }
 
         void LateUpdate()
