@@ -121,6 +121,11 @@ namespace PromptFighters.Battle.Skills
 
             float t0 = Time.time;
 
+            // アクションを time 昇順で順次実行（簡易: アクションは startup考慮済の time にスポーン）
+            float elapsed = 0f;
+            int actionIdx = 0;
+            var actions = skill.actions;
+
             // SmashSide: dashより前に melee_hitbox が出ないよう補正
             if (skill.slot == SkillSlot.SmashSide && actions != null)
             {
@@ -131,11 +136,6 @@ namespace PromptFighters.Battle.Skills
                     foreach (var ac in actions)
                         if (ac?.type == "melee_hitbox") ac.time = Mathf.Max(ac.time, latestDash + 0.05f);
             }
-
-            // アクションを time 昇順で順次実行（簡易: アクションは startup考慮済の time にスポーン）
-            float elapsed = 0f;
-            int actionIdx = 0;
-            var actions = skill.actions;
 
             while (actionIdx < actions.Count)
             {
