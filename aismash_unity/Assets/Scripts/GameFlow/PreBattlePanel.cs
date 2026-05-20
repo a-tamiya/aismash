@@ -23,6 +23,8 @@ namespace PromptFighters.GameFlow
         int _p1IconPage = 0;
         int _p2IconPage = 0;
 
+        TextMeshProUGUI _p1GamepadLabel;
+        TextMeshProUGUI _p2GamepadLabel;
         TextMeshProUGUI _p1PresetLabel;
         TextMeshProUGUI _p2PresetLabel;
         TextMeshProUGUI _p1CategoryLabel;
@@ -127,6 +129,7 @@ namespace PromptFighters.GameFlow
 
             if (_panel != null && _panel.activeSelf)
             {
+                RefreshGamepadLabels();
                 var kb = UnityEngine.InputSystem.Keyboard.current;
                 if (_waitForMenuInputRelease)
                 {
@@ -371,6 +374,30 @@ namespace PromptFighters.GameFlow
             BuildTrainingPanel();
         }
 
+        void RefreshGamepadLabels()
+        {
+            var all = UnityEngine.InputSystem.Gamepad.all;
+            UpdateGpLabel(_p1GamepadLabel, all, 0);
+            UpdateGpLabel(_p2GamepadLabel, all, 1);
+        }
+
+        static void UpdateGpLabel(TextMeshProUGUI label,
+            UnityEngine.InputSystem.Utilities.ReadOnlyArray<UnityEngine.InputSystem.Gamepad> all,
+            int index)
+        {
+            if (label == null) return;
+            if (all.Count > index)
+            {
+                label.text  = $"● コントローラー接続中 ({all[index].displayName})";
+                label.color = new Color(0.3f, 0.9f, 0.3f);
+            }
+            else
+            {
+                label.text  = "● コントローラー未接続 (キーボード)";
+                label.color = new Color(0.6f, 0.6f, 0.6f);
+            }
+        }
+
         void BuildPlayerColumn(Transform parent, bool isP1)
         {
             float cx = isP1 ? -480f : 480f;
@@ -393,6 +420,13 @@ namespace PromptFighters.GameFlow
                 isP1 ? "1P" : "2P",
                 new Vector2(cx, 360f), new Vector2(100f, 60f), 40, pColor)
                 .fontStyle = FontStyles.Bold;
+
+            // コントローラー接続状態
+            var gpLabel = MakeLabel(parent, isP1 ? "P1GpStatus" : "P2GpStatus",
+                "",
+                new Vector2(cx, 323f), new Vector2(280f, 22f), 12, Color.gray);
+            if (isP1) _p1GamepadLabel = gpLabel;
+            else      _p2GamepadLabel = gpLabel;
 
             // カラーライン
             MakeOutline(parent, isP1 ? "P1Line" : "P2Line",
