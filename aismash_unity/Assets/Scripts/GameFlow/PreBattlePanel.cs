@@ -581,21 +581,21 @@ namespace PromptFighters.GameFlow
             BuildGenerationColumn(_generationSetupPanel.transform, false);
 
             var startGen = MakeButton(_generationSetupPanel.transform, "StartGenerateBtn", "生成開始",
-                new Vector2(-170f, -430f), new Vector2(260f, 62f), OnGeneratePressed,
+                new Vector2(-170f, -420f), new Vector2(260f, 62f), OnGeneratePressed,
                 new Color(0.65f, 0.28f, 0.08f, 1f));
             SetButtonLabelStyle(startGen, 22f, FontStyles.Bold, Color.white);
 
             var back = MakeButton(_generationSetupPanel.transform, "BackToSelectBtn", "戻る",
-                new Vector2(170f, -430f), new Vector2(220f, 62f), ShowCharacterSelect,
+                new Vector2(170f, -420f), new Vector2(220f, 62f), ShowCharacterSelect,
                 new Color(0.14f, 0.16f, 0.22f, 1f));
             SetButtonLabelStyle(back, 20f, FontStyles.Bold, Color.white);
 
             MakeLabel(_generationSetupPanel.transform, "GenSetupHint",
                 "空欄のプレイヤーは選択中の既存キャラを使用します。生成中はTキーで練習できます。",
-                new Vector2(0f, -485f), new Vector2(840f, 28f), 13f, new Color(0.78f, 0.86f, 1f));
+                new Vector2(0f, -470f), new Vector2(840f, 28f), 13f, new Color(0.78f, 0.86f, 1f));
 
             var debugBtn = MakeButton(_generationSetupPanel.transform, "DebugSkipImageBtn",
-                "", new Vector2(0f, -510f), new Vector2(420f, 40f),
+                "", new Vector2(0f, -370f), new Vector2(420f, 40f),
                 ToggleSkipImageMode, new Color(0.08f, 0.12f, 0.08f, 1f));
             _debugSkipImageLabel = debugBtn.GetComponentInChildren<TextMeshProUGUI>();
             RefreshDebugSkipLabel();
