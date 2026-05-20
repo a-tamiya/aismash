@@ -58,6 +58,8 @@ namespace PromptFighters.Battle.Skills
         public GrabParameters grabParameters = new GrabParameters();
         public ThrowParameters throwParameters = new ThrowParameters();
 
+        public float sizeScale = 1f; // 0.7 ~ 1.3: キャラの見た目サイズ倍率
+
         public string spritePath        = "Sprites/test.jpg"; // StreamingAssets相対パス or 絶対パス
         public string spriteDir         = null;               // 保存済みスプライトのディレクトリ（絶対パス）
         public Sprite characterSprite;  // Phase 4で設定（またはspritePath読み込み後に格納）

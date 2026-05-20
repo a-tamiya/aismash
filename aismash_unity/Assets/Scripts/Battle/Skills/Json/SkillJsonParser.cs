@@ -73,6 +73,7 @@ namespace PromptFighters.Battle.Skills.Json
             }
 
             data.skills = skillMap;
+            data.sizeScale = CharacterSizeEstimator.Estimate(data);
             return data;
         }
 

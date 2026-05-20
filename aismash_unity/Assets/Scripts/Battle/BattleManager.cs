@@ -207,6 +207,8 @@ namespace PromptFighters.Battle
             fighter2?.ApplyCharacterStats(data2?.stats);
             fighter1?.SetGrabThrowParameters(data1?.grabParameters, data1?.throwParameters);
             fighter2?.SetGrabThrowParameters(data2?.grabParameters, data2?.throwParameters);
+            fighter1?.SetSizeScale(data1?.sizeScale ?? 1f);
+            fighter2?.SetSizeScale(data2?.sizeScale ?? 1f);
 
             ApplySprite(fighter1, data1);
             ApplySprite(fighter2, data2);

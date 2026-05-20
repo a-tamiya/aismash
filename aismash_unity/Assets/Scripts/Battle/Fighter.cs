@@ -93,6 +93,7 @@ namespace PromptFighters.Battle
         SpriteRenderer _sprite;
         SpriteRenderer _rootSprite;
         Transform _visualRoot;
+        float _charSizeScale = 1f;
         SkillExecutor _skillExecutor;
         CharacterSpriteSet _spriteSet = new CharacterSpriteSet();
         CharacterSpriteId? _forcedSprite;
@@ -603,6 +604,13 @@ namespace PromptFighters.Battle
             if (throwData != null) throwParameters = throwData;
         }
 
+        public void SetSizeScale(float scale)
+        {
+            _charSizeScale = Mathf.Clamp(scale, 0.5f, 2f);
+            ApplyVisualScaleCorrection();
+            ApplyColliderScaleCorrection();
+        }
+
         public void ApplyCharacterStats(CharacterStats stats)
         {
             if (stats == null) return;
@@ -1095,15 +1103,15 @@ namespace PromptFighters.Battle
 
             _visualRoot.localPosition = Vector3.zero;
             _visualRoot.localRotation = Quaternion.identity;
-            _visualRoot.localScale = new Vector3(y / x, 1f, 1f);
+            _visualRoot.localScale = new Vector3(y / x * _charSizeScale, _charSizeScale, 1f);
         }
 
         void ApplyColliderScaleCorrection()
         {
             var col = GetComponent<BoxCollider2D>();
             if (col == null) return;
-            col.size = new Vector2(0.78f, 1.75f);
-            col.offset = new Vector2(0f, 0.82f);
+            col.size   = new Vector2(0.78f * _charSizeScale, 1.75f * _charSizeScale);
+            col.offset = new Vector2(0f,                     0.82f * _charSizeScale);
         }
 
         void Die()

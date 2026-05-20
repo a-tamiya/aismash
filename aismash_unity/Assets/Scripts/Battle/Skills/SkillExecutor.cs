@@ -14,6 +14,7 @@ namespace PromptFighters.Battle.Skills
         const float HitboxVisualScale = 0.9f;
 
         Fighter _fighter;
+        float _sizeScale = 1f;
         bool _isExecuting;
         bool _currentSkillHit;
         int _skillSerial;
@@ -40,8 +41,9 @@ namespace PromptFighters.Battle.Skills
             if (data == null) return;
             for (int i = 0; i < skills.Length; i++)
                 skills[i] = data.skills[i];
+            _sizeScale = Mathf.Clamp(data.sizeScale > 0f ? data.sizeScale : 1f, 0.5f, 2f);
             ResetSkillState();
-            Debug.Log($"[SkillExecutor] キャラクター「{data.characterName}」の技をロードしました。");
+            Debug.Log($"[SkillExecutor] キャラクター「{data.characterName}」の技をロードしました。(sizeScale={_sizeScale:F2})");
         }
 
         // JSONから直接ロード（フォールバックつき）
@@ -241,6 +243,11 @@ namespace PromptFighters.Battle.Skills
             float height = a.size_y > 0f ? a.size_y : DefaultHitboxHeight(skill.slot);
             // エフェクトなし（キャラ本体判定）は視覚補助がないぶんやや広めに
             if (a.hide_effect) { range *= 1.2f; height *= 1.2f; }
+            // キャラサイズに合わせてヒットボックスをスケール
+            range   *= _sizeScale;
+            height  *= _sizeScale;
+            offsetX *= _sizeScale;
+            offsetY *= _sizeScale;
             Vector2 offset = new Vector2(dirSign * offsetX, offsetY);
             Vector2 size   = new Vector2(range * HitboxVisualScale, height * HitboxVisualScale);
             float lifetime = skill.parameters.active_time > 0f ? skill.parameters.active_time : 0.12f;
@@ -283,6 +290,10 @@ namespace PromptFighters.Battle.Skills
             float height = a.size_y > 0f ? a.size_y : width;
             float offsetX = !Mathf.Approximately(a.spawn_x, 0f) ? a.spawn_x : width * 0.2f;
             float offsetY = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 0.6f;
+            width   *= _sizeScale;
+            height  *= _sizeScale;
+            offsetX *= _sizeScale;
+            offsetY *= _sizeScale;
             float lifetime = a.duration > 0f ? a.duration : Mathf.Max(skill.parameters.active_time, 0.12f);
 
             var hb = SpawnConfiguredHitbox(
@@ -301,6 +312,8 @@ namespace PromptFighters.Battle.Skills
             float height = a.size_y > 0f ? a.size_y : 0.9f;
             float offsetX = !Mathf.Approximately(a.spawn_x, 0f) ? a.spawn_x : width * 0.8f;
             float offsetY = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 0.35f;
+            width   *= _sizeScale;
+            height  *= _sizeScale;
             float lifetime = a.duration > 0f ? a.duration : Mathf.Max(skill.parameters.active_time, 0.35f);
 
             SpawnConfiguredHitbox(
@@ -359,8 +372,8 @@ namespace PromptFighters.Battle.Skills
             p.HideVisual     = a.hide_effect;
             p.FlipEffectX    = !_fighter.FacingRight;
             p.DesiredWorldSize = new Vector2(
-                (a.size_x > 0f ? a.size_x : Mathf.Clamp(speed * lifetime * 0.08f, 0.74f, 1.74f)) * HitboxVisualScale,
-                (a.size_y > 0f ? a.size_y : 0.75f) * HitboxVisualScale);
+                (a.size_x > 0f ? a.size_x : Mathf.Clamp(speed * lifetime * 0.08f, 0.74f, 1.74f)) * HitboxVisualScale * _sizeScale,
+                (a.size_y > 0f ? a.size_y : 0.75f) * HitboxVisualScale * _sizeScale);
         }
 
         static Vector2 DefaultMeleeOffset(SkillSlot slot, float range)

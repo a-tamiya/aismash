@@ -49,6 +49,7 @@ namespace PromptFighters.GameFlow
                 data.skills[(int)SkillSlot.AttackC] = BuildTrapSkill(safeName, element);
             }
             data.skills[(int)SkillSlot.SmashSide] = BuildUltimateSkill(safeName, element);
+            data.sizeScale = CharacterSizeEstimator.Estimate(data);
             return data;
         }
 
@@ -101,6 +102,7 @@ namespace PromptFighters.GameFlow
                 },
             };
 
+            clone.sizeScale = src.sizeScale;
             for (int i = 0; i < clone.skills.Length && i < src.skills.Length; i++)
                 clone.skills[i] = CloneSkill(src.skills[i]);
             return clone;
