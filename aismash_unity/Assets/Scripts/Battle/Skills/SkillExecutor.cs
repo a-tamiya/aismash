@@ -23,9 +23,11 @@ namespace PromptFighters.Battle.Skills
         bool _followUpReady;
         float _followUpTimer;
         SkillData _followUpSkill;
+        SkillSlot _followUpSlot;
 
-        public bool  IsExecuting               => _isExecuting;
-        public bool  IsFollowUpReady           => _followUpReady && _followUpTimer > 0f;
+        public bool      IsExecuting               => _isExecuting;
+        public bool      IsFollowUpReady           => _followUpReady && _followUpTimer > 0f;
+        public SkillSlot FollowUpSlot              => _followUpSlot;
         public SkillData GetSkill(SkillSlot s) => skills[(int)s];
 
         void Awake()
@@ -74,6 +76,7 @@ namespace PromptFighters.Battle.Skills
             _followUpReady = false;
             _followUpTimer = 0f;
             _followUpSkill = null;
+            _followUpSlot  = SkillSlot.AttackA;
             UnsubscribeCurrentSkillHit();
             StopAllCoroutines();
         }
@@ -219,13 +222,14 @@ namespace PromptFighters.Battle.Skills
             // recovery（後隙）が終わるまで待機
             while (Time.time - t0 < totalDuration) yield return null;
 
-            // follow_up: ヒット確認できたら受付ウィンドウを開く
+            // follow_up: ヒット確認できたら受付ウィンドウを開く（同じスロットのボタン限定）
             if (_currentSkillHit && skill.follow_up_actions?.Count > 0)
             {
                 float window = skill.follow_up_window > 0f ? skill.follow_up_window : 0.5f;
                 _followUpReady = true;
                 _followUpTimer = window;
                 _followUpSkill = skill;
+                _followUpSlot  = skill.slot;
             }
 
             _isExecuting = false;

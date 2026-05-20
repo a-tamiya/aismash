@@ -170,8 +170,16 @@ namespace PromptFighters.Battle
                     if (_airSkillFaceTimer > 0f)
                         _fighter.FaceTowardInput(moveX);
                 }
-                // follow_up 優先チェック
-                bool followUsed = (skillA || skillB || skillC) && _skills.TryExecuteFollowUp();
+                // follow_up: 派生元と同じスロットのボタンのみ受け付ける
+                bool followUsed = false;
+                if (_skills.IsFollowUpReady)
+                {
+                    var fs = _skills.FollowUpSlot;
+                    bool sameSlot = (fs == SkillSlot.AttackA && skillA) ||
+                                    (fs == SkillSlot.AttackB && skillB) ||
+                                    (fs == SkillSlot.AttackC && skillC);
+                    if (sameSlot) followUsed = _skills.TryExecuteFollowUp();
+                }
                 if (!followUsed)
                 {
                     HandleSkillSlot(SkillSlot.AttackA, skillA);

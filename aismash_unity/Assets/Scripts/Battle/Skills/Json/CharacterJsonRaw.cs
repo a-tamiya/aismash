@@ -30,5 +30,13 @@ namespace PromptFighters.Battle.Skills.Json
         public string risk_level;   // "low" | "medium" | "high" | "extreme"
         public SkillParameters parameters = new SkillParameters();
         public List<SkillAction>  actions = new List<SkillAction>();
+
+        // 派生技
+        public List<SkillAction> follow_up_actions;
+        public float             follow_up_window;
+
+        // チャージ
+        public bool  chargeable;
+        public float max_charge_time;
     }
 }

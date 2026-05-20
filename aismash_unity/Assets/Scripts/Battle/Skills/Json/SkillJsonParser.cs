@@ -134,13 +134,17 @@ namespace PromptFighters.Battle.Skills.Json
 
             return new SkillData
             {
-                slot        = SkillEnumParser.ParseSlot(raw.slot),
-                skill_name  = string.IsNullOrEmpty(raw.skill_name) ? "名称不明" : raw.skill_name,
-                description = raw.description ?? "",
-                element     = SkillEnumParser.ParseElement(raw.element),
-                risk_level  = ParseRiskLevel(raw.risk_level),
-                parameters  = raw.parameters ?? new SkillParameters(),
-                actions     = raw.actions    ?? new List<SkillAction>(),
+                slot             = SkillEnumParser.ParseSlot(raw.slot),
+                skill_name       = string.IsNullOrEmpty(raw.skill_name) ? "名称不明" : raw.skill_name,
+                description      = raw.description ?? "",
+                element          = SkillEnumParser.ParseElement(raw.element),
+                risk_level       = ParseRiskLevel(raw.risk_level),
+                parameters       = raw.parameters       ?? new SkillParameters(),
+                actions          = raw.actions          ?? new List<SkillAction>(),
+                follow_up_actions= raw.follow_up_actions,
+                follow_up_window = raw.follow_up_window,
+                chargeable       = raw.chargeable,
+                max_charge_time  = raw.max_charge_time,
             };
         }
 
