@@ -103,6 +103,7 @@ namespace PromptFighters.Battle.Skills
                 _fighter.Opponent.OnDamageReceived += MarkCurrentSkillHit;
 
             var actions = skill.follow_up_actions;
+            int total = actions?.Count ?? 0;
             float t0 = Time.time;
             int idx  = 0;
             float totalTime = 0.15f;
@@ -111,11 +112,32 @@ namespace PromptFighters.Battle.Skills
                     if (a != null)
                         totalTime = Mathf.Max(totalTime, a.time + (a.duration > 0f ? a.duration : 0.12f));
 
-            while (idx < (actions?.Count ?? 0))
+            _fighter.BeginSkillRecovery(totalTime);
+
+            while (idx < total)
             {
                 var a = actions[idx];
                 if (a == null) { idx++; continue; }
-                if (Time.time - t0 >= a.time) { ExecuteAction(skill, a, 1f); idx++; }
+                if (Time.time - t0 >= a.time)
+                {
+                    bool isLast = (idx == total - 1);
+                    if (!isLast)
+                    {
+                        // 非最終段: 相手を引き寄せてコンボを繋ぐ
+                        string savedDir = a.knockback_direction;
+                        float savedKb   = skill.parameters.knockback;
+                        a.knockback_direction      = "toward";
+                        skill.parameters.knockback = Mathf.Min(savedKb, 2.5f);
+                        ExecuteAction(skill, a, 1f);
+                        a.knockback_direction      = savedDir;
+                        skill.parameters.knockback = savedKb;
+                    }
+                    else
+                    {
+                        ExecuteAction(skill, a, 1f);
+                    }
+                    idx++;
+                }
                 else yield return null;
             }
             while (Time.time - t0 < totalTime) yield return null;
