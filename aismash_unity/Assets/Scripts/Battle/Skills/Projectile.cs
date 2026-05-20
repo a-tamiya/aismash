@@ -45,6 +45,7 @@ namespace PromptFighters.Battle.Skills
         float _spawnTime;
         bool  _boomerangFlipped;
         HashSet<Fighter> _boomerangHitSet;
+        bool  _wasReflected;
 
         public static Projectile Spawn(Fighter owner, Vector2 worldPos, Vector2 dir,
                                        float speed, float lifetime)
@@ -227,8 +228,8 @@ namespace PromptFighters.Battle.Skills
             }
             if (target.IsDodging) return;
 
-            // リフレクター: 速度・威力を1.2倍にして逆ベクトルで反射、オーナーを切り替え
-            if (target.IsReflecting && Owner != null && !Owner.IsReflecting)
+            // リフレクター: 速度・威力を1.2倍にして逆ベクトルで反射、オーナーを切り替え（1回限り）
+            if (!_wasReflected && target.IsReflecting)
             {
                 var rb = GetComponent<Rigidbody2D>();
                 if (rb != null) rb.linearVelocity = -rb.linearVelocity * 1.2f;
@@ -237,6 +238,7 @@ namespace PromptFighters.Battle.Skills
                 Damage    *= 1.2f;
                 Knockback *= 1.2f;
                 Owner = target;
+                _wasReflected = true;
                 _boomerangHitSet?.Clear();
                 DamagePopup.SpawnText(target.transform.position + Vector3.up * 0.5f, "REFLECT!", new Color(1f, 0.3f, 0.95f), 1.5f);
                 return;
