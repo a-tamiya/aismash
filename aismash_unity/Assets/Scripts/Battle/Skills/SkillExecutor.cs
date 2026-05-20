@@ -121,6 +121,17 @@ namespace PromptFighters.Battle.Skills
 
             float t0 = Time.time;
 
+            // SmashSide: dashより前に melee_hitbox が出ないよう補正
+            if (skill.slot == SkillSlot.SmashSide && actions != null)
+            {
+                float latestDash = 0f;
+                foreach (var ac in actions)
+                    if (ac?.type == "dash") latestDash = Mathf.Max(latestDash, ac.time);
+                if (latestDash > 0f)
+                    foreach (var ac in actions)
+                        if (ac?.type == "melee_hitbox") ac.time = Mathf.Max(ac.time, latestDash + 0.05f);
+            }
+
             // アクションを time 昇順で順次実行（簡易: アクションは startup考慮済の time にスポーン）
             float elapsed = 0f;
             int actionIdx = 0;
@@ -226,9 +237,12 @@ namespace PromptFighters.Battle.Skills
             float offsetX = a.spawn_x > 0f ? a.spawn_x : baseOffset.x;
             float offsetY = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : baseOffset.y;
             float height = a.size_y > 0f ? a.size_y : DefaultHitboxHeight(skill.slot);
+            // エフェクトなし（キャラ本体判定）は視覚補助がないぶんやや広めに
+            if (a.hide_effect) { range *= 1.2f; height *= 1.2f; }
             Vector2 offset = new Vector2(dirSign * offsetX, offsetY);
             Vector2 size   = new Vector2(range * HitboxVisualScale, height * HitboxVisualScale);
             float lifetime = skill.parameters.active_time > 0f ? skill.parameters.active_time : 0.12f;
+            if (skill.slot == SkillSlot.SmashSide) lifetime = Mathf.Max(lifetime, 0.15f);
 
             var hb = Hitbox.Spawn(_fighter, (Vector2)_fighter.transform.position + offset, size, lifetime);
             hb.FollowOwner = a.follow_owner;
@@ -253,8 +267,8 @@ namespace PromptFighters.Battle.Skills
         {
             a.follow_owner = true;
             a.hide_effect = true;
-            if (a.range <= 0f) a.range = 0.85f;
-            if (a.size_y <= 0f) a.size_y = 1.45f;
+            if (a.range <= 0f) a.range = 1.2f;
+            if (a.size_y <= 0f) a.size_y = 1.6f;
             if (Mathf.Approximately(a.spawn_y, 0f)) a.spawn_y = 0.75f;
             SpawnMeleeHitbox(skill, a, powerMultiplier);
         }
