@@ -678,7 +678,6 @@ namespace PromptFighters.Battle.Skills
             float damage    = a.damage_override >= 0f ? a.damage_override : 10f;
             float kx        = !Mathf.Approximately(a.knockback_x, 0f) ? Mathf.Abs(a.knockback_x) : 1f;
             float ky        = !Mathf.Approximately(a.knockback_y, 0f) ? Mathf.Abs(a.knockback_y) : 0.4f;
-            float knockback = new Vector2(kx, ky).magnitude * (_fighter?.stats?.groundMoveSpeed > 0f ? 1f : 1f);
             float forceMag  = Mathf.Clamp(damage * 0.9f, 6f, 18f);
             _fighter.StartCounter(duration, damage, forceMag, new Vector2(kx, ky).normalized, 0.3f);
         }
