@@ -1071,10 +1071,10 @@ namespace PromptFighters.GameFlow
 
         IEnumerator GenerateImages(CharacterData data1, CharacterData data2, bool generateP1, bool generateP2)
         {
-            bool img1Done = false, img2Done = false;
-
+            // P1 → P2 の順に直列生成（同時リクエストによるレート制限エラーを防ぐ）
             if (generateP1 && data1 != null && !string.IsNullOrEmpty(data1.visualPrompt))
             {
+                bool img1Done = false;
                 AIImageClient.GenerateSpriteSet(this, data1,
                     msg => UpdateGeneratingStatus("1P " + msg),
                     sprites =>
@@ -1085,11 +1085,12 @@ namespace PromptFighters.GameFlow
                     },
                     err => { Debug.LogWarning("[AIImage] 1P: " + err); img1Done = true; },
                     saveDir: data1.spriteDir);
+                yield return new WaitUntil(() => img1Done);
             }
-            else img1Done = true;
 
             if (generateP2 && data2 != null && !string.IsNullOrEmpty(data2.visualPrompt))
             {
+                bool img2Done = false;
                 AIImageClient.GenerateSpriteSet(this, data2,
                     msg => UpdateGeneratingStatus("2P " + msg),
                     sprites =>
@@ -1100,10 +1101,8 @@ namespace PromptFighters.GameFlow
                     },
                     err => { Debug.LogWarning("[AIImage] 2P: " + err); img2Done = true; },
                     saveDir: data2.spriteDir);
+                yield return new WaitUntil(() => img2Done);
             }
-            else img2Done = true;
-
-            yield return new WaitUntil(() => img1Done && img2Done);
         }
 
         // 保存済みスプライトがある場合はフルロードする（バトル開始直前に呼ぶ）
