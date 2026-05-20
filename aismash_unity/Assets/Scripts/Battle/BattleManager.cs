@@ -105,6 +105,9 @@ namespace PromptFighters.Battle
 
         void Update()
         {
+            if (Keyboard.current?.f3Key.wasPressedThisFrame == true)
+                DebugSettings.ShowHitboxes = !DebugSettings.ShowHitboxes;
+
             switch (Phase)
             {
                 case BattlePhase.Countdown:

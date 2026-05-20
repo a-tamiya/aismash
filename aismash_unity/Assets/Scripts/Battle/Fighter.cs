@@ -94,6 +94,7 @@ namespace PromptFighters.Battle
         SpriteRenderer _rootSprite;
         Transform _visualRoot;
         float _charSizeScale = 1f;
+        SpriteRenderer _hurtboxDebugSr;
         SkillExecutor _skillExecutor;
         CharacterSpriteSet _spriteSet = new CharacterSpriteSet();
         CharacterSpriteId? _forcedSprite;
@@ -187,6 +188,7 @@ namespace PromptFighters.Battle
             _bodyCollider   = GetComponent<Collider2D>();
             EnsureVisualRenderer();
             ApplyColliderScaleCorrection();
+            CreateHurtboxDebugVisual();
             _skillExecutor  = GetComponent<SkillExecutor>();
             CurrentHP       = maxHP;
             CurrentGuardDurability = maxGuardDurability;
@@ -251,6 +253,34 @@ namespace PromptFighters.Battle
         {
             ClampToStage();
             SeparateFromOpponent();
+            UpdateHurtboxDebugVisual();
+        }
+
+        void CreateHurtboxDebugVisual()
+        {
+            var go = new GameObject("HurtboxDebug");
+            _hurtboxDebugSr = go.AddComponent<SpriteRenderer>();
+            _hurtboxDebugSr.sprite       = RuntimeSprite.Square();
+            _hurtboxDebugSr.color        = new Color(0f, 0.55f, 1f, 0.30f); // 青: 食らい判定
+            _hurtboxDebugSr.sortingOrder = 25;
+            _hurtboxDebugSr.enabled      = false;
+        }
+
+        void UpdateHurtboxDebugVisual()
+        {
+            if (_hurtboxDebugSr == null) return;
+            bool show = DebugSettings.ShowHitboxes && _bodyCollider != null;
+            _hurtboxDebugSr.enabled = show;
+            if (!show) return;
+            var b = _bodyCollider.bounds;
+            _hurtboxDebugSr.transform.position   = b.center;
+            _hurtboxDebugSr.transform.rotation   = Quaternion.identity;
+            _hurtboxDebugSr.transform.localScale  = new Vector3(b.size.x, b.size.y, 1f);
+        }
+
+        void OnDestroy()
+        {
+            if (_hurtboxDebugSr != null) Destroy(_hurtboxDebugSr.gameObject);
         }
 
         void TickBurn()

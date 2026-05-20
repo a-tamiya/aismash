@@ -68,6 +68,7 @@ namespace PromptFighters.GameFlow
         CharacterData _pendingData2;
         Coroutine _generationCoroutine;
         bool _generationTrainingActive;
+        TextMeshProUGUI _debugSkipImageLabel;
 
         Image _titleTopGlow;
         Image _titleBottomGlow;
@@ -592,6 +593,29 @@ namespace PromptFighters.GameFlow
             MakeLabel(_generationSetupPanel.transform, "GenSetupHint",
                 "空欄のプレイヤーは選択中の既存キャラを使用します。生成中はTキーで練習できます。",
                 new Vector2(0f, -485f), new Vector2(840f, 28f), 13f, new Color(0.78f, 0.86f, 1f));
+
+            var debugBtn = MakeButton(_generationSetupPanel.transform, "DebugSkipImageBtn",
+                "", new Vector2(0f, -525f), new Vector2(420f, 40f),
+                ToggleSkipImageMode, new Color(0.08f, 0.12f, 0.08f, 1f));
+            _debugSkipImageLabel = debugBtn.GetComponentInChildren<TextMeshProUGUI>();
+            RefreshDebugSkipLabel();
+        }
+
+        void ToggleSkipImageMode()
+        {
+            DebugSettings.SkipImageGeneration = !DebugSettings.SkipImageGeneration;
+            RefreshDebugSkipLabel();
+        }
+
+        void RefreshDebugSkipLabel()
+        {
+            if (_debugSkipImageLabel == null) return;
+            _debugSkipImageLabel.text = DebugSettings.SkipImageGeneration
+                ? "[デバッグ] 画像スキップ: ON"
+                : "[デバッグ] 画像スキップ: OFF";
+            _debugSkipImageLabel.color = DebugSettings.SkipImageGeneration
+                ? new Color(0.4f, 1f, 0.4f)
+                : new Color(0.55f, 0.65f, 0.55f);
         }
 
         void BuildGenerationColumn(Transform parent, bool isP1)
@@ -1053,10 +1077,14 @@ namespace PromptFighters.GameFlow
             }
 
             // 画像生成は新規生成した側だけ行う。既存キャラ側は選択中スプライトをそのまま使う。
-            if (genP1 || genP2)
+            if ((genP1 || genP2) && !DebugSettings.SkipImageGeneration)
             {
                 UpdateGeneratingStatus("キャラクター画像を生成中...");
                 yield return GenerateImages(_pendingData1, _pendingData2, genP1, genP2);
+            }
+            else if (DebugSettings.SkipImageGeneration)
+            {
+                UpdateGeneratingStatus("[デバッグ] 画像生成をスキップしました");
             }
 
             _generatingPanel?.SetActive(false);

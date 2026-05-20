@@ -57,8 +57,18 @@ namespace PromptFighters.Battle.Skills
             var sr = GetComponent<SpriteRenderer>();
             if (HideVisual)
             {
-                if (sr != null) sr.enabled = false;
-                FitColliderToDesiredWorldSize();
+                if (DebugSettings.ShowHitboxes && sr != null)
+                {
+                    sr.enabled = true;
+                    sr.sprite  = RuntimeSprite.Square();
+                    sr.color   = new Color(1f, 0.35f, 0f, 0.55f);
+                    FitColliderAndVisualToWorldSize(sr);
+                }
+                else
+                {
+                    if (sr != null) sr.enabled = false;
+                    FitColliderToDesiredWorldSize();
+                }
             }
             else if (EffectSprite != null)
             {
