@@ -595,7 +595,7 @@ namespace PromptFighters.GameFlow
                 new Vector2(0f, -485f), new Vector2(840f, 28f), 13f, new Color(0.78f, 0.86f, 1f));
 
             var debugBtn = MakeButton(_generationSetupPanel.transform, "DebugSkipImageBtn",
-                "", new Vector2(0f, -525f), new Vector2(420f, 40f),
+                "", new Vector2(0f, -510f), new Vector2(420f, 40f),
                 ToggleSkipImageMode, new Color(0.08f, 0.12f, 0.08f, 1f));
             _debugSkipImageLabel = debugBtn.GetComponentInChildren<TextMeshProUGUI>();
             RefreshDebugSkipLabel();
