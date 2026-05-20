@@ -126,15 +126,17 @@ namespace PromptFighters.Battle.Skills
             int actionIdx = 0;
             var actions = skill.actions;
 
-            // SmashSide: dashより前に melee_hitbox が出ないよう補正
+            // SmashSide: dashより後に判定が出るよう補正（melee/body 両対応）
             if (skill.slot == SkillSlot.SmashSide && actions != null)
             {
+                bool hasDash = false;
                 float latestDash = 0f;
                 foreach (var ac in actions)
-                    if (ac?.type == "dash") latestDash = Mathf.Max(latestDash, ac.time);
-                if (latestDash > 0f)
+                    if (ac?.type == "dash") { hasDash = true; latestDash = Mathf.Max(latestDash, ac.time); }
+                if (hasDash)
                     foreach (var ac in actions)
-                        if (ac?.type == "melee_hitbox") ac.time = Mathf.Max(ac.time, latestDash + 0.05f);
+                        if (ac?.type == "melee_hitbox" || ac?.type == "body_hitbox")
+                            ac.time = Mathf.Max(ac.time, latestDash + 0.05f);
             }
 
             while (actionIdx < actions.Count)
