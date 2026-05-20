@@ -13,7 +13,7 @@ namespace PromptFighters.Battle.Skills
         public bool autoEquipSampleSkills = true;
         const float HitboxVisualScale = 0.9f;
         const int MaxFollowUpCount = 3;
-        const float FollowUpDamageMultiplier = 0.55f;
+        const float FollowUpDamageMultiplier = 0.35f;
 
         Fighter _fighter;
         float _sizeScale = 1f;

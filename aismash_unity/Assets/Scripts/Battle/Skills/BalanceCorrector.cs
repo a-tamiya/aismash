@@ -188,9 +188,9 @@ namespace PromptFighters.Battle.Skills
                 foreach (var fa in skill.follow_up_actions)
                 {
                     if (fa == null) continue;
-                    fa.hit_count = Mathf.Clamp(fa.hit_count, 1, 2);
+                    fa.hit_count = 1;
                     if (fa.damage_override >= 0f)
-                        fa.damage_override = Mathf.Clamp(fa.damage_override, 0f, totalMaxDmg * 0.7f);
+                        fa.damage_override = Mathf.Clamp(fa.damage_override, 0f, totalMaxDmg * 0.35f);
                 }
             }
         }

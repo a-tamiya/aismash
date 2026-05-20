@@ -34,6 +34,7 @@ namespace PromptFighters.Battle
         const float ThrowNeutralThreshold = 0.2f;
         const float ShortHopThreshold = -0.35f;
         const float FastFallThreshold = -0.55f;
+        const float MinChargeReleaseSeconds = 0.08f;
 
         void Awake()
         {
@@ -425,7 +426,7 @@ namespace PromptFighters.Battle
         void HandleSkillSlot(SkillSlot slot, bool pressed)
         {
             var skillDef = _skills?.GetSkill(slot);
-            if (skillDef?.chargeable == true)
+            if (IsChargeSkill(skillDef))
                 return;
 
             if (pressed) _skills.TryUseSkill(slot);
@@ -704,15 +705,15 @@ namespace PromptFighters.Battle
         {
             int i = (int)slot;
             var skillDef = _skills?.GetSkill(slot);
-            if (skillDef?.chargeable != true)
+            if (!IsChargeSkill(skillDef))
                 return false;
 
             float maxCharge = skillDef.max_charge_time > 0f ? skillDef.max_charge_time : 0.8f;
-            bool pressed = ReadSkillPressed(slot);
             bool held = ReadSkillHeld(slot);
+            bool pressed = ReadSkillPressed(slot);
             bool released = ReadSkillReleased(slot);
 
-            if (pressed && !_skillCharging[i])
+            if ((pressed || held) && !_skillCharging[i])
             {
                 if (_skills.IsExecuting || !_fighter.CanAct)
                     return false;
@@ -726,16 +727,6 @@ namespace PromptFighters.Battle
             if (!_skillCharging[i])
                 return false;
 
-            if (released || !held)
-            {
-                float chargeLevel = Mathf.Clamp01(_skillChargeTimers[i] / maxCharge);
-                if (!_skills.IsExecuting && _fighter.CanAct)
-                    _skills.TryUseSkill(slot, 1f + chargeLevel * 0.8f);
-                _skillCharging[i] = false;
-                _skillChargeTimers[i] = 0f;
-                return true;
-            }
-
             if (_skills.IsExecuting || !_fighter.CanAct)
             {
                 _skillCharging[i] = false;
@@ -747,6 +738,16 @@ namespace PromptFighters.Battle
             float chargeRate = Mathf.Clamp01(_skillChargeTimers[i] / maxCharge);
             _fighter.ShowSkillCharge(chargeRate);
 
+            bool canRelease = _skillChargeTimers[i] >= MinChargeReleaseSeconds;
+            if ((released || !held) && canRelease)
+            {
+                float chargeLevel = Mathf.Clamp01(_skillChargeTimers[i] / maxCharge);
+                _skills.TryUseSkill(slot, 1f + chargeLevel * 0.8f);
+                _skillCharging[i] = false;
+                _skillChargeTimers[i] = 0f;
+                return true;
+            }
+
             if (_skillChargeTimers[i] >= maxCharge)
             {
                 _skills.TryUseSkill(slot, 1.8f);
@@ -755,6 +756,11 @@ namespace PromptFighters.Battle
             }
 
             return true;
+        }
+
+        static bool IsChargeSkill(SkillData skill)
+        {
+            return skill != null && (skill.chargeable || skill.max_charge_time > 0f);
         }
     }
 }
