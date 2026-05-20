@@ -164,22 +164,33 @@ namespace PromptFighters.AI
                     pending--;
                     continue;
                 }
-                // baseVisualPrompt（外見説明）+ ポーズ指示（CharSuffixを既に含む）
-                string fullPrompt = baseVisualPrompt + ", " + editPrompt;
-                runner.StartCoroutine(GenerateEditCoroutine(
-                    id, filename, fullPrompt, size, baseRawBytes, key, saveDir,
-                    (spriteId, fname, sprite) =>
-                    {
-                        set.Set(spriteId, sprite);
-                        pending--;
-                        onProgress?.Invoke($"生成完了: {fname} (残り {pending} 枚)");
-                    },
-                    (spriteId, err) =>
-                    {
-                        Debug.LogWarning($"[AIImage] {spriteId} 生成失敗（Idle1で代替）: {err}");
-                        set.Set(spriteId, baseSprite);
-                        pending--;
-                    }));
+
+                Action<CharacterSpriteId, string, Sprite> onDone = (spriteId, fname, sprite) =>
+                {
+                    set.Set(spriteId, sprite);
+                    pending--;
+                    onProgress?.Invoke($"生成完了: {fname} (残り {pending} 枚)");
+                };
+                Action<CharacterSpriteId, string> onFail = (spriteId, err) =>
+                {
+                    Debug.LogWarning($"[AIImage] {spriteId} 生成失敗（Idle1で代替）: {err}");
+                    set.Set(spriteId, baseSprite);
+                    pending--;
+                };
+
+                if (IsEffectSprite(id))
+                {
+                    // エフェクトはキャラ参照不要 → generations endpoint で生成（入力画像コスト削減）
+                    runner.StartCoroutine(GenerateNewImageCoroutine(
+                        id, filename, editPrompt, size, key, saveDir, onDone, onFail));
+                }
+                else
+                {
+                    // baseVisualPrompt（外見説明）+ ポーズ指示（CharSuffixを既に含む）
+                    string fullPrompt = baseVisualPrompt + ", " + editPrompt;
+                    runner.StartCoroutine(GenerateEditCoroutine(
+                        id, filename, fullPrompt, size, baseRawBytes, key, saveDir, onDone, onFail));
+                }
             }
 
             yield return new WaitUntil(() => pending == 0);
@@ -322,6 +333,86 @@ namespace PromptFighters.AI
             catch (Exception e)
             {
                 onError?.Invoke("画像変換失敗: " + e.Message);
+            }
+        }
+
+        // /v1/images/generations でエフェクト等（参照画像不要）を新規生成する
+        static IEnumerator GenerateNewImageCoroutine(
+            CharacterSpriteId id, string filename, string prompt,
+            string size, string key, string saveDir,
+            Action<CharacterSpriteId, string, Sprite> onSuccess,
+            Action<CharacterSpriteId, string> onError)
+        {
+            string safePrompt = EscapeForJson(prompt);
+            string body =
+                $"{{\"model\":\"{Model}\"," +
+                $"\"prompt\":\"{safePrompt}\"," +
+                $"\"n\":1,\"size\":\"{size}\",\"quality\":\"{Quality}\"}}";
+
+            using var req = new UnityWebRequest(GenerationsEndpoint, "POST");
+            req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
+            req.downloadHandler = new DownloadHandlerBuffer();
+            req.SetRequestHeader("Content-Type", "application/json");
+            req.SetRequestHeader("Authorization", "Bearer " + key);
+            req.timeout = 120;
+
+            yield return req.SendWebRequest();
+
+            if (req.result != UnityWebRequest.Result.Success)
+            {
+                onError?.Invoke(id, $"{req.error}: {req.downloadHandler?.text}");
+                yield break;
+            }
+
+            string imageUrl = null;
+            string imageBase64 = null;
+            try
+            {
+                ParseImageResponse(req.downloadHandler.text, out imageUrl, out imageBase64);
+            }
+            catch (Exception e)
+            {
+                onError?.Invoke(id, "レスポンス解析失敗: " + e.Message);
+                yield break;
+            }
+
+            byte[] rawBytes = null;
+            if (!string.IsNullOrEmpty(imageBase64))
+            {
+                try { rawBytes = Convert.FromBase64String(imageBase64); }
+                catch (Exception e) { onError?.Invoke(id, "Base64デコード失敗: " + e.Message); yield break; }
+            }
+            else if (!string.IsNullOrEmpty(imageUrl))
+            {
+                var imgReq = UnityWebRequestTexture.GetTexture(imageUrl);
+                imgReq.timeout = 60;
+                yield return imgReq.SendWebRequest();
+                if (imgReq.result != UnityWebRequest.Result.Success)
+                {
+                    string err = imgReq.error;
+                    imgReq.Dispose();
+                    onError?.Invoke(id, "URL画像のダウンロード失敗: " + err);
+                    yield break;
+                }
+                var urlTex = DownloadHandlerTexture.GetContent(imgReq);
+                rawBytes = ImageConversion.EncodeToPNG(urlTex);
+                imgReq.Dispose();
+            }
+            else
+            {
+                onError?.Invoke(id, "レスポンスにurl/b64_jsonが見つかりません");
+                yield break;
+            }
+
+            try
+            {
+                var sprite = RawBytesToSprite(rawBytes);
+                if (saveDir != null) TrySavePng(saveDir, filename, sprite);
+                onSuccess?.Invoke(id, filename, sprite);
+            }
+            catch (Exception e)
+            {
+                onError?.Invoke(id, "画像処理失敗: " + e.Message);
             }
         }
 
