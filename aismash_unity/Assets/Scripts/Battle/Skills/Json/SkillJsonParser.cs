@@ -113,7 +113,8 @@ namespace PromptFighters.Battle.Skills.Json
             var result = Parse(json);
             if (result != null) return result;
 
-            var fallback = new CharacterData { characterName = fallbackName };
+            string name = string.IsNullOrEmpty(fallbackName) || fallbackName == "???" ? "電脳の巫女・ミコト" : fallbackName;
+            var fallback = new CharacterData { characterName = name };
             SampleSkillLibrary.EquipDefaults(fallback);
             return fallback;
         }

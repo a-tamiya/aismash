@@ -25,7 +25,7 @@ namespace PromptFighters.GameFlow
                 visualPrompt = BuildVisualPrompt(safeName, safeFeatures, element),
                 visualDescription = safeFeatures,
                 stats = InferStats(safeFeatures),
-                spritePath = fallback != null ? fallback.spritePath : "Sprites/test.jpg",
+                spritePath = fallback?.spritePath ?? "",
                 characterSprite = fallback?.characterSprite,
             };
 
@@ -57,7 +57,7 @@ namespace PromptFighters.GameFlow
         {
             if (src == null)
             {
-                var fallback = new CharacterData { characterName = "Sample Fighter" };
+                var fallback = new CharacterData { characterName = "電脳の巫女・ミコト" };
                 SampleSkillLibrary.EquipDefaults(fallback);
                 return fallback;
             }

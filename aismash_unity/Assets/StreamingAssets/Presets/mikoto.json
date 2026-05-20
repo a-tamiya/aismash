@@ -1,0 +1,116 @@
+{
+  "character_name": "電脳の巫女・ミコト",
+  "input_features": "電脳技術と霊力を融合させた小柄な巫女。素早い動きと雷撃を組み合わせた近〜中距離攻撃を得意とする。",
+  "base_visual_prompt": "2D anime standing character, full body, petite shrine maiden with cyberpunk elements, white and red hakama with glowing cyan circuit patterns, long black hair with digital halo ornament, floating glowing ofuda papers, cyan glowing eyes, slender athletic build",
+  "visual_description": "サイバーパンクな要素を取り入れた小柄な巫女装束。白と赤の袴にシアン色の電脳回路紋様が浮かぶ。長い黒髪に光の輪、電子的なお札が浮遊している。",
+  "stats": {
+    "groundMoveSpeed": 6.8,
+    "airMoveSpeed": 5.8,
+    "jumpForce": 14.0,
+    "airJumpHeightMultiplier": 0.48,
+    "walkSpeedRatio": 0.38,
+    "guardDurability": 58,
+    "lightness": 1.35,
+    "weight": 0.72,
+    "groundDodgeDistance": 3.0,
+    "airDodgeDistance": 2.4
+  },
+  "skills": [
+    {
+      "slot": "attack_a",
+      "skill_name": "電神拳",
+      "description": "電気をまとった高速3連打",
+      "element": "lightning",
+      "risk_level": "low",
+      "parameters": {
+        "damage": 5,
+        "hit_count": 3,
+        "range": 1.3,
+        "startup": 0.04,
+        "active_time": 0.10,
+        "recovery": 0.22,
+        "knockback": 3.5,
+        "stun_time": 0.12,
+        "guard_damage": 1.2
+      },
+      "actions": [
+        {"type": "body_hitbox", "time": 0.04, "range": 1.2, "spawn_x": 0.5, "spawn_y": 0.85, "size_y": 1.3, "hit_count": 1, "follow_owner": true, "hide_effect": true, "damage_override": -1},
+        {"type": "body_hitbox", "time": 0.09, "range": 1.1, "spawn_x": 0.5, "spawn_y": 0.55, "size_y": 1.1, "hit_count": 1, "follow_owner": true, "hide_effect": true, "damage_override": -1},
+        {"type": "body_hitbox", "time": 0.14, "range": 1.3, "spawn_x": 0.6, "spawn_y": 0.75, "size_y": 1.2, "hit_count": 1, "follow_owner": true, "hide_effect": true, "damage_override": -1}
+      ]
+    },
+    {
+      "slot": "attack_b",
+      "skill_name": "デジタル弾",
+      "description": "前方にデジタルエネルギー弾を3連射",
+      "element": "lightning",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 6,
+        "range": 14,
+        "startup": 0.07,
+        "active_time": 0.10,
+        "recovery": 0.38,
+        "knockback": 4.0,
+        "stun_time": 0.1,
+        "guard_damage": 1.4
+      },
+      "actions": [
+        {"type": "projectile", "time": 0.07, "projectile_speed": 11, "projectile_lifetime": 1.3, "size_x": 0.85, "size_y": 0.55, "damage_override": -1},
+        {"type": "projectile", "time": 0.15, "projectile_speed": 11, "projectile_lifetime": 1.3, "size_x": 0.85, "size_y": 0.55, "damage_override": -1},
+        {"type": "projectile", "time": 0.23, "projectile_speed": 11, "projectile_lifetime": 1.3, "size_x": 0.85, "size_y": 0.55, "damage_override": -1}
+      ]
+    },
+    {
+      "slot": "attack_c",
+      "skill_name": "霊波転送",
+      "description": "高速ダッシュ後に電磁フィールドを展開",
+      "element": "lightning",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 9,
+        "range": 2.2,
+        "startup": 0.08,
+        "active_time": 0.18,
+        "recovery": 0.44,
+        "knockback": 5.5,
+        "stun_time": 0.30,
+        "guard_damage": 1.8
+      },
+      "actions": [
+        {"type": "dash", "time": 0.0, "power": 7, "direction": "forward", "damage_override": -1},
+        {"type": "area_hitbox", "time": 0.08, "spawn_x": 0.9, "spawn_y": 0.7, "size_x": 2.0, "size_y": 1.6, "hit_count": 1, "status": "stun", "chance": 0.6, "damage_override": -1}
+      ]
+    },
+    {
+      "slot": "smash_side",
+      "skill_name": "電脳奉納",
+      "description": "踏み込んで全力の電撃波動を解放",
+      "element": "lightning",
+      "risk_level": "high",
+      "parameters": {
+        "damage": 21,
+        "range": 2.8,
+        "startup": 0.16,
+        "active_time": 0.20,
+        "recovery": 0.52,
+        "knockback": 12,
+        "stun_time": 0.35,
+        "guard_damage": 3.8
+      },
+      "actions": [
+        {"type": "dash", "time": 0.1, "power": 5, "direction": "forward", "damage_override": -1},
+        {"type": "melee_hitbox", "time": 0.16, "range": 2.8, "spawn_x": 1.5, "spawn_y": 0.7, "size_y": 1.8, "hit_count": 1, "damage_override": -1}
+      ]
+    }
+  ],
+  "grab_parameters": {"range": 1.4, "startup": 0.07, "recovery": 0.13},
+  "throw_parameters": {
+    "front_damage": 9,
+    "front_knockback": 7,
+    "back_damage": 9,
+    "back_knockback": 9,
+    "up_damage": 9,
+    "up_knockback": 9
+  }
+}
