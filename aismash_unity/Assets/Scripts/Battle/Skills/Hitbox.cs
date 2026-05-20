@@ -66,6 +66,11 @@ namespace PromptFighters.Battle.Skills
             return hb;
         }
 
+        public void SetDebugColor(Color c)
+        {
+            if (_debugSr != null) _debugSr.color = c;
+        }
+
         // ring形状用: CircleCollider2Dで生成する
         public static Hitbox SpawnCircle(Fighter owner, Vector2 worldPos, float radius, float lifetime)
         {
@@ -89,7 +94,7 @@ namespace PromptFighters.Battle.Skills
 
             var dbGo = new GameObject("HitboxDebug");
             var dbSr = dbGo.AddComponent<SpriteRenderer>();
-            dbSr.sprite       = RuntimeSprite.Square();
+            dbSr.sprite       = RuntimeSprite.Circle(); // 円スプライトで実形状を表示
             dbSr.color        = new Color(0.3f, 1f, 0.3f, 0.6f); // 緑: リング判定
             dbSr.sortingOrder = 12;
             dbSr.enabled      = false;

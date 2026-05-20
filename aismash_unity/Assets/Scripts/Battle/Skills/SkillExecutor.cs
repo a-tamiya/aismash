@@ -445,6 +445,8 @@ namespace PromptFighters.Battle.Skills
                 lifetime);
             hbox.FollowOwner      = a.follow_owner;
             hbox.OwnerLocalOffset = new Vector2(offsetX, offsetY2);
+            if (shape == "cone")
+                hbox.SetDebugColor(new Color(0.3f, 0.9f, 1f, 0.6f)); // 水色: コーン判定
         }
 
         void SpawnTrapHitbox(SkillData skill, SkillAction a, float powerMultiplier)
