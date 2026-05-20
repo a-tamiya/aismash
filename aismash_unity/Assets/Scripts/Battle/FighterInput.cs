@@ -708,7 +708,7 @@ namespace PromptFighters.Battle
             if (!IsChargeSkill(skillDef))
                 return false;
 
-            float maxCharge = skillDef.max_charge_time > 0f ? skillDef.max_charge_time : 0.8f;
+            float maxCharge = Mathf.Clamp(skillDef.max_charge_time > 0f ? skillDef.max_charge_time : 1.5f, 1.0f, 3.0f);
             bool held = ReadSkillHeld(slot);
             bool pressed = ReadSkillPressed(slot);
             bool released = ReadSkillReleased(slot);

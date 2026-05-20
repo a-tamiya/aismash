@@ -77,8 +77,8 @@ namespace PromptFighters.Battle.Skills
             }
 
             // スキルレベルのチャージ・フォローアップ制限
-            if (skill.chargeable)
-                skill.max_charge_time = Mathf.Clamp(skill.max_charge_time > 0f ? skill.max_charge_time : 0.8f, 0.3f, 1.5f);
+            if (skill.chargeable || skill.max_charge_time > 0f)
+                skill.max_charge_time = Mathf.Clamp(skill.max_charge_time > 0f ? skill.max_charge_time : 1.5f, 1.0f, 3.0f);
             if (skill.follow_up_actions?.Count > 0)
                 skill.follow_up_window = Mathf.Clamp(skill.follow_up_window > 0f ? skill.follow_up_window : 0.5f, 0.2f, 1.0f);
 

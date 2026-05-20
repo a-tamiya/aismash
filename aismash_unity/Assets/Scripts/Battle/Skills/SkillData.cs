@@ -23,7 +23,7 @@ namespace PromptFighters.Battle.Skills
 
         // charge: 長押しで powerMultiplier 1.0→1.8
         public bool  chargeable;
-        public float max_charge_time;  // 最大チャージ秒（0→デフォルト0.8s）
+        public float max_charge_time;  // 最大チャージ秒（0→デフォルト1.5s）
     }
 
     [Serializable]
