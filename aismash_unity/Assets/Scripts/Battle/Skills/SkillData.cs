@@ -58,6 +58,7 @@ namespace PromptFighters.Battle.Skills
         public int    hit_count = 1;
         public float  damage_override = -1f; // -1なら parameters.damage を使用
         public bool   follow_owner;
+        public bool   player_controlled;
         public float  knockback_x;
         public float  knockback_y;
         public bool   hide_effect;
@@ -95,6 +96,7 @@ namespace PromptFighters.Battle.Skills
 
         // apply_status / buff_self
         public string status;     // "stun"/"burn"/"slow"/"guard_break"/"speed"/"jump"/"transparent"/"damage"/"reflect"
+        public float  status_duration;
         public float  chance = 1f;
     }
 }

@@ -295,6 +295,8 @@ AIは、各プレイヤーの入力から以下を生成する。
 
 召喚技（`summon`）を生成する場合、召喚するものの見た目はその技スロットの技エフェクト画像（`effect_a` / `effect_b` / `effect_c` / `effect_smash`）として生成し、バトル中の召喚エンティティ表示にもその画像を使用する。AIは `skill_name` と `description` に召喚物の名前・形状が分かる語を含め、画像生成側が召喚物を技エフェクト枠で描けるようにする。
 
+召喚物は `direction`（`forward` / `backward` / `left` / `right` / `toward_enemy` / `away_enemy` / `stationary`）、`player_controlled`、`homing`、`knockback_direction`、`status` / `status_duration` / `chance` を指定できる。`player_controlled:true` の召喚物は召喚したプレイヤーの左右入力で操縦でき、`homing:true` の召喚物は相手を追尾する。接触時は指定されたノックバック方向と状態異常を適用する。`duration` は召喚物の寿命、`status_duration` は接触時に付与する状態異常の時間として扱う。
+
 #### 固定アクション（AI生成なし、パラメータのみ生成）
 
 | アクション | 入力 | 役割 |

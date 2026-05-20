@@ -320,6 +320,7 @@ namespace PromptFighters.GameFlow
                 hit_count           = a.hit_count,
                 damage_override     = a.damage_override,
                 follow_owner        = a.follow_owner,
+                player_controlled   = a.player_controlled,
                 knockback_x         = a.knockback_x,
                 knockback_y         = a.knockback_y,
                 knockback_direction = a.knockback_direction,
@@ -337,6 +338,7 @@ namespace PromptFighters.GameFlow
                 spread_angle        = a.spread_angle,
                 gravity_scale       = a.gravity_scale,
                 status              = a.status,
+                status_duration     = a.status_duration,
                 chance              = a.chance,
             };
         }

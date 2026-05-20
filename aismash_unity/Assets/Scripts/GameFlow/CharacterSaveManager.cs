@@ -246,12 +246,15 @@ namespace PromptFighters.GameFlow
             if (a.size_y > 0f)                       sb.Append($",\"size_y\":{a.size_y}");
             if (a.hit_count > 0)                     sb.Append($",\"hit_count\":{a.hit_count}");
             if (a.follow_owner)                      sb.Append(",\"follow_owner\":true");
+            if (a.player_controlled)                 sb.Append(",\"player_controlled\":true");
             if (a.hide_effect)                       sb.Append(",\"hide_effect\":true");
             if (!Mathf.Approximately(a.knockback_x, 0f)) sb.Append($",\"knockback_x\":{a.knockback_x}");
             if (!Mathf.Approximately(a.knockback_y, 0f)) sb.Append($",\"knockback_y\":{a.knockback_y}");
+            if (!string.IsNullOrEmpty(a.knockback_direction)) sb.Append($",\"knockback_direction\":{Q(a.knockback_direction)}");
             if (a.projectile_speed > 0f)             sb.Append($",\"projectile_speed\":{a.projectile_speed}");
             if (a.projectile_lifetime > 0f)          sb.Append($",\"projectile_lifetime\":{a.projectile_lifetime}");
-            if (!string.IsNullOrEmpty(a.status))     sb.Append($",\"status\":{Q(a.status)},\"duration\":{a.duration},\"chance\":{a.chance}");
+            if (a.homing)                            sb.Append(",\"homing\":true");
+            if (!string.IsNullOrEmpty(a.status))     sb.Append($",\"status\":{Q(a.status)},\"duration\":{a.duration},\"status_duration\":{a.status_duration},\"chance\":{a.chance}");
             if (a.damage_override >= 0f)             sb.Append($",\"damage_override\":{a.damage_override}");
             sb.Append("}");
         }

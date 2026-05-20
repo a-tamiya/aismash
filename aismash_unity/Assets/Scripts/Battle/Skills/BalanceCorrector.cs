@@ -177,6 +177,8 @@ namespace PromptFighters.Battle.Skills
                     if (a.type == "summon")
                     {
                         a.duration = Mathf.Clamp(a.duration > 0f ? a.duration : 3f, 1f, 6f);
+                        if (!string.IsNullOrEmpty(a.status))
+                            a.status_duration = Mathf.Clamp(a.status_duration > 0f ? a.status_duration : 1.5f, 0.1f, 5f);
                         if (a.power > 0f) a.power = Mathf.Clamp(a.power, 0.5f, 5f);
                         if (a.damage_override >= 0f)
                             a.damage_override = Mathf.Clamp(a.damage_override, 0f, totalMaxDmg * 0.6f);

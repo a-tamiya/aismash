@@ -74,6 +74,7 @@ namespace PromptFighters.Battle
         public FighterState State { get; private set; } = FighterState.Idle;
         public bool IsGrounded { get; private set; }
         public bool FacingRight { get; set; } = true;
+        public float LastMoveInputX { get; private set; }
         public int PlayerIndex { get; set; }
         public bool IsHoldingOpponent => _heldOpponent != null;
         public bool IsGrabbed => _grabbedBy != null;
@@ -443,6 +444,7 @@ namespace PromptFighters.Battle
 
         public void Move(float direction)
         {
+            LastMoveInputX = Mathf.Clamp(direction, -1f, 1f);
             if (!CanAct && !(CanAirDriftDuringSkill() && Mathf.Abs(direction) > 0.01f)) return;
             float input = Mathf.Clamp(direction, -1f, 1f);
             float absInput = Mathf.Abs(input);

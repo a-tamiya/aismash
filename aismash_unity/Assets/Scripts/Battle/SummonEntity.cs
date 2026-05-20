@@ -14,6 +14,13 @@ namespace PromptFighters.Battle
         public float   Speed = 2.5f;
         public float   PatrolRange = 3f;
         public Element Element = Element.None;
+        public bool    PlayerControlled;
+        public bool    Homing;
+        public string  Direction;
+        public string  KnockbackDirection;
+        public StatusType Status = StatusType.None;
+        public float   StatusDuration;
+        public float   StatusChance = 1f;
 
         Rigidbody2D _rb;
         float _startX;
@@ -22,7 +29,8 @@ namespace PromptFighters.Battle
 
         public static SummonEntity Spawn(Fighter owner, Vector2 pos, float speed, float lifetime,
                                          float damage, float knockback, Element element,
-                                         Sprite sprite = null, Vector2? desiredWorldSize = null)
+                                         Sprite sprite = null, Vector2? desiredWorldSize = null,
+                                         SkillAction sourceAction = null)
         {
             var go = new GameObject("SummonEntity");
             go.transform.position = pos;
@@ -62,6 +70,18 @@ namespace PromptFighters.Battle
             s.Damage     = damage;
             s.Knockback  = knockback;
             s.Element    = element;
+            if (sourceAction != null)
+            {
+                s.PlayerControlled   = sourceAction.player_controlled;
+                s.Homing             = sourceAction.homing;
+                s.Direction          = sourceAction.direction;
+                s.KnockbackDirection = sourceAction.knockback_direction;
+                s.Status             = SkillEnumParser.ParseStatus(sourceAction.status);
+                s.StatusDuration     = sourceAction.status_duration > 0f
+                    ? sourceAction.status_duration
+                    : Mathf.Min(sourceAction.duration, 3f);
+                s.StatusChance       = Mathf.Clamp01(sourceAction.chance);
+            }
 
             Object.Destroy(go, lifetime);
             return s;
@@ -71,12 +91,43 @@ namespace PromptFighters.Battle
         {
             _rb     = GetComponent<Rigidbody2D>();
             _startX = transform.position.x;
-            _dir    = Owner != null && !Owner.FacingRight ? -1f : 1f;
+            _dir    = InitialDirection();
             _rb.linearVelocity = new Vector2(_dir * Speed, 0f);
         }
 
         void Update()
         {
+            if (PlayerControlled && Owner != null)
+            {
+                float input = Owner.LastMoveInputX;
+                if (Owner.InputReversed) input = -input;
+                if (Mathf.Abs(input) > 0.1f)
+                {
+                    _dir = Mathf.Sign(input);
+                    _rb.linearVelocity = new Vector2(_dir * Speed, 0f);
+                    GetComponent<SpriteRenderer>().flipX = _dir < 0;
+                    return;
+                }
+            }
+
+            if (Homing && Owner != null && Owner.Opponent != null)
+            {
+                float dx = Owner.Opponent.transform.position.x - transform.position.x;
+                if (Mathf.Abs(dx) > 0.05f)
+                {
+                    _dir = Mathf.Sign(dx);
+                    _rb.linearVelocity = new Vector2(_dir * Speed, 0f);
+                    GetComponent<SpriteRenderer>().flipX = _dir < 0;
+                    return;
+                }
+            }
+
+            if (Direction == "stationary")
+            {
+                _rb.linearVelocity = Vector2.zero;
+                return;
+            }
+
             float distX = transform.position.x - _startX;
             if ((_dir > 0 && distX > PatrolRange) || (_dir < 0 && distX < -PatrolRange))
             {
@@ -94,12 +145,40 @@ namespace PromptFighters.Battle
             if (_recentHits.Contains(target)) return;
 
             _recentHits.Add(target);
-            float dir = Mathf.Sign(_dir);
-            Vector2 kb = new Vector2(dir, 0.3f);
+            Vector2 kb = KnockbackVector(target);
             target.TakeDamage(Damage, Knockback, kb, 0.12f, Damage * 0.3f, false);
+            if (Status != StatusType.None && Random.value <= StatusChance)
+                target.ApplyStatus(Status, StatusDuration);
             Invoke(nameof(ClearHits), 0.55f);
         }
 
         void ClearHits() => _recentHits.Clear();
+
+        float InitialDirection()
+        {
+            if (Direction == "backward") return Owner != null && Owner.FacingRight ? -1f : 1f;
+            if (Direction == "left") return -1f;
+            if (Direction == "right") return 1f;
+            if (Direction == "toward_enemy" && Owner?.Opponent != null)
+                return Mathf.Sign(Owner.Opponent.transform.position.x - transform.position.x);
+            if (Direction == "away_enemy" && Owner?.Opponent != null)
+                return -Mathf.Sign(Owner.Opponent.transform.position.x - transform.position.x);
+            return Owner != null && !Owner.FacingRight ? -1f : 1f;
+        }
+
+        Vector2 KnockbackVector(Fighter target)
+        {
+            float facing = Mathf.Sign(_dir);
+            if (Mathf.Approximately(facing, 0f)) facing = 1f;
+            return KnockbackDirection switch
+            {
+                "up"            => new Vector2(0f, 1.5f),
+                "spike"         => new Vector2(facing * 0.15f, -1.2f),
+                "toward"        => Owner != null ? new Vector2(Mathf.Sign(Owner.transform.position.x - target.transform.position.x), 0.35f) : new Vector2(-facing, 0.35f),
+                "diagonal_up"   => new Vector2(facing * 0.45f, 1.15f),
+                "ground_bounce" => new Vector2(facing * 0.25f, -1.4f),
+                _               => new Vector2(facing, 0.3f),
+            };
+        }
     }
 }

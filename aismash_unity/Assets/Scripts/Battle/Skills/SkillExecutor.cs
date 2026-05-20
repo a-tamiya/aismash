@@ -712,7 +712,7 @@ namespace PromptFighters.Battle.Skills
                 (a.size_x > 0f ? a.size_x : 0.9f) * _sizeScale,
                 (a.size_y > 0f ? a.size_y : 1.2f) * _sizeScale);
             SummonEntity.Spawn(_fighter, pos, speed, lifetime, dmg, kb, skill.element,
-                a.hide_effect ? null : _fighter.GetEffectSprite(skill.slot), desiredSize);
+                a.hide_effect ? null : _fighter.GetEffectSprite(skill.slot), desiredSize, a);
         }
 
         // apply_status は相手に状態異常を付与する。近距離内でchance判定あり。
