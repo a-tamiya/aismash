@@ -24,6 +24,8 @@ namespace PromptFighters.Battle.Skills
         public Vector2    Direction = Vector2.right;
         public Vector2    DesiredWorldSize = new Vector2(1.2f, 0.74f);
 
+        SpriteRenderer _debugSr;
+
         public static Projectile Spawn(Fighter owner, Vector2 worldPos, Vector2 dir,
                                        float speed, float lifetime)
         {
@@ -49,6 +51,15 @@ namespace PromptFighters.Battle.Skills
             p.Direction = dir.normalized;
             p.Speed     = speed;
             p.Lifetime  = lifetime;
+
+            var dbGo = new GameObject("ProjectileDebug");
+            var dbSr = dbGo.AddComponent<SpriteRenderer>();
+            dbSr.sprite       = RuntimeSprite.Square();
+            dbSr.color        = new Color(1f, 0.35f, 0f, 0.6f);
+            dbSr.sortingOrder = 12;
+            dbSr.enabled      = false;
+            p._debugSr = dbSr;
+
             return p;
         }
 
@@ -78,11 +89,32 @@ namespace PromptFighters.Battle.Skills
             Destroy(gameObject, Lifetime);
         }
 
-        void Update()
+        void LateUpdate()
         {
-            if (!HideVisual) return;
-            var sr = GetComponent<SpriteRenderer>();
-            if (sr != null) sr.enabled = DebugSettings.ShowHitboxes;
+            if (_debugSr == null) return;
+            bool show = DebugSettings.ShowHitboxes;
+            _debugSr.enabled = show;
+            if (show)
+            {
+                var col = GetComponent<BoxCollider2D>();
+                if (col != null)
+                {
+                    var b = col.bounds;
+                    _debugSr.transform.position   = b.center;
+                    _debugSr.transform.rotation   = Quaternion.identity;
+                    _debugSr.transform.localScale  = new Vector3(b.size.x, b.size.y, 1f);
+                }
+            }
+            if (!HideVisual)
+            {
+                var sr = GetComponent<SpriteRenderer>();
+                if (sr != null) sr.enabled = !show;
+            }
+        }
+
+        void OnDestroy()
+        {
+            if (_debugSr != null) Destroy(_debugSr.gameObject);
         }
 
         void FitColliderToDesiredWorldSize()
