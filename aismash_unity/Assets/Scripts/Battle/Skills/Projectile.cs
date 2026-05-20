@@ -24,7 +24,23 @@ namespace PromptFighters.Battle.Skills
         public Vector2    Direction = Vector2.right;
         public Vector2    DesiredWorldSize = new Vector2(1.2f, 0.74f);
 
+        // 追尾
+        public Transform HomingTarget;
+        public float     HomingStrength;
+
+        // ブーメラン（寿命の半分で折り返す）
+        public bool      IsBoomerang;
+
+        // 重力スケール（0=無重力、1=通常）
+        public float     GravityScale;
+
+        // ノックバック方向（Hitbox と同じ仕組み）
+        public Vector2   KnockbackDir = new Vector2(1f, 0.3f);
+        public bool      FixedKnockbackDir;
+
         SpriteRenderer _debugSr;
+        float _spawnTime;
+        bool  _boomerangFlipped;
 
         public static Projectile Spawn(Fighter owner, Vector2 worldPos, Vector2 dir,
                                        float speed, float lifetime)
@@ -85,8 +101,39 @@ namespace PromptFighters.Battle.Skills
                 sr.color = SkillEnumParser.ElementColor(Element);
                 FitColliderAndVisualToWorldSize(sr);
             }
-            GetComponent<Rigidbody2D>().linearVelocity = Direction * Speed;
+            _spawnTime = Time.time;
+            var rb2 = GetComponent<Rigidbody2D>();
+            if (GravityScale > 0f) rb2.gravityScale = GravityScale;
+            rb2.linearVelocity = Direction * Speed;
             Destroy(gameObject, Lifetime);
+        }
+
+        void Update()
+        {
+            // ブーメラン: 寿命の半分で折り返す
+            if (IsBoomerang && !_boomerangFlipped && Time.time - _spawnTime >= Lifetime * 0.5f)
+            {
+                var rb = GetComponent<Rigidbody2D>();
+                if (rb != null) { rb.linearVelocity = -rb.linearVelocity; Direction = -Direction; }
+                _boomerangFlipped = true;
+            }
+
+            // 追尾: 毎フレーム速度を目標方向へ曲げる
+            if (HomingTarget != null && HomingStrength > 0f)
+            {
+                var rb = GetComponent<Rigidbody2D>();
+                if (rb != null)
+                {
+                    Vector2 vel = rb.linearVelocity;
+                    if (vel.sqrMagnitude > 0.01f)
+                    {
+                        Vector2 toTarget = (Vector2)HomingTarget.position + Vector2.up * 0.8f - (Vector2)transform.position;
+                        float maxTurn = HomingStrength * 280f * Time.deltaTime;
+                        float angle = Mathf.Clamp(Vector2.SignedAngle(vel, toTarget), -maxTurn, maxTurn);
+                        rb.linearVelocity = (Vector2)(Quaternion.Euler(0f, 0f, angle) * vel);
+                    }
+                }
+            }
         }
 
         void LateUpdate()
@@ -154,12 +201,16 @@ namespace PromptFighters.Battle.Skills
                 if (other.gameObject.layer != 0) Destroy(gameObject);
                 return;
             }
-            if (target == Owner) return;
+            if (target == Owner)
+            {
+                if (IsBoomerang && _boomerangFlipped) Destroy(gameObject); // ブーメラン回収
+                return;
+            }
             if (target.IsDodging) return;
 
-            float dir = Mathf.Sign(Direction.x);
+            float dir = FixedKnockbackDir ? 1f : Mathf.Sign(Direction.x);
             if (dir == 0f) dir = 1f;
-            var kb = new Vector2(dir * Knockback, Knockback * 0.3f);
+            var kb = new Vector2(dir * KnockbackDir.x * Knockback, KnockbackDir.y * Knockback);
 
             target.TakeDamage(Damage, Knockback, kb, StunTime, GuardDamage, !DamageIncludesOwnerBoost);
             if (Status != StatusType.None && Random.value <= StatusChance)

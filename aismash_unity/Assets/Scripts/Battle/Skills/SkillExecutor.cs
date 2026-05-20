@@ -191,7 +191,7 @@ namespace PromptFighters.Battle.Skills
                 var a = skill.actions[i];
                 if (a == null) continue;
                 bool melee = a.type == "melee_hitbox" || a.type == "body_hitbox" ||
-                              a.type == "area_hitbox" || a.type == "jump_attack";
+                              a.type == "area_hitbox" || a.type == "jump_attack" || a.type == "beam";
                 if (!melee) continue;
                 hasMelee = true;
                 float duration = a.duration > 0f ? a.duration : Mathf.Max(skill.parameters.active_time, 0.08f);
@@ -217,6 +217,7 @@ namespace PromptFighters.Battle.Skills
                 case "area_hitbox":    SpawnAreaHitbox(skill, a, powerMultiplier);  break;
                 case "trap_hitbox":    SpawnTrapHitbox(skill, a, powerMultiplier);  break;
                 case "projectile":     SpawnProjectile(skill, a, powerMultiplier);  break;
+                case "beam":           SpawnBeam(skill, a, powerMultiplier);        break;
                 case "jump_attack":    DoJumpAttack(skill, a, powerMultiplier);     break;
                 case "dash":           DoDash(a);                  break;
                 case "teleport":       DoTeleport(a);              break;
@@ -261,7 +262,9 @@ namespace PromptFighters.Battle.Skills
             hb.Damage         = dmg;
             hb.DamageIncludesOwnerBoost = true;
             hb.Knockback      = skill.parameters.knockback * powerMultiplier;
-            hb.KnockbackDir   = KnockbackDir(a, 1f, 0.3f);
+            var (kbDir1, kbFixed1) = ComputeKnockback(a, 1f, 0.3f);
+            hb.KnockbackDir      = kbDir1;
+            hb.FixedKnockbackDir = kbFixed1;
             hb.StunTime       = skill.parameters.stun_time;
             hb.GuardDamage    = skill.parameters.guard_damage;
             hb.Element        = skill.element;
@@ -333,7 +336,9 @@ namespace PromptFighters.Battle.Skills
             hb.Damage         = dmg;
             hb.DamageIncludesOwnerBoost = true;
             hb.Knockback      = skill.parameters.knockback * powerMultiplier;
-            hb.KnockbackDir   = KnockbackDir(a, 1f, 0.25f);
+            var (kbDir2, kbFixed2) = ComputeKnockback(a, 1f, 0.25f);
+            hb.KnockbackDir      = kbDir2;
+            hb.FixedKnockbackDir = kbFixed2;
             hb.StunTime       = skill.parameters.stun_time;
             hb.GuardDamage    = skill.parameters.guard_damage;
             hb.Element        = skill.element;
@@ -355,25 +360,68 @@ namespace PromptFighters.Battle.Skills
 
             float speed    = a.projectile_speed    > 0f ? a.projectile_speed    : 9f;
             float lifetime = a.projectile_lifetime > 0f ? a.projectile_lifetime : 1.5f;
-
-            var p = Projectile.Spawn(_fighter, spawn, new Vector2(dirSign, 0f), speed, lifetime);
             float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) *
                         powerMultiplier * _fighter.DamageMultiplier;
-            p.Damage         = dmg;
-            p.DamageIncludesOwnerBoost = true;
-            p.Knockback      = skill.parameters.knockback * powerMultiplier;
-            p.StunTime       = skill.parameters.stun_time;
-            p.GuardDamage    = skill.parameters.guard_damage;
-            p.Status         = SkillEnumParser.ParseStatus(a.status);
-            p.StatusDuration = a.duration;
-            p.StatusChance   = Mathf.Clamp01(a.chance);
-            p.Element        = skill.element;
-            p.EffectSprite   = a.hide_effect ? null : _fighter.GetEffectSprite(skill.slot);
-            p.HideVisual     = a.hide_effect;
-            p.FlipEffectX    = !_fighter.FacingRight;
-            p.DesiredWorldSize = new Vector2(
+            Vector2 desiredSize = new Vector2(
                 (a.size_x > 0f ? a.size_x : Mathf.Clamp(speed * lifetime * 0.08f, 0.74f, 1.74f)) * HitboxVisualScale * _sizeScale,
                 (a.size_y > 0f ? a.size_y : 0.75f) * HitboxVisualScale * _sizeScale);
+            var (kbDir, kbFixed) = ComputeKnockback(a, 1f, 0.3f);
+
+            int count = a.projectile_count > 1 ? a.projectile_count : 1;
+            float spreadDeg = a.spread_angle > 0f ? a.spread_angle : 15f;
+            float totalSpread = count > 1 ? spreadDeg * (count - 1) : 0f;
+
+            for (int i = 0; i < count; i++)
+            {
+                float angleDeg = a.projectile_angle + (count > 1 ? -totalSpread * 0.5f + spreadDeg * i : 0f);
+                float rad = angleDeg * Mathf.Deg2Rad;
+                Vector2 dir = new Vector2(dirSign * Mathf.Cos(rad), Mathf.Sin(rad)).normalized;
+
+                var p = Projectile.Spawn(_fighter, spawn, dir, speed, lifetime);
+                p.Damage                   = dmg;
+                p.DamageIncludesOwnerBoost = true;
+                p.Knockback                = skill.parameters.knockback * powerMultiplier;
+                p.KnockbackDir             = kbDir;
+                p.FixedKnockbackDir        = kbFixed;
+                p.StunTime                 = skill.parameters.stun_time;
+                p.GuardDamage              = skill.parameters.guard_damage;
+                p.Status                   = SkillEnumParser.ParseStatus(a.status);
+                p.StatusDuration           = a.duration;
+                p.StatusChance             = Mathf.Clamp01(a.chance);
+                p.Element                  = skill.element;
+                p.EffectSprite             = a.hide_effect ? null : _fighter.GetEffectSprite(skill.slot);
+                p.HideVisual               = a.hide_effect;
+                p.FlipEffectX              = !_fighter.FacingRight;
+                p.DesiredWorldSize         = desiredSize;
+                p.GravityScale             = a.gravity_scale;
+                p.IsBoomerang              = a.boomerang;
+                if ((a.homing || a.homing_strength > 0f) && _fighter.Opponent != null)
+                {
+                    p.HomingTarget   = _fighter.Opponent.transform;
+                    p.HomingStrength = a.homing_strength > 0f ? a.homing_strength : 0.5f;
+                }
+            }
+        }
+
+        void SpawnBeam(SkillData skill, SkillAction a, float powerMultiplier)
+        {
+            float dirSign = _fighter.FacingRight ? 1f : -1f;
+            float width   = a.size_x > 0f ? a.size_x : (a.range > 0f ? a.range : 7f);
+            float height  = a.size_y > 0f ? a.size_y : 0.5f;
+            float offsetX = a.spawn_x > 0f ? a.spawn_x : width * 0.5f;
+            float offsetY = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 0.8f;
+            width   *= _sizeScale;
+            height  *= _sizeScale;
+            offsetX *= _sizeScale;
+            offsetY *= _sizeScale;
+            float lifetime = a.duration > 0f ? a.duration : 0.07f;
+
+            var hb = SpawnConfiguredHitbox(
+                skill, a, powerMultiplier,
+                (Vector2)_fighter.transform.position + new Vector2(dirSign * offsetX, offsetY),
+                new Vector2(width, height),
+                lifetime);
+            hb.MaxHits = a.hit_count > 1 ? a.hit_count : 5; // 貫通
         }
 
         static Vector2 DefaultMeleeOffset(SkillSlot slot, float range)
@@ -484,11 +532,19 @@ namespace PromptFighters.Battle.Skills
             _fighter.Opponent.ApplyStatus(st, a.duration);
         }
 
-        static Vector2 KnockbackDir(SkillAction a, float defaultX, float defaultY)
+        (Vector2 kbDir, bool isFixed) ComputeKnockback(SkillAction a, float defaultX, float defaultY)
         {
+            float facingSign = _fighter != null && _fighter.FacingRight ? 1f : -1f;
             float x = !Mathf.Approximately(a.knockback_x, 0f) ? Mathf.Abs(a.knockback_x) : defaultX;
             float y = !Mathf.Approximately(a.knockback_y, 0f) ? Mathf.Abs(a.knockback_y) : defaultY;
-            return new Vector2(x, y);
+            return (string.IsNullOrEmpty(a.knockback_direction) ? "away" : a.knockback_direction) switch
+            {
+                "up"          => (new Vector2(0f,                  1.5f), true),
+                "spike"       => (new Vector2(facingSign * 0.15f, -1.2f), true),
+                "toward"      => (new Vector2(-facingSign * x,       y  ), true),
+                "diagonal_up" => (new Vector2(facingSign * 0.4f,   1.2f), true),
+                _             => (new Vector2(x, y),                      false),
+            };
         }
 
         static void ApplyActionStatus(Hitbox hb, SkillAction a)

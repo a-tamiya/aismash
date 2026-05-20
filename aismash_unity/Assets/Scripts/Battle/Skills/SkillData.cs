@@ -58,9 +58,29 @@ namespace PromptFighters.Battle.Skills
         public float  power;
         public string direction;  // "forward" / "backward"
 
-        // projectile
+        // projectile: 基本
         public float  projectile_speed;
         public float  projectile_lifetime;
+
+        // projectile: 発射角度（度数。0=水平, 45=斜め上, -45=斜め下, 90=真上）
+        public float  projectile_angle;
+
+        // projectile: 追尾
+        public bool   homing;
+        public float  homing_strength; // 0〜1。大きいほど曲がりやすい
+
+        // projectile: ブーメラン（寿命の半分で折り返す）
+        public bool   boomerang;
+
+        // projectile: 多方向発射
+        public int    projectile_count;  // 0/1=単発、2以上=多発
+        public float  spread_angle;      // 発射間の広がり角（度数）。省略時15
+
+        // projectile: 重力（0=無重力デフォルト、1=通常重力）
+        public float  gravity_scale;
+
+        // ノックバック方向: "away"(default)/"up"/"spike"/"toward"/"diagonal_up"
+        public string knockback_direction;
 
         // apply_status
         public string status;     // "stun" / "burn" / "slow" / "guard_break" / "speed" / "jump" / "transparent" / "damage"

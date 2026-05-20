@@ -27,7 +27,7 @@ namespace PromptFighters.Battle.Skills
             // ヒット数（上限を超えないよう）
             p.hit_count = Mathf.Clamp(p.hit_count, 1, 10);
 
-            bool hasProjectile = HasAction(skill, "projectile");
+            bool hasProjectile = HasAction(skill, "projectile") || HasAction(skill, "beam");
             int maxHitCount = Mathf.Clamp(MaxHitCount(skill), 1, 10);
             p.hit_count = Mathf.Clamp(Mathf.Max(p.hit_count, maxHitCount), 1, 10);
 
@@ -108,10 +108,32 @@ namespace PromptFighters.Battle.Skills
 
                     if (a.type == "projectile")
                     {
-                        a.projectile_speed = Mathf.Clamp(a.projectile_speed, 0f, 18f);
+                        a.projectile_speed    = Mathf.Clamp(a.projectile_speed, 0f, 18f);
                         a.projectile_lifetime = Mathf.Clamp(a.projectile_lifetime, 0f, 2.8f);
                         if (a.size_x > 0f) a.size_x = Mathf.Clamp(a.size_x, 0.45f, 2.4f);
                         if (a.size_y > 0f) a.size_y = Mathf.Clamp(a.size_y, 0.35f, 1.8f);
+                        // 新フィールド
+                        if (a.homing_strength != 0f) a.homing_strength = Mathf.Clamp01(a.homing_strength);
+                        if (a.spread_angle > 0f)     a.spread_angle     = Mathf.Clamp(a.spread_angle, 5f, 60f);
+                        if (a.projectile_count > 5)  a.projectile_count = 5;
+                        a.gravity_scale = Mathf.Clamp(a.gravity_scale, 0f, 3f);
+                        // 多発時は1発あたりダメージを按分
+                        if (a.projectile_count > 1)
+                        {
+                            float perShotMax = Mathf.Max(1f, totalMaxDmg / a.projectile_count);
+                            if (a.damage_override >= 0f)
+                                a.damage_override = Mathf.Min(a.damage_override, perShotMax);
+                            else
+                                p.damage = Mathf.Min(p.damage, perShotMax);
+                        }
+                    }
+
+                    if (a.type == "beam")
+                    {
+                        if (a.size_x > 0f) a.size_x = Mathf.Clamp(a.size_x, 2f, 12f);
+                        if (a.size_y > 0f) a.size_y = Mathf.Clamp(a.size_y, 0.25f, 1.5f);
+                        a.range    = a.range > 0f ? Mathf.Clamp(a.range, 2f, 12f) : 0f;
+                        a.duration = Mathf.Clamp(a.duration, 0f, 0.12f);
                     }
 
                     // dashのpowerに上限

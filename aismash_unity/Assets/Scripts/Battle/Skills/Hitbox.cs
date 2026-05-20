@@ -26,11 +26,14 @@ namespace PromptFighters.Battle.Skills
         public bool         DamageIncludesOwnerBoost;
         public Vector2      OwnerLocalOffset;
         public Vector2      DesiredWorldSize;
+        public bool         FixedKnockbackDir; // trueのとき KnockbackDir.x の符号をそのまま使う
 
         readonly HashSet<Fighter> _hitTargets = new HashSet<Fighter>();
         readonly Dictionary<Fighter, float> _nextHitTimes = new Dictionary<Fighter, float>();
         int _hitsLanded;
-        bool _visualReady; // Start()後にtrueになる
+
+        // デバッグオーバーレイ（col.boundsに毎フレーム追従する独立オブジェクト）
+        SpriteRenderer _debugSr;
 
         public static Hitbox Spawn(Fighter owner, Vector2 worldPos, Vector2 size, float lifetime)
         {
@@ -50,6 +53,16 @@ namespace PromptFighters.Battle.Skills
             hb.Owner    = owner;
             hb.Lifetime = lifetime;
             hb.DesiredWorldSize = size;
+
+            // デバッグオーバーレイ作成
+            var dbGo = new GameObject("HitboxDebug");
+            var dbSr = dbGo.AddComponent<SpriteRenderer>();
+            dbSr.sprite       = RuntimeSprite.Square();
+            dbSr.color        = new Color(1f, 0.35f, 0f, 0.6f); // 橙: 攻撃判定
+            dbSr.sortingOrder = 12;
+            dbSr.enabled      = false;
+            hb._debugSr = dbSr;
+
             return hb;
         }
 
@@ -59,40 +72,59 @@ namespace PromptFighters.Battle.Skills
             var sr = GetComponent<SpriteRenderer>();
             if (HideVisual)
             {
-                // サイズだけ確定させ、表示はUpdateで毎フレーム制御する
-                sr.sprite = RuntimeSprite.Square();
-                sr.color  = new Color(1f, 0.35f, 0f, 0.55f); // 橙: 攻撃判定（デバッグ用）
-                // サイズをワールドスケールに合わせて確定
-                sr.enabled = false; // 初期は非表示、Update()で切り替え
+                sr.enabled = false;
             }
             else if (EffectSprite != null)
             {
                 sr.sprite = EffectSprite;
-                sr.color = Color.white;
-                sr.flipX = FlipEffectX;
+                sr.color  = Color.white;
+                sr.flipX  = FlipEffectX;
                 FitColliderAndVisualToWorldSize(sr);
             }
             else
             {
                 sr.color = new Color(ec.r, ec.g, ec.b, 0.65f);
             }
-            _visualReady = true;
             Destroy(gameObject, Lifetime);
-        }
-
-        void Update()
-        {
-            if (!_visualReady || !HideVisual) return;
-            var sr = GetComponent<SpriteRenderer>();
-            if (sr != null) sr.enabled = DebugSettings.ShowHitboxes;
         }
 
         void LateUpdate()
         {
-            if (!FollowOwner || Owner == null) return;
-            float dirSign = Owner.FacingRight ? 1f : -1f;
-            transform.position = (Vector2)Owner.transform.position +
-                new Vector2(dirSign * OwnerLocalOffset.x, OwnerLocalOffset.y);
+            // FollowOwner処理
+            if (FollowOwner && Owner != null)
+            {
+                float dirSign = Owner.FacingRight ? 1f : -1f;
+                transform.position = (Vector2)Owner.transform.position +
+                    new Vector2(dirSign * OwnerLocalOffset.x, OwnerLocalOffset.y);
+            }
+
+            // デバッグオーバーレイをcol.boundsに追従
+            if (_debugSr == null) return;
+            bool show = DebugSettings.ShowHitboxes;
+            _debugSr.enabled = show;
+            if (show)
+            {
+                var col = GetComponent<BoxCollider2D>();
+                if (col != null)
+                {
+                    var b = col.bounds;
+                    _debugSr.transform.position   = b.center;
+                    _debugSr.transform.rotation   = Quaternion.identity;
+                    _debugSr.transform.localScale = new Vector3(b.size.x, b.size.y, 1f);
+                }
+            }
+
+            // デバッグ中はエフェクトスプライトを非表示にしてブロックのみ見せる
+            if (!HideVisual)
+            {
+                var sr = GetComponent<SpriteRenderer>();
+                if (sr != null) sr.enabled = !show;
+            }
+        }
+
+        void OnDestroy()
+        {
+            if (_debugSr != null) Destroy(_debugSr.gameObject);
         }
 
         void FitColliderAndVisualToWorldSize(SpriteRenderer sr)
@@ -151,9 +183,15 @@ namespace PromptFighters.Battle.Skills
 
         void ApplyHit(Fighter target)
         {
-            float dir = Mathf.Sign(target.transform.position.x - (Owner != null ? Owner.transform.position.x : transform.position.x));
-            if (dir == 0f) dir = 1f;
-            var kb = new Vector2(dir * Mathf.Abs(KnockbackDir.x), Mathf.Abs(KnockbackDir.y));
+            float dir;
+            if (FixedKnockbackDir)
+                dir = 1f;
+            else
+            {
+                dir = Mathf.Sign(target.transform.position.x - (Owner != null ? Owner.transform.position.x : transform.position.x));
+                if (dir == 0f) dir = 1f;
+            }
+            var kb = new Vector2(dir * KnockbackDir.x, KnockbackDir.y);
 
             target.TakeDamage(Damage, Knockback, kb, StunTime, GuardDamage, !DamageIncludesOwnerBoost);
 
