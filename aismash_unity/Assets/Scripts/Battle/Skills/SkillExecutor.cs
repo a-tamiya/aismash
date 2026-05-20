@@ -13,6 +13,7 @@ namespace PromptFighters.Battle.Skills
         public bool autoEquipSampleSkills = true;
         const float HitboxVisualScale = 0.9f;
         const int MaxFollowUpCount = 3;
+        const float FollowUpDamageMultiplier = 0.55f;
 
         Fighter _fighter;
         float _sizeScale = 1f;
@@ -125,7 +126,7 @@ namespace PromptFighters.Battle.Skills
                 if (a == null) { idx++; continue; }
                 if (Time.time - t0 >= a.time)
                 {
-                    ExecuteActionWithOptionalComboPull(skill, a, pullForCombo);
+                    ExecuteFollowUpAction(skill, a, pullForCombo);
                     idx++;
                 }
                 else yield return null;
@@ -755,18 +756,26 @@ namespace PromptFighters.Battle.Skills
             _followUpCount = Mathf.Clamp(followUpCount, 0, MaxFollowUpCount);
         }
 
-        void ExecuteActionWithOptionalComboPull(SkillData skill, SkillAction action, bool pullForCombo)
+        void ExecuteFollowUpAction(SkillData skill, SkillAction action, bool pullForCombo)
         {
-            if (!pullForCombo)
-            {
-                ExecuteAction(skill, action, 1f);
-                return;
-            }
-
             string savedDir = action.knockback_direction;
+            float savedDamage = skill.parameters.damage;
             float savedKnockback = skill.parameters.knockback;
             float savedKnockbackX = action.knockback_x;
             float savedKnockbackY = action.knockback_y;
+            float savedDamageOverride = action.damage_override;
+
+            skill.parameters.damage = savedDamage * FollowUpDamageMultiplier;
+            if (action.damage_override >= 0f)
+                action.damage_override *= FollowUpDamageMultiplier;
+
+            if (!pullForCombo)
+            {
+                ExecuteAction(skill, action, 1f);
+                skill.parameters.damage = savedDamage;
+                action.damage_override = savedDamageOverride;
+                return;
+            }
 
             action.knockback_direction = "toward";
             action.knockback_x = savedKnockbackX > 0f ? Mathf.Min(savedKnockbackX, 0.55f) : 0.55f;
@@ -778,6 +787,8 @@ namespace PromptFighters.Battle.Skills
             action.knockback_direction = savedDir;
             action.knockback_x = savedKnockbackX;
             action.knockback_y = savedKnockbackY;
+            action.damage_override = savedDamageOverride;
+            skill.parameters.damage = savedDamage;
             skill.parameters.knockback = savedKnockback;
         }
     }

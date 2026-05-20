@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace PromptFighters.Battle.Skills.Json
@@ -18,6 +19,7 @@ namespace PromptFighters.Battle.Skills.Json
             CharacterJsonRaw raw;
             try
             {
+                json = NormalizeJsonForUnity(json);
                 raw = JsonUtility.FromJson<CharacterJsonRaw>(json);
             }
             catch (System.Exception e)
@@ -156,5 +158,13 @@ namespace PromptFighters.Battle.Skills.Json
             "extreme" => RiskLevel.Extreme,
             _         => RiskLevel.Medium,
         };
+
+        static string NormalizeJsonForUnity(string json)
+        {
+            if (string.IsNullOrEmpty(json)) return json;
+            json = Regex.Replace(json, "\\\"chargeable\\\"\\s*:\\s*\\\"true\\\"", "\"chargeable\": true", RegexOptions.IgnoreCase);
+            json = Regex.Replace(json, "\\\"chargeable\\\"\\s*:\\s*\\\"false\\\"", "\"chargeable\": false", RegexOptions.IgnoreCase);
+            return json;
+        }
     }
 }

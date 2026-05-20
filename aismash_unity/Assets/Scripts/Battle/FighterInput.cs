@@ -126,6 +126,15 @@ namespace PromptFighters.Battle
                 return;
             }
 
+            if (_skills != null && !guardHeld && HandleChargeSkillInput())
+            {
+                _fighter.Move(0f);
+                _fighter.SetGuard(false);
+                GameAudioManager.Instance?.SetGroundMove(_fighter, false);
+                _previousGuardHeld = guardHeld;
+                return;
+            }
+
             Vector2 moveInput = ReadMoveVector();
             bool jumpPressed = ReadJumpPressed();
             bool grabPressed = ReadGrabPressed();
@@ -414,47 +423,11 @@ namespace PromptFighters.Battle
 
         void HandleSkillSlot(SkillSlot slot, bool pressed)
         {
-            int i = (int)slot;
             var skillDef = _skills?.GetSkill(slot);
             if (skillDef?.chargeable == true)
-            {
-                float maxCharge = skillDef.max_charge_time > 0f ? skillDef.max_charge_time : 0.8f;
+                return;
 
-                if (ReadSkillReleased(slot))
-                {
-                    if (!_skills.IsExecuting && _fighter.CanAct)
-                    {
-                        float chargeLevel = Mathf.Clamp01(_skillChargeTimers[i] / maxCharge);
-                        _skills.TryUseSkill(slot, 1f + chargeLevel * 0.8f);
-                    }
-                    _skillChargeTimers[i] = 0f;
-                    return;
-                }
-
-                if (_skills.IsExecuting || !_fighter.CanAct)
-                    return;
-
-                if (ReadSkillHeld(slot))
-                {
-                    if (pressed && _skillChargeTimers[i] <= 0f)
-                        _skillChargeTimers[i] = Time.deltaTime;
-                    else
-                        _skillChargeTimers[i] += Time.deltaTime;
-
-                    float chargeRate = Mathf.Clamp01(_skillChargeTimers[i] / maxCharge);
-                    _fighter.ShowSkillCharge(chargeRate);
-
-                    if (_skillChargeTimers[i] >= maxCharge)
-                    {
-                        _skills.TryUseSkill(slot, 1.8f);
-                        _skillChargeTimers[i] = 0f;
-                    }
-                }
-            }
-            else
-            {
-                if (pressed) _skills.TryUseSkill(slot);
-            }
+            if (pressed) _skills.TryUseSkill(slot);
         }
 
         bool ReadSkillHeld(SkillSlot slot)
@@ -715,6 +688,52 @@ namespace PromptFighters.Battle
         {
             try { return Input.GetKeyDown(key); }
             catch (System.InvalidOperationException) { return false; }
+        }
+
+        bool HandleChargeSkillInput()
+        {
+            bool handled = false;
+            handled |= HandleChargeSkillSlot(SkillSlot.AttackA);
+            handled |= HandleChargeSkillSlot(SkillSlot.AttackB);
+            handled |= HandleChargeSkillSlot(SkillSlot.AttackC);
+            return handled;
+        }
+
+        bool HandleChargeSkillSlot(SkillSlot slot)
+        {
+            int i = (int)slot;
+            var skillDef = _skills?.GetSkill(slot);
+            if (skillDef?.chargeable != true)
+                return false;
+
+            float maxCharge = skillDef.max_charge_time > 0f ? skillDef.max_charge_time : 0.8f;
+
+            if (ReadSkillReleased(slot))
+            {
+                float chargeLevel = Mathf.Clamp01(_skillChargeTimers[i] / maxCharge);
+                if (!_skills.IsExecuting && _fighter.CanAct)
+                    _skills.TryUseSkill(slot, 1f + chargeLevel * 0.8f);
+                _skillChargeTimers[i] = 0f;
+                return true;
+            }
+
+            if (!ReadSkillHeld(slot))
+                return false;
+
+            if (_skills.IsExecuting || !_fighter.CanAct)
+                return false;
+
+            _skillChargeTimers[i] += Time.deltaTime;
+            float chargeRate = Mathf.Clamp01(_skillChargeTimers[i] / maxCharge);
+            _fighter.ShowSkillCharge(chargeRate);
+
+            if (_skillChargeTimers[i] >= maxCharge)
+            {
+                _skills.TryUseSkill(slot, 1.8f);
+                _skillChargeTimers[i] = 0f;
+            }
+
+            return true;
         }
     }
 }
