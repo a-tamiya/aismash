@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 namespace PromptFighters.Battle.Skills
 {
@@ -41,6 +42,7 @@ namespace PromptFighters.Battle.Skills
         SpriteRenderer _debugSr;
         float _spawnTime;
         bool  _boomerangFlipped;
+        HashSet<Fighter> _boomerangHitSet;
 
         public static Projectile Spawn(Fighter owner, Vector2 worldPos, Vector2 dir,
                                        float speed, float lifetime)
@@ -116,6 +118,21 @@ namespace PromptFighters.Battle.Skills
                 var rb = GetComponent<Rigidbody2D>();
                 if (rb != null) { rb.linearVelocity = -rb.linearVelocity; Direction = -Direction; }
                 _boomerangFlipped = true;
+                _boomerangHitSet?.Clear(); // 復路で再ヒット可能に
+                // 復路: オーナーへ強制追尾
+                if (Owner != null)
+                {
+                    HomingTarget   = Owner.transform;
+                    HomingStrength = Mathf.Max(HomingStrength, 0.65f);
+                }
+            }
+
+            // ブーメラン復路: オーナーに近づいたら回収
+            if (IsBoomerang && _boomerangFlipped && Owner != null)
+            {
+                Vector2 ownerCenter = (Vector2)Owner.transform.position + Vector2.up * 0.8f;
+                if (Vector2.Distance(transform.position, ownerCenter) < 0.7f)
+                    Destroy(gameObject);
             }
 
             // 追尾: 毎フレーム速度を目標方向へ曲げる
@@ -197,13 +214,13 @@ namespace PromptFighters.Battle.Skills
             var target = other.GetComponentInParent<Fighter>();
             if (target == null)
             {
-                // 壁・地面に当たった場合も消える
-                if (other.gameObject.layer != 0) Destroy(gameObject);
+                // 壁・地面に当たった場合: ブーメランは貫通、通常弾は消える
+                if (!IsBoomerang && other.gameObject.layer != 0) Destroy(gameObject);
                 return;
             }
             if (target == Owner)
             {
-                if (IsBoomerang && _boomerangFlipped) Destroy(gameObject); // ブーメラン回収
+                if (IsBoomerang && _boomerangFlipped) Destroy(gameObject); // 回収
                 return;
             }
             if (target.IsDodging) return;
@@ -212,11 +229,24 @@ namespace PromptFighters.Battle.Skills
             if (dir == 0f) dir = 1f;
             var kb = new Vector2(dir * KnockbackDir.x * Knockback, KnockbackDir.y * Knockback);
 
-            target.TakeDamage(Damage, Knockback, kb, StunTime, GuardDamage, !DamageIncludesOwnerBoost);
-            if (Status != StatusType.None && Random.value <= StatusChance)
-                target.ApplyStatus(Status, StatusDuration);
-
-            Destroy(gameObject);
+            if (IsBoomerang)
+            {
+                // ブーメラン: 1パスにつき1ターゲット1回ヒット、消えずに継続
+                if (_boomerangHitSet == null) _boomerangHitSet = new HashSet<Fighter>();
+                if (_boomerangHitSet.Contains(target)) return;
+                _boomerangHitSet.Add(target);
+                target.TakeDamage(Damage, Knockback, kb, StunTime, GuardDamage, !DamageIncludesOwnerBoost);
+                if (Status != StatusType.None && Random.value <= StatusChance)
+                    target.ApplyStatus(Status, StatusDuration);
+                // 消えない
+            }
+            else
+            {
+                target.TakeDamage(Damage, Knockback, kb, StunTime, GuardDamage, !DamageIncludesOwnerBoost);
+                if (Status != StatusType.None && Random.value <= StatusChance)
+                    target.ApplyStatus(Status, StatusDuration);
+                Destroy(gameObject);
+            }
         }
     }
 }
