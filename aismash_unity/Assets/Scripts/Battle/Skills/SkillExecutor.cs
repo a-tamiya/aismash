@@ -279,14 +279,14 @@ namespace PromptFighters.Battle.Skills
         {
             float dirSign = _fighter.FacingRight ? 1f : -1f;
             // spawn_x=0 はキャラ中心（前方オフセットなし）。>0 で前方に張り出す
-            float width   = a.size_x > 0f ? a.size_x : (a.range > 0f ? a.range : 1.4f);
-            float height  = a.size_y > 0f ? a.size_y : 1.8f; // デフォルトは全身
+            float width   = a.size_x > 0f ? a.size_x : (a.range > 0f ? a.range : 1.9f);
+            float height  = a.size_y > 0f ? a.size_y : 2.3f; // デフォルトは全身
             float offsetX = a.spawn_x * _sizeScale;           // 0=体の中心、正値=前方
             float offsetY = (!Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 0.75f) * _sizeScale;
             width  *= _sizeScale;
             height *= _sizeScale;
             float lifetime = a.duration > 0f ? a.duration
-                           : (skill.parameters.active_time > 0f ? skill.parameters.active_time : 0.15f);
+                           : (skill.parameters.active_time > 0f ? skill.parameters.active_time : 0.28f);
 
             var hb = Hitbox.Spawn(_fighter,
                 (Vector2)_fighter.transform.position + new Vector2(dirSign * offsetX, offsetY),
