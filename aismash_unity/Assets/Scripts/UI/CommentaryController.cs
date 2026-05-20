@@ -95,7 +95,18 @@ namespace PromptFighters.UI
             _audioSource.volume = 1f;
         }
 
-        public void StopVoice() => _audioSource?.Stop();
+        public void StopVoice()
+        {
+            _audioSource?.Stop();
+            if (_loopRoutine != null) { StopCoroutine(_loopRoutine); _loopRoutine = null; }
+            if (_fadeRoutine != null) { StopCoroutine(_fadeRoutine); _fadeRoutine = null; }
+            if (_group != null) _group.alpha = 0f;
+        }
+
+        void OnDestroy()
+        {
+            if (_audioSource != null) Destroy(_audioSource.gameObject);
+        }
 
         void OnBattleStart()
         {
