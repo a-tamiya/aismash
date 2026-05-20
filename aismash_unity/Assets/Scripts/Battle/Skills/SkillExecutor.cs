@@ -277,12 +277,37 @@ namespace PromptFighters.Battle.Skills
 
         void SpawnBodyHitbox(SkillData skill, SkillAction a, float powerMultiplier)
         {
-            a.follow_owner = true;
-            a.hide_effect = true;
-            if (a.range <= 0f) a.range = 1.2f;
-            if (a.size_y <= 0f) a.size_y = 1.6f;
-            if (Mathf.Approximately(a.spawn_y, 0f)) a.spawn_y = 0.75f;
-            SpawnMeleeHitbox(skill, a, powerMultiplier);
+            float dirSign = _fighter.FacingRight ? 1f : -1f;
+            // spawn_x=0 はキャラ中心（前方オフセットなし）。>0 で前方に張り出す
+            float width   = a.size_x > 0f ? a.size_x : (a.range > 0f ? a.range : 1.4f);
+            float height  = a.size_y > 0f ? a.size_y : 1.8f; // デフォルトは全身
+            float offsetX = a.spawn_x * _sizeScale;           // 0=体の中心、正値=前方
+            float offsetY = (!Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 0.75f) * _sizeScale;
+            width  *= _sizeScale;
+            height *= _sizeScale;
+            float lifetime = a.duration > 0f ? a.duration
+                           : (skill.parameters.active_time > 0f ? skill.parameters.active_time : 0.15f);
+
+            var hb = Hitbox.Spawn(_fighter,
+                (Vector2)_fighter.transform.position + new Vector2(dirSign * offsetX, offsetY),
+                new Vector2(width * HitboxVisualScale, height * HitboxVisualScale),
+                lifetime);
+            hb.FollowOwner       = true;
+            hb.OwnerLocalOffset  = new Vector2(offsetX, offsetY);
+            hb.HideVisual        = true;
+            float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage)
+                        * powerMultiplier * _fighter.DamageMultiplier;
+            hb.Damage            = dmg;
+            hb.DamageIncludesOwnerBoost = true;
+            hb.Knockback         = skill.parameters.knockback * powerMultiplier;
+            var (kbDir, kbFixed) = ComputeKnockback(a, 1f, 0.3f);
+            hb.KnockbackDir      = kbDir;
+            hb.FixedKnockbackDir = kbFixed;
+            hb.StunTime          = skill.parameters.stun_time;
+            hb.GuardDamage       = skill.parameters.guard_damage;
+            hb.Element           = skill.element;
+            hb.MaxHits           = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
+            ApplyActionStatus(hb, a);
         }
 
         void SpawnAreaHitbox(SkillData skill, SkillAction a, float powerMultiplier)
