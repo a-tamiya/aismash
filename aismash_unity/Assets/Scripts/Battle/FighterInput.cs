@@ -15,6 +15,7 @@ namespace PromptFighters.Battle
         bool _smashHeld;
         float _smashCharge;
         readonly float[] _skillChargeTimers  = new float[4];
+        readonly bool[]  _skillCharging      = new bool[4];
         readonly float[] _lastSkillPressTime = { -10f, -10f, -10f, -10f };
         float _lastSmashFlickTime = -10f;
         float _previousSmashAxis;
@@ -707,21 +708,40 @@ namespace PromptFighters.Battle
                 return false;
 
             float maxCharge = skillDef.max_charge_time > 0f ? skillDef.max_charge_time : 0.8f;
+            bool pressed = ReadSkillPressed(slot);
+            bool held = ReadSkillHeld(slot);
+            bool released = ReadSkillReleased(slot);
 
-            if (ReadSkillReleased(slot))
+            if (pressed && !_skillCharging[i])
+            {
+                if (_skills.IsExecuting || !_fighter.CanAct)
+                    return false;
+
+                _skillCharging[i] = true;
+                _skillChargeTimers[i] = 0f;
+                _fighter.ShowSkillCharge(0f);
+                return true;
+            }
+
+            if (!_skillCharging[i])
+                return false;
+
+            if (released || !held)
             {
                 float chargeLevel = Mathf.Clamp01(_skillChargeTimers[i] / maxCharge);
                 if (!_skills.IsExecuting && _fighter.CanAct)
                     _skills.TryUseSkill(slot, 1f + chargeLevel * 0.8f);
+                _skillCharging[i] = false;
                 _skillChargeTimers[i] = 0f;
                 return true;
             }
 
-            if (!ReadSkillHeld(slot))
-                return false;
-
             if (_skills.IsExecuting || !_fighter.CanAct)
+            {
+                _skillCharging[i] = false;
+                _skillChargeTimers[i] = 0f;
                 return false;
+            }
 
             _skillChargeTimers[i] += Time.deltaTime;
             float chargeRate = Mathf.Clamp01(_skillChargeTimers[i] / maxCharge);
@@ -730,6 +750,7 @@ namespace PromptFighters.Battle
             if (_skillChargeTimers[i] >= maxCharge)
             {
                 _skills.TryUseSkill(slot, 1.8f);
+                _skillCharging[i] = false;
                 _skillChargeTimers[i] = 0f;
             }
 
