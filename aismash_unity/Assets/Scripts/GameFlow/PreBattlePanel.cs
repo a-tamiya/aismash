@@ -388,8 +388,19 @@ namespace PromptFighters.GameFlow
             if (label == null) return;
             if (all.Count > index)
             {
-                label.text  = $"● コントローラー接続中 ({all[index].displayName})";
-                label.color = new Color(0.3f, 0.9f, 0.3f);
+                var gp = all[index];
+                // lastUpdateTime が 0 以下 = 一度も実入力がない → ゴーストデバイス
+                bool active = gp.lastUpdateTime > 0;
+                if (active)
+                {
+                    label.text  = $"● コントローラー接続中 ({gp.displayName})";
+                    label.color = new Color(0.3f, 0.9f, 0.3f);
+                }
+                else
+                {
+                    label.text  = $"● 未接続 (ゴーストデバイス検出)";
+                    label.color = new Color(0.9f, 0.6f, 0.1f);
+                }
             }
             else
             {
