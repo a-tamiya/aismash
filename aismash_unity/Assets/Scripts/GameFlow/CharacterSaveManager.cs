@@ -209,7 +209,28 @@ namespace PromptFighters.GameFlow
                 AppendAction(sb, a);
             }
             sb.AppendLine();
-            sb.AppendLine("      ]");
+            sb.AppendLine("      ],");
+            sb.AppendLine($"      \"chargeable\": {(s.chargeable ? "true" : "false")},");
+            sb.AppendLine($"      \"max_charge_time\": {s.max_charge_time},");
+            if (s.follow_up_actions != null && s.follow_up_actions.Count > 0)
+            {
+                sb.AppendLine("      \"follow_up_actions\": [");
+                bool firstFollow = true;
+                foreach (var a in s.follow_up_actions)
+                {
+                    if (!firstFollow) sb.AppendLine(",");
+                    firstFollow = false;
+                    AppendAction(sb, a);
+                }
+                sb.AppendLine();
+                sb.AppendLine("      ],");
+                sb.AppendLine($"      \"follow_up_window\": {s.follow_up_window}");
+            }
+            else
+            {
+                sb.AppendLine("      \"follow_up_actions\": [],");
+                sb.AppendLine($"      \"follow_up_window\": {s.follow_up_window}");
+            }
             sb.Append("    }");
         }
 
