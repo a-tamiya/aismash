@@ -156,13 +156,13 @@ namespace PromptFighters.Battle.Skills
 
                     if (a.type == "counter")
                     {
-                        a.duration = Mathf.Clamp(a.duration > 0f ? a.duration : 0.4f, 0.1f, 1.5f);
+                        a.duration = Mathf.Clamp(a.duration > 0f ? a.duration : 1.0f, 1.0f, 1.5f);
                         if (a.damage_override >= 0f)
                             a.damage_override = Mathf.Clamp(a.damage_override, 0f, totalMaxDmg * 1.5f);
                     }
 
                     if (a.type == "reflector")
-                        a.duration = Mathf.Clamp(a.duration > 0f ? a.duration : 0.8f, 0.2f, 3f);
+                        a.duration = Mathf.Clamp(a.duration > 0f ? a.duration : 1.0f, 1.0f, 3f);
 
                     if (a.type == "summon")
                     {
