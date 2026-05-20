@@ -708,7 +708,11 @@ namespace PromptFighters.Battle.Skills
             float speed    = a.power > 0f ? a.power : 2.5f;
             float dmg      = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage * 0.5f) * powerMultiplier;
             float kb       = skill.parameters.knockback * 0.6f * powerMultiplier;
-            SummonEntity.Spawn(_fighter, pos, speed, lifetime, dmg, kb, skill.element);
+            Vector2 desiredSize = new Vector2(
+                (a.size_x > 0f ? a.size_x : 0.9f) * _sizeScale,
+                (a.size_y > 0f ? a.size_y : 1.2f) * _sizeScale);
+            SummonEntity.Spawn(_fighter, pos, speed, lifetime, dmg, kb, skill.element,
+                a.hide_effect ? null : _fighter.GetEffectSprite(skill.slot), desiredSize);
         }
 
         // apply_status は相手に状態異常を付与する。近距離内でchance判定あり。

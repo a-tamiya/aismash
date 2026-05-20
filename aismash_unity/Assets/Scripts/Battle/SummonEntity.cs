@@ -21,7 +21,8 @@ namespace PromptFighters.Battle
         readonly HashSet<Fighter> _recentHits = new HashSet<Fighter>();
 
         public static SummonEntity Spawn(Fighter owner, Vector2 pos, float speed, float lifetime,
-                                         float damage, float knockback, Element element)
+                                         float damage, float knockback, Element element,
+                                         Sprite sprite = null, Vector2? desiredWorldSize = null)
         {
             var go = new GameObject("SummonEntity");
             go.transform.position = pos;
@@ -32,16 +33,28 @@ namespace PromptFighters.Battle
             rb.constraints  = RigidbodyConstraints2D.FreezeRotation | RigidbodyConstraints2D.FreezePositionY;
             rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
 
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = sprite != null ? sprite : RuntimeSprite.Square();
+            if (sprite == null)
+            {
+                Color ec = SkillEnumParser.ElementColor(element);
+                sr.color = new Color(ec.r * 0.7f + 0.3f, ec.g * 0.5f, ec.b * 0.7f + 0.3f, 0.82f);
+            }
+            else
+            {
+                sr.color = Color.white;
+            }
+            sr.sortingOrder = 8;
+
+            Vector2 worldSize = desiredWorldSize ?? new Vector2(0.9f, 1.2f);
+            Vector2 spriteSize = sr.sprite != null
+                ? new Vector2(Mathf.Max(0.01f, sr.sprite.bounds.size.x), Mathf.Max(0.01f, sr.sprite.bounds.size.y))
+                : Vector2.one;
+            go.transform.localScale = new Vector3(worldSize.x / spriteSize.x, worldSize.y / spriteSize.y, 1f);
+
             var col = go.AddComponent<BoxCollider2D>();
             col.isTrigger = true;
-            col.size = new Vector2(0.9f, 1.2f);
-
-            var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite = RuntimeSprite.Square();
-            Color ec = SkillEnumParser.ElementColor(element);
-            sr.color = new Color(ec.r * 0.7f + 0.3f, ec.g * 0.5f, ec.b * 0.7f + 0.3f, 0.82f);
-            sr.sortingOrder = 8;
-            go.transform.localScale = new Vector3(0.9f, 1.2f, 1f);
+            col.size = spriteSize;
 
             var s = go.AddComponent<SummonEntity>();
             s.Owner      = owner;
