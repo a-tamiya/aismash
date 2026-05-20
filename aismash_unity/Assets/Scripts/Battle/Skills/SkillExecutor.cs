@@ -19,13 +19,28 @@ namespace PromptFighters.Battle.Skills
         bool _currentSkillHit;
         int _skillSerial;
 
+        // follow_up
+        bool _followUpReady;
+        float _followUpTimer;
+        SkillData _followUpSkill;
+
         public bool  IsExecuting               => _isExecuting;
+        public bool  IsFollowUpReady           => _followUpReady && _followUpTimer > 0f;
         public SkillData GetSkill(SkillSlot s) => skills[(int)s];
 
         void Awake()
         {
             _fighter = GetComponent<Fighter>();
             if (autoEquipSampleSkills && IsEmpty()) SampleSkillLibrary.EquipDefaults(this);
+        }
+
+        void Update()
+        {
+            if (_followUpTimer > 0f)
+            {
+                _followUpTimer -= Time.deltaTime;
+                if (_followUpTimer <= 0f) { _followUpReady = false; _followUpSkill = null; }
+            }
         }
 
         bool IsEmpty()
@@ -55,9 +70,54 @@ namespace PromptFighters.Battle.Skills
 
         public void ResetSkillState()
         {
-            _isExecuting = false;
+            _isExecuting   = false;
+            _followUpReady = false;
+            _followUpTimer = 0f;
+            _followUpSkill = null;
             UnsubscribeCurrentSkillHit();
             StopAllCoroutines();
+        }
+
+        public bool TryExecuteFollowUp()
+        {
+            if (!IsFollowUpReady) return false;
+            var skill = _followUpSkill;
+            _followUpReady = false;
+            _followUpTimer = 0f;
+            _followUpSkill = null;
+            ResetSkillState();
+            BattleLogger.Instance?.LogSkillUse(_fighter.PlayerIndex, skill.slot, skill.skill_name + "（派生）");
+            GameAudioManager.Instance?.PlaySkill(skill);
+            StartCoroutine(ExecuteFollowUp(skill));
+            return true;
+        }
+
+        IEnumerator ExecuteFollowUp(SkillData skill)
+        {
+            _isExecuting = true;
+            _currentSkillHit = false;
+            if (_fighter.Opponent != null)
+                _fighter.Opponent.OnDamageReceived += MarkCurrentSkillHit;
+
+            var actions = skill.follow_up_actions;
+            float t0 = Time.time;
+            int idx  = 0;
+            float totalTime = 0.15f;
+            if (actions != null)
+                foreach (var a in actions)
+                    if (a != null)
+                        totalTime = Mathf.Max(totalTime, a.time + (a.duration > 0f ? a.duration : 0.12f));
+
+            while (idx < (actions?.Count ?? 0))
+            {
+                var a = actions[idx];
+                if (a == null) { idx++; continue; }
+                if (Time.time - t0 >= a.time) { ExecuteAction(skill, a, 1f); idx++; }
+                else yield return null;
+            }
+            while (Time.time - t0 < totalTime) yield return null;
+            _isExecuting = false;
+            UnsubscribeCurrentSkillHit();
         }
 
         public bool TryUseSkill(SkillSlot slot)
@@ -159,6 +219,15 @@ namespace PromptFighters.Battle.Skills
             // recovery（後隙）が終わるまで待機
             while (Time.time - t0 < totalDuration) yield return null;
 
+            // follow_up: ヒット確認できたら受付ウィンドウを開く
+            if (_currentSkillHit && skill.follow_up_actions?.Count > 0)
+            {
+                float window = skill.follow_up_window > 0f ? skill.follow_up_window : 0.5f;
+                _followUpReady = true;
+                _followUpTimer = window;
+                _followUpSkill = skill;
+            }
+
             _isExecuting = false;
             UnsubscribeCurrentSkillHit();
         }
@@ -224,6 +293,9 @@ namespace PromptFighters.Battle.Skills
                 case "push_enemy":     PushOrPullOpponent(a, push: true);  break;
                 case "pull_enemy":     PushOrPullOpponent(a, push: false); break;
                 case "buff_self":      BuffSelf(a);                 break;
+                case "reflector":      DoReflector(a);              break;
+                case "counter":        DoCounter(a);                break;
+                case "summon":         SpawnSummon(skill, a, powerMultiplier); break;
                 case "apply_status":   ApplyOpponentStatus(a);     break;
                 case "delay":          /* no-op: time制御で表現 */ break;
                 default:
@@ -265,6 +337,7 @@ namespace PromptFighters.Battle.Skills
             var (kbDir1, kbFixed1) = ComputeKnockback(a, 1f, 0.3f);
             hb.KnockbackDir      = kbDir1;
             hb.FixedKnockbackDir = kbFixed1;
+            hb.GroundBounce      = a.knockback_direction == "ground_bounce";
             hb.StunTime       = skill.parameters.stun_time;
             hb.GuardDamage    = skill.parameters.guard_damage;
             hb.Element        = skill.element;
@@ -303,6 +376,7 @@ namespace PromptFighters.Battle.Skills
             var (kbDir, kbFixed) = ComputeKnockback(a, 1f, 0.3f);
             hb.KnockbackDir      = kbDir;
             hb.FixedKnockbackDir = kbFixed;
+            hb.GroundBounce      = a.knockback_direction == "ground_bounce";
             hb.StunTime          = skill.parameters.stun_time;
             hb.GuardDamage       = skill.parameters.guard_damage;
             hb.Element           = skill.element;
@@ -312,25 +386,65 @@ namespace PromptFighters.Battle.Skills
 
         void SpawnAreaHitbox(SkillData skill, SkillAction a, float powerMultiplier)
         {
-            float dirSign = _fighter.FacingRight ? 1f : -1f;
-            float width = a.size_x > 0f ? a.size_x : (a.range > 0f ? a.range : skill.parameters.range);
-            if (width <= 0f) width = 2f;
-            float height = a.size_y > 0f ? a.size_y : width;
-            float offsetX = !Mathf.Approximately(a.spawn_x, 0f) ? a.spawn_x : width * 0.2f;
-            float offsetY = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 0.6f;
-            width   *= _sizeScale;
-            height  *= _sizeScale;
-            offsetX *= _sizeScale;
-            offsetY *= _sizeScale;
+            float dirSign  = _fighter.FacingRight ? 1f : -1f;
             float lifetime = a.duration > 0f ? a.duration : Mathf.Max(skill.parameters.active_time, 0.12f);
+            string shape   = string.IsNullOrEmpty(a.shape) ? "box" : a.shape;
 
-            var hb = SpawnConfiguredHitbox(
+            if (shape == "ring")
+            {
+                float radius   = (a.size_x > 0f ? a.size_x : (a.range > 0f ? a.range : 2f)) * 0.5f * _sizeScale;
+                float offsetY  = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y * _sizeScale : 0.75f * _sizeScale;
+                var hb = Hitbox.SpawnCircle(_fighter,
+                    (Vector2)_fighter.transform.position + new Vector2(0f, offsetY),
+                    radius, lifetime);
+                float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) *
+                            powerMultiplier * _fighter.DamageMultiplier;
+                hb.Damage         = dmg;
+                hb.DamageIncludesOwnerBoost = true;
+                hb.Knockback      = skill.parameters.knockback * powerMultiplier;
+                var (kbDirR, kbFixedR) = ComputeKnockback(a, 1f, 0.25f);
+                hb.KnockbackDir      = kbDirR;
+                hb.FixedKnockbackDir = kbFixedR;
+                hb.GroundBounce      = a.knockback_direction == "ground_bounce";
+                hb.StunTime      = skill.parameters.stun_time;
+                hb.GuardDamage   = skill.parameters.guard_damage;
+                hb.Element       = skill.element;
+                hb.MaxHits       = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
+                hb.FollowOwner   = a.follow_owner;
+                hb.OwnerLocalOffset = new Vector2(0f, offsetY / _sizeScale);
+                ApplyActionStatus(hb, a);
+                return;
+            }
+
+            // cone: 前方向に広く縦に薄い扇形近似
+            float width, height, offsetX, offsetY2;
+            if (shape == "cone")
+            {
+                width   = a.size_x > 0f ? a.size_x : (a.range > 0f ? a.range * 1.4f : 3.0f);
+                height  = a.size_y > 0f ? a.size_y : width * 0.45f;
+                offsetX = !Mathf.Approximately(a.spawn_x, 0f) ? a.spawn_x : width * 0.52f;
+                offsetY2= !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 0.55f;
+            }
+            else // box (default)
+            {
+                width   = a.size_x > 0f ? a.size_x : (a.range > 0f ? a.range : skill.parameters.range);
+                if (width <= 0f) width = 2f;
+                height  = a.size_y > 0f ? a.size_y : width;
+                offsetX = !Mathf.Approximately(a.spawn_x, 0f) ? a.spawn_x : width * 0.2f;
+                offsetY2= !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 0.6f;
+            }
+            width    *= _sizeScale;
+            height   *= _sizeScale;
+            offsetX  *= _sizeScale;
+            offsetY2 *= _sizeScale;
+
+            var hbox = SpawnConfiguredHitbox(
                 skill, a, powerMultiplier,
-                (Vector2)_fighter.transform.position + new Vector2(dirSign * offsetX, offsetY),
+                (Vector2)_fighter.transform.position + new Vector2(dirSign * offsetX, offsetY2),
                 new Vector2(width, height),
                 lifetime);
-            hb.FollowOwner = a.follow_owner;
-            hb.OwnerLocalOffset = new Vector2(offsetX, offsetY);
+            hbox.FollowOwner      = a.follow_owner;
+            hbox.OwnerLocalOffset = new Vector2(offsetX, offsetY2);
         }
 
         void SpawnTrapHitbox(SkillData skill, SkillAction a, float powerMultiplier)
@@ -364,6 +478,7 @@ namespace PromptFighters.Battle.Skills
             var (kbDir2, kbFixed2) = ComputeKnockback(a, 1f, 0.25f);
             hb.KnockbackDir      = kbDir2;
             hb.FixedKnockbackDir = kbFixed2;
+            hb.GroundBounce      = a.knockback_direction == "ground_bounce";
             hb.StunTime       = skill.parameters.stun_time;
             hb.GuardDamage    = skill.parameters.guard_damage;
             hb.Element        = skill.element;
@@ -408,6 +523,7 @@ namespace PromptFighters.Battle.Skills
                 p.Knockback                = skill.parameters.knockback * powerMultiplier;
                 p.KnockbackDir             = kbDir;
                 p.FixedKnockbackDir        = kbFixed;
+                p.GroundBounce             = a.knockback_direction == "ground_bounce";
                 p.StunTime                 = skill.parameters.stun_time;
                 p.GuardDamage              = skill.parameters.guard_damage;
                 p.Status                   = SkillEnumParser.ParseStatus(a.status);
@@ -541,10 +657,43 @@ namespace PromptFighters.Battle.Skills
                 case "transparent":
                     _fighter.StartTemporaryInvincible(Mathf.Min(duration, 1.2f));
                     break;
+                case "reflect":
+                    _fighter.StartTemporaryReflect(Mathf.Min(duration, 3f));
+                    break;
                 default:
                     _fighter.StartTemporaryDamageBoost(Mathf.Clamp(multiplier, 1f, 1.6f), duration);
                     break;
             }
+        }
+
+        void DoReflector(SkillAction a)
+        {
+            float duration = a.duration > 0f ? Mathf.Min(a.duration, 3f) : 0.8f;
+            _fighter.StartTemporaryReflect(duration);
+        }
+
+        void DoCounter(SkillAction a)
+        {
+            float duration  = a.duration > 0f ? Mathf.Clamp(a.duration, 0.1f, 1.5f) : 0.4f;
+            float damage    = a.damage_override >= 0f ? a.damage_override : 10f;
+            float kx        = !Mathf.Approximately(a.knockback_x, 0f) ? Mathf.Abs(a.knockback_x) : 1f;
+            float ky        = !Mathf.Approximately(a.knockback_y, 0f) ? Mathf.Abs(a.knockback_y) : 0.4f;
+            float knockback = new Vector2(kx, ky).magnitude * (_fighter?.stats?.groundMoveSpeed > 0f ? 1f : 1f);
+            float forceMag  = Mathf.Clamp(damage * 0.9f, 6f, 18f);
+            _fighter.StartCounter(duration, damage, forceMag, new Vector2(kx, ky).normalized, 0.3f);
+        }
+
+        void SpawnSummon(SkillData skill, SkillAction a, float powerMultiplier)
+        {
+            float dirSign  = _fighter.FacingRight ? 1f : -1f;
+            float spawnX   = a.spawn_x > 0f ? a.spawn_x : 1.5f;
+            float spawnY   = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 0f;
+            Vector2 pos    = (Vector2)_fighter.transform.position + new Vector2(dirSign * spawnX * _sizeScale, spawnY * _sizeScale);
+            float lifetime = a.duration > 0f ? a.duration : 3f;
+            float speed    = a.power > 0f ? a.power : 2.5f;
+            float dmg      = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage * 0.5f) * powerMultiplier;
+            float kb       = skill.parameters.knockback * 0.6f * powerMultiplier;
+            SummonEntity.Spawn(_fighter, pos, speed, lifetime, dmg, kb, skill.element);
         }
 
         // apply_status は相手に状態異常を付与する。近距離内でchance判定あり。
@@ -564,11 +713,12 @@ namespace PromptFighters.Battle.Skills
             float y = !Mathf.Approximately(a.knockback_y, 0f) ? Mathf.Abs(a.knockback_y) : defaultY;
             return (string.IsNullOrEmpty(a.knockback_direction) ? "away" : a.knockback_direction) switch
             {
-                "up"          => (new Vector2(0f,                  1.5f), true),
-                "spike"       => (new Vector2(facingSign * 0.15f, -1.2f), true),
-                "toward"      => (new Vector2(-facingSign * x,       y  ), true),
-                "diagonal_up" => (new Vector2(facingSign * 0.4f,   1.2f), true),
-                _             => (new Vector2(x, y),                      false),
+                "up"           => (new Vector2(0f,                  1.5f), true),
+                "spike"        => (new Vector2(facingSign * 0.15f, -1.2f), true),
+                "toward"       => (new Vector2(-facingSign * x,       y  ), true),
+                "diagonal_up"  => (new Vector2(facingSign * 0.4f,   1.2f), true),
+                "ground_bounce"=> (new Vector2(facingSign * 0.25f, -1.4f), true),
+                _              => (new Vector2(x, y),                      false),
             };
         }
 

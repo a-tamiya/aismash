@@ -14,6 +14,7 @@ namespace PromptFighters.Battle
         SkillExecutor _skills;
         bool _smashHeld;
         float _smashCharge;
+        readonly float[] _skillChargeTimers = new float[4];
         float _lastSmashFlickTime = -10f;
         float _previousSmashAxis;
         Vector2 _previousDodgeInput;
@@ -164,16 +165,20 @@ namespace PromptFighters.Battle
                 bool smash  = smashMultiplier > 0f;
                 if (!_fighter.IsGrounded)
                 {
-                    // 空中技を押した瞬間 + その後 AirSkillFaceWindow 秒間は向き転換を受け付ける
                     if (skillA || skillB || skillC || smash)
                         _airSkillFaceTimer = AirSkillFaceWindow;
                     if (_airSkillFaceTimer > 0f)
                         _fighter.FaceTowardInput(moveX);
                 }
-                if (skillA) _skills.TryUseSkill(SkillSlot.AttackA);
-                if (skillB) _skills.TryUseSkill(SkillSlot.AttackB);
-                if (skillC) _skills.TryUseSkill(SkillSlot.AttackC);
-                if (smash)  _skills.TryUseSkill(SkillSlot.SmashSide, smashMultiplier);
+                // follow_up 優先チェック
+                bool followUsed = (skillA || skillB || skillC) && _skills.TryExecuteFollowUp();
+                if (!followUsed)
+                {
+                    HandleSkillSlot(SkillSlot.AttackA, skillA);
+                    HandleSkillSlot(SkillSlot.AttackB, skillB);
+                    HandleSkillSlot(SkillSlot.AttackC, skillC);
+                    if (smash) _skills.TryUseSkill(SkillSlot.SmashSide, smashMultiplier);
+                }
             }
         }
 
@@ -380,6 +385,133 @@ namespace PromptFighters.Battle
 
             var gp = GetGamepad();
             return gp != null && (gp.leftShoulder.wasPressedThisFrame || gp.leftTrigger.wasPressedThisFrame);
+        }
+
+        void HandleSkillSlot(SkillSlot slot, bool pressed)
+        {
+            int i = (int)slot;
+            var skillDef = _skills?.GetSkill(slot);
+            if (skillDef?.chargeable == true)
+            {
+                float maxCharge = skillDef.max_charge_time > 0f ? skillDef.max_charge_time : 0.8f;
+                if (_skills.IsExecuting || !_fighter.CanAct)
+                {
+                    if (_skillChargeTimers[i] > 0f && ReadSkillReleased(slot))
+                        _skillChargeTimers[i] = 0f;
+                    return;
+                }
+                if (ReadSkillHeld(slot))
+                {
+                    _skillChargeTimers[i] += Time.deltaTime;
+                    _fighter.ShowSmashCharge(Mathf.Clamp01(_skillChargeTimers[i] / maxCharge));
+                }
+                if (ReadSkillReleased(slot) && _skillChargeTimers[i] > 0f)
+                {
+                    float chargeLevel = Mathf.Clamp01(_skillChargeTimers[i] / maxCharge);
+                    _skills.TryUseSkill(slot, 1f + chargeLevel * 0.8f);
+                    _skillChargeTimers[i] = 0f;
+                }
+            }
+            else
+            {
+                if (pressed) _skills.TryUseSkill(slot);
+            }
+        }
+
+        bool ReadSkillHeld(SkillSlot slot)
+        {
+            var kb = Keyboard.current;
+            if (kb != null)
+            {
+                if (playerIndex == 0)
+                    switch (slot)
+                    {
+                        case SkillSlot.AttackA: return kb.jKey.isPressed;
+                        case SkillSlot.AttackB: return kb.kKey.isPressed;
+                        case SkillSlot.AttackC: return kb.lKey.isPressed;
+                    }
+                else
+                    switch (slot)
+                    {
+                        case SkillSlot.AttackA: return kb.numpad2Key.isPressed;
+                        case SkillSlot.AttackB: return kb.numpad3Key.isPressed;
+                        case SkillSlot.AttackC: return kb.numpad1Key.isPressed;
+                    }
+            }
+            else
+            {
+                if (playerIndex == 0)
+                    switch (slot)
+                    {
+                        case SkillSlot.AttackA: return LegacyKey(KeyCode.J);
+                        case SkillSlot.AttackB: return LegacyKey(KeyCode.K);
+                        case SkillSlot.AttackC: return LegacyKey(KeyCode.L);
+                    }
+                else
+                    switch (slot)
+                    {
+                        case SkillSlot.AttackA: return LegacyKey(KeyCode.Keypad2);
+                        case SkillSlot.AttackB: return LegacyKey(KeyCode.Keypad3);
+                        case SkillSlot.AttackC: return LegacyKey(KeyCode.Keypad1);
+                    }
+            }
+            var gp = GetGamepad();
+            if (gp == null) return false;
+            return slot switch
+            {
+                SkillSlot.AttackA => gp.buttonEast.isPressed,
+                SkillSlot.AttackB => gp.buttonSouth.isPressed,
+                SkillSlot.AttackC => gp.buttonWest.isPressed,
+                _ => false,
+            };
+        }
+
+        bool ReadSkillReleased(SkillSlot slot)
+        {
+            var kb = Keyboard.current;
+            if (kb != null)
+            {
+                if (playerIndex == 0)
+                    switch (slot)
+                    {
+                        case SkillSlot.AttackA: return kb.jKey.wasReleasedThisFrame;
+                        case SkillSlot.AttackB: return kb.kKey.wasReleasedThisFrame;
+                        case SkillSlot.AttackC: return kb.lKey.wasReleasedThisFrame;
+                    }
+                else
+                    switch (slot)
+                    {
+                        case SkillSlot.AttackA: return kb.numpad2Key.wasReleasedThisFrame;
+                        case SkillSlot.AttackB: return kb.numpad3Key.wasReleasedThisFrame;
+                        case SkillSlot.AttackC: return kb.numpad1Key.wasReleasedThisFrame;
+                    }
+            }
+            else
+            {
+                if (playerIndex == 0)
+                    switch (slot)
+                    {
+                        case SkillSlot.AttackA: return Input.GetKeyUp(KeyCode.J);
+                        case SkillSlot.AttackB: return Input.GetKeyUp(KeyCode.K);
+                        case SkillSlot.AttackC: return Input.GetKeyUp(KeyCode.L);
+                    }
+                else
+                    switch (slot)
+                    {
+                        case SkillSlot.AttackA: return Input.GetKeyUp(KeyCode.Keypad2);
+                        case SkillSlot.AttackB: return Input.GetKeyUp(KeyCode.Keypad3);
+                        case SkillSlot.AttackC: return Input.GetKeyUp(KeyCode.Keypad1);
+                    }
+            }
+            var gp = GetGamepad();
+            if (gp == null) return false;
+            return slot switch
+            {
+                SkillSlot.AttackA => gp.buttonEast.wasReleasedThisFrame,
+                SkillSlot.AttackB => gp.buttonSouth.wasReleasedThisFrame,
+                SkillSlot.AttackC => gp.buttonWest.wasReleasedThisFrame,
+                _ => false,
+            };
         }
 
         bool ReadSkillPressed(SkillSlot slot)

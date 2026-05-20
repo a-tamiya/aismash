@@ -38,6 +38,7 @@ namespace PromptFighters.Battle.Skills
         // ノックバック方向（Hitbox と同じ仕組み）
         public Vector2   KnockbackDir = new Vector2(1f, 0.3f);
         public bool      FixedKnockbackDir;
+        public bool      GroundBounce;
 
         SpriteRenderer _debugSr;
         float _spawnTime;
@@ -236,6 +237,7 @@ namespace PromptFighters.Battle.Skills
                 if (_boomerangHitSet.Contains(target)) return;
                 _boomerangHitSet.Add(target);
                 target.TakeDamage(Damage, Knockback, kb, StunTime, GuardDamage, !DamageIncludesOwnerBoost);
+                if (GroundBounce) target.StartGroundBounce(Knockback * 0.75f);
                 if (Status != StatusType.None && Random.value <= StatusChance)
                     target.ApplyStatus(Status, StatusDuration);
                 // 消えない
@@ -243,6 +245,7 @@ namespace PromptFighters.Battle.Skills
             else
             {
                 target.TakeDamage(Damage, Knockback, kb, StunTime, GuardDamage, !DamageIncludesOwnerBoost);
+                if (GroundBounce) target.StartGroundBounce(Knockback * 0.75f);
                 if (Status != StatusType.None && Random.value <= StatusChance)
                     target.ApplyStatus(Status, StatusDuration);
                 Destroy(gameObject);

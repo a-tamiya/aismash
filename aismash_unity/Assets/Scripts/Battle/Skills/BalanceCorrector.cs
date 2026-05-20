@@ -68,6 +68,12 @@ namespace PromptFighters.Battle.Skills
             if (HasAction(skill, "trap_hitbox"))
                 p.active_time = Mathf.Min(p.active_time, 0.10f);
 
+            // スキルレベルのチャージ・フォローアップ制限
+            if (skill.chargeable)
+                skill.max_charge_time = Mathf.Clamp(skill.max_charge_time > 0f ? skill.max_charge_time : 0.8f, 0.3f, 1.5f);
+            if (skill.follow_up_actions?.Count > 0)
+                skill.follow_up_window = Mathf.Clamp(skill.follow_up_window > 0f ? skill.follow_up_window : 0.5f, 0.2f, 1.0f);
+
             // actions内のdamage_overrideにも適用
             if (skill.actions != null)
             {
@@ -147,6 +153,36 @@ namespace PromptFighters.Battle.Skills
                          a.type == "push_enemy" || a.type == "pull_enemy" ||
                          a.type == "teleport") && a.power > 15f)
                         a.power = 15f;
+
+                    if (a.type == "counter")
+                    {
+                        a.duration = Mathf.Clamp(a.duration > 0f ? a.duration : 0.4f, 0.1f, 1.5f);
+                        if (a.damage_override >= 0f)
+                            a.damage_override = Mathf.Clamp(a.damage_override, 0f, totalMaxDmg * 1.5f);
+                    }
+
+                    if (a.type == "reflector")
+                        a.duration = Mathf.Clamp(a.duration > 0f ? a.duration : 0.8f, 0.2f, 3f);
+
+                    if (a.type == "summon")
+                    {
+                        a.duration = Mathf.Clamp(a.duration > 0f ? a.duration : 3f, 1f, 6f);
+                        if (a.power > 0f) a.power = Mathf.Clamp(a.power, 0.5f, 5f);
+                        if (a.damage_override >= 0f)
+                            a.damage_override = Mathf.Clamp(a.damage_override, 0f, totalMaxDmg * 0.6f);
+                    }
+                }
+            }
+
+            // follow_up_actionsも同様にクランプ
+            if (skill.follow_up_actions != null)
+            {
+                foreach (var fa in skill.follow_up_actions)
+                {
+                    if (fa == null) continue;
+                    fa.hit_count = Mathf.Clamp(fa.hit_count, 0, 10);
+                    if (fa.damage_override >= 0f)
+                        fa.damage_override = Mathf.Clamp(fa.damage_override, 0f, totalMaxDmg);
                 }
             }
         }

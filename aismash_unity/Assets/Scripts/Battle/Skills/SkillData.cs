@@ -16,6 +16,14 @@ namespace PromptFighters.Battle.Skills
         public RiskLevel   risk_level;
         public SkillParameters parameters = new SkillParameters();
         public List<SkillAction> actions  = new List<SkillAction>();
+
+        // follow_up: ヒット後の受付時間内に追加入力で発動
+        public List<SkillAction> follow_up_actions;
+        public float             follow_up_window;   // 受付秒数（0→デフォルト0.5s）
+
+        // charge: 長押しで powerMultiplier 1.0→1.8
+        public bool  chargeable;
+        public float max_charge_time;  // 最大チャージ秒（0→デフォルト0.8s）
     }
 
     [Serializable]
@@ -79,11 +87,14 @@ namespace PromptFighters.Battle.Skills
         // projectile: 重力（0=無重力デフォルト、1=通常重力）
         public float  gravity_scale;
 
-        // ノックバック方向: "away"(default)/"up"/"spike"/"toward"/"diagonal_up"
+        // ノックバック方向: "away"(default)/"up"/"spike"/"toward"/"diagonal_up"/"ground_bounce"
         public string knockback_direction;
 
-        // apply_status
-        public string status;     // "stun" / "burn" / "slow" / "guard_break" / "speed" / "jump" / "transparent" / "damage"
+        // area_hitbox: 形状 "box"(default) / "cone"（前方扇形近似） / "ring"（周囲円形）
+        public string shape;
+
+        // apply_status / buff_self
+        public string status;     // "stun"/"burn"/"slow"/"guard_break"/"speed"/"jump"/"transparent"/"damage"/"reflect"
         public float  chance = 1f;
     }
 }

@@ -118,7 +118,14 @@ namespace PromptFighters.Battle
         Collider2D _ignoredOpponentCollider;
 
         float _reflectTimer;
-        static readonly Color ReflectColor = new Color(1f, 0.3f, 0.95f);
+        float _counterTimer;
+        float _counterDamage;
+        Vector2 _counterKbDir;
+        float _counterKnockback;
+        float _counterStun;
+        float _groundBounceForce;
+        static readonly Color ReflectColor  = new Color(1f, 0.3f, 0.95f);
+        static readonly Color CounterColor  = new Color(1f, 0.9f, 0.1f);
 
         // 状態異常タイマー
         float _burnTimer;
@@ -153,6 +160,7 @@ namespace PromptFighters.Battle
         public bool  IsInvincible     { get; private set; }
         public bool  InputReversed    { get; private set; }
         public bool  IsReflecting     => _reflectTimer > 0f;
+        public bool  IsCountering     => _counterTimer > 0f;
 
         public bool CanAct =>
             State != FighterState.Guarding &&
@@ -200,7 +208,14 @@ namespace PromptFighters.Battle
             IsGrounded = groundCheck != null &&
                 Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
             if (!wasGrounded && IsGrounded && BattleManager.Instance != null && BattleManager.Instance.IsFighting)
+            {
                 OnLanded?.Invoke();
+                if (_groundBounceForce > 0f)
+                {
+                    _rb.linearVelocity = new Vector2(_rb.linearVelocity.x, _groundBounceForce);
+                    _groundBounceForce = 0f;
+                }
+            }
             if (IsGrounded && _isAirDodgeActive && State == FighterState.Dodging)
             {
                 EndAirDodgeOnLanding();
@@ -233,6 +248,7 @@ namespace PromptFighters.Battle
             if (_hitFlashTimer      > 0f) _hitFlashTimer      -= Time.deltaTime;
             if (_transparencyTimer  > 0f) _transparencyTimer  -= Time.deltaTime;
             if (_reflectTimer       > 0f) _reflectTimer       -= Time.deltaTime;
+            if (_counterTimer       > 0f) _counterTimer       -= Time.deltaTime;
             if (_speedBoostTimer > 0f) _speedBoostTimer -= Time.deltaTime;
             if (_jumpBoostTimer  > 0f) _jumpBoostTimer  -= Time.deltaTime;
             if (_forcedSpriteTimer  > 0f)
@@ -360,6 +376,7 @@ namespace PromptFighters.Battle
                 else if (_jumpBoostTimer   > 0f)  c = Color.Lerp(JumpBoostColor,   Color.white, (Mathf.Sin(Time.time * 6f) + 1f) * 0.25f);
                 else if (InputReversed          )  c = Color.Lerp(ChaosColor,       Color.white, (Mathf.Sin(Time.time * 10f) + 1f) * 0.3f);
                 else if (_reflectTimer     > 0f)  c = Color.Lerp(ReflectColor,     Color.white, (Mathf.Sin(Time.time * 12f) + 1f) * 0.3f);
+                else if (_counterTimer     > 0f)  c = Color.Lerp(CounterColor,     Color.white, (Mathf.Sin(Time.time * 8f)  + 1f) * 0.3f);
             }
 
             _sprite.color = WithDebugAlpha(c);
@@ -505,6 +522,17 @@ namespace PromptFighters.Battle
             if (State == FighterState.Dodging || _dodgeTimer > 0f) return;
             if (_grabbedBy != null) return;
             if (IsInvincible) return;
+
+            if (IsCountering && Opponent != null && !Opponent.IsCountering)
+            {
+                _counterTimer = 0f;
+                float facingDir = FacingRight ? 1f : -1f;
+                Vector2 kbVec = new Vector2(facingDir * _counterKbDir.x, _counterKbDir.y);
+                DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "COUNTER!", CounterColor, 2f);
+                BattleLogger.Instance?.LogEvent($"{PlayerLabel()}がカウンター発動");
+                Opponent.TakeDamage(_counterDamage, _counterKnockback, kbVec, _counterStun, _counterDamage * 0.3f, false);
+                return;
+            }
 
             if (IsReflecting && Opponent != null && !Opponent.IsReflecting)
             {
@@ -930,6 +958,8 @@ namespace PromptFighters.Battle
             _fastFallUsed       = false;
             _airTime            = 0f;
             _reflectTimer       = 0f;
+            _counterTimer       = 0f;
+            _groundBounceForce  = 0f;
             RestoreDodgeGravity();
             RestoreOpponentCollision();
             _forcedSprite       = null;
@@ -1231,6 +1261,22 @@ namespace PromptFighters.Battle
         {
             _reflectTimer = Mathf.Max(_reflectTimer, duration);
             DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "REFLECT!", ReflectColor, 2.2f);
+        }
+
+        public void StartCounter(float duration, float damage, float knockback, Vector2 kbDir, float stun)
+        {
+            _counterTimer    = Mathf.Max(_counterTimer, duration);
+            _counterDamage   = damage;
+            _counterKnockback= knockback;
+            _counterKbDir    = kbDir;
+            _counterStun     = stun;
+            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "COUNTER!", CounterColor, 1.5f);
+            BattleLogger.Instance?.LogEvent($"{PlayerLabel()}がカウンター構え");
+        }
+
+        public void StartGroundBounce(float force)
+        {
+            _groundBounceForce = Mathf.Max(_groundBounceForce, force);
         }
 
         public void FillGuard()

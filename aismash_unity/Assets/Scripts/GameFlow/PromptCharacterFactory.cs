@@ -272,6 +272,9 @@ namespace PromptFighters.GameFlow
                 description = src.description,
                 element = src.element,
                 risk_level = src.risk_level,
+                chargeable = src.chargeable,
+                max_charge_time = src.max_charge_time,
+                follow_up_window = src.follow_up_window,
                 parameters = new SkillParameters
                 {
                     damage = src.parameters.damage,
@@ -289,42 +292,53 @@ namespace PromptFighters.GameFlow
             };
 
             for (int i = 0; i < src.actions.Count; i++)
+                clone.actions.Add(CloneAction(src.actions[i]));
+
+            if (src.follow_up_actions != null)
             {
-                var action = src.actions[i];
-                clone.actions.Add(new SkillAction
-                {
-                    type                = action.type,
-                    time                = action.time,
-                    duration            = action.duration,
-                    range               = action.range,
-                    spawn_x             = action.spawn_x,
-                    spawn_y             = action.spawn_y,
-                    size_y              = action.size_y,
-                    size_x              = action.size_x,
-                    hit_count           = action.hit_count,
-                    damage_override     = action.damage_override,
-                    follow_owner        = action.follow_owner,
-                    knockback_x         = action.knockback_x,
-                    knockback_y         = action.knockback_y,
-                    knockback_direction = action.knockback_direction,
-                    hide_effect         = action.hide_effect,
-                    power               = action.power,
-                    direction           = action.direction,
-                    projectile_speed    = action.projectile_speed,
-                    projectile_lifetime = action.projectile_lifetime,
-                    projectile_angle    = action.projectile_angle,
-                    homing              = action.homing,
-                    homing_strength     = action.homing_strength,
-                    boomerang           = action.boomerang,
-                    projectile_count    = action.projectile_count,
-                    spread_angle        = action.spread_angle,
-                    gravity_scale       = action.gravity_scale,
-                    status              = action.status,
-                    chance              = action.chance,
-                });
+                clone.follow_up_actions = new List<SkillAction>();
+                for (int i = 0; i < src.follow_up_actions.Count; i++)
+                    clone.follow_up_actions.Add(CloneAction(src.follow_up_actions[i]));
             }
 
             return clone;
+        }
+
+        static SkillAction CloneAction(SkillAction a)
+        {
+            if (a == null) return null;
+            return new SkillAction
+            {
+                type                = a.type,
+                time                = a.time,
+                duration            = a.duration,
+                range               = a.range,
+                spawn_x             = a.spawn_x,
+                spawn_y             = a.spawn_y,
+                size_y              = a.size_y,
+                size_x              = a.size_x,
+                hit_count           = a.hit_count,
+                damage_override     = a.damage_override,
+                follow_owner        = a.follow_owner,
+                knockback_x         = a.knockback_x,
+                knockback_y         = a.knockback_y,
+                knockback_direction = a.knockback_direction,
+                shape               = a.shape,
+                hide_effect         = a.hide_effect,
+                power               = a.power,
+                direction           = a.direction,
+                projectile_speed    = a.projectile_speed,
+                projectile_lifetime = a.projectile_lifetime,
+                projectile_angle    = a.projectile_angle,
+                homing              = a.homing,
+                homing_strength     = a.homing_strength,
+                boomerang           = a.boomerang,
+                projectile_count    = a.projectile_count,
+                spread_angle        = a.spread_angle,
+                gravity_scale       = a.gravity_scale,
+                status              = a.status,
+                chance              = a.chance,
+            };
         }
 
         static string ElementLabel(Element element) => element switch
