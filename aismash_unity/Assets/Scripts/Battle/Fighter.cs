@@ -106,6 +106,8 @@ namespace PromptFighters.Battle
         float _skillRecoveryTimer;
         float _smashChargeVisualTimer;
         float _smashChargeVisual01;
+        float _skillChargeVisualTimer;
+        float _skillChargeVisual01;
         float _dodgeTimer;
         float _defaultGravityScale;
         bool _airDodgeUsed;
@@ -236,6 +238,7 @@ namespace PromptFighters.Battle
             if (_controlLockTimer   > 0f) _controlLockTimer   -= Time.deltaTime;
             if (_skillRecoveryTimer > 0f) _skillRecoveryTimer -= Time.deltaTime;
             if (_smashChargeVisualTimer > 0f) _smashChargeVisualTimer -= Time.deltaTime;
+            if (_skillChargeVisualTimer > 0f) _skillChargeVisualTimer -= Time.deltaTime;
             if (_dodgeTimer > 0f) _dodgeTimer -= Time.deltaTime;
             if (_grabCooldownTimer  > 0f) _grabCooldownTimer  -= Time.deltaTime;
             if (_slowTimer          > 0f) _slowTimer          -= Time.deltaTime;
@@ -356,6 +359,14 @@ namespace PromptFighters.Battle
             {
                 float pulse = (Mathf.Sin(Time.time * 18f) + 1f) * 0.5f;
                 _sprite.color = WithDebugAlpha(Color.Lerp(GuardBreakColor, Color.white, pulse * 0.35f));
+                return;
+            }
+
+            if (_skillChargeVisualTimer > 0f)
+            {
+                float pulse = (Mathf.Sin(Time.time * 22f) + 1f) * 0.5f;
+                Color chargeColor = Color.Lerp(new Color(0.2f, 0.85f, 1f), new Color(0.0f, 0.35f, 1f), _skillChargeVisual01);
+                _sprite.color = WithDebugAlpha(Color.Lerp(chargeColor, Color.white, pulse * 0.35f));
                 return;
             }
 
@@ -625,6 +636,12 @@ namespace PromptFighters.Battle
             _smashChargeVisual01 = Mathf.Clamp01(charge01);
             _smashChargeVisualTimer = 0.12f;
             ForceSprite(CharacterSpriteId.SmashSide, 0.12f);
+        }
+
+        public void ShowSkillCharge(float charge01)
+        {
+            _skillChargeVisual01 = Mathf.Clamp01(charge01);
+            _skillChargeVisualTimer = 0.12f;
         }
 
         public Sprite GetEffectSprite(SkillSlot slot)
@@ -934,7 +951,9 @@ namespace PromptFighters.Battle
             _controlLockTimer   = 0f;
             _skillRecoveryTimer = 0f;
             _smashChargeVisualTimer = 0f;
-            _smashChargeVisual01 = 0f;
+            _smashChargeVisual01    = 0f;
+            _skillChargeVisualTimer = 0f;
+            _skillChargeVisual01    = 0f;
             _burnTimer          = 0f;
             _slowTimer          = 0f;
             _guardBreakTimer    = 0f;

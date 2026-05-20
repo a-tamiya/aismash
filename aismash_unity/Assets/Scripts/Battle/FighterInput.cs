@@ -14,7 +14,8 @@ namespace PromptFighters.Battle
         SkillExecutor _skills;
         bool _smashHeld;
         float _smashCharge;
-        readonly float[] _skillChargeTimers = new float[4];
+        readonly float[] _skillChargeTimers  = new float[4];
+        readonly float[] _lastSkillPressTime = { -10f, -10f, -10f, -10f };
         float _lastSmashFlickTime = -10f;
         float _previousSmashAxis;
         Vector2 _previousDodgeInput;
@@ -163,6 +164,12 @@ namespace PromptFighters.Battle
                 bool skillB = ReadSkillPressed(SkillSlot.AttackB);
                 bool skillC = ReadSkillPressed(SkillSlot.AttackC);
                 bool smash  = smashMultiplier > 0f;
+
+                // 押下時刻を常に記録（派生バッファ用）
+                if (skillA) _lastSkillPressTime[(int)SkillSlot.AttackA] = Time.time;
+                if (skillB) _lastSkillPressTime[(int)SkillSlot.AttackB] = Time.time;
+                if (skillC) _lastSkillPressTime[(int)SkillSlot.AttackC] = Time.time;
+
                 if (!_fighter.IsGrounded)
                 {
                     if (skillA || skillB || skillC || smash)
@@ -170,15 +177,22 @@ namespace PromptFighters.Battle
                     if (_airSkillFaceTimer > 0f)
                         _fighter.FaceTowardInput(moveX);
                 }
-                // follow_up: 派生元と同じスロットのボタンのみ受け付ける
+
+                // follow_up: 派生元スロットの「現在押下 or バッファ内押下」で受け付ける
                 bool followUsed = false;
                 if (_skills.IsFollowUpReady)
                 {
-                    var fs = _skills.FollowUpSlot;
-                    bool sameSlot = (fs == SkillSlot.AttackA && skillA) ||
-                                    (fs == SkillSlot.AttackB && skillB) ||
-                                    (fs == SkillSlot.AttackC && skillC);
-                    if (sameSlot) followUsed = _skills.TryExecuteFollowUp();
+                    var fs  = _skills.FollowUpSlot;
+                    int fi  = (int)fs;
+                    bool currentPress = (fs == SkillSlot.AttackA && skillA) ||
+                                        (fs == SkillSlot.AttackB && skillB) ||
+                                        (fs == SkillSlot.AttackC && skillC);
+                    bool bufferedPress = Time.time - _lastSkillPressTime[fi] < 0.5f;
+                    if (currentPress || bufferedPress)
+                    {
+                        _lastSkillPressTime[fi] = -10f; // バッファ消費
+                        followUsed = _skills.TryExecuteFollowUp();
+                    }
                 }
                 if (!followUsed)
                 {
@@ -411,7 +425,7 @@ namespace PromptFighters.Battle
                 if (ReadSkillHeld(slot))
                 {
                     _skillChargeTimers[i] += Time.deltaTime;
-                    _fighter.ShowSmashCharge(Mathf.Clamp01(_skillChargeTimers[i] / maxCharge));
+                    _fighter.ShowSkillCharge(Mathf.Clamp01(_skillChargeTimers[i] / maxCharge));
                 }
                 if (ReadSkillReleased(slot) && _skillChargeTimers[i] > 0f)
                 {
