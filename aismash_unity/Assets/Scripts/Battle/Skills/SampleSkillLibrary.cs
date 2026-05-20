@@ -10,33 +10,22 @@ namespace PromptFighters.Battle.Skills
         public static SkillData CloseSlash() => new SkillData
         {
             slot        = SkillSlot.AttackA,
-            skill_name  = "ワンツーコンボ",
-            description = "パンチから蹴りへ派生",
+            skill_name  = "連続斬り",
+            description = "短射程の3段斬撃",
             element     = Element.Physical,
             risk_level  = RiskLevel.Low,
             parameters  = new SkillParameters
             {
-                damage = 5, range = 1.2f, startup = 0.03f, active_time = 0.1f,
-                recovery = 0.22f, hit_count = 1,
-                knockback = 2.6f, stun_time = 0.12f, guard_damage = 1.0f,
+                damage = 4, range = 1.3f, startup = 0.04f, active_time = 0.1f,
+                recovery = 0.24f, hit_count = 3,
+                knockback = 3f, stun_time = 0.1f, guard_damage = 1.1f,
             },
             actions = new List<SkillAction>
             {
-                new SkillAction
-                {
-                    type = "melee_hitbox", time = 0f, range = 1.2f,
-                    spawn_x = 0.8f, spawn_y = 0.75f, size_y = 1.0f, hit_count = 1,
-                },
+                new SkillAction { type = "melee_hitbox", time = 0.04f, hit_count = 1 },
+                new SkillAction { type = "melee_hitbox", time = 0.08f, hit_count = 1 },
+                new SkillAction { type = "melee_hitbox", time = 0.12f, hit_count = 1 },
             },
-            follow_up_actions = new List<SkillAction>
-            {
-                new SkillAction
-                {
-                    type = "melee_hitbox", time = 0f, range = 1.35f,
-                    spawn_x = 0.9f, spawn_y = 0.25f, size_y = 0.95f, hit_count = 1,
-                },
-            },
-            follow_up_window = 0.6f,
         };
 
         public static SkillData RangedFireball() => new SkillData
