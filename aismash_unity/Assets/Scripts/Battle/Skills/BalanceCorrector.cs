@@ -63,6 +63,11 @@ namespace PromptFighters.Battle.Skills
             p.active_time = Mathf.Max(0.05f, p.active_time);
             p.recovery    = Mathf.Max(MinRecovery[si], p.recovery);
 
+            // 設置技: キャラのロックアウト時間はactive_timeを短く打ち切る
+            // トラップの実寿命は action.duration が担う
+            if (HasAction(skill, "trap_hitbox"))
+                p.active_time = Mathf.Min(p.active_time, 0.10f);
+
             // actions内のdamage_overrideにも適用
             if (skill.actions != null)
             {
@@ -79,7 +84,8 @@ namespace PromptFighters.Battle.Skills
 
                     if (a.type == "trap_hitbox")
                     {
-                        a.duration = Mathf.Clamp(a.duration, 0f, 5f);
+                        if (a.duration <= 0f) a.duration = 2.5f; // 未指定は2.5秒
+                        a.duration = Mathf.Clamp(a.duration, 0.5f, 5f);
                     }
                     // apply_statusのduration上限。trap_hitboxのdurationは設置寿命として扱う。
                     else if ((a.type == "apply_status" || a.type == "melee_hitbox" ||
