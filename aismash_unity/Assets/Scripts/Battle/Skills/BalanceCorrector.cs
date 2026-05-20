@@ -68,6 +68,14 @@ namespace PromptFighters.Battle.Skills
             if (HasAction(skill, "trap_hitbox") || HasAction(skill, "summon"))
                 p.active_time = Mathf.Min(p.active_time, 0.10f);
 
+            // リフレクター技: startup+active+recovery=1.0秒ちょうどに固定し、
+            // 1秒後はリフレクト状態を保ったまま自由行動できるようにする
+            if (HasAction(skill, "reflector"))
+            {
+                p.active_time = 0.10f;
+                p.recovery    = Mathf.Max(MinRecovery[si], 1.0f - p.startup - 0.10f);
+            }
+
             // スキルレベルのチャージ・フォローアップ制限
             if (skill.chargeable)
                 skill.max_charge_time = Mathf.Clamp(skill.max_charge_time > 0f ? skill.max_charge_time : 0.8f, 0.3f, 1.5f);
