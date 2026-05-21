@@ -106,7 +106,7 @@ namespace PromptFighters.UI
         {
             _busy = true;
 
-            // 1. 退屈メッセージを表示 + TTS
+            // 1. 退屈メッセージを表示 + TTS + 音声入力受付
             string boredMsg = BoredMessages[Random.Range(0, BoredMessages.Length)];
             ShowBanner("[ 天使降臨中 ]", boredMsg);
             ShowSubtitle(boredMsg);
@@ -118,17 +118,31 @@ namespace PromptFighters.UI
                 voice: AITTSClient.AngelVoice,
                 volume: 2.2f);
 
-            float waited = 0f;
-            while (!ttsDone && waited < 5f) { waited += Time.deltaTime; yield return null; }
-
-            // 2. 音声入力受付
-            ShowBanner("[ 天使降臨中 ]", $"お願い事を話してね！ ({recordSeconds:0}秒)");
             string transcribed = null;
             bool   recordDone  = false;
+            bool   listeningStarted = false;
+            float  listeningEndTime = Time.time + recordSeconds;
             WhisperClient.RecordAndTranscribe(this, recordSeconds,
                 text => { transcribed = text; recordDone = true; },
-                err  => { Debug.LogWarning("[Angel] Whisper: " + err); recordDone = true; });
-            while (!recordDone) yield return null;
+                err  => { Debug.LogWarning("[Angel] Whisper: " + err); recordDone = true; },
+                onRecordingStart: () =>
+                {
+                    listeningStarted = true;
+                    listeningEndTime = Time.time + recordSeconds;
+                });
+
+            while (!recordDone || !ttsDone)
+            {
+                if (!recordDone)
+                {
+                    float remaining = listeningStarted ? Mathf.Max(0f, listeningEndTime - Time.time) : recordSeconds;
+                    if (listeningStarted && remaining > 0f)
+                        ShowListeningBanner(remaining);
+                    else
+                        ShowBanner("[ 天使降臨中 ]", "音声を解析中...");
+                }
+                yield return null;
+            }
 
             // 3. ギミック決定
             ShowBanner("[ 天使降臨中 ]", "天使が考え中...");
@@ -265,6 +279,19 @@ namespace PromptFighters.UI
         {
             _titleLabel.text  = title;
             _statusLabel.text = status;
+            _titleLabel.color = new Color(1f, 0.95f, 0.35f);
+            _statusLabel.color = Color.white;
+            _bannerGroup.alpha = 1f;
+        }
+
+        void ShowListeningBanner(float remaining)
+        {
+            _titleLabel.text = "[ 音声入力受付中 ]";
+            _statusLabel.text = $"録音中: 願いを話してね！ 残り {remaining:0.0}秒";
+
+            float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 8f);
+            _titleLabel.color = Color.Lerp(new Color(1f, 0.9f, 0.2f), new Color(1f, 0.35f, 0.25f), pulse);
+            _statusLabel.color = Color.Lerp(Color.white, new Color(1f, 0.55f, 0.45f), pulse);
             _bannerGroup.alpha = 1f;
         }
 
