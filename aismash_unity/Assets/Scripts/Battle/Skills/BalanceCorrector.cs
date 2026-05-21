@@ -111,7 +111,7 @@ namespace PromptFighters.Battle.Skills
                     {
                         a.duration = a.status switch
                         {
-                            "stun"        => Mathf.Clamp(a.duration > 0f ? a.duration : 1f, 1f, MaxStunTime),
+                            "stun"        => Mathf.Clamp(a.duration > 0f ? a.duration : 0.4f, 0.4f, 0.7f),
                             "guard_break" => Mathf.Min(a.duration, 1.5f),
                             "burn"        => Mathf.Min(a.duration, 5f),
                             "slow"        => Mathf.Min(a.duration, 5f),
@@ -179,7 +179,7 @@ namespace PromptFighters.Battle.Skills
                         a.duration = Mathf.Clamp(a.duration > 0f ? a.duration : 3f, 1f, 6f);
                         if (!string.IsNullOrEmpty(a.status))
                             a.status_duration = a.status == "stun"
-                                ? Mathf.Clamp(a.status_duration > 0f ? a.status_duration : 1f, 1f, MaxStunTime)
+                                ? Mathf.Clamp(a.status_duration > 0f ? a.status_duration : 0.4f, 0.4f, 0.7f)
                                 : Mathf.Clamp(a.status_duration > 0f ? a.status_duration : 1.5f, 0.1f, 5f);
                         if (a.power > 0f) a.power = Mathf.Clamp(a.power, 0.5f, 5f);
                         if (a.damage_override >= 0f)
