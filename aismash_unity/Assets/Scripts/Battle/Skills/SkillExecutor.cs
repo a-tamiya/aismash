@@ -187,6 +187,9 @@ namespace PromptFighters.Battle.Skills
                 _fighter.Opponent.OnDamageReceived += MarkCurrentSkillHit;
             float recovery = EffectiveRecovery(skill);
             float totalDuration = skill.parameters.startup + skill.parameters.active_time + recovery;
+            float firstBeamTime = FirstActionTime(skill, "beam");
+            if (firstBeamTime > 0f)
+                totalDuration = Mathf.Max(totalDuration, firstBeamTime + skill.parameters.active_time + recovery);
             _fighter.BeginSkillRecovery(totalDuration);
             _fighter.ShowSkillSprite(skill.slot, totalDuration);
             float whiffDelay = WhiffCheckDelay(skill);
@@ -224,6 +227,8 @@ namespace PromptFighters.Battle.Skills
             while (actionIdx < actions.Count)
             {
                 elapsed = Time.time - t0;
+                if (firstBeamTime > 0f && elapsed < firstBeamTime)
+                    ShowBeamTelegraph(skill, elapsed / firstBeamTime);
                 var a = actions[actionIdx];
                 if (elapsed >= a.time)
                 {
@@ -579,6 +584,28 @@ namespace PromptFighters.Battle.Skills
                 new Vector2(width, height),
                 lifetime);
             hb.MaxHits = a.hit_count > 1 ? a.hit_count : 5; // 貫通
+        }
+
+        float FirstActionTime(SkillData skill, string type)
+        {
+            float time = float.MaxValue;
+            if (skill?.actions == null) return -1f;
+            foreach (var a in skill.actions)
+                if (a != null && a.type == type)
+                    time = Mathf.Min(time, a.time);
+            return time == float.MaxValue ? -1f : time;
+        }
+
+        void ShowBeamTelegraph(SkillData skill, float charge01)
+        {
+            _fighter.ShowSkillCharge(charge01);
+            var sr = _fighter.VisualRenderer;
+            if (sr == null) return;
+
+            Color ec = SkillEnumParser.ElementColor(skill.element);
+            float pulse = (Mathf.Sin(Time.time * 28f) + 1f) * 0.5f;
+            Color warmup = Color.Lerp(Color.white, ec, 0.45f + 0.4f * pulse);
+            sr.color = new Color(warmup.r, warmup.g, warmup.b, 1f);
         }
 
         static Vector2 DefaultMeleeOffset(SkillSlot slot, float range)

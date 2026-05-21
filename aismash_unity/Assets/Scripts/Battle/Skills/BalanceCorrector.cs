@@ -18,6 +18,7 @@ namespace PromptFighters.Battle.Skills
 
         const float MaxStunTime  = 1.5f;
         const float MaxKnockback = 18f;
+        const float BeamStartupSeconds = 0.3f;
 
         public static void Apply(SkillData skill)
         {
@@ -64,6 +65,9 @@ namespace PromptFighters.Battle.Skills
             p.startup     = Mathf.Clamp(p.startup, 0f, MaxStartup[si]);
             p.active_time = Mathf.Max(0.05f, p.active_time);
             p.recovery    = Mathf.Max(MinRecovery[si], p.recovery);
+
+            if (HasAction(skill, "beam"))
+                p.startup = Mathf.Max(p.startup, BeamStartupSeconds);
 
             // 設置・召喚技: キャラのロックアウト時間はactive_timeを短く打ち切る
             // 実寿命は action.duration が担う
@@ -152,6 +156,7 @@ namespace PromptFighters.Battle.Skills
 
                     if (a.type == "beam")
                     {
+                        a.time = Mathf.Max(a.time, BeamStartupSeconds);
                         if (a.size_x > 0f) a.size_x = Mathf.Clamp(a.size_x, 2f, 12f);
                         if (a.size_y > 0f) a.size_y = Mathf.Clamp(a.size_y, 0.25f, 1.5f);
                         a.range    = a.range > 0f ? Mathf.Clamp(a.range, 2f, 12f) : 0f;
