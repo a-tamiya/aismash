@@ -570,6 +570,7 @@ namespace PromptFighters.Battle.Skills
             float dirSign = _fighter.FacingRight ? 1f : -1f;
             float width   = a.size_x > 0f ? a.size_x : (a.range > 0f ? a.range : 7f);
             float height  = a.size_y > 0f ? a.size_y : 0.5f;
+            height = Mathf.Max(height, Mathf.Clamp(width * 0.1f, 0.55f, 1.2f));
             float offsetX = a.spawn_x > 0f ? a.spawn_x : width * 0.5f;
             float offsetY = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 0.8f;
             width   *= _sizeScale;
