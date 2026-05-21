@@ -585,7 +585,7 @@ namespace PromptFighters.Battle
             switch (type)
             {
                 case StatusType.Stun:
-                    _stunTimer = Mathf.Max(_stunTimer, Mathf.Min(duration, 1.5f));
+                    _stunTimer = Mathf.Max(_stunTimer, Mathf.Clamp(duration, 1f, 1.5f));
                     DamagePopup.SpawnText(transform.position, "STUN", StunColor, 1.8f);
                     BattleLogger.Instance?.LogEvent($"{PlayerLabel()}がスタン");
                     break;
