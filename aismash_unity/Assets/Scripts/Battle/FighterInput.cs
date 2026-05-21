@@ -128,8 +128,12 @@ namespace PromptFighters.Battle
                 return;
             }
 
-            if (_skills != null && !guardHeld && HandleChargeSkillInput())
+            Vector2 moveInput = ReadMoveVector();
+            float moveX = _fighter.InputReversed ? -moveInput.x : moveInput.x;
+
+            if (_skills != null && !guardHeld && HandleChargeSkillInput(moveX))
             {
+                FaceAirChargeSkill(moveX);
                 _fighter.Move(0f);
                 _fighter.SetGuard(false);
                 GameAudioManager.Instance?.SetGroundMove(_fighter, false);
@@ -137,7 +141,6 @@ namespace PromptFighters.Battle
                 return;
             }
 
-            Vector2 moveInput = ReadMoveVector();
             bool jumpPressed = ReadJumpPressed();
             bool grabPressed = ReadGrabPressed();
 
@@ -159,7 +162,6 @@ namespace PromptFighters.Battle
             }
             _previousDodgeInput = moveInput;
 
-            float moveX = _fighter.InputReversed ? -moveInput.x : moveInput.x;
             _fighter.Move(moveX);
             GameAudioManager.Instance?.SetGroundMove(
                 _fighter,
@@ -701,16 +703,16 @@ namespace PromptFighters.Battle
             catch (System.InvalidOperationException) { return false; }
         }
 
-        bool HandleChargeSkillInput()
+        bool HandleChargeSkillInput(float moveX)
         {
             bool handled = false;
-            handled |= HandleChargeSkillSlot(SkillSlot.AttackA);
-            handled |= HandleChargeSkillSlot(SkillSlot.AttackB);
-            handled |= HandleChargeSkillSlot(SkillSlot.AttackC);
+            handled |= HandleChargeSkillSlot(SkillSlot.AttackA, moveX);
+            handled |= HandleChargeSkillSlot(SkillSlot.AttackB, moveX);
+            handled |= HandleChargeSkillSlot(SkillSlot.AttackC, moveX);
             return handled;
         }
 
-        bool HandleChargeSkillSlot(SkillSlot slot)
+        bool HandleChargeSkillSlot(SkillSlot slot, float moveX)
         {
             int i = (int)slot;
             var skillDef = _skills?.GetSkill(slot);
@@ -727,6 +729,7 @@ namespace PromptFighters.Battle
                 if (_skills.IsExecuting || !_fighter.CanAct)
                     return false;
 
+                FaceAirChargeSkill(moveX);
                 _skillCharging[i] = true;
                 _skillChargeTimers[i] = 0f;
                 _fighter.ShowSkillCharge(0f);
@@ -746,6 +749,7 @@ namespace PromptFighters.Battle
             _skillChargeTimers[i] += Time.deltaTime;
             float chargeRate = Mathf.Clamp01(_skillChargeTimers[i] / maxCharge);
             _fighter.ShowSkillCharge(chargeRate);
+            FaceAirChargeSkill(moveX);
 
             bool canRelease = _skillChargeTimers[i] >= MinChargeReleaseSeconds;
             if ((released || !held) && canRelease)
@@ -765,6 +769,14 @@ namespace PromptFighters.Battle
             }
 
             return true;
+        }
+
+        void FaceAirChargeSkill(float moveX)
+        {
+            if (_fighter.IsGrounded) return;
+            if (Mathf.Abs(moveX) <= 0.1f) return;
+            _airSkillFaceTimer = AirSkillFaceWindow;
+            _fighter.FaceTowardInput(moveX);
         }
 
         static bool IsChargeSkill(SkillData skill)
