@@ -253,7 +253,13 @@ namespace PromptFighters.GameFlow
             if (!string.IsNullOrEmpty(a.knockback_direction)) sb.Append($",\"knockback_direction\":{Q(a.knockback_direction)}");
             if (a.projectile_speed > 0f)             sb.Append($",\"projectile_speed\":{a.projectile_speed}");
             if (a.projectile_lifetime > 0f)          sb.Append($",\"projectile_lifetime\":{a.projectile_lifetime}");
+            if (!Mathf.Approximately(a.projectile_angle, 0f)) sb.Append($",\"projectile_angle\":{a.projectile_angle}");
             if (a.homing)                            sb.Append(",\"homing\":true");
+            if (!Mathf.Approximately(a.homing_strength, 0f)) sb.Append($",\"homing_strength\":{a.homing_strength}");
+            if (a.boomerang)                         sb.Append(",\"boomerang\":true");
+            if (a.projectile_count > 1)               sb.Append($",\"projectile_count\":{a.projectile_count}");
+            if (a.spread_angle > 0f)                  sb.Append($",\"spread_angle\":{a.spread_angle}");
+            if (!Mathf.Approximately(a.gravity_scale, 0f)) sb.Append($",\"gravity_scale\":{a.gravity_scale}");
             if (!string.IsNullOrEmpty(a.status))     sb.Append($",\"status\":{Q(a.status)},\"duration\":{a.duration},\"status_duration\":{a.status_duration},\"chance\":{a.chance}");
             if (a.damage_override >= 0f)             sb.Append($",\"damage_override\":{a.damage_override}");
             sb.Append("}");
