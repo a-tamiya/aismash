@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using PromptFighters.Battle;
+using PromptFighters.Battle.Skills;
 
 namespace PromptFighters.UI
 {
@@ -10,6 +11,7 @@ namespace PromptFighters.UI
     {
         TextMeshProUGUI _text;
         Image           _flash;
+        Image           _portrait1, _portrait2; // キャラ立ち絵スライドイン用
 
         // number → (text color, flash color)
         static readonly Color Col3      = new Color(0.30f, 0.72f, 1.00f);
@@ -32,7 +34,7 @@ namespace PromptFighters.UI
 
         void BuildUI()
         {
-            var canvas = GetComponentInParent<Canvas>();
+            var canvas = GetComponentInParent<Canvas>() ?? FindFirstObjectByType<Canvas>();
             Transform root = canvas != null ? canvas.transform : transform;
 
             // full-screen flash layer
@@ -45,6 +47,10 @@ namespace PromptFighters.UI
             _flash = flashGo.AddComponent<Image>();
             _flash.color = new Color(0, 0, 0, 0);
             _flash.raycastTarget = false;
+
+            // キャラ立ち絵（左: 1P、右: 2P）
+            _portrait1 = MakePortrait(root, "CDPortrait1", left: true);
+            _portrait2 = MakePortrait(root, "CDPortrait2", left: false);
 
             // text
             var tGo = new GameObject("CDText");
@@ -93,6 +99,16 @@ namespace PromptFighters.UI
             StartCoroutine(Punch(1.4f, 1.0f, 0.20f));
             StartCoroutine(Flash(new Color(ColFight.r, ColFight.g, ColFight.b, 0f), 0.35f, 0.55f));
             StartCoroutine(HideAfter(0.85f));
+
+            // キャラ立ち絵スライドイン演出
+            var bm = BattleManager.Instance;
+            if (bm != null)
+            {
+                SetPortraitSprite(_portrait1, bm.Character1?.spriteSet?.Get(CharacterSpriteId.Idle1), flipX: false);
+                SetPortraitSprite(_portrait2, bm.Character2?.spriteSet?.Get(CharacterSpriteId.Idle1), flipX: true);
+                StartCoroutine(PortraitSlide(_portrait1, fromLeft: true,  duration: 0.22f, holdTime: 0.70f));
+                StartCoroutine(PortraitSlide(_portrait2, fromLeft: false, duration: 0.22f, holdTime: 0.70f));
+            }
         }
 
         IEnumerator Punch(float fromScale, float toScale, float duration)
@@ -135,6 +151,76 @@ namespace PromptFighters.UI
         {
             if (_text  != null) { _text.transform.localScale = Vector3.one; _text.gameObject.SetActive(false); }
             if (_flash != null) _flash.color = new Color(0, 0, 0, 0);
+            HidePortrait(_portrait1);
+            HidePortrait(_portrait2);
+        }
+
+        // ── キャラ立ち絵ヘルパー ────────────────────────────────────────
+        static Image MakePortrait(Transform root, string name, bool left)
+        {
+            var go = new GameObject(name);
+            go.layer = root.gameObject.layer;
+            var rt = go.AddComponent<RectTransform>();
+            rt.SetParent(root, false);
+            rt.anchorMin = new Vector2(left ? 0f : 1f, 0f);
+            rt.anchorMax = new Vector2(left ? 0f : 1f, 1f);
+            rt.sizeDelta = new Vector2(280f, 0f);
+            rt.anchoredPosition = new Vector2(left ? -320f : 320f, 0f); // 最初は画面外
+            var img = go.AddComponent<Image>();
+            img.preserveAspect = true;
+            img.color = new Color(1f, 1f, 1f, 0f);
+            return img;
+        }
+
+        static void SetPortraitSprite(Image img, Sprite sprite, bool flipX)
+        {
+            if (img == null) return;
+            img.sprite = sprite;
+            img.enabled = sprite != null;
+            img.rectTransform.localScale = new Vector3(flipX ? -1f : 1f, 1f, 1f);
+        }
+
+        static void HidePortrait(Image img)
+        {
+            if (img == null) return;
+            img.color = new Color(1f, 1f, 1f, 0f);
+            img.enabled = false;
+        }
+
+        IEnumerator PortraitSlide(Image img, bool fromLeft, float duration, float holdTime)
+        {
+            if (img == null || img.sprite == null) yield break;
+            img.enabled = true;
+            img.color   = Color.white;
+
+            float offscreen = fromLeft ? -320f :  320f;
+            float onscreen  = fromLeft ?  20f  : -20f;
+
+            var rt = img.rectTransform;
+
+            // スライドイン
+            float t = 0f;
+            while (t < duration)
+            {
+                t += Time.unscaledDeltaTime;
+                float x = Mathf.Lerp(offscreen, onscreen, Mathf.SmoothStep(0f, 1f, t / duration));
+                rt.anchoredPosition = new Vector2(x, 0f);
+                yield return null;
+            }
+            rt.anchoredPosition = new Vector2(onscreen, 0f);
+
+            yield return new WaitForSecondsRealtime(holdTime);
+
+            // フェードアウト
+            t = 0f;
+            float fadeDur = 0.18f;
+            while (t < fadeDur)
+            {
+                t += Time.unscaledDeltaTime;
+                img.color = new Color(1f, 1f, 1f, 1f - t / fadeDur);
+                yield return null;
+            }
+            HidePortrait(img);
         }
     }
 }

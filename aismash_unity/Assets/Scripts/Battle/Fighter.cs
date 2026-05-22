@@ -577,7 +577,11 @@ namespace PromptFighters.Battle
             if (blocking) DamagePopup.SpawnText(transform.position, "GUARD", GuardColor, 1.6f);
             else          DamagePopup.Spawn(transform.position, actual, false);
             if (!blocking) _hitFlashTimer = 0.08f;
-            if (CurrentHP <= 0f) Die();
+            bool willDie = CurrentHP <= 0f;
+            // ヒットストップ（KO時は TriggerKOSlow が担当するためスキップ）
+            if (!blocking && actual > 0f && !willDie && BattleManager.Instance?.Phase == BattlePhase.Fighting)
+                BattleManager.Instance.TriggerHitStop(0.05f, 0.05f);
+            if (willDie) Die();
         }
 
         public void ApplyStatus(StatusType type, float duration)
@@ -1215,6 +1219,7 @@ namespace PromptFighters.Battle
             RestoreDodgeGravity();
             State = FighterState.Dead;
             _rb.linearVelocity = Vector2.zero;
+            BattleManager.Instance?.TriggerKOSlow(transform.position);
             OnDeath?.Invoke();
         }
 

@@ -786,8 +786,9 @@ namespace PromptFighters.GameFlow
                 TextMeshProUGUI statsT, Image image, TextMeshProUGUI[] skillTs)
             {
                 if (d == null) return;
+                string catchTag = !string.IsNullOrEmpty(d.catchCopy) ? $"「{d.catchCopy}」\n" : "";
                 if (nameT != null) nameT.text = d.characterName;
-                if (descT != null) descT.text = d.visualDescription;
+                if (descT != null) descT.text = catchTag + d.visualDescription;
                 if (statsT != null) statsT.text = BuildStatsText(d);
                 if (image != null)
                 {
@@ -1104,7 +1105,7 @@ namespace PromptFighters.GameFlow
             {
                 bool img1Done = false;
                 AIImageClient.GenerateSpriteSet(this, data1,
-                    msg => UpdateGeneratingStatus("1P " + msg),
+                    msg => UpdateGeneratingStatus("1P " + FormatImageProgress(msg)),
                     sprites =>
                     {
                         data1.spriteSet = sprites;
@@ -1120,7 +1121,7 @@ namespace PromptFighters.GameFlow
             {
                 bool img2Done = false;
                 AIImageClient.GenerateSpriteSet(this, data2,
-                    msg => UpdateGeneratingStatus("2P " + msg),
+                    msg => UpdateGeneratingStatus("2P " + FormatImageProgress(msg)),
                     sprites =>
                     {
                         data2.spriteSet = sprites;
@@ -1167,6 +1168,20 @@ namespace PromptFighters.GameFlow
         void UpdateGeneratingStatus(string msg)
         {
             if (_generatingStatusText != null) _generatingStatusText.text = msg;
+        }
+
+        // 生成進捗メッセージから画像枚数を解析して "N/15" 表示に変換する（Feature E）
+        static string FormatImageProgress(string msg)
+        {
+            if (msg.Contains("残り") && msg.Contains("枚"))
+            {
+                var m = System.Text.RegularExpressions.Regex.Match(msg, @"残り\s*(\d+)\s*枚");
+                if (m.Success && int.TryParse(m.Groups[1].Value, out int rem))
+                    return $"画像生成中 {15 - rem}/15 完了";
+            }
+            if (msg.Contains("バリエーション")) return "画像生成中 1/15 完了";
+            if (msg.Contains("ベース画像"))    return "画像生成中 0/15 完了";
+            return msg;
         }
 
         void OnTrainingPressed()

@@ -247,8 +247,20 @@ namespace PromptFighters.UI
         {
             var bm = BattleManager.Instance;
             if (bm == null) return;
-            if (_p1NameText) _p1NameText.text = bm.Character1?.characterName ?? "1P";
-            if (_p2NameText) _p2NameText.text = bm.Character2?.characterName ?? "2P";
+            if (_p1NameText)
+            {
+                string cc1 = bm.Character1?.catchCopy;
+                _p1NameText.text = !string.IsNullOrEmpty(cc1)
+                    ? $"{bm.Character1.characterName}\n<size=11><color=#aaccff>「{cc1}」</color></size>"
+                    : bm.Character1?.characterName ?? "1P";
+            }
+            if (_p2NameText)
+            {
+                string cc2 = bm.Character2?.catchCopy;
+                _p2NameText.text = !string.IsNullOrEmpty(cc2)
+                    ? $"{bm.Character2.characterName}\n<size=11><color=#ffaaaa>「{cc2}」</color></size>"
+                    : bm.Character2?.characterName ?? "2P";
+            }
         }
 
         void RefreshStats()

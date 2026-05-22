@@ -214,6 +214,16 @@ namespace PromptFighters.Battle.Skills
 
         void OnTriggerEnter2D(Collider2D other)
         {
+            // 飛び道具同士の相殺: 異なるオーナーの弾が衝突したら両方消滅
+            var otherProj = other.GetComponent<Projectile>();
+            if (otherProj != null && otherProj.Owner != Owner && !IsBoomerang && !otherProj.IsBoomerang)
+            {
+                DamagePopup.SpawnText(transform.position, "相殺!", new Color(1f, 0.9f, 0.2f), 1.2f);
+                Destroy(otherProj.gameObject);
+                Destroy(gameObject);
+                return;
+            }
+
             var target = other.GetComponentInParent<Fighter>();
             if (target == null)
             {

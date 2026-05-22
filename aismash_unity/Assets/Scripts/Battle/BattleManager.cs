@@ -75,6 +75,11 @@ namespace PromptFighters.Battle
                 gameObject.AddComponent<CommentaryController>();
             if (GetComponent<AngelController>() == null)
                 gameObject.AddComponent<AngelController>();
+            if (GetComponent<ComboCounter>() == null)
+                gameObject.AddComponent<ComboCounter>();
+
+            _mainCam = Camera.main;
+            if (_mainCam != null) _defaultCamOrthoSize = _mainCam.orthographicSize;
         }
 
         void Start()
@@ -284,10 +289,89 @@ namespace PromptFighters.Battle
                 _trainingResetRoutine = null;
             }
 
+            Time.timeScale = 1f; // KOスロー中にリセットされた場合の保険
             Phase = BattlePhase.Setup;
             fighter1?.ResetForBattle(fighter1SpawnPos, faceRight: true);
             fighter2?.ResetForBattle(fighter2SpawnPos, faceRight: false);
+            ResetCameraZoom();
             OnReturnedToSetup?.Invoke();
+        }
+
+        // ── ヒットストップ（Feature A）────────────────────────────────
+        bool _hitStopActive;
+
+        public void TriggerHitStop(float duration, float timeScale = 0.05f)
+        {
+            if (_hitStopActive) return; // 重複防止
+            StartCoroutine(HitStopCoroutine(duration, timeScale));
+        }
+
+        IEnumerator HitStopCoroutine(float duration, float timeScale)
+        {
+            _hitStopActive = true;
+            Time.timeScale = timeScale;
+            yield return new WaitForSecondsRealtime(duration);
+            if (!_koSlowActive) // KOスロー中は timeScale を上書きしない
+            {
+                Time.timeScale = 1f;
+                _hitStopActive = false;
+            }
+        }
+
+        // ── KO時スロー＆カメラズーム（Feature H）──────────────────────
+        Camera _mainCam;
+        float  _defaultCamOrthoSize;
+        bool   _koSlowActive;
+
+        public void TriggerKOSlow(Vector3 koPosition)
+        {
+            if (_koSlowActive) return;
+            StartCoroutine(KOSlowCoroutine(koPosition));
+        }
+
+        IEnumerator KOSlowCoroutine(Vector3 koPosition)
+        {
+            _koSlowActive  = true;
+            _hitStopActive = true; // HitStopが上書きしないようにロック
+
+            float slowDuration = 1.2f;
+            float zoomDuration = 0.18f;
+            float zoomInSize   = _defaultCamOrthoSize * 0.70f;
+
+            Time.timeScale = 0.15f;
+
+            // カメラをKO位置へズームイン
+            if (_mainCam != null)
+            {
+                Vector3 targetPos = new Vector3(
+                    Mathf.Clamp(koPosition.x, -stageHalfWidth * 0.6f, stageHalfWidth * 0.6f),
+                    _mainCam.transform.position.y,
+                    _mainCam.transform.position.z);
+                float elapsed = 0f;
+                Vector3 startPos = _mainCam.transform.position;
+                float startSize  = _mainCam.orthographicSize;
+                while (elapsed < zoomDuration)
+                {
+                    elapsed += Time.unscaledDeltaTime;
+                    float t  = Mathf.SmoothStep(0f, 1f, elapsed / zoomDuration);
+                    _mainCam.orthographicSize = Mathf.Lerp(startSize, zoomInSize, t);
+                    _mainCam.transform.position = Vector3.Lerp(startPos, targetPos, t);
+                    yield return null;
+                }
+            }
+
+            yield return new WaitForSecondsRealtime(slowDuration);
+
+            Time.timeScale = 1f;
+            _hitStopActive = false;
+            _koSlowActive  = false;
+            ResetCameraZoom();
+        }
+
+        void ResetCameraZoom()
+        {
+            if (_mainCam == null) return;
+            _mainCam.orthographicSize = _defaultCamOrthoSize;
         }
     }
 

@@ -52,6 +52,7 @@ namespace PromptFighters.Battle.Skills
         public string inputFeatures      = "";
         public string visualPrompt       = "";
         public string visualDescription  = "";
+        public string catchCopy          = ""; // AIキャッチコピー
 
         public SkillData[] skills = new SkillData[4]; // index = SkillSlot
         public CharacterStats stats = new CharacterStats();

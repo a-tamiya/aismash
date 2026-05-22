@@ -307,6 +307,8 @@ namespace PromptFighters.Battle.Skills
                 case "projectile":     SpawnProjectile(skill, a, powerMultiplier);  break;
                 case "beam":           SpawnBeam(skill, a, powerMultiplier);        break;
                 case "jump_attack":    DoJumpAttack(skill, a, powerMultiplier);     break;
+                case "dash+melee_hitbox": DoDash(a); SpawnMeleeHitbox(skill, a, powerMultiplier); break;
+                case "multi_hit":      SpawnMeleeHitbox(skill, a, powerMultiplier);  break;
                 case "dash":           DoDash(a);                  break;
                 case "teleport":       DoTeleport(a);              break;
                 case "push_enemy":     PushOrPullOpponent(a, push: true);  break;
@@ -364,6 +366,7 @@ namespace PromptFighters.Battle.Skills
             hb.HideVisual     = a.hide_effect;
             hb.FlipEffectX    = !_fighter.FacingRight;
             hb.MaxHits        = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
+            hb.IsSmashHit     = skill.slot == SkillSlot.SmashSide && powerMultiplier >= 1.8f;
             ApplyActionStatus(hb, a);
         }
 

@@ -27,6 +27,7 @@ namespace PromptFighters.Battle.Skills
         public Vector2      DesiredWorldSize;
         public bool         FixedKnockbackDir; // trueのとき KnockbackDir.x の符号をそのまま使う
         public bool         GroundBounce;     // ヒット時に地面バウンドさせる
+        public bool         IsSmashHit;       // 最大チャージスマッシュヒット時のスロー演出用
 
         readonly HashSet<Fighter> _hitTargets = new HashSet<Fighter>();
         readonly Dictionary<Fighter, float> _nextHitTimes = new Dictionary<Fighter, float>();
@@ -232,6 +233,9 @@ namespace PromptFighters.Battle.Skills
 
             target.TakeDamage(Damage, Knockback, kb, StunTime, GuardDamage, !DamageIncludesOwnerBoost);
             if (GroundBounce) target.StartGroundBounce(Knockback * 0.75f);
+
+            if (IsSmashHit)
+                Battle.BattleManager.Instance?.TriggerHitStop(0.20f, 0.05f);
 
             if (Status != StatusType.None && Random.value <= StatusChance)
                 target.ApplyStatus(Status, StatusDuration);
