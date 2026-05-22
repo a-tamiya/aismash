@@ -46,6 +46,7 @@ namespace PromptFighters.Battle.Skills
         bool  _boomerangFlipped;
         HashSet<Fighter> _boomerangHitSet;
         bool  _wasReflected;
+        bool  _cancelled;
 
         public static Projectile Spawn(Fighter owner, Vector2 worldPos, Vector2 dir,
                                        float speed, float lifetime)
@@ -214,10 +215,14 @@ namespace PromptFighters.Battle.Skills
 
         void OnTriggerEnter2D(Collider2D other)
         {
+            if (_cancelled) return;
+
             // 飛び道具同士の相殺: 異なるオーナーの弾が衝突したら両方消滅
             var otherProj = other.GetComponent<Projectile>();
             if (otherProj != null && otherProj.Owner != Owner && !IsBoomerang && !otherProj.IsBoomerang)
             {
+                _cancelled = true;
+                otherProj._cancelled = true;
                 DamagePopup.SpawnText(transform.position, "相殺!", new Color(1f, 0.9f, 0.2f), 1.2f);
                 Destroy(otherProj.gameObject);
                 Destroy(gameObject);
