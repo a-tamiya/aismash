@@ -230,7 +230,8 @@ namespace PromptFighters.Battle
             if (P1RoundWins >= 2 || P2RoundWins >= 2)
             {
                 int matchWinner = P1RoundWins >= 2 ? 0 : 1;
-                EndBattle(matchWinner);
+                Debug.Log($"[Battle] Match over. {matchWinner + 1}P Wins");
+                OnBattleEnd?.Invoke(matchWinner); // Phase は既に Ended なので EndBattle を使わず直接発火
             }
             else
             {
@@ -250,6 +251,7 @@ namespace PromptFighters.Battle
             CurrentRound++;
 
             ResetFightersAndSkillState();
+            yield return null; // 1フレーム待ってRigidbody2Dの位置を確定させる
 
             Phase     = BattlePhase.Countdown;
             Countdown = countdownLength;

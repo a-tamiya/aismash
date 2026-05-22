@@ -990,6 +990,7 @@ namespace PromptFighters.Battle
             CurrentGuardDurability = maxGuardDurability;
             State               = FighterState.Idle;
             transform.position  = spawnPos;
+            _rb.position        = (Vector2)spawnPos; // transform だけでなく rb も同期する
             _rb.linearVelocity  = Vector2.zero;
             FacingRight = faceRight;
             var s = transform.localScale;

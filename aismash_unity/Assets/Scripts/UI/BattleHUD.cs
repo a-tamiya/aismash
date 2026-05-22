@@ -169,7 +169,7 @@ namespace PromptFighters.UI
         {
             string hex = ColorUtility.ToHtmlStringRGB(col);
             string on  = $"<color=#{hex}>●</color>";
-            string off = "<color=#222244>○</color>";
+            string off = "<color=#556688>○</color>";
             return (wins > 0 ? on : off) + (wins > 1 ? on : off);
         }
 
@@ -217,19 +217,19 @@ namespace PromptFighters.UI
 
             // ─ Round win dots ────────────────────────────────────────
             var rd1Go = MakeUI("RoundDots1", _hudRoot.transform);
-            Anch(rd1Go, 0f,1f, 0.5f,1f,  PAD+4f, -TOTAL_H+PAD+2f, -(TIMER_W*0.5f+GAP), -TOTAL_H+PAD+14f);
+            Anch(rd1Go, 0f,1f, 0.5f,1f,  PAD+4f, -TOTAL_H+1f, -(TIMER_W*0.5f+GAP), -TOTAL_H+17f);
             _roundDots1 = rd1Go.AddComponent<TextMeshProUGUI>();
             _roundDots1.text = RoundDots(0, P1Col);
-            _roundDots1.fontSize = 11f;
+            _roundDots1.fontSize = 15f;
             _roundDots1.alignment = TextAlignmentOptions.Left;
             _roundDots1.color = Color.white;
             UITheme.Apply(_roundDots1);
 
             var rd2Go = MakeUI("RoundDots2", _hudRoot.transform);
-            Anch(rd2Go, 0.5f,1f, 1f,1f,  TIMER_W*0.5f+GAP, -TOTAL_H+PAD+2f, -PAD-4f, -TOTAL_H+PAD+14f);
+            Anch(rd2Go, 0.5f,1f, 1f,1f,  TIMER_W*0.5f+GAP, -TOTAL_H+1f, -PAD-4f, -TOTAL_H+17f);
             _roundDots2 = rd2Go.AddComponent<TextMeshProUGUI>();
             _roundDots2.text = RoundDots(0, P2Col);
-            _roundDots2.fontSize = 11f;
+            _roundDots2.fontSize = 15f;
             _roundDots2.alignment = TextAlignmentOptions.Right;
             _roundDots2.color = Color.white;
             UITheme.Apply(_roundDots2);

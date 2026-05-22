@@ -249,16 +249,16 @@ namespace PromptFighters.UI
 
         static string RoundDotsText(int winner, BattleManager bm)
         {
-            string p1 = DotsFor(bm.P1RoundWins, winner == 0 ? P1Col : DrawCol);
-            string p2 = DotsFor(bm.P2RoundWins, winner == 1 ? P2Col : DrawCol);
-            return $"<size=28>{p1}  {p2}</size>";
+            string p1 = DotsFor(bm.P1RoundWins, winner == 0 ? P1Col : new Color(0.5f, 0.7f, 1f));
+            string p2 = DotsFor(bm.P2RoundWins, winner == 1 ? P2Col : new Color(1f, 0.5f, 0.5f));
+            return $"\n<size=32>{p1}    {p2}</size>";
         }
 
         static string DotsFor(int wins, Color col)
         {
             string hex = ColorUtility.ToHtmlStringRGB(col);
             string filled = $"<color=#{hex}>●</color>";
-            string empty  = "<color=#333355>○</color>";
+            string empty  = "<color=#445566>○</color>";
             string result = "";
             for (int i = 0; i < 2; i++)
                 result += i < wins ? filled : empty;
