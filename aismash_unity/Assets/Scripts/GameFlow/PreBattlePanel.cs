@@ -76,11 +76,13 @@ namespace PromptFighters.GameFlow
         RectTransform _startButtonRect;
         bool _waitForMenuInputRelease;
 
-        // AI機能トグル
+        // AI機能・ステージトグル
         Image _commentaryToggleBg;
         TextMeshProUGUI _commentaryToggleLabel;
         Image _angelToggleBg;
         TextMeshProUGUI _angelToggleLabel;
+        Image _platformToggleBg;
+        TextMeshProUGUI _platformToggleLabel;
 
         static readonly Color ToggleOnColor  = new Color(0.15f, 0.55f, 0.9f, 1f);
         static readonly Color ToggleOffColor = new Color(0.18f, 0.18f, 0.22f, 1f);
@@ -274,6 +276,17 @@ namespace PromptFighters.GameFlow
             _angelToggleBg   = angelBtn.GetComponent<Image>();
             _angelToggleLabel = angelBtn.GetComponentInChildren<TextMeshProUGUI>();
 
+            // ステージ設定トグル（2行目）
+            MakeLabel(_titlePanel.transform, "StageToggleLabel", "ステージ",
+                new Vector2(-100f, -262f), new Vector2(80f, 24f), 13, new Color(0.72f, 0.84f, 1f));
+
+            var platformBtn = MakeButton(_titlePanel.transform, "PlatformToggle",
+                PlatformToggleText(),
+                new Vector2(20f, -262f), new Vector2(150f, 34f),
+                OnPlatformToggle, ToggleOnColor);
+            _platformToggleBg    = platformBtn.GetComponent<Image>();
+            _platformToggleLabel = platformBtn.GetComponentInChildren<TextMeshProUGUI>();
+
             RefreshToggleVisuals();
 
             MakeLabel(_titlePanel.transform, "Footer",
@@ -285,6 +298,8 @@ namespace PromptFighters.GameFlow
             PromptFighters.UI.CommentaryController.Enabled ? "実況 ON" : "実況 OFF";
         static string AngelToggleText() =>
             PromptFighters.UI.AngelController.Enabled ? "天使 ON" : "天使 OFF";
+        static string PlatformToggleText() =>
+            PromptFighters.Battle.StagePlatformSpawner.PlatformsEnabled ? "台 ON" : "台 OFF";
 
         void OnCommentaryToggle()
         {
@@ -298,14 +313,24 @@ namespace PromptFighters.GameFlow
             RefreshToggleVisuals();
         }
 
+        void OnPlatformToggle()
+        {
+            PromptFighters.Battle.StagePlatformSpawner.PlatformsEnabled =
+                !PromptFighters.Battle.StagePlatformSpawner.PlatformsEnabled;
+            RefreshToggleVisuals();
+        }
+
         void RefreshToggleVisuals()
         {
             bool ce = PromptFighters.UI.CommentaryController.Enabled;
             bool ae = PromptFighters.UI.AngelController.Enabled;
+            bool pe = PromptFighters.Battle.StagePlatformSpawner.PlatformsEnabled;
             if (_commentaryToggleBg  != null) _commentaryToggleBg.color  = ce ? ToggleOnColor  : ToggleOffColor;
             if (_commentaryToggleLabel != null) _commentaryToggleLabel.text = CommentaryToggleText();
             if (_angelToggleBg       != null) _angelToggleBg.color       = ae ? ToggleOnColor  : ToggleOffColor;
             if (_angelToggleLabel    != null) _angelToggleLabel.text    = AngelToggleText();
+            if (_platformToggleBg    != null) _platformToggleBg.color    = pe ? ToggleOnColor  : ToggleOffColor;
+            if (_platformToggleLabel != null) _platformToggleLabel.text  = PlatformToggleText();
         }
 
         void BuildPanel()

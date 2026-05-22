@@ -167,7 +167,13 @@ namespace PromptFighters.Battle
                 _fighter,
                 Mathf.Abs(moveX) > 0.18f && _fighter.IsGrounded && _fighter.CanAct);
             _fighter.SetGuard(guardHeld && _fighter.IsGrounded);
-            if (jumpPressed) JumpFromInput(moveInput);
+            if (jumpPressed)
+            {
+                bool droppedThrough = _fighter.IsGrounded &&
+                                      moveInput.y <= -0.5f &&
+                                      _fighter.TryDropThrough();
+                if (!droppedThrough) JumpFromInput(moveInput);
+            }
             if (!_fighter.IsGrounded && moveInput.y <= FastFallThreshold)
                 _fighter.FastFall();
             if (grabPressed) _fighter.TryStartGrab();

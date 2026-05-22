@@ -86,6 +86,8 @@ namespace PromptFighters.Battle
                 gameObject.AddComponent<AngelController>();
             if (GetComponent<ComboCounter>() == null)
                 gameObject.AddComponent<ComboCounter>();
+            if (GetComponent<StagePlatformSpawner>() == null)
+                gameObject.AddComponent<StagePlatformSpawner>();
 
             _mainCam = Camera.main;
             if (_mainCam != null)
@@ -147,6 +149,7 @@ namespace PromptFighters.Battle
         {
             if (Phase != BattlePhase.Setup) return;
 
+            GetComponent<StagePlatformSpawner>()?.SpawnPlatforms();
             ApplyCharacters(data1, data2);
 
             Phase     = BattlePhase.Countdown;

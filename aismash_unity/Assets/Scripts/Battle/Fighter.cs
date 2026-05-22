@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 using PromptFighters.Battle.Skills;
 using PromptFighters.UI;
 
@@ -209,7 +210,8 @@ namespace PromptFighters.Battle
         {
             bool wasGrounded = IsGrounded;
             IsGrounded = groundCheck != null &&
-                Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
+                Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer) &&
+                _rb.linearVelocity.y <= 1.0f; // 上昇中は台をすり抜けるため接地判定しない
             if (!wasGrounded && IsGrounded && BattleManager.Instance != null && BattleManager.Instance.IsFighting)
             {
                 OnLanded?.Invoke();
@@ -1213,6 +1215,43 @@ namespace PromptFighters.Battle
             if (col == null) return;
             col.size   = new Vector2(0.78f * _charSizeScale, 1.75f * _charSizeScale);
             col.offset = new Vector2(0f,                     0.82f * _charSizeScale);
+        }
+
+        public bool TryDropThrough()
+        {
+            var spawner = BattleManager.Instance?.GetComponent<StagePlatformSpawner>();
+            if (spawner == null) return false;
+            var cols = spawner.GetColliders();
+            if (cols.Count == 0) return false;
+
+            var myCol = GetComponent<BoxCollider2D>();
+            if (myCol == null) return false;
+
+            // 足元に台があるか確認（少し上方向にマージンを持たせる）
+            float myBottom = myCol.bounds.min.y;
+            bool onPlatform = false;
+            foreach (var c in cols)
+            {
+                if (c == null) continue;
+                float platTop = c.bounds.max.y;
+                if (platTop > myBottom - 0.15f && platTop < myBottom + 0.35f)
+                { onPlatform = true; break; }
+            }
+            if (!onPlatform) return false;
+
+            StartCoroutine(DropThroughRoutine(cols, myCol));
+            return true;
+        }
+
+        System.Collections.IEnumerator DropThroughRoutine(List<Collider2D> platformCols, Collider2D myCol)
+        {
+            foreach (var c in platformCols)
+                if (c != null && myCol != null) Physics2D.IgnoreCollision(myCol, c, true);
+
+            yield return new WaitForSeconds(0.30f);
+
+            foreach (var c in platformCols)
+                if (c != null && myCol != null) Physics2D.IgnoreCollision(myCol, c, false);
         }
 
         void Die()
