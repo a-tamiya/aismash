@@ -13,6 +13,9 @@ namespace PromptFighters.Battle
         float _p1Timer, _p2Timer;
         Vector3 _p1LastPos, _p2LastPos;
 
+        System.Action<float, bool> _onFighter1Damaged;
+        System.Action<float, bool> _onFighter2Damaged;
+
         void Start()
         {
             var bm = BattleManager.Instance;
@@ -20,7 +23,8 @@ namespace PromptFighters.Battle
 
             // fighter1 が受けた → P2 のコンボカウント
             if (bm.fighter1 != null)
-                bm.fighter1.OnDamageReceived += (dmg, blocked) =>
+            {
+                _onFighter1Damaged = (dmg, blocked) =>
                 {
                     if (!blocked && dmg > 0f && bm.IsFighting && !bm.IsTraining)
                     {
@@ -30,10 +34,13 @@ namespace PromptFighters.Battle
                         ShowCombo(_p2Combo, _p2LastPos);
                     }
                 };
+                bm.fighter1.OnDamageReceived += _onFighter1Damaged;
+            }
 
             // fighter2 が受けた → P1 のコンボカウント
             if (bm.fighter2 != null)
-                bm.fighter2.OnDamageReceived += (dmg, blocked) =>
+            {
+                _onFighter2Damaged = (dmg, blocked) =>
                 {
                     if (!blocked && dmg > 0f && bm.IsFighting && !bm.IsTraining)
                     {
@@ -43,6 +50,18 @@ namespace PromptFighters.Battle
                         ShowCombo(_p1Combo, _p1LastPos);
                     }
                 };
+                bm.fighter2.OnDamageReceived += _onFighter2Damaged;
+            }
+        }
+
+        void OnDestroy()
+        {
+            var bm = BattleManager.Instance;
+            if (bm == null) return;
+            if (bm.fighter1 != null && _onFighter1Damaged != null)
+                bm.fighter1.OnDamageReceived -= _onFighter1Damaged;
+            if (bm.fighter2 != null && _onFighter2Damaged != null)
+                bm.fighter2.OnDamageReceived -= _onFighter2Damaged;
         }
 
         void Update()

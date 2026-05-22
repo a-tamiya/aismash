@@ -79,7 +79,11 @@ namespace PromptFighters.Battle
                 gameObject.AddComponent<ComboCounter>();
 
             _mainCam = Camera.main;
-            if (_mainCam != null) _defaultCamOrthoSize = _mainCam.orthographicSize;
+            if (_mainCam != null)
+            {
+                _defaultCamOrthoSize = _mainCam.orthographicSize;
+                _defaultCamPos       = _mainCam.transform.position;
+            }
         }
 
         void Start()
@@ -289,7 +293,10 @@ namespace PromptFighters.Battle
                 _trainingResetRoutine = null;
             }
 
-            Time.timeScale = 1f; // KOスロー中にリセットされた場合の保険
+            StopAllCoroutines();
+            _hitStopActive = false;
+            _koSlowActive  = false;
+            Time.timeScale = 1f;
             Phase = BattlePhase.Setup;
             fighter1?.ResetForBattle(fighter1SpawnPos, faceRight: true);
             fighter2?.ResetForBattle(fighter2SpawnPos, faceRight: false);
@@ -319,9 +326,10 @@ namespace PromptFighters.Battle
         }
 
         // ── KO時スロー＆カメラズーム（Feature H）──────────────────────
-        Camera _mainCam;
-        float  _defaultCamOrthoSize;
-        bool   _koSlowActive;
+        Camera  _mainCam;
+        float   _defaultCamOrthoSize;
+        Vector3 _defaultCamPos;
+        bool    _koSlowActive;
 
         public void TriggerKOSlow(Vector3 koPosition)
         {
@@ -372,6 +380,7 @@ namespace PromptFighters.Battle
         {
             if (_mainCam == null) return;
             _mainCam.orthographicSize = _defaultCamOrthoSize;
+            _mainCam.transform.position = _defaultCamPos;
         }
     }
 

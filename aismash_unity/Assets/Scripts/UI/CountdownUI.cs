@@ -34,7 +34,7 @@ namespace PromptFighters.UI
 
         void BuildUI()
         {
-            var canvas = GetComponentInParent<Canvas>() ?? FindFirstObjectByType<Canvas>();
+            var canvas = GetComponentInParent<Canvas>() ?? FindAnyObjectByType<Canvas>();
             Transform root = canvas != null ? canvas.transform : transform;
 
             // full-screen flash layer
