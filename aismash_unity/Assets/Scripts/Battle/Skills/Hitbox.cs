@@ -31,6 +31,7 @@ namespace PromptFighters.Battle.Skills
 
         readonly HashSet<Fighter> _hitTargets = new HashSet<Fighter>();
         readonly Dictionary<Fighter, float> _nextHitTimes = new Dictionary<Fighter, float>();
+        readonly HashSet<Battle.SummonEntity> _hitSummons = new HashSet<Battle.SummonEntity>();
         int _hitsLanded;
 
         // デバッグオーバーレイ（col.boundsに毎フレーム追従する独立オブジェクト）
@@ -198,6 +199,22 @@ namespace PromptFighters.Battle.Skills
         void TryHit(Collider2D other)
         {
             if (_hitsLanded >= MaxHits) return;
+
+            // 召喚物へのヒット
+            var summon = other.GetComponentInParent<Battle.SummonEntity>();
+            if (summon != null && summon.Owner != Owner && !_hitSummons.Contains(summon))
+            {
+                _hitSummons.Add(summon);
+                summon.TakeHit(Damage);
+                _hitsLanded++;
+                if (_hitsLanded >= MaxHits)
+                {
+                    var c = GetComponent<Collider2D>();
+                    if (c != null) c.enabled = false;
+                }
+                return;
+            }
+
             var target = other.GetComponentInParent<Fighter>();
             if (target == null || target == Owner) return;
             if (target.IsDodging) return;

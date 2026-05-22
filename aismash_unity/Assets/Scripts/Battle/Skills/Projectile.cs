@@ -229,6 +229,15 @@ namespace PromptFighters.Battle.Skills
                 return;
             }
 
+            // 召喚物へのヒット
+            var summon = other.GetComponentInParent<Battle.SummonEntity>();
+            if (summon != null && summon.Owner != Owner)
+            {
+                summon.TakeHit(Damage);
+                if (!IsBoomerang) Destroy(gameObject);
+                return;
+            }
+
             var target = other.GetComponentInParent<Fighter>();
             if (target == null)
             {

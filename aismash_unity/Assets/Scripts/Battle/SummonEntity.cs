@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using PromptFighters.Battle.Skills;
+using PromptFighters.UI;
 
 namespace PromptFighters.Battle
 {
@@ -21,6 +22,9 @@ namespace PromptFighters.Battle
         public StatusType Status = StatusType.None;
         public float   StatusDuration;
         public float   StatusChance = 1f;
+
+        public const float MaxHP = 10f;
+        float _hp = MaxHP;
 
         Rigidbody2D _rb;
         float _startX;
@@ -134,6 +138,20 @@ namespace PromptFighters.Battle
                 _dir = -_dir;
                 _rb.linearVelocity = new Vector2(_dir * Speed, 0f);
                 GetComponent<SpriteRenderer>().flipX = _dir < 0;
+            }
+        }
+
+        public void TakeHit(float dmg)
+        {
+            if (dmg <= 0f) return;
+            _hp -= dmg;
+            DamagePopup.SpawnText(transform.position + Vector3.up * 0.6f,
+                Mathf.RoundToInt(dmg).ToString(), new Color(1f, 0.45f, 0.1f), 1.0f);
+            if (_hp <= 0f)
+            {
+                DamagePopup.SpawnText(transform.position + Vector3.up * 1.0f,
+                    "破壊!", new Color(1f, 0.65f, 0.1f), 1.6f);
+                Destroy(gameObject);
             }
         }
 
