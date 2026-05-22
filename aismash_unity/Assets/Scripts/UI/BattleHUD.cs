@@ -46,6 +46,7 @@ namespace PromptFighters.UI
         RectTransform    _grd1Rect,  _grd2Rect;
         TextMeshProUGUI  _hp1Num,    _hp2Num;
         TextMeshProUGUI  _hp1Name,   _hp2Name;
+        TextMeshProUGUI  _roundDots1, _roundDots2;
         TextMeshProUGUI  _timerText;
         GameObject       _hudRoot;
 
@@ -89,6 +90,7 @@ namespace PromptFighters.UI
                 bm.OnReturnedToSetup += HideHUD;
                 bm.OnTrainingStart   += ShowHUD;
                 bm.OnTrainingStart   += RefreshAll;
+                bm.OnRoundEnd        += (_, p1, p2) => UpdateRoundDots(p1, p2);
             }
         }
 
@@ -113,6 +115,9 @@ namespace PromptFighters.UI
             RefreshSkillNames(_p1Names, _se1);
             RefreshSkillNames(_p2Names, _se2);
             if (_timerText) _timerText.text = Mathf.CeilToInt(bm?.TimeRemaining ?? 0f).ToString();
+            bool showDots = bm?.bestOf3 == true;
+            if (_roundDots1) { _roundDots1.gameObject.SetActive(showDots); UpdateRoundDots(bm?.P1RoundWins ?? 0, bm?.P2RoundWins ?? 0); }
+            if (_roundDots2) _roundDots2.gameObject.SetActive(showDots);
         }
 
         void RefreshSkillNames(TextMeshProUGUI[] labels, SkillExecutor se)
@@ -152,6 +157,20 @@ namespace PromptFighters.UI
             rect.anchorMax = player == 1 ? new Vector2(t, 1f)    : Vector2.one;
             rect.offsetMin = rect.offsetMax = Vector2.zero;
             img.color = Color.Lerp(GuardLow, GuardFull, t);
+        }
+
+        void UpdateRoundDots(int p1wins, int p2wins)
+        {
+            if (_roundDots1) _roundDots1.text = RoundDots(p1wins, P1Col);
+            if (_roundDots2) _roundDots2.text = RoundDots(p2wins, P2Col);
+        }
+
+        static string RoundDots(int wins, Color col)
+        {
+            string hex = ColorUtility.ToHtmlStringRGB(col);
+            string on  = $"<color=#{hex}>●</color>";
+            string off = "<color=#222244>○</color>";
+            return (wins > 0 ? on : off) + (wins > 1 ? on : off);
         }
 
         // ── Build ──────────────────────────────────────────────────────
@@ -195,6 +214,25 @@ namespace PromptFighters.UI
                 out _hp2Fill, out _hp2Rect,
                 out _grd2Fill, out _grd2Rect,
                 out _hp2Num, out _hp2Name);
+
+            // ─ Round win dots ────────────────────────────────────────
+            var rd1Go = MakeUI("RoundDots1", _hudRoot.transform);
+            Anch(rd1Go, 0f,1f, 0.5f,1f,  PAD+4f, -TOTAL_H+PAD+2f, -(TIMER_W*0.5f+GAP), -TOTAL_H+PAD+14f);
+            _roundDots1 = rd1Go.AddComponent<TextMeshProUGUI>();
+            _roundDots1.text = RoundDots(0, P1Col);
+            _roundDots1.fontSize = 11f;
+            _roundDots1.alignment = TextAlignmentOptions.Left;
+            _roundDots1.color = Color.white;
+            UITheme.Apply(_roundDots1);
+
+            var rd2Go = MakeUI("RoundDots2", _hudRoot.transform);
+            Anch(rd2Go, 0.5f,1f, 1f,1f,  TIMER_W*0.5f+GAP, -TOTAL_H+PAD+2f, -PAD-4f, -TOTAL_H+PAD+14f);
+            _roundDots2 = rd2Go.AddComponent<TextMeshProUGUI>();
+            _roundDots2.text = RoundDots(0, P2Col);
+            _roundDots2.fontSize = 11f;
+            _roundDots2.alignment = TextAlignmentOptions.Right;
+            _roundDots2.color = Color.white;
+            UITheme.Apply(_roundDots2);
 
             // ─ Timer ────────────────────────────────────────────────
             var tc = MakeUI("TimerBox", _hudRoot.transform);

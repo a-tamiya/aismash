@@ -26,6 +26,9 @@ namespace PromptFighters.Battle
         public float countdownLength = 3f;
         public float trainingRespawnDelay = 1f;
 
+        [Header("Round Settings")]
+        public bool bestOf3 = true;
+
         [Header("References")]
         public Fighter fighter1;
         public Fighter fighter2;
@@ -41,6 +44,10 @@ namespace PromptFighters.Battle
         public float       StageMinX     => -stageHalfWidth;
         public float       StageMaxX     =>  stageHalfWidth;
 
+        public int P1RoundWins  { get; private set; }
+        public int P2RoundWins  { get; private set; }
+        public int CurrentRound { get; private set; } = 1;
+
         // 旧 BattleState 互換プロパティ
         public bool IsFighting => Phase == BattlePhase.Fighting || Phase == BattlePhase.Training;
         public bool IsTraining => Phase == BattlePhase.Training;
@@ -53,7 +60,9 @@ namespace PromptFighters.Battle
         public event System.Action<float>        OnCountdownChanged;
         public event System.Action               OnBattleStart;
         public event System.Action               OnTrainingStart;
-        public event System.Action<int>          OnBattleEnd;        // 0=1P wins, 1=2P wins, -1=draw
+        public event System.Action<int>          OnBattleEnd;        // 0=1P wins, 1=2P wins, -1=draw (マッチ終了)
+        public event System.Action<int,int,int>  OnRoundEnd;         // winnerIdx, p1wins, p2wins
+        public event System.Action<int>          OnRoundStart;       // round number
         public event System.Action               OnReturnedToSetup;  // リトライ時にSetupフェーズへ戻ったとき
 
         Coroutine _trainingResetRoutine;
@@ -173,10 +182,10 @@ namespace PromptFighters.Battle
 
         void EndByTimeout()
         {
-            if (fighter1 == null || fighter2 == null) { EndBattle(-1); return; }
-            if      (fighter1.CurrentHP > fighter2.CurrentHP) EndBattle(0);
-            else if (fighter2.CurrentHP > fighter1.CurrentHP) EndBattle(1);
-            else                                               EndBattle(-1);
+            if (fighter1 == null || fighter2 == null) { FinishRoundOrMatch(-1); return; }
+            if      (fighter1.CurrentHP > fighter2.CurrentHP) FinishRoundOrMatch(0);
+            else if (fighter2.CurrentHP > fighter1.CurrentHP) FinishRoundOrMatch(1);
+            else                                               FinishRoundOrMatch(-1);
         }
 
         void EndBattle(int winnerIndex)
@@ -197,7 +206,55 @@ namespace PromptFighters.Battle
                 return;
             }
 
-            EndBattle(winnerIndex);
+            FinishRoundOrMatch(winnerIndex);
+        }
+
+        void FinishRoundOrMatch(int winnerIndex)
+        {
+            if (Phase == BattlePhase.Ended) return;
+            if (Phase == BattlePhase.Training) return;
+            Phase = BattlePhase.Ended;
+
+            if (!bestOf3)
+            {
+                EndBattle(winnerIndex);
+                return;
+            }
+
+            if (winnerIndex == 0)      P1RoundWins++;
+            else if (winnerIndex == 1) P2RoundWins++;
+
+            OnRoundEnd?.Invoke(winnerIndex, P1RoundWins, P2RoundWins);
+            Debug.Log($"[Battle] Round {CurrentRound} end. P1:{P1RoundWins} P2:{P2RoundWins}");
+
+            if (P1RoundWins >= 2 || P2RoundWins >= 2)
+            {
+                int matchWinner = P1RoundWins >= 2 ? 0 : 1;
+                EndBattle(matchWinner);
+            }
+            else
+            {
+                StartCoroutine(NextRoundRoutine());
+            }
+        }
+
+        IEnumerator NextRoundRoutine()
+        {
+            // KOスローが終わるまで待つ
+            yield return new WaitForSecondsRealtime(3.8f);
+
+            Time.timeScale = 1f;
+            _hitStopActive = false;
+            _koSlowActive  = false;
+            ResetCameraZoom();
+            CurrentRound++;
+
+            ResetFightersAndSkillState();
+
+            Phase     = BattlePhase.Countdown;
+            Countdown = countdownLength;
+            OnRoundStart?.Invoke(CurrentRound);
+            OnCountdownChanged?.Invoke(Countdown);
         }
 
         IEnumerator ResetTrainingAfterDelay()
@@ -298,6 +355,9 @@ namespace PromptFighters.Battle
             _koSlowActive  = false;
             Time.timeScale = 1f;
             Phase = BattlePhase.Setup;
+            P1RoundWins  = 0;
+            P2RoundWins  = 0;
+            CurrentRound = 1;
             fighter1?.ResetForBattle(fighter1SpawnPos, faceRight: true);
             fighter2?.ResetForBattle(fighter2SpawnPos, faceRight: false);
             ResetCameraZoom();
@@ -342,8 +402,8 @@ namespace PromptFighters.Battle
             _koSlowActive  = true;
             _hitStopActive = true; // HitStopが上書きしないようにロック
 
-            float slowDuration = 1.2f;
-            float zoomDuration = 0.18f;
+            float slowDuration = 2.5f;
+            float zoomDuration = 0.25f;
             float zoomInSize   = _defaultCamOrthoSize * 0.70f;
 
             Time.timeScale = 0.15f;
@@ -373,7 +433,7 @@ namespace PromptFighters.Battle
             Time.timeScale = 1f;
             _hitStopActive = false;
             _koSlowActive  = false;
-            ResetCameraZoom();
+            // カメラはロビーに戻るまでズームを維持する（ResetCameraZoomは呼ばない）
         }
 
         void ResetCameraZoom()

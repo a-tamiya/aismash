@@ -214,7 +214,16 @@ namespace PromptFighters.UI
         // ── Show / Hide ────────────────────────────────────────────────
         void ShowResult(int winnerIndex)
         {
-            if (_overlay == null) return;
+            StopAllCoroutines();
+            StartCoroutine(ShowResultDelayed(winnerIndex));
+        }
+
+        IEnumerator ShowResultDelayed(int winnerIndex)
+        {
+            // KOスロー（2.5s）が終わるまで待ってから表示
+            yield return new WaitForSecondsRealtime(2.9f);
+
+            if (_overlay == null) yield break;
             _winnerIndex = winnerIndex;
             _overlay.SetActive(true);
             _visible   = true;
@@ -227,14 +236,33 @@ namespace PromptFighters.UI
 
             if (_winnerText != null)
             {
-                _winnerText.text  = winnerIndex == 0 ? "1P  WIN" : winnerIndex == 1 ? "2P  WIN" : "DRAW";
+                var bm = BattleManager.Instance;
+                string roundStr = (bm != null && bm.bestOf3) ? "  " + RoundDotsText(winnerIndex, bm) : "";
+                _winnerText.text  = (winnerIndex == 0 ? "1P  WIN" : winnerIndex == 1 ? "2P  WIN" : "DRAW") + roundStr;
                 _winnerText.color = accent;
             }
 
-            // top accent line matches winner
             RefreshCharInfo();
             RefreshStats();
             StartCoroutine(GenerateComment());
+        }
+
+        static string RoundDotsText(int winner, BattleManager bm)
+        {
+            string p1 = DotsFor(bm.P1RoundWins, winner == 0 ? P1Col : DrawCol);
+            string p2 = DotsFor(bm.P2RoundWins, winner == 1 ? P2Col : DrawCol);
+            return $"<size=28>{p1}  {p2}</size>";
+        }
+
+        static string DotsFor(int wins, Color col)
+        {
+            string hex = ColorUtility.ToHtmlStringRGB(col);
+            string filled = $"<color=#{hex}>●</color>";
+            string empty  = "<color=#333355>○</color>";
+            string result = "";
+            for (int i = 0; i < 2; i++)
+                result += i < wins ? filled : empty;
+            return result;
         }
 
         void HidePanel()

@@ -27,6 +27,8 @@ namespace PromptFighters.UI
                 BattleManager.Instance.OnCountdownChanged += OnCountdown;
                 BattleManager.Instance.OnBattleStart      += OnFight;
                 BattleManager.Instance.OnBattleEnd        += _ => Hide();
+                BattleManager.Instance.OnRoundStart       += OnRoundStart;
+                BattleManager.Instance.OnRoundEnd         += OnRoundEnd;
             }
         }
 
@@ -79,6 +81,36 @@ namespace PromptFighters.UI
             StopAllCoroutines();
             StartCoroutine(Punch(1.55f, 1.0f, 0.22f));
             StartCoroutine(Flash(flashCol, 0.28f, 0.45f));
+        }
+
+        void OnRoundEnd(int winnerIdx, int p1wins, int p2wins)
+        {
+            if (_text == null) return;
+            _text.gameObject.SetActive(true);
+            string label = winnerIdx == 0 ? "1P WIN!" : winnerIdx == 1 ? "2P WIN!" : "DRAW";
+            Color col    = winnerIdx == 0 ? new Color(0.3f, 0.72f, 1f)
+                         : winnerIdx == 1 ? new Color(1f, 0.28f, 0.22f)
+                         :                  new Color(1f, 0.86f, 0.08f);
+            _text.text     = label;
+            _text.fontSize = 96f;
+            _text.color    = col;
+            StopAllCoroutines();
+            StartCoroutine(Punch(1.4f, 1.0f, 0.20f));
+            StartCoroutine(Flash(new Color(col.r, col.g, col.b, 0f), 0.30f, 0.40f));
+            StartCoroutine(HideAfter(1.8f));
+        }
+
+        void OnRoundStart(int round)
+        {
+            if (_text == null) return;
+            _text.gameObject.SetActive(true);
+            _text.text     = $"ROUND {round}";
+            _text.fontSize = 90f;
+            _text.color    = new Color(0.9f, 0.9f, 1f);
+            StopAllCoroutines();
+            StartCoroutine(Punch(1.5f, 1.0f, 0.22f));
+            StartCoroutine(Flash(new Color(0.5f, 0.5f, 1f, 0f), 0.28f, 0.45f));
+            StartCoroutine(HideAfter(1.0f));
         }
 
         void OnFight()
