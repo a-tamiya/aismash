@@ -6,11 +6,12 @@ namespace PromptFighters.Battle.Skills
     public static class CharacterSizeEstimator
     {
         public static float Estimate(CharacterData data)
-            => Estimate(data.inputFeatures, data.visualDescription, data.visualPrompt);
+            => Estimate(data.inputFeatures);
 
-        public static float Estimate(string features, string visualDesc, string visualPrompt)
+        public static float Estimate(string features, string visualDesc = "", string visualPrompt = "")
         {
-            string text = $"{features} {visualDesc} {visualPrompt}".ToLower();
+            // 体格はユーザーが明示した特徴のみから判定する（AI生成テキストは除外）
+            string text = features.ToLower();
             float score = 0f;
 
             if (Has(text, "巨大", "大型", "giant", "huge", "massive", "enormous", "巨漢", "重量級", "大巨人"))
