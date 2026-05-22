@@ -219,7 +219,7 @@ namespace PromptFighters.Battle.Skills
 
             // 飛び道具同士の相殺: 異なるオーナーの弾が衝突したら両方消滅
             var otherProj = other.GetComponent<Projectile>();
-            if (otherProj != null && otherProj.Owner != Owner && !IsBoomerang && !otherProj.IsBoomerang)
+            if (otherProj != null && otherProj.Owner != Owner)
             {
                 _cancelled = true;
                 otherProj._cancelled = true;
