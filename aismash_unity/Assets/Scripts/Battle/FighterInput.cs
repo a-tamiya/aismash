@@ -25,6 +25,7 @@ namespace PromptFighters.Battle
         bool _throwInputReleasedAfterGrab = true;
         float _airSkillFaceTimer;
         float _recentJumpTimer;
+        float _prevMoveY;
         const float MaxSmashCharge = 1f;
         const float AirSkillFaceWindow = 0.22f;
         const float RecentJumpWindow = 0.2f;
@@ -167,6 +168,12 @@ namespace PromptFighters.Battle
                 _fighter,
                 Mathf.Abs(moveX) > 0.18f && _fighter.IsGrounded && _fighter.CanAct);
             _fighter.SetGuard(guardHeld && _fighter.IsGrounded);
+
+            // 下入力の押した瞬間にすり抜け（ジャンプなし）
+            bool downJustPressed = moveInput.y <= -0.5f && _prevMoveY > -0.5f;
+            if (_fighter.IsGrounded && downJustPressed && !guardHeld && !jumpPressed)
+                _fighter.TryDropThrough();
+
             if (jumpPressed)
             {
                 bool droppedThrough = _fighter.IsGrounded &&
@@ -178,6 +185,7 @@ namespace PromptFighters.Battle
                 _fighter.FastFall();
             if (grabPressed) _fighter.TryStartGrab();
             _previousGuardHeld = guardHeld;
+            _prevMoveY = moveInput.y;
 
             // スキルはEnded以外で使用可能
             if (_skills != null && !guardHeld)

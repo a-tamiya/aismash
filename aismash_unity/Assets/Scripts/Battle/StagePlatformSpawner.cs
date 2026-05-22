@@ -53,6 +53,8 @@ namespace PromptFighters.Battle
 
             var go = new GameObject("StagePlatform");
             go.transform.position = center;
+            int groundLayerIdx = LayerMask.NameToLayer("Ground");
+            if (groundLayerIdx >= 0) go.layer = groundLayerIdx;
 
             var rb = go.AddComponent<Rigidbody2D>();
             rb.bodyType = RigidbodyType2D.Static;
