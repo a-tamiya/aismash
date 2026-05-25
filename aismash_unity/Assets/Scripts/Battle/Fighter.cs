@@ -120,6 +120,7 @@ namespace PromptFighters.Battle
         int _airJumpsRemaining;
         Collider2D _bodyCollider;
         Collider2D _ignoredOpponentCollider;
+        readonly ContactPoint2D[] _contactBuf = new ContactPoint2D[8];
 
         float _reflectTimer;
         float _counterTimer;
@@ -212,15 +213,18 @@ namespace PromptFighters.Battle
             bool onGroundLayer = groundCheck != null &&
                 Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
             bool onPlatform = false;
-            if (!onGroundLayer && groundCheck != null)
+            if (!onGroundLayer)
             {
                 var spawner = BattleManager.Instance?.GetComponent<StagePlatformSpawner>();
                 if (spawner != null)
-                    foreach (var pc in spawner.GetColliders())
-                        if (pc != null &&
-                            Vector2.Distance(pc.ClosestPoint(groundCheck.position),
-                                groundCheck.position) <= groundCheckRadius)
-                        { onPlatform = true; break; }
+                {
+                    var platCols = spawner.GetColliders();
+                    int cnt = _rb.GetContacts(_contactBuf);
+                    for (int i = 0; i < cnt && !onPlatform; i++)
+                        if (_contactBuf[i].normal.y > 0.5f &&
+                            platCols.Contains(_contactBuf[i].collider))
+                            onPlatform = true;
+                }
             }
             IsGrounded = (onGroundLayer || onPlatform) &&
                 _rb.linearVelocity.y <= 1.0f; // 上昇中は台をすり抜けるため接地判定しない
