@@ -209,8 +209,20 @@ namespace PromptFighters.Battle
         void Update()
         {
             bool wasGrounded = IsGrounded;
-            IsGrounded = groundCheck != null &&
-                Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer) &&
+            bool onGroundLayer = groundCheck != null &&
+                Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
+            bool onPlatform = false;
+            if (!onGroundLayer && groundCheck != null)
+            {
+                var spawner = BattleManager.Instance?.GetComponent<StagePlatformSpawner>();
+                if (spawner != null)
+                    foreach (var pc in spawner.GetColliders())
+                        if (pc != null &&
+                            Vector2.Distance(pc.ClosestPoint(groundCheck.position),
+                                groundCheck.position) <= groundCheckRadius)
+                        { onPlatform = true; break; }
+            }
+            IsGrounded = (onGroundLayer || onPlatform) &&
                 _rb.linearVelocity.y <= 1.0f; // 上昇中は台をすり抜けるため接地判定しない
             if (!wasGrounded && IsGrounded && BattleManager.Instance != null && BattleManager.Instance.IsFighting)
             {
