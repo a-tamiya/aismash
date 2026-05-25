@@ -229,7 +229,8 @@ namespace PromptFighters.Battle
                     HandleSkillSlot(SkillSlot.AttackA, skillA);
                     HandleSkillSlot(SkillSlot.AttackB, skillB);
                     HandleSkillSlot(SkillSlot.AttackC, skillC);
-                    if (smash) _skills.TryUseSkill(SkillSlot.SmashSide, smashMultiplier);
+                    if (smash && _fighter.SealedSlot != (int)SkillSlot.SmashSide)
+                        _skills.TryUseSkill(SkillSlot.SmashSide, smashMultiplier);
                 }
             }
         }
@@ -444,6 +445,7 @@ namespace PromptFighters.Battle
             var skillDef = _skills?.GetSkill(slot);
             if (IsChargeSkill(skillDef))
                 return;
+            if (_fighter.SealedSlot == (int)slot) return;
 
             if (pressed && _skills.TryUseSkill(slot))
                 _lastSkillPressTime[(int)slot] = -10f;

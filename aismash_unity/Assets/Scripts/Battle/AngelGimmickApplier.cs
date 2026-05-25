@@ -203,6 +203,72 @@ namespace PromptFighters.Battle
                     target2?.FillGuard();
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
+
+                // ── 拡張ギミック ────────────────────────────────────────
+                case "hp_equal":
+                    if (p1 != null && p2 != null &&
+                        p1.State != FighterState.Dead && p2.State != FighterState.Dead)
+                    {
+                        float avg = (p1.CurrentHP + p2.CurrentHP) * 0.5f;
+                        p1.DebugSetCurrentHP(Mathf.Min(avg, p1.maxHP));
+                        p2.DebugSetCurrentHP(Mathf.Min(avg, p2.maxHP));
+                        GameAudioManager.Instance?.PlayGimmickBuff();
+                    }
+                    break;
+                case "counter_gimmick":
+                    float ctDmg = Mathf.Max(value * 30f, 30f);
+                    target1?.StartCounter(Mathf.Max(duration, 3f), ctDmg, 8f, new Vector2(1f, 0.3f), 0.4f);
+                    target2?.StartCounter(Mathf.Max(duration, 3f), ctDmg, 8f, new Vector2(1f, 0.3f), 0.4f);
+                    GameAudioManager.Instance?.PlayGimmickBuff();
+                    break;
+                case "ground_bounce":
+                    float bounceF = Mathf.Clamp(value > 0f ? value * 10f : 12f, 5f, 20f);
+                    target1?.StartGroundBounce(bounceF);
+                    target2?.StartGroundBounce(bounceF);
+                    GameAudioManager.Instance?.PlayGimmickBuff();
+                    break;
+                case "wind":
+                    float windF = value != 0f ? Mathf.Clamp(value * 5f, 1f, 15f) : 4f;
+                    target1?.StartTemporaryWind(windF, Mathf.Max(duration, 4f));
+                    target2?.StartTemporaryWind(windF, Mathf.Max(duration, 4f));
+                    GameAudioManager.Instance?.PlayGimmickDebuff();
+                    break;
+                case "floor_lava":
+                    target1?.StartTemporaryFloorLava(Mathf.Clamp(value > 0f ? value : 0.1f, 0.05f, 0.5f), Mathf.Max(duration, 5f));
+                    target2?.StartTemporaryFloorLava(Mathf.Clamp(value > 0f ? value : 0.1f, 0.05f, 0.5f), Mathf.Max(duration, 5f));
+                    GameAudioManager.Instance?.PlayGimmickDebuff();
+                    break;
+                case "guard_disable":
+                    target1?.StartTemporaryGuardDisable(Mathf.Max(duration, 4f));
+                    target2?.StartTemporaryGuardDisable(Mathf.Max(duration, 4f));
+                    GameAudioManager.Instance?.PlayGimmickDebuff();
+                    break;
+                case "skill_seal":
+                    int sealSlot = value > 0f ? Mathf.Clamp((int)value - 1, 0, 3) : Random.Range(0, 4);
+                    target1?.StartTemporarySkillSeal(sealSlot, Mathf.Max(duration, 5f));
+                    target2?.StartTemporarySkillSeal(sealSlot, Mathf.Max(duration, 5f));
+                    GameAudioManager.Instance?.PlayGimmickDebuff();
+                    break;
+                case "super_knockback":
+                    target1?.StartTemporarySuperKnockback(Mathf.Max(duration, 5f));
+                    target2?.StartTemporarySuperKnockback(Mathf.Max(duration, 5f));
+                    GameAudioManager.Instance?.PlayGimmickDebuff();
+                    break;
+                case "obstacle_moving":
+                    SpawnMovingPlatform(Mathf.Max(value, 1f), Mathf.Max(duration, 8f));
+                    GameAudioManager.Instance?.PlayGimmickBuff();
+                    break;
+                case "hp_share":
+                    if (p1 != null && p2 != null && target1 != null &&
+                        p1.State != FighterState.Dead && p2.State != FighterState.Dead)
+                    {
+                        float shareDur = Mathf.Max(duration, 6f);
+                        Fighter shareOther = (target1 == p1) ? p2 : p1;
+                        target1.StartHPShare(shareOther, shareDur);
+                        shareOther.StartHPShare(target1, shareDur);
+                        GameAudioManager.Instance?.PlayGimmickBuff();
+                    }
+                    break;
             }
         }
 
@@ -314,6 +380,27 @@ namespace PromptFighters.Battle
             StartCoroutine(DestroyAfter(go, duration));
         }
 
+        void SpawnMovingPlatform(float widthScale, float duration)
+        {
+            var bm   = BattleManager.Instance;
+            float minX = bm?.StageMinX ?? -5f;
+            float maxX = bm?.StageMaxX ??  5f;
+            float w  = Mathf.Clamp(widthScale * 1.8f, 1f, 7f);
+            var go   = new GameObject("AngelMovingPlatform");
+            go.transform.position   = new Vector3(0f, Random.Range(1.5f, 3.5f), 0f);
+            go.transform.localScale = new Vector3(w, 0.35f, 1f);
+            var rb = go.AddComponent<Rigidbody2D>();
+            rb.bodyType = RigidbodyType2D.Kinematic;
+            rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+            go.AddComponent<BoxCollider2D>().size = Vector2.one;
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite       = Sprite.Create(Texture2D.whiteTexture, new Rect(0,0,1,1), new Vector2(0.5f,0.5f), 1f);
+            sr.color        = new Color(0.3f, 1f, 0.8f, 0.93f);
+            sr.sortingOrder = 6;
+            go.AddComponent<AngelMovingPlatform>().Init(minX + 1f, maxX - 1f, duration);
+            StartCoroutine(DestroyAfter(go, duration));
+        }
+
         System.Collections.IEnumerator DestroyAfter(GameObject go, float duration)
         {
             yield return new WaitForSeconds(duration);
@@ -346,6 +433,31 @@ namespace PromptFighters.Battle
                 default:
                     return primary ? p1 : p2;
             }
+        }
+    }
+
+    // 左右に往復する動くプラットフォーム
+    public class AngelMovingPlatform : MonoBehaviour
+    {
+        float _minX, _maxX, _speed;
+        int   _dir = 1;
+        Rigidbody2D _rb;
+
+        public void Init(float minX, float maxX, float duration)
+        {
+            _minX  = minX;
+            _maxX  = maxX;
+            _speed = (_maxX - _minX) / Mathf.Max(duration * 0.4f, 1f);
+            _rb    = GetComponent<Rigidbody2D>();
+        }
+
+        void FixedUpdate()
+        {
+            if (_rb == null) return;
+            float nx = _rb.position.x + _dir * _speed * Time.fixedDeltaTime;
+            if (nx >= _maxX) { nx = _maxX; _dir = -1; }
+            if (nx <= _minX) { nx = _minX; _dir =  1; }
+            _rb.MovePosition(new Vector2(nx, _rb.position.y));
         }
     }
 

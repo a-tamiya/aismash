@@ -149,6 +149,15 @@ namespace PromptFighters.Battle
         float _grabHoldTimer;
         float _grabCooldownTimer;
         bool _isTryingGrab;
+        // 新ギミック用フィールド
+        bool  _applyingShare;
+        Fighter _hpSharePartner;
+        float _hpShareTimer;
+        bool  _guardDisabled;
+        float _guardDisabledTimer;
+        int   _sealedSlot = -1;
+        float _sealedSlotTimer;
+        float _superKnockbackOrigWeight = -1f;
 
         static readonly Color GuardColor       = new Color(0.4f, 0.6f, 1f);
         static readonly Color StunColor        = new Color(1f, 0.8f, 0f);
@@ -158,7 +167,13 @@ namespace PromptFighters.Battle
         static readonly Color SpeedBoostColor  = new Color(0.3f, 1f, 0.4f);
         static readonly Color JumpBoostColor   = new Color(0.4f, 0.85f, 1f);
         static readonly Color DamageBoostColor = new Color(1f, 0.55f, 0.1f);
-        static readonly Color ChaosColor       = new Color(0.85f, 0.3f, 1f);
+        static readonly Color ChaosColor        = new Color(0.85f, 0.3f, 1f);
+        static readonly Color WindColor         = new Color(0.7f, 1f, 0.85f);
+        static readonly Color LavaColor         = new Color(1f, 0.45f, 0.1f);
+        static readonly Color GuardDisableColor = new Color(1f, 0.3f, 0.3f);
+        static readonly Color SealColor         = new Color(0.5f, 0.3f, 0.8f);
+        static readonly Color SuperKBColor      = new Color(1f, 0.7f, 0.1f);
+        static readonly Color HPShareColor      = new Color(0.8f, 0.3f, 0.9f);
 
         // ====== ギミック用プロパティ ======
         public float DamageMultiplier { get; private set; } = 1f;
@@ -166,6 +181,7 @@ namespace PromptFighters.Battle
         public bool  InputReversed    { get; private set; }
         public bool  IsReflecting     => _reflectTimer > 0f;
         public bool  IsCountering     => _counterTimer > 0f;
+        public int   SealedSlot       => _sealedSlot;
 
         public bool CanAct =>
             State != FighterState.Guarding &&
@@ -273,6 +289,9 @@ namespace PromptFighters.Battle
             if (_counterTimer       > 0f) _counterTimer       -= Time.deltaTime;
             if (_speedBoostTimer > 0f) _speedBoostTimer -= Time.deltaTime;
             if (_jumpBoostTimer  > 0f) _jumpBoostTimer  -= Time.deltaTime;
+            if (_guardDisabledTimer > 0f) { _guardDisabledTimer -= Time.deltaTime; if (_guardDisabledTimer <= 0f) _guardDisabled = false; }
+            if (_sealedSlotTimer    > 0f) { _sealedSlotTimer    -= Time.deltaTime; if (_sealedSlotTimer    <= 0f) _sealedSlot    = -1; }
+            if (_hpShareTimer       > 0f) _hpShareTimer -= Time.deltaTime;
             if (_forcedSpriteTimer  > 0f)
             {
                 _forcedSpriteTimer -= Time.deltaTime;
@@ -407,6 +426,9 @@ namespace PromptFighters.Battle
                 else if (InputReversed          )  c = Color.Lerp(ChaosColor,       Color.white, (Mathf.Sin(Time.time * 10f) + 1f) * 0.3f);
                 else if (_reflectTimer     > 0f)  c = Color.Lerp(ReflectColor,     Color.white, (Mathf.Sin(Time.time * 12f) + 1f) * 0.3f);
                 else if (_counterTimer     > 0f)  c = Color.Lerp(CounterColor,     Color.white, (Mathf.Sin(Time.time * 8f)  + 1f) * 0.3f);
+                else if (_guardDisabled         )  c = Color.Lerp(GuardDisableColor,Color.white, (Mathf.Sin(Time.time * 10f) + 1f) * 0.3f);
+                else if (_sealedSlot >= 0       )  c = Color.Lerp(SealColor,        Color.white, (Mathf.Sin(Time.time * 8f)  + 1f) * 0.3f);
+                else if (_hpShareTimer     > 0f)   c = Color.Lerp(HPShareColor,     Color.white, (Mathf.Sin(Time.time * 6f)  + 1f) * 0.3f);
             }
 
             _sprite.color = WithDebugAlpha(c);
@@ -531,6 +553,7 @@ namespace PromptFighters.Battle
             if (_skillExecutor != null && _skillExecutor.IsExecuting) return;
             if (_heldOpponent != null || _grabbedBy != null || _isTryingGrab || _dodgeTimer > 0f) return;
             if (_guardBreakTimer > 0f) { guarding = false; }
+            if (_guardDisabled)        { guarding = false; }
             if (CurrentGuardDurability <= 0f) { guarding = false; }
 
             if (guarding && State != FighterState.Guarding)
@@ -572,6 +595,17 @@ namespace PromptFighters.Battle
             float actual  = blocking ? Mathf.Max(0f, damage * guardDamageRatio) : damage;
             CurrentHP     = Mathf.Max(0f, CurrentHP - actual);
             OnHPChanged?.Invoke(CurrentHP, maxHP);
+            // HP共有: 受けたダメージの50%を相手にも伝播（再帰防止）
+            if (!blocking && actual > 0f && _hpShareTimer > 0f && _hpSharePartner != null && !_applyingShare)
+            {
+                _applyingShare = true;
+                _hpSharePartner._applyingShare = true;
+                _hpSharePartner.CurrentHP = Mathf.Max(0f, _hpSharePartner.CurrentHP - actual * 0.5f);
+                _hpSharePartner.OnHPChanged?.Invoke(_hpSharePartner.CurrentHP, _hpSharePartner.maxHP);
+                if (_hpSharePartner.CurrentHP <= 0f) _hpSharePartner.Die();
+                _applyingShare = false;
+                if (_hpSharePartner != null) _hpSharePartner._applyingShare = false;
+            }
             if (blocking)
                 DamageGuard(Mathf.Max(guardDamage, damage * guardHitDamageRatio));
             else if (_guardBreakTimer > 0f)
@@ -998,6 +1032,14 @@ namespace PromptFighters.Battle
             _reflectTimer       = 0f;
             _counterTimer       = 0f;
             _groundBounceForce  = 0f;
+            _applyingShare      = false;
+            _hpSharePartner     = null;
+            _hpShareTimer       = 0f;
+            _guardDisabled      = false;
+            _guardDisabledTimer = 0f;
+            _sealedSlot         = -1;
+            _sealedSlotTimer    = 0f;
+            if (_superKnockbackOrigWeight >= 0f) { weight = _superKnockbackOrigWeight; _superKnockbackOrigWeight = -1f; }
             RestoreDodgeGravity();
             RestoreOpponentCollision();
             _forcedSprite       = null;
@@ -1441,6 +1483,94 @@ namespace PromptFighters.Battle
             DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "CHAOS!", ChaosColor, 2.2f);
             yield return new WaitForSeconds(duration);
             InputReversed = false;
+        }
+
+        // ── 新ギミック用メソッド ────────────────────────────────────────
+
+        public void StartTemporaryWind(float force, float duration)
+            => StartCoroutine(TemporaryWind(force, duration));
+
+        public void StartTemporaryFloorLava(float dpsRatio, float duration)
+            => StartCoroutine(TemporaryFloorLava(dpsRatio, duration));
+
+        public void StartTemporaryGuardDisable(float duration)
+        {
+            _guardDisabled = true;
+            _guardDisabledTimer = Mathf.Max(_guardDisabledTimer, duration);
+            if (State == FighterState.Guarding) SetGuard(false);
+            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "NO GUARD!", GuardDisableColor, 2.2f);
+            BattleLogger.Instance?.LogEvent($"{PlayerLabel()}のガード封印");
+        }
+
+        public void StartTemporarySkillSeal(int slot, float duration)
+        {
+            _sealedSlot = Mathf.Clamp(slot, 0, 3);
+            _sealedSlotTimer = Mathf.Max(_sealedSlotTimer, duration);
+            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "SEALED!", SealColor, 2.2f);
+            BattleLogger.Instance?.LogEvent($"{PlayerLabel()}のスロット{_sealedSlot}封印");
+        }
+
+        public void StartTemporarySuperKnockback(float duration)
+            => StartCoroutine(TemporarySuperKnockback(duration));
+
+        public void StartHPShare(Fighter partner, float duration)
+        {
+            _hpSharePartner = partner;
+            _hpShareTimer   = Mathf.Max(_hpShareTimer, duration);
+            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "HP LINK!", HPShareColor, 2.2f);
+            BattleLogger.Instance?.LogEvent($"{PlayerLabel()}がHPリンク開始");
+        }
+
+        System.Collections.IEnumerator TemporaryWind(float force, float duration)
+        {
+            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "WIND!", WindColor, 2.2f);
+            float elapsed = 0f;
+            while (elapsed < duration && State != FighterState.Dead)
+            {
+                _rb.AddForce(new Vector2(force, 0f), ForceMode2D.Force);
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+        }
+
+        System.Collections.IEnumerator TemporaryFloorLava(float dpsRatio, float duration)
+        {
+            float elapsed  = 0f;
+            float tickTimer = 0f;
+            float dps = maxHP * dpsRatio;
+            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "FLOOR LAVA!", LavaColor, 2.2f);
+            while (elapsed < duration && State != FighterState.Dead)
+            {
+                elapsed    += Time.deltaTime;
+                if (IsGrounded)
+                {
+                    tickTimer += Time.deltaTime;
+                    if (tickTimer >= 0.5f)
+                    {
+                        tickTimer = 0f;
+                        float dmg = dps * 0.5f;
+                        CurrentHP = Mathf.Max(0f, CurrentHP - dmg);
+                        OnHPChanged?.Invoke(CurrentHP, maxHP);
+                        DamagePopup.Spawn(transform.position, dmg, false);
+                        if (CurrentHP <= 0f) { Die(); yield break; }
+                    }
+                }
+                else tickTimer = 0f;
+                yield return null;
+            }
+        }
+
+        System.Collections.IEnumerator TemporarySuperKnockback(float duration)
+        {
+            if (_superKnockbackOrigWeight < 0f) _superKnockbackOrigWeight = weight;
+            weight = Mathf.Max(0.2f, weight * 0.3f);
+            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "FRAGILE!", SuperKBColor, 2.2f);
+            yield return new WaitForSeconds(duration);
+            if (_superKnockbackOrigWeight >= 0f)
+            {
+                weight = _superKnockbackOrigWeight;
+                _superKnockbackOrigWeight = -1f;
+            }
         }
 
         void OnDrawGizmosSelected()
