@@ -70,6 +70,9 @@ namespace PromptFighters.AI
                 yield return new WaitForSeconds(clip.length);
             }
 
+            // AudioClip.Createで確保したネイティブリソースはGC対象外。再生完了後に明示破棄してリークを防ぐ。
+            UnityEngine.Object.Destroy(clip);
+
             onComplete?.Invoke();
         }
 
