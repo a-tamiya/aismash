@@ -1,4 +1,6 @@
+using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using PromptFighters.Audio;
 using PromptFighters.Battle.Skills.Json;
@@ -11,9 +13,9 @@ namespace PromptFighters.Battle.Skills
     {
         public SkillData[] skills = new SkillData[4]; // index = SkillSlot
         public bool autoEquipSampleSkills = true;
-        const float HitboxVisualScale = 0.9f;
-        const int MaxFollowUpCount = 3;
-        const float FollowUpDamageMultiplier = 0.35f;
+        const float HitboxVisualScale = SkillConstants.HitboxVisualScale;
+        const int MaxFollowUpCount = SkillConstants.MaxFollowUpCount;
+        const float FollowUpDamageMultiplier = SkillConstants.FollowUpDamageMultiplier;
 
         Fighter _fighter;
         float _sizeScale = 1f;
@@ -222,7 +224,7 @@ namespace PromptFighters.Battle.Skills
                 if (hasDash)
                     foreach (var ac in actions)
                         if (ac?.type == "melee_hitbox" || ac?.type == "body_hitbox")
-                            ac.time = Mathf.Max(ac.time, latestDash + 0.05f);
+                            ac.time = Mathf.Max(ac.time, latestDash + SkillConstants.SmashHitAfterDashDelay);
             }
 
             while (actionIdx < actions.Count)
@@ -286,44 +288,54 @@ namespace PromptFighters.Battle.Skills
                 float duration = a.duration > 0f ? a.duration : Mathf.Max(skill.parameters.active_time, 0.08f);
                 latest = Mathf.Max(latest, a.time + duration);
             }
-            return hasMelee ? latest + 0.03f : 0f;
+            return hasMelee ? latest + SkillConstants.WhiffCheckGrace : 0f;
         }
 
         static float EffectiveRecovery(SkillData skill)
         {
             if (skill == null) return 0f;
             return skill.slot == SkillSlot.SmashSide
-                ? Mathf.Clamp(skill.parameters.recovery, 0.20f, 0.70f)
+                ? Mathf.Clamp(skill.parameters.recovery, SkillConstants.SmashRecoveryMin, SkillConstants.SmashRecoveryMax)
                 : skill.parameters.recovery;
+        }
+
+        // アクション種 -> ハンドラのディスパッチ表。新しいアクションを足す際は
+        // ここに1エントリ追加すればよく、中央のswitchを編集する必要がない。
+        Dictionary<string, Action<SkillData, SkillAction, float>> _actionHandlers;
+
+        void BuildActionHandlers()
+        {
+            _actionHandlers = new Dictionary<string, Action<SkillData, SkillAction, float>>
+            {
+                ["melee_hitbox"]       = SpawnMeleeHitbox,
+                ["body_hitbox"]        = SpawnBodyHitbox,
+                ["area_hitbox"]        = SpawnAreaHitbox,
+                ["trap_hitbox"]        = SpawnTrapHitbox,
+                ["projectile"]         = SpawnProjectile,
+                ["beam"]               = SpawnBeam,
+                ["jump_attack"]        = DoJumpAttack,
+                ["dash+melee_hitbox"]  = (skill, a, pm) => { DoDash(a); SpawnMeleeHitbox(skill, a, pm); },
+                ["multi_hit"]          = SpawnMeleeHitbox,
+                ["dash"]               = (skill, a, pm) => DoDash(a),
+                ["teleport"]           = (skill, a, pm) => DoTeleport(a),
+                ["push_enemy"]         = (skill, a, pm) => PushOrPullOpponent(a, push: true),
+                ["pull_enemy"]         = (skill, a, pm) => PushOrPullOpponent(a, push: false),
+                ["buff_self"]          = (skill, a, pm) => BuffSelf(a),
+                ["reflector"]          = (skill, a, pm) => DoReflector(a),
+                ["counter"]            = (skill, a, pm) => DoCounter(a),
+                ["summon"]             = SpawnSummon,
+                ["apply_status"]       = (skill, a, pm) => ApplyOpponentStatus(a),
+                ["delay"]              = (skill, a, pm) => { /* no-op: time制御で表現 */ },
+            };
         }
 
         void ExecuteAction(SkillData skill, SkillAction a, float powerMultiplier)
         {
-            switch (a.type)
-            {
-                case "melee_hitbox":   SpawnMeleeHitbox(skill, a, powerMultiplier); break;
-                case "body_hitbox":    SpawnBodyHitbox(skill, a, powerMultiplier);  break;
-                case "area_hitbox":    SpawnAreaHitbox(skill, a, powerMultiplier);  break;
-                case "trap_hitbox":    SpawnTrapHitbox(skill, a, powerMultiplier);  break;
-                case "projectile":     SpawnProjectile(skill, a, powerMultiplier);  break;
-                case "beam":           SpawnBeam(skill, a, powerMultiplier);        break;
-                case "jump_attack":    DoJumpAttack(skill, a, powerMultiplier);     break;
-                case "dash+melee_hitbox": DoDash(a); SpawnMeleeHitbox(skill, a, powerMultiplier); break;
-                case "multi_hit":      SpawnMeleeHitbox(skill, a, powerMultiplier);  break;
-                case "dash":           DoDash(a);                  break;
-                case "teleport":       DoTeleport(a);              break;
-                case "push_enemy":     PushOrPullOpponent(a, push: true);  break;
-                case "pull_enemy":     PushOrPullOpponent(a, push: false); break;
-                case "buff_self":      BuffSelf(a);                 break;
-                case "reflector":      DoReflector(a);              break;
-                case "counter":        DoCounter(a);                break;
-                case "summon":         SpawnSummon(skill, a, powerMultiplier); break;
-                case "apply_status":   ApplyOpponentStatus(a);     break;
-                case "delay":          /* no-op: time制御で表現 */ break;
-                default:
-                    Debug.LogWarning($"[Skill] Unknown action type: {a.type}");
-                    break;
-            }
+            if (_actionHandlers == null) BuildActionHandlers();
+            if (_actionHandlers.TryGetValue(a.type, out var handler))
+                handler(skill, a, powerMultiplier);
+            else
+                Debug.LogWarning($"[Skill] Unknown action type: {a.type}");
         }
 
         void SpawnMeleeHitbox(SkillData skill, SkillAction a, float powerMultiplier)
@@ -367,7 +379,7 @@ namespace PromptFighters.Battle.Skills
             hb.HideVisual     = a.hide_effect;
             hb.FlipEffectX    = !_fighter.FacingRight;
             hb.MaxHits        = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
-            hb.IsSmashHit     = skill.slot == SkillSlot.SmashSide && powerMultiplier >= 1.8f;
+            hb.IsSmashHit     = skill.slot == SkillSlot.SmashSide && powerMultiplier >= SkillConstants.SmashPowerThreshold;
             ApplyActionStatus(hb, a);
         }
 
