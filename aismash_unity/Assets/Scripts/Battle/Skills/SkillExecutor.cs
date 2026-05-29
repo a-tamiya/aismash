@@ -701,29 +701,27 @@ namespace PromptFighters.Battle.Skills
             _fighter.Opponent.ApplyImpulse(new Vector2(dir * power, up), 0.24f);
         }
 
+        // 自己バフのデータ駆動テーブル。status文字列→適用処理(Fighter, 倍率, 持続)。
+        // 新しい自己バフはここに1行追加すればよく、BuffSelf本体を編集する必要がない。
+        // 未登録のstatusはデフォルト(ダメージブースト)にフォールバックする。
+        static readonly Dictionary<string, Action<Fighter, float, float>> s_selfBuffs =
+            new Dictionary<string, Action<Fighter, float, float>>
+        {
+            ["speed"]       = (f, m, d) => f.StartTemporarySpeedChange(Mathf.Clamp(m, 1f, 1.7f), d),
+            ["jump"]        = (f, m, d) => f.StartTemporaryJumpChange(Mathf.Clamp(m, 1f, 1.5f), d),
+            ["invincible"]  = (f, m, d) => f.StartTemporaryInvincible(Mathf.Min(d, 1.2f)),
+            ["transparent"] = (f, m, d) => f.StartTemporaryInvincible(Mathf.Min(d, 1.2f)),
+            ["reflect"]     = (f, m, d) => f.StartTemporaryReflect(Mathf.Min(d, 3f)),
+        };
+
         void BuffSelf(SkillAction a)
         {
             float duration = Mathf.Max(0.1f, a.duration);
             float multiplier = a.power > 0f ? a.power : 1.2f;
-            switch (a.status)
-            {
-                case "speed":
-                    _fighter.StartTemporarySpeedChange(Mathf.Clamp(multiplier, 1f, 1.7f), duration);
-                    break;
-                case "jump":
-                    _fighter.StartTemporaryJumpChange(Mathf.Clamp(multiplier, 1f, 1.5f), duration);
-                    break;
-                case "invincible":
-                case "transparent":
-                    _fighter.StartTemporaryInvincible(Mathf.Min(duration, 1.2f));
-                    break;
-                case "reflect":
-                    _fighter.StartTemporaryReflect(Mathf.Min(duration, 3f));
-                    break;
-                default:
-                    _fighter.StartTemporaryDamageBoost(Mathf.Clamp(multiplier, 1f, 1.6f), duration);
-                    break;
-            }
+            if (a.status != null && s_selfBuffs.TryGetValue(a.status, out var apply))
+                apply(_fighter, multiplier, duration);
+            else
+                _fighter.StartTemporaryDamageBoost(Mathf.Clamp(multiplier, 1f, 1.6f), duration);
         }
 
         void DoReflector(SkillAction a)
