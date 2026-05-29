@@ -49,7 +49,8 @@ namespace PromptFighters.AI
                 yield break;
             }
 
-            string body = BuildBody(BuildPrompt(state));
+            string body = OpenAIRequest.BuildChatBody(
+                AICharacterClient.Model, BuildSystemPrompt(), BuildUserPrompt(state));
             using var req = new UnityWebRequest(AICharacterClient.Endpoint, "POST");
             req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
             req.downloadHandler = new DownloadHandlerBuffer();
@@ -76,7 +77,12 @@ namespace PromptFighters.AI
             }
         }
 
-        static string BuildPrompt(CommentaryBattleState s)
+        static string BuildSystemPrompt() =>
+            "2D格闘ゲームの試合実況を1〜2文で熱く行ってください（日本語・スポーツ実況風）。" +
+            "直近の出来事があれば必ず拾い、同じ言い回しを避けてください。" +
+            "出力は実況1〜2文のみ・前置き不要。";
+
+        static string BuildUserPrompt(CommentaryBattleState s)
         {
             var sb = new System.Text.StringBuilder();
             sb.Append($"{s.player1Name} HP:{s.player1HpRatio*100f:0}% 与ダメ:{s.totalDamageP1:0}");
@@ -94,15 +100,7 @@ namespace PromptFighters.AI
             if (!string.IsNullOrEmpty(s.recentEvents))
                 sb.Append($"\n直近:{s.recentEvents}");
 
-            return $"2D格闘ゲームの試合実況を1〜2文で熱く行ってください（日本語・スポーツ実況風）。直近の出来事があれば必ず拾い、同じ言い回しを避けてください。\n状況:\n{sb}\n残り{s.timeRemaining:0}秒\n\n実況（1〜2文のみ、前置き不要）:";
-        }
-
-        static string BuildBody(string prompt)
-        {
-            string esc = prompt
-                .Replace("\\", "\\\\").Replace("\"", "\\\"")
-                .Replace("\n", "\\n").Replace("\r", "").Replace("\t", " ");
-            return $"{{\"model\":\"{AICharacterClient.Model}\",\"messages\":[{{\"role\":\"user\",\"content\":\"{esc}\"}}]}}";
+            return $"状況:\n{sb}\n残り{s.timeRemaining:0}秒";
         }
     }
 }

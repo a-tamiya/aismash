@@ -289,7 +289,7 @@ namespace PromptFighters.AI
             string basePrompt, string key,
             Action<Sprite, byte[]> onSuccess, Action<string> onError)
         {
-            string safePrompt = EscapeForJson(
+            string safePrompt = OpenAIRequest.EscapeString(
                 basePrompt + $", standing idle, {CharSuffix}");
             string body =
                 $"{{\"model\":\"{Model}\"," +
@@ -466,9 +466,6 @@ namespace PromptFighters.AI
             if (string.IsNullOrEmpty(url) && string.IsNullOrEmpty(b64Json))
                 throw new Exception("data[0].url / data[0].b64_json が見つかりません");
         }
-
-        static string EscapeForJson(string s) =>
-            s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", " ").Replace("\r", "");
 
         static bool IsEffectSprite(CharacterSpriteId id) =>
             id == CharacterSpriteId.EffectA ||
