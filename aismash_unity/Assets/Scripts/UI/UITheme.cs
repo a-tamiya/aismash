@@ -19,6 +19,7 @@ namespace PromptFighters.UI
         public static readonly Color P1NeonDark = new Color(0.05f, 0.22f, 0.45f, 1.00f);
         public static readonly Color P2Neon     = new Color(1.00f, 0.28f, 0.30f, 1.00f); // 2P 赤
         public static readonly Color P2NeonDark = new Color(0.45f, 0.06f, 0.10f, 1.00f);
+        public static readonly Color FieldBg    = new Color(0.02f, 0.025f, 0.05f, 0.86f); // 入力欄の地
         public static readonly Color Ink        = Color.white;
         public static readonly Color InkDim     = new Color(0.62f, 0.70f, 0.84f, 1.00f);
         public static readonly Color Urgent     = new Color(1.00f, 0.24f, 0.16f, 1.00f);

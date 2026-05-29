@@ -47,7 +47,7 @@ namespace PromptFighters.AI
                 req.downloadHandler = new DownloadHandlerBuffer();
                 req.SetRequestHeader("Content-Type", "application/json");
                 req.SetRequestHeader("Authorization", "Bearer " + key);
-                req.timeout = 150;
+                req.timeout = 60;
 
                 yield return req.SendWebRequest();
 

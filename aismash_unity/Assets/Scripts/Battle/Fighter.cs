@@ -135,9 +135,9 @@ namespace PromptFighters.Battle
         // 状態異常タイマー
         float _burnTimer;
         float _burnTickTimer;
-        float _burnDamagePerTick = 2f;
+        [SerializeField] float _burnDamagePerTick = 2f;
         float _slowTimer;
-        float _slowFactor = 0.5f;
+        [SerializeField] float _slowFactor = 0.5f;
         float _guardBreakTimer;
         float _speedBoostTimer;
         float _jumpBoostTimer;

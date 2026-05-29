@@ -141,7 +141,7 @@ namespace PromptFighters.GameFlow
             rt.sizeDelta = size;
 
             var bg = go.AddComponent<Image>();
-            bg.color = new Color(0.02f, 0.025f, 0.05f, 0.86f);
+            bg.color = UITheme.FieldBg;
 
             var viewport = CreateUIObject("TextArea", go.transform);
             var vpRt = viewport.GetComponent<RectTransform>();

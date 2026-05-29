@@ -1323,10 +1323,12 @@ namespace PromptFighters.GameFlow
             // 生成失敗時はローカル生成で代替
             if (_pendingData1 == null)
             {
-                UpdateGeneratingStatus("生成に失敗しました。ローカル生成で代替します...");
+                if (!string.IsNullOrEmpty(errorMsg))
+                    Debug.LogWarning("[PreBattle] AI生成失敗: " + errorMsg);
+                UpdateGeneratingStatus(BuildFallbackMessage(errorMsg));
                 _pendingData1 = PromptCharacterFactory.Create(
                     _p1NameInput?.text, _p1FeatureInput?.text, preset1);
-                yield return new WaitForSeconds(0.8f);
+                yield return new WaitForSeconds(1.5f);
             }
             if (_pendingData2 == null)
             {
@@ -1425,6 +1427,18 @@ namespace PromptFighters.GameFlow
         void UpdateGeneratingStatus(string msg)
         {
             if (_generatingStatusText != null) _generatingStatusText.text = msg;
+        }
+
+        // 生成失敗の理由を簡潔に伝えつつローカル生成へ切り替える旨を表示する
+        static string BuildFallbackMessage(string error)
+        {
+            string reason;
+            if (string.IsNullOrEmpty(error))                 reason = "AI生成に失敗";
+            else if (error.Contains("timeout") || error.Contains("タイムアウト"))
+                                                             reason = "AIサーバーが応答しません（通信タイムアウト）";
+            else if (error.Contains("APIキー"))               reason = "APIキー未設定";
+            else                                             reason = "AI生成に失敗";
+            return reason + " — ローカル生成で続行します...";
         }
 
         // 生成進捗メッセージから画像枚数を解析して "N/15" 表示に変換する（Feature E）

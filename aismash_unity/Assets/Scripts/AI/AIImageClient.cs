@@ -20,6 +20,7 @@ namespace PromptFighters.AI
         const string CharacterSize = "1024x1536";
         const string EffectSize = "1536x1024";
         const string Quality = "low";
+        const int    MaxImageAttempts = 2;
 
         static string _cachedApiKey;
 
@@ -296,18 +297,35 @@ namespace PromptFighters.AI
                 $"\"prompt\":\"{safePrompt}\"," +
                 $"\"n\":1,\"size\":\"{CharacterSize}\",\"quality\":\"{Quality}\"}}";
 
-            using var req = new UnityWebRequest(GenerationsEndpoint, "POST");
-            req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
-            req.downloadHandler = new DownloadHandlerBuffer();
-            req.SetRequestHeader("Content-Type", "application/json");
-            req.SetRequestHeader("Authorization", "Bearer " + key);
-            req.timeout = 120;
-
-            yield return req.SendWebRequest();
-
-            if (req.result != UnityWebRequest.Result.Success)
+            string respText = null;
+            string lastErr  = null;
+            bool   ok       = false;
+            for (int attempt = 1; attempt <= MaxImageAttempts; attempt++)
             {
-                onError?.Invoke($"{req.error}: {req.downloadHandler?.text}");
+                using var req = new UnityWebRequest(GenerationsEndpoint, "POST");
+                req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
+                req.downloadHandler = new DownloadHandlerBuffer();
+                req.SetRequestHeader("Content-Type", "application/json");
+                req.SetRequestHeader("Authorization", "Bearer " + key);
+                req.timeout = 90;
+
+                yield return req.SendWebRequest();
+
+                if (req.result == UnityWebRequest.Result.Success)
+                {
+                    respText = req.downloadHandler.text;
+                    ok = true;
+                    break;
+                }
+
+                lastErr = $"{req.error}: {req.downloadHandler?.text}";
+                Debug.LogWarning($"[AIImage] ベース生成エラー({attempt}/{MaxImageAttempts}): {lastErr}");
+                if (attempt < MaxImageAttempts) yield return new WaitForSeconds(1.5f);
+            }
+
+            if (!ok)
+            {
+                onError?.Invoke(lastErr ?? "ベース画像生成に失敗");
                 yield break;
             }
 
@@ -316,7 +334,7 @@ namespace PromptFighters.AI
             string imageBase64 = null;
             try
             {
-                ParseImageResponse(req.downloadHandler.text, out imageUrl, out imageBase64);
+                ParseImageResponse(respText, out imageUrl, out imageBase64);
             }
             catch (Exception e)
             {
