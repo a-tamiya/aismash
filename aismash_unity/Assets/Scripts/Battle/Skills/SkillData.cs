@@ -98,5 +98,8 @@ namespace PromptFighters.Battle.Skills
         public string status;     // "stun"/"burn"/"slow"/"guard_break"/"speed"/"jump"/"transparent"/"damage"/"reflect"
         public float  status_duration;
         public float  chance = 1f;
+
+        // lifesteal: 与ダメージのうち owner が回復する割合（0〜1）。melee/lifesteal で使用
+        public float  lifesteal_ratio;
     }
 }

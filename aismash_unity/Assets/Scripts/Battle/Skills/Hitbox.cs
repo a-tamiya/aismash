@@ -30,6 +30,7 @@ namespace PromptFighters.Battle.Skills
         public bool         FixedKnockbackDir; // trueのとき KnockbackDir.x の符号をそのまま使う
         public bool         GroundBounce;     // ヒット時に地面バウンドさせる
         public bool         IsSmashHit;       // 最大チャージスマッシュヒット時のスロー演出用
+        public float        LifestealRatio;   // ヒット時に与ダメージ×この割合だけ owner を回復
 
         readonly HashSet<Fighter> _hitTargets = new HashSet<Fighter>();
         readonly Dictionary<Fighter, float> _nextHitTimes = new Dictionary<Fighter, float>();
@@ -173,6 +174,7 @@ namespace PromptFighters.Battle.Skills
             FixedKnockbackDir = false;
             GroundBounce = false;
             IsSmashHit = false;
+            LifestealRatio = 0f;
 
             transform.rotation = Quaternion.identity;
             if (_col != null) _col.enabled = true;
@@ -353,6 +355,9 @@ namespace PromptFighters.Battle.Skills
 
             if (Status != StatusType.None && Random.value <= StatusChance)
                 target.ApplyStatus(Status, StatusDuration);
+
+            if (LifestealRatio > 0f && Owner != null)
+                Owner.Heal(Damage * LifestealRatio);
         }
     }
 }

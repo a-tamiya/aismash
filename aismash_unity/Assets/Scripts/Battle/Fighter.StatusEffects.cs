@@ -7,6 +7,44 @@ namespace PromptFighters.Battle
     // コア戦闘ロジック(Fighter.cs)と分離して見通しを良くするための分割。
     public partial class Fighter
     {
+        // バリアで吸収できる残りダメージ量（TakeDamage/TakeThrowで消費）。
+        float _barrierHP;
+
+        // 一定量のダメージを吸収するシールド（barrier アクション用）。
+        public void StartBarrier(float amount, float duration)
+            => StartCoroutine(BarrierRoutine(amount, duration));
+
+        System.Collections.IEnumerator BarrierRoutine(float amount, float duration)
+        {
+            _barrierHP = Mathf.Max(_barrierHP, amount);
+            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "BARRIER!",
+                new Color(0.4f, 0.8f, 1f), 2.2f);
+            BattleLogger.Instance?.LogEvent($"{PlayerLabel()}がバリア展開");
+            yield return new WaitForSeconds(duration);
+            _barrierHP = 0f;
+        }
+
+        // 一定時間、相手を中心点へ継続的に引き寄せる（gravity_well アクション用）。
+        public void StartGravityWell(Vector2 center, float radius, float force, float duration)
+            => StartCoroutine(GravityWellRoutine(center, radius, force, duration));
+
+        System.Collections.IEnumerator GravityWellRoutine(Vector2 center, float radius, float force, float duration)
+        {
+            float elapsed = 0f;
+            while (elapsed < duration && State != FighterState.Dead)
+            {
+                var opp = Opponent;
+                if (opp != null && opp.State != FighterState.Dead)
+                {
+                    Vector2 d = center - (Vector2)opp.transform.position;
+                    if (d.magnitude <= radius)
+                        opp.AddExternalForce(d.normalized * force);
+                }
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+        }
+
         public void StartTemporarySpeedChange(float multiplier, float duration)
             => StartCoroutine(TemporarySpeedChange(multiplier, duration));
 

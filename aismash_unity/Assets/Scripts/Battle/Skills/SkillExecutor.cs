@@ -325,6 +325,12 @@ namespace PromptFighters.Battle.Skills
                 ["counter"]            = (skill, a, pm) => DoCounter(a),
                 ["summon"]             = SpawnSummon,
                 ["apply_status"]       = (skill, a, pm) => ApplyOpponentStatus(a),
+                ["heal_self"]          = (skill, a, pm) => HealSelf(a),
+                ["barrier"]            = (skill, a, pm) => DoBarrier(a),
+                ["command_throw"]      = DoCommandThrow,
+                ["shockwave"]          = SpawnShockwave,
+                ["gravity_well"]       = (skill, a, pm) => DoGravityWell(skill, a),
+                ["lifesteal"]          = (skill, a, pm) => { if (a.lifesteal_ratio <= 0f) a.lifesteal_ratio = 0.5f; SpawnMeleeHitbox(skill, a, pm); },
                 ["delay"]              = (skill, a, pm) => { /* no-op: time制御で表現 */ },
             };
         }
@@ -380,6 +386,7 @@ namespace PromptFighters.Battle.Skills
             hb.FlipEffectX    = !_fighter.FacingRight;
             hb.MaxHits        = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
             hb.IsSmashHit     = skill.slot == SkillSlot.SmashSide && powerMultiplier >= SkillConstants.SmashPowerThreshold;
+            hb.LifestealRatio = Mathf.Clamp01(a.lifesteal_ratio);
             ApplyActionStatus(hb, a);
         }
 
@@ -755,6 +762,127 @@ namespace PromptFighters.Battle.Skills
                 (a.size_y > 0f ? a.size_y : 1.2f) * _sizeScale);
             SummonEntity.Spawn(_fighter, pos, speed, lifetime, dmg, kb, skill.element,
                 a.hide_effect ? null : _fighter.GetEffectSprite(skill.slot), desiredSize, a);
+        }
+
+        // heal_self: HP回復。power=回復量(HP)。未指定なら最大HPの8%。
+        void HealSelf(SkillAction a)
+        {
+            float amount = a.power > 0f ? a.power : _fighter.MaxHP * 0.08f;
+            _fighter.Heal(amount);
+        }
+
+        // barrier: 一定量のダメージを吸収するシールド。power=吸収量、duration=持続秒。
+        void DoBarrier(SkillAction a)
+        {
+            float amount   = a.power > 0f ? a.power : 15f;
+            float duration = a.duration > 0f ? a.duration : 4f;
+            _fighter.StartBarrier(amount, duration);
+        }
+
+        // command_throw: 近距離のガード不能投げ。範囲内なら確定ダメージ＋吹き飛ばし。
+        void DoCommandThrow(SkillData skill, SkillAction a, float powerMultiplier)
+        {
+            var opp = _fighter.Opponent;
+            if (opp == null) return;
+
+            Vector2 delta = opp.transform.position - _fighter.transform.position;
+            float range  = (a.range > 0f ? a.range
+                          : (skill.parameters.range > 0f ? skill.parameters.range : 1.6f)) * _sizeScale;
+            float height = (a.size_y > 0f ? a.size_y : 2.0f) * _sizeScale;
+            if (Mathf.Abs(delta.x) > range || Mathf.Abs(delta.y) > height) return;
+
+            float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage)
+                        * powerMultiplier * _fighter.DamageMultiplier;
+            float facing = _fighter.FacingRight ? 1f : -1f;
+            var (kbDir, _) = ComputeKnockback(a, 1f, 0.8f);
+            Vector2 throwDir = new Vector2(facing * Mathf.Abs(kbDir.x), Mathf.Abs(kbDir.y));
+            opp.TakeThrow(dmg, skill.parameters.knockback * powerMultiplier, throwDir, skill.parameters.stun_time);
+            PromptFighters.Audio.GameAudioManager.Instance?.PlayGrab();
+        }
+
+        // shockwave: 地面叩きつけで左右に発生する衝撃波。effect spriteで判定と見た目を一致させる。
+        void SpawnShockwave(SkillData skill, SkillAction a, float powerMultiplier)
+        {
+            float width   = (a.size_x > 0f ? a.size_x : 2.0f);
+            float height  = (a.size_y > 0f ? a.size_y : 0.8f);
+            float dist    = (a.range  > 0f ? a.range  : 2.2f) * _sizeScale; // 中心から左右へのオフセット
+            float groundY = (!Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 0.3f) * _sizeScale;
+            float life    = skill.parameters.active_time > 0f ? skill.parameters.active_time : 0.25f;
+            SpawnGroundWave(skill, a, powerMultiplier, +1f, dist, width, height, groundY, life);
+            SpawnGroundWave(skill, a, powerMultiplier, -1f, dist, width, height, groundY, life);
+        }
+
+        void SpawnGroundWave(SkillData skill, SkillAction a, float powerMultiplier,
+                             float side, float dist, float width, float height, float groundY, float life)
+        {
+            float w = width  * _sizeScale;
+            float h = height * _sizeScale;
+            Vector2 pos = (Vector2)_fighter.transform.position + new Vector2(side * dist, groundY);
+            var hb = Hitbox.Spawn(_fighter, pos,
+                new Vector2(w * HitboxVisualScale, h * HitboxVisualScale), life);
+            float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage)
+                        * powerMultiplier * _fighter.DamageMultiplier;
+            hb.Damage         = dmg;
+            hb.DamageIncludesOwnerBoost = true;
+            hb.Knockback      = skill.parameters.knockback * powerMultiplier;
+            var (kbDir, kbFixed) = ComputeKnockback(a, 0.6f, 1.0f);
+            hb.KnockbackDir      = kbDir;
+            hb.FixedKnockbackDir = kbFixed;
+            hb.GroundBounce      = a.knockback_direction == "ground_bounce";
+            hb.StunTime       = skill.parameters.stun_time;
+            hb.GuardDamage    = skill.parameters.guard_damage;
+            hb.Element        = skill.element;
+            hb.EffectSprite   = a.hide_effect ? null : _fighter.GetEffectSprite(skill.slot);
+            hb.HideVisual     = a.hide_effect;
+            hb.FlipEffectX    = side < 0f;
+            hb.MaxHits        = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
+            ApplyActionStatus(hb, a);
+        }
+
+        // gravity_well: 一定時間、相手を一点へ継続引き寄せ。引き寄せ半径＝表示ビジュアル径で一致させる。
+        void DoGravityWell(SkillData skill, SkillAction a)
+        {
+            float dirSign = _fighter.FacingRight ? 1f : -1f;
+            float spawnX  = !Mathf.Approximately(a.spawn_x, 0f) ? a.spawn_x : 2.5f;
+            float spawnY  = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 1.0f;
+            Vector2 center = (Vector2)_fighter.transform.position
+                           + new Vector2(dirSign * spawnX * _sizeScale, spawnY * _sizeScale);
+            float radius   = (a.range > 0f ? a.range : 3.5f) * _sizeScale;
+            float force    = Mathf.Clamp(a.power > 0f ? a.power : 18f, 4f, 40f);
+            float duration = a.duration > 0f ? a.duration : 1.2f;
+            _fighter.StartGravityWell(center, radius, force, duration);
+            if (!a.hide_effect)
+                SpawnFieldVisual(center, radius * 2f, _fighter.GetEffectSprite(skill.slot), skill.element, duration);
+        }
+
+        // 引き寄せ範囲などの「効果範囲」を可視化する非接触ビジュアル。直径＝効果範囲で一致させる。
+        void SpawnFieldVisual(Vector2 center, float diameter, Sprite sprite, Element element, float duration)
+        {
+            var go = new GameObject("FieldVisual");
+            go.transform.position = center;
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = sprite != null ? sprite : RuntimeSprite.Circle();
+            sr.sortingOrder = 9;
+            Color c = SkillEnumParser.ElementColor(element);
+            sr.color = new Color(c.r, c.g, c.b, 0.5f);
+            Vector2 ss = sr.sprite.bounds.size;
+            if (ss.x > 0f && ss.y > 0f)
+                go.transform.localScale = new Vector3(diameter / ss.x, diameter / ss.y, 1f);
+            StartCoroutine(FadeAndDestroy(go, sr, duration));
+        }
+
+        IEnumerator FadeAndDestroy(GameObject go, SpriteRenderer sr, float duration)
+        {
+            float t = 0f;
+            Color baseC = sr.color;
+            while (t < duration && go != null)
+            {
+                t += Time.deltaTime;
+                if (sr != null)
+                    sr.color = new Color(baseC.r, baseC.g, baseC.b, Mathf.Lerp(baseC.a, 0f, t / duration));
+                yield return null;
+            }
+            if (go != null) Destroy(go);
         }
 
         // apply_status は相手に状態異常を付与する。近距離内でchance判定あり。

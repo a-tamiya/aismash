@@ -593,6 +593,7 @@ namespace PromptFighters.Battle
             bool blocking = State == FighterState.Guarding && _guardBreakTimer <= 0f;
             if (!blocking && applyOpponentDamageBoost && Opponent != null) damage *= Opponent.DamageMultiplier;
             float actual  = blocking ? Mathf.Max(0f, damage * guardDamageRatio) : damage;
+            actual        = AbsorbBarrier(actual);
             CurrentHP     = Mathf.Max(0f, CurrentHP - actual);
             OnHPChanged?.Invoke(CurrentHP, maxHP);
             // HP共有: 受けたダメージの50%を相手にも伝播（再帰防止）
@@ -669,6 +670,63 @@ namespace PromptFighters.Battle
             _rb.linearVelocity = new Vector2(impulse.x, _rb.linearVelocity.y + impulse.y);
             if (controlLock > 0f && impulse.sqrMagnitude > 0.01f)
                 _controlLockTimer = Mathf.Max(_controlLockTimer, controlLock);
+        }
+
+        public float MaxHP => maxHP;
+
+        // HP回復。heal_self / lifesteal から呼ばれる。
+        public void Heal(float amount)
+        {
+            if (State == FighterState.Dead || amount <= 0f) return;
+            CurrentHP = Mathf.Min(maxHP, CurrentHP + amount);
+            OnHPChanged?.Invoke(CurrentHP, maxHP);
+            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f,
+                "HEAL +" + Mathf.RoundToInt(amount), new Color(0.3f, 1f, 0.45f), 2.0f);
+            BattleLogger.Instance?.LogEvent($"{PlayerLabel()}がHP回復");
+        }
+
+        // gravity_well の継続引き寄せ用。物理力を加える。
+        public void AddExternalForce(Vector2 force)
+        {
+            if (State == FighterState.Dead) return;
+            _rb.AddForce(force, ForceMode2D.Force);
+        }
+
+        // ガード不能の確定ダメージ（command_throw 用）。投げ扱いでガードを貫通する。
+        public void TakeThrow(float damage, float knockbackForce, Vector2 knockbackDir, float stun)
+        {
+            if (State == FighterState.Dead || State == FighterState.Dodging || _dodgeTimer > 0f) return;
+            if (IsInvincible) return;
+
+            damage = AbsorbBarrier(damage);
+            CurrentHP = Mathf.Max(0f, CurrentHP - damage);
+            OnHPChanged?.Invoke(CurrentHP, maxHP);
+            if (State == FighterState.Guarding) State = FighterState.Idle;
+
+            if (knockbackForce > 0f)
+            {
+                const float KnockbackBoost = 1.4f;
+                float weightScale = 1f / Mathf.Max(0.4f, weight);
+                _rb.linearVelocity = knockbackDir.normalized * knockbackForce * weightScale * KnockbackBoost;
+                _controlLockTimer  = 0.2f;
+            }
+            if (stun > 0f) _stunTimer = Mathf.Min(stun, 1.5f);
+
+            OnDamageReceived?.Invoke(damage, false);
+            if (Opponent != null) BattleLogger.Instance?.LogDamage(Opponent.PlayerIndex, damage);
+            DamagePopup.Spawn(transform.position, damage, false);
+            _hitFlashTimer = 0.08f;
+            if (CurrentHP <= 0f) Die();
+        }
+
+        // バリアでダメージを吸収し、残りダメージを返す。
+        float AbsorbBarrier(float dmg)
+        {
+            if (_barrierHP <= 0f || dmg <= 0f) return dmg;
+            float absorbed = Mathf.Min(_barrierHP, dmg);
+            _barrierHP -= absorbed;
+            DamagePopup.SpawnText(transform.position, "BARRIER", new Color(0.4f, 0.8f, 1f), 1.4f);
+            return dmg - absorbed;
         }
 
         public void ShowSkillSprite(SkillSlot slot, float seconds)
