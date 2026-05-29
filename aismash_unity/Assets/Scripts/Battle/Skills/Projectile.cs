@@ -64,7 +64,7 @@ namespace PromptFighters.Battle.Skills
             p.transform.localScale = new Vector3(0.84f, 0.62f, 1f);
 
             p._sr.sprite  = RuntimeSprite.Square();
-            p._sr.enabled = true;
+            p._sr.enabled = false; // アクティベート完了まで描画しない（1フレーム点滅防止）
 
             p.Owner     = owner;
             p.Direction = dir.normalized;
@@ -195,11 +195,13 @@ namespace PromptFighters.Battle.Skills
                 _sr.color  = Color.white;
                 _sr.flipX  = FlipEffectX;
                 FitColliderAndVisualToWorldSize(_sr);
+                _sr.enabled = true;
             }
             else
             {
                 _sr.color = SkillEnumParser.ElementColor(Element);
                 FitColliderAndVisualToWorldSize(_sr);
+                _sr.enabled = true;
             }
 
             _spawnTime = Time.time;
@@ -253,7 +255,7 @@ namespace PromptFighters.Battle.Skills
 
         void LateUpdate()
         {
-            if (_debugSr == null) return;
+            if (_released || !_activated || _debugSr == null) return;
             bool show = DebugSettings.ShowHitboxes;
             _debugSr.enabled = show;
             if (show && _col != null)

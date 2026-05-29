@@ -41,6 +41,7 @@ namespace PromptFighters.Battle.Skills
 
         bool _isCircle;
         bool _released;
+        bool _activated;
         SpriteRenderer _sr;
         Collider2D _col;
 
@@ -57,7 +58,7 @@ namespace PromptFighters.Battle.Skills
 
             hb._sr.sprite       = RuntimeSprite.Square();
             hb._sr.color        = new Color(1f, 1f, 0f, 0.55f);
-            hb._sr.enabled      = true;
+            hb._sr.enabled      = false; // アクティベート完了まで描画しない（1フレーム点滅防止）
 
             hb.Owner    = owner;
             hb.Lifetime = lifetime;
@@ -77,7 +78,7 @@ namespace PromptFighters.Battle.Skills
 
             hb._sr.sprite = RuntimeSprite.Square();
             hb._sr.color  = new Color(1f, 1f, 0f, 0f); // 不可視（ring は常にHideVisual扱い）
-            hb._sr.enabled = true;
+            hb._sr.enabled = false;
 
             hb.Owner      = owner;
             hb.Lifetime   = lifetime;
@@ -144,6 +145,7 @@ namespace PromptFighters.Battle.Skills
         void ResetState()
         {
             _released = false;
+            _activated = false;
             _hitTargets.Clear();
             _nextHitTimes.Clear();
             _hitSummons.Clear();
@@ -205,18 +207,23 @@ namespace PromptFighters.Battle.Skills
                 _sr.color  = Color.white;
                 _sr.flipX  = FlipEffectX;
                 FitColliderAndVisualToWorldSize(_sr);
+                _sr.enabled = true;
             }
             else
             {
                 _sr.color = new Color(ec.r, ec.g, ec.b, 0.65f);
+                _sr.enabled = true;
             }
 
+            _activated = true;
             yield return new WaitForSeconds(Lifetime);
             Release();
         }
 
         void LateUpdate()
         {
+            if (_released || !_activated) return;
+
             // FollowOwner処理
             if (FollowOwner && Owner != null)
             {
@@ -247,6 +254,7 @@ namespace PromptFighters.Battle.Skills
         {
             if (_released) return;
             _released = true;
+            _activated = false;
             StopAllCoroutines();
             if (_debugSr != null) _debugSr.enabled = false;
             gameObject.SetActive(false);
