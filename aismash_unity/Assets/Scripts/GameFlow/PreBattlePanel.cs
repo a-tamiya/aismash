@@ -763,11 +763,14 @@ namespace PromptFighters.GameFlow
             cg.interactable = false;
             cg.blocksRaycasts = false;
 
+            MakeSlantBar(_trainingPanel.transform, "TrainSlash", new Vector2(0, 485), new Vector2(420, 44),
+                new Color(PromptFighters.UI.UITheme.P1NeonDark.r, PromptFighters.UI.UITheme.P1NeonDark.g, PromptFighters.UI.UITheme.P1NeonDark.b, 0.5f), 22f);
             MakeLabel(_trainingPanel.transform, "TrainingTitle", "トレーニングモード",
-                new Vector2(0, 485), new Vector2(480, 46), 28, new Color(0.5f, 0.85f, 1f));
+                new Vector2(0, 485), new Vector2(480, 46), 28, PromptFighters.UI.UITheme.P1Neon)
+                .fontStyle = FontStyles.Bold | FontStyles.Italic;
             _trainingControlsText = MakeLabel(_trainingPanel.transform, "TrainingControls",
                 BuildTrainingHelpText(),
-                new Vector2(0, 440), new Vector2(900, 52), 14, new Color(0.9f, 0.95f, 1f));
+                new Vector2(0, 440), new Vector2(900, 52), 14, PromptFighters.UI.UITheme.Ink);
         }
 
         void BuildGenerationSetupPanel()
@@ -778,30 +781,35 @@ namespace PromptFighters.GameFlow
 
             var bg = _generationSetupPanel.AddComponent<Image>();
             bg.sprite = CreateGradientSprite(
-                new Color(0.02f, 0.02f, 0.06f, 1f),
-                new Color(0.09f, 0.02f, 0.12f, 1f),
-                new Color(0f, 0.08f, 0.14f, 1f),
-                new Color(0f, 0f, 0.04f, 1f));
+                new Color(0.05f, 0.06f, 0.09f, 1f),
+                new Color(0.06f, 0.07f, 0.11f, 1f),
+                new Color(0.012f, 0.014f, 0.022f, 1f),
+                new Color(0.0f, 0.0f, 0.012f, 1f));
 
+            MakeSlantBar(_generationSetupPanel.transform, "GenSlash", new Vector2(0f, 455f), new Vector2(520f, 52f),
+                new Color(PromptFighters.UI.UITheme.GoldDim.r, PromptFighters.UI.UITheme.GoldDim.g, PromptFighters.UI.UITheme.GoldDim.b, 0.30f), 24f);
             MakeLabel(_generationSetupPanel.transform, "GenSetupTitle", "新規キャラクター生成",
-                new Vector2(0f, 455f), new Vector2(760f, 56f), 30f, new Color(1f, 0.88f, 0.35f));
+                new Vector2(0f, 455f), new Vector2(760f, 56f), 32f, PromptFighters.UI.UITheme.Gold)
+                .fontStyle = FontStyles.Bold | FontStyles.Italic;
 
             BuildGenerationColumn(_generationSetupPanel.transform, true);
             BuildGenerationColumn(_generationSetupPanel.transform, false);
 
             var startGen = MakeButton(_generationSetupPanel.transform, "StartGenerateBtn", "生成開始",
-                new Vector2(-170f, -420f), new Vector2(260f, 62f), OnGeneratePressed,
-                new Color(0.65f, 0.28f, 0.08f, 1f));
-            SetButtonLabelStyle(startGen, 22f, FontStyles.Bold, Color.white);
+                new Vector2(-170f, -420f), new Vector2(260f, 64f), OnGeneratePressed,
+                PromptFighters.UI.UITheme.Gold);
+            StyleArcadeButton(startGen, PromptFighters.UI.UITheme.Gold, 16f);
+            SetButtonLabelStyle(startGen, 23f, FontStyles.Bold | FontStyles.Italic, new Color(0.12f, 0.08f, 0f));
 
             var back = MakeButton(_generationSetupPanel.transform, "BackToSelectBtn", "戻る",
-                new Vector2(170f, -420f), new Vector2(220f, 62f), ShowCharacterSelect,
-                new Color(0.14f, 0.16f, 0.22f, 1f));
-            SetButtonLabelStyle(back, 20f, FontStyles.Bold, Color.white);
+                new Vector2(170f, -420f), new Vector2(220f, 64f), ShowCharacterSelect,
+                PromptFighters.UI.UITheme.SteelLight);
+            StyleArcadeButton(back, PromptFighters.UI.UITheme.SteelLight, 16f);
+            SetButtonLabelStyle(back, 20f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             MakeLabel(_generationSetupPanel.transform, "GenSetupHint",
                 "空欄のプレイヤーは選択中の既存キャラを使用します。生成中はTキーで練習できます。",
-                new Vector2(0f, -470f), new Vector2(840f, 28f), 13f, new Color(0.78f, 0.86f, 1f));
+                new Vector2(0f, -470f), new Vector2(840f, 28f), 13f, PromptFighters.UI.UITheme.InkDim);
 
             var debugBtn = MakeButton(_generationSetupPanel.transform, "DebugSkipImageBtn",
                 "", new Vector2(0f, -370f), new Vector2(420f, 40f),
@@ -831,13 +839,22 @@ namespace PromptFighters.GameFlow
         {
             float cx = isP1 ? -330f : 330f;
             var pColor = isP1 ? PromptFighters.UI.UITheme.P1Neon : PromptFighters.UI.UITheme.P2Neon;
+            var pColorDark = isP1 ? PromptFighters.UI.UITheme.P1NeonDark : PromptFighters.UI.UITheme.P2NeonDark;
+            float slant = isP1 ? 16f : -16f;
 
-            MakePanel(parent, isP1 ? "P1GenBg" : "P2GenBg",
-                new Vector2(cx, 35f), new Vector2(520f, 650f), new Color(0.01f, 0.014f, 0.03f, 0.72f));
+            var genBg = MakePanel(parent, isP1 ? "P1GenBg" : "P2GenBg",
+                new Vector2(cx, 35f), new Vector2(520f, 650f),
+                new Color(pColorDark.r, pColorDark.g, pColorDark.b, 0.24f));
+            genBg.sprite = PromptFighters.UI.UITheme.VGradient; genBg.type = Image.Type.Simple;
+            MakeSlantBar(parent, isP1 ? "P1GenTop" : "P2GenTop",
+                new Vector2(cx, 358f), new Vector2(520f, 5f), pColor, slant);
+            MakeSlantBar(parent, isP1 ? "P1GenBadgePlate" : "P2GenBadgePlate",
+                new Vector2(cx, 325f), new Vector2(120f, 46f), pColor, slant);
             MakeLabel(parent, isP1 ? "P1GenBadge" : "P2GenBadge", isP1 ? "1P" : "2P",
-                new Vector2(cx, 325f), new Vector2(120f, 44f), 28f, pColor).fontStyle = FontStyles.Bold;
-            MakeOutline(parent, isP1 ? "P1GenLine" : "P2GenLine",
-                new Vector2(cx, 292f), new Vector2(360f, 2f), pColor);
+                new Vector2(cx, 325f), new Vector2(120f, 46f), 28f, Color.white)
+                .fontStyle = FontStyles.Bold | FontStyles.Italic;
+            MakeSlantBar(parent, isP1 ? "P1GenLine" : "P2GenLine",
+                new Vector2(cx, 292f), new Vector2(360f, 3f), pColor, slant);
 
             var nameInput = MakeInputField(parent, isP1 ? "P1GenerateNameInput" : "P2GenerateNameInput",
                 "キャラクター名", new Vector2(cx, 220f), new Vector2(430f, 48f), false);
@@ -867,27 +884,34 @@ namespace PromptFighters.GameFlow
             _generatingPanel.SetActive(false);
 
             var bg = _generatingPanel.AddComponent<Image>();
-            bg.color = new Color(0f, 0f, 0f, 0.88f);
+            bg.color = new Color(0f, 0f, 0f, 0.9f);
 
+            MakeSlantBar(_generatingPanel.transform, "GenBar1",
+                new Vector2(0, 122), new Vector2(760, 70),
+                new Color(PromptFighters.UI.UITheme.P1NeonDark.r, PromptFighters.UI.UITheme.P1NeonDark.g, PromptFighters.UI.UITheme.P1NeonDark.b, 0.4f), 40f);
             MakeLabel(_generatingPanel.transform, "GenTitle",
                 "AIがキャラクターと技を生成中...",
-                new Vector2(0, 120), new Vector2(700, 56), 30f, new Color(0.5f, 0.9f, 1f));
+                new Vector2(0, 120), new Vector2(760, 56), 32f, PromptFighters.UI.UITheme.Gold)
+                .fontStyle = FontStyles.Bold | FontStyles.Italic;
 
             _generatingStatusText = MakeLabel(_generatingPanel.transform, "GenStatus",
                 "生成を開始しています...",
-                new Vector2(0, 40), new Vector2(700, 40), 18f, new Color(0.85f, 0.9f, 1f));
+                new Vector2(0, 40), new Vector2(700, 40), 18f, PromptFighters.UI.UITheme.Ink);
+            _generatingStatusText.fontStyle = FontStyles.Bold;
 
             MakeLabel(_generatingPanel.transform, "GenNote",
                 "しばらくお待ちください。OpenAI API を使用しています。",
-                new Vector2(0, -20), new Vector2(700, 32), 14f, new Color(0.65f, 0.75f, 0.9f));
+                new Vector2(0, -20), new Vector2(700, 32), 14f, PromptFighters.UI.UITheme.InkDim);
 
-            MakeButton(_generatingPanel.transform, "CancelBtn", "キャンセル（ローカル生成で続行）",
-                new Vector2(0, -100), new Vector2(400, 52), CancelGeneration,
-                new Color(0.25f, 0.15f, 0.15f));
+            var cancelBtn = MakeButton(_generatingPanel.transform, "CancelBtn", "キャンセル（ローカル生成で続行）",
+                new Vector2(0, -100), new Vector2(420, 54), CancelGeneration,
+                PromptFighters.UI.UITheme.SteelLight);
+            StyleArcadeButton(cancelBtn, PromptFighters.UI.UITheme.SteelLight, 14f);
+            SetButtonLabelStyle(cancelBtn, 18f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             MakeLabel(_generatingPanel.transform, "TrainHint",
                 "Tキー: 生成を続けたままトレーニング　Esc: キャンセル",
-                new Vector2(0, -165), new Vector2(700, 30), 13f, new Color(0.6f, 0.7f, 0.85f));
+                new Vector2(0, -165), new Vector2(700, 30), 13f, PromptFighters.UI.UITheme.InkDim);
         }
 
         void BuildSkillConfirmPanel()
@@ -898,23 +922,28 @@ namespace PromptFighters.GameFlow
 
             var bg = _skillConfirmPanel.AddComponent<Image>();
             bg.sprite = CreateGradientSprite(
-                new Color(0.02f, 0.02f, 0.06f, 1f), new Color(0.06f, 0f, 0.14f, 1f),
-                new Color(0f, 0.08f, 0.16f, 1f), new Color(0f, 0f, 0.04f, 1f));
+                new Color(0.05f, 0.06f, 0.09f, 1f), new Color(0.06f, 0.07f, 0.11f, 1f),
+                new Color(0.012f, 0.014f, 0.022f, 1f), new Color(0.0f, 0.0f, 0.012f, 1f));
 
+            MakeSlantBar(_skillConfirmPanel.transform, "ConfirmSlash", new Vector2(0, 492), new Vector2(420, 46),
+                new Color(PromptFighters.UI.UITheme.GoldDim.r, PromptFighters.UI.UITheme.GoldDim.g, PromptFighters.UI.UITheme.GoldDim.b, 0.30f), 22f);
             MakeLabel(_skillConfirmPanel.transform, "ConfirmTitle", "キャラクター確認",
-                new Vector2(0, 492), new Vector2(700, 46), 28f, new Color(1f, 0.88f, 0.3f));
+                new Vector2(0, 492), new Vector2(700, 46), 30f, PromptFighters.UI.UITheme.Gold)
+                .fontStyle = FontStyles.Bold | FontStyles.Italic;
 
-            // 中央仕切り
-            MakeOutline(_skillConfirmPanel.transform, "Divider",
-                new Vector2(0, 0), new Vector2(3, 900), new Color(1f, 1f, 1f, 0.1f));
+            // 中央仕切り（斜めゴールド）
+            MakeSlantBar(_skillConfirmPanel.transform, "Divider",
+                new Vector2(0, -20), new Vector2(6, 880), new Color(PromptFighters.UI.UITheme.Gold.r, PromptFighters.UI.UITheme.Gold.g, PromptFighters.UI.UITheme.Gold.b, 0.32f), 50f);
 
             // 1P 列（左）
             float lx = -440f;
+            MakeSlantBar(_skillConfirmPanel.transform, "P1BadgePlate",
+                new Vector2(lx, 438), new Vector2(110, 46), PromptFighters.UI.UITheme.P1Neon, 14f);
             MakeLabel(_skillConfirmPanel.transform, "P1Badge", "1P",
-                new Vector2(lx, 438), new Vector2(100, 44), 30f, new Color(0.4f, 0.75f, 1f))
-                .fontStyle = FontStyles.Bold;
-            MakeOutline(_skillConfirmPanel.transform, "P1Line",
-                new Vector2(lx, 404), new Vector2(360, 2), new Color(0.4f, 0.75f, 1f));
+                new Vector2(lx, 438), new Vector2(110, 46), 30f, Color.white)
+                .fontStyle = FontStyles.Bold | FontStyles.Italic;
+            MakeSlantBar(_skillConfirmPanel.transform, "P1Line",
+                new Vector2(lx, 404), new Vector2(360, 3), PromptFighters.UI.UITheme.P1Neon, 14f);
 
             _confirmP1Name = MakeLabel(_skillConfirmPanel.transform, "P1Name", "---",
                 new Vector2(lx, 374), new Vector2(390, 32), 20f, new Color(1f, 1f, 1f));
@@ -947,11 +976,13 @@ namespace PromptFighters.GameFlow
 
             // 2P 列（右）
             float rx = 440f;
+            MakeSlantBar(_skillConfirmPanel.transform, "P2BadgePlate",
+                new Vector2(rx, 438), new Vector2(110, 46), PromptFighters.UI.UITheme.P2Neon, -14f);
             MakeLabel(_skillConfirmPanel.transform, "P2Badge", "2P",
-                new Vector2(rx, 438), new Vector2(100, 44), 30f, new Color(1f, 0.55f, 0.35f))
-                .fontStyle = FontStyles.Bold;
-            MakeOutline(_skillConfirmPanel.transform, "P2Line",
-                new Vector2(rx, 404), new Vector2(360, 2), new Color(1f, 0.55f, 0.35f));
+                new Vector2(rx, 438), new Vector2(110, 46), 30f, Color.white)
+                .fontStyle = FontStyles.Bold | FontStyles.Italic;
+            MakeSlantBar(_skillConfirmPanel.transform, "P2Line",
+                new Vector2(rx, 404), new Vector2(360, 3), PromptFighters.UI.UITheme.P2Neon, -14f);
 
             _confirmP2Name = MakeLabel(_skillConfirmPanel.transform, "P2Name", "---",
                 new Vector2(rx, 374), new Vector2(390, 32), 20f, Color.white);
@@ -980,13 +1011,14 @@ namespace PromptFighters.GameFlow
 
             // フッター
             var battleBtn = MakeButton(_skillConfirmPanel.transform, "BattleBtn", "バトル開始",
-                new Vector2(0, -428), new Vector2(330, 58), OnSkillConfirmBattlePressed,
-                new Color(0.1f, 0.55f, 0.1f, 1f));
-            SetButtonLabelStyle(battleBtn, 24f, FontStyles.Bold, Color.white);
+                new Vector2(0, -428), new Vector2(340, 62), OnSkillConfirmBattlePressed,
+                PromptFighters.UI.UITheme.Gold);
+            StyleArcadeButton(battleBtn, PromptFighters.UI.UITheme.Gold, 16f);
+            SetButtonLabelStyle(battleBtn, 25f, FontStyles.Bold | FontStyles.Italic, new Color(0.12f, 0.08f, 0f));
 
             MakeLabel(_skillConfirmPanel.transform, "BattleHint",
                 "スペースキー: バトル開始　Esc: 戻る",
-                new Vector2(0, -475), new Vector2(600, 28), 13f, new Color(0.72f, 0.8f, 1f));
+                new Vector2(0, -475), new Vector2(600, 28), 13f, PromptFighters.UI.UITheme.InkDim);
         }
 
         void RefreshSkillConfirmContent()
@@ -1149,7 +1181,7 @@ namespace PromptFighters.GameFlow
                 EnsurePreviewSprite(data);
                 bool isSelected = idx == selected;
                 Color bg = isSelected
-                    ? (isP1 ? new Color(0.2f, 0.55f, 1f, 1f) : new Color(1f, 0.35f, 0.2f, 1f))
+                    ? (isP1 ? PromptFighters.UI.UITheme.P1Neon : PromptFighters.UI.UITheme.P2Neon)
                     : new Color(0.08f, 0.09f, 0.13f, 1f);
                 MakeIconButton(grid, $"Icon_{idx}", data.characterSprite, idx + 1, () => SelectPreset(isP1, idx), bg);
             }
