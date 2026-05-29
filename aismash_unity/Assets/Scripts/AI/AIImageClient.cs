@@ -186,7 +186,22 @@ namespace PromptFighters.AI
                     }));
             }
 
-            yield return new WaitUntil(() => pending == 0);
+            // 各edit個別タイムアウト(180s)を超えても全コールバックが返らない異常時の保険。
+            // これがないと pending が 0 にならず永久にハングする。
+            const float overallTimeout = 240f;
+            float elapsed = 0f;
+            while (pending > 0 && elapsed < overallTimeout)
+            {
+                yield return null;
+                elapsed += Time.unscaledDeltaTime;
+            }
+            if (pending > 0)
+            {
+                Debug.LogWarning($"[AIImage] 画像生成が{overallTimeout:F0}秒以内に完了しませんでした（残り{pending}枚をIdle1で代替）");
+                onProgress?.Invoke($"⚠ 画像生成タイムアウト（残り{pending}枚をIdle1で代替）");
+                failedCount += pending;
+                pending = 0;
+            }
 
             if (failedCount > 0)
             {

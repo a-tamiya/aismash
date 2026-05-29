@@ -59,8 +59,9 @@ namespace PromptFighters.Battle.Skills
         public void LoadCharacter(CharacterData data)
         {
             if (data == null) return;
+            int n = data.skills != null ? data.skills.Length : 0;
             for (int i = 0; i < skills.Length; i++)
-                skills[i] = data.skills[i];
+                skills[i] = i < n ? data.skills[i] : null;
             _sizeScale = Mathf.Clamp(data.sizeScale > 0f ? data.sizeScale : 1f, 0.5f, 2f);
             ResetSkillState();
             Debug.Log($"[SkillExecutor] キャラクター「{data.characterName}」の技をロードしました。(sizeScale={_sizeScale:F2})");
