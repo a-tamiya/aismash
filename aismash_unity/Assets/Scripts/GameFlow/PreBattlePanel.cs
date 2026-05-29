@@ -33,6 +33,10 @@ namespace PromptFighters.GameFlow
         Transform _p2IconGrid;
         TextMeshProUGUI _p1DetailText;
         TextMeshProUGUI _p2DetailText;
+        Image[] _p1StatFills;
+        Image[] _p2StatFills;
+        TextMeshProUGUI[] _p1StatValues;
+        TextMeshProUGUI[] _p2StatValues;
         Image _p1PreviewImage;
         Image _p2PreviewImage;
         Button _p1DeleteButton;
@@ -496,103 +500,70 @@ namespace PromptFighters.GameFlow
             cbImg.type = Image.Type.Simple;
             cbImg.color = bgColor;
 
-            // プレイヤーバッジ（斜めネオンプレート）
+            // プレイヤーバッジ（斜めネオンプレート）— 左上に小さく
             MakeSlantBar(parent, isP1 ? "P1BadgePlate" : "P2BadgePlate",
-                new Vector2(cx, 362f), new Vector2(150f, 64f), pColor, slant);
+                new Vector2(cx - 300f, 404f), new Vector2(120f, 56f), pColor, slant);
             var badge = MakeLabel(parent, isP1 ? "P1Badge" : "P2Badge",
                 isP1 ? "1P" : "2P",
-                new Vector2(cx, 362f), new Vector2(150f, 64f), 42, Color.white);
+                new Vector2(cx - 300f, 404f), new Vector2(120f, 56f), 38, Color.white);
             badge.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
-            // コントローラー接続状態
-            var gpLabel = MakeLabel(parent, isP1 ? "P1GpStatus" : "P2GpStatus",
-                "",
-                new Vector2(cx, 323f), new Vector2(280f, 22f), 12, Color.gray);
-            if (isP1) _p1GamepadLabel = gpLabel;
-            else      _p2GamepadLabel = gpLabel;
-
-            // カラーライン（斜め）
-            MakeSlantBar(parent, isP1 ? "P1Line" : "P2Line",
-                new Vector2(cx, 308f), new Vector2(300f, 4f), pColor, slant);
-
-            // 選択中キャラ名
+            // 選択中キャラ名（中央・大きく、左右に < > ）
             var row = CreateUIObject(isP1 ? "P1Row" : "P2Row", parent);
             var rowRt = row.GetComponent<RectTransform>();
             rowRt.anchorMin = rowRt.anchorMax = new Vector2(0.5f, 0.5f);
-            rowRt.anchoredPosition = new Vector2(cx, 280f);
-            rowRt.sizeDelta = new Vector2(390f, 48f);
+            rowRt.anchoredPosition = new Vector2(cx + 20f, 404f);
+            rowRt.sizeDelta = new Vector2(440f, 52f);
 
-            MakeButton(row.transform, "Left", "<", new Vector2(-172f, 0f), new Vector2(42f, 42f),
+            var leftBtn = MakeButton(row.transform, "Left", "<", new Vector2(-200f, 0f), new Vector2(46f, 46f),
                 isP1
                     ? () => ChangePreset(ref _p1PresetIdx, -1, _p1PresetLabel)
                     : () => ChangePreset(ref _p2PresetIdx, -1, _p2PresetLabel),
-                new Color(0.2f, 0.2f, 0.35f));
+                pColorDark);
+            StyleArcadeButton(leftBtn, pColorDark, slant > 0 ? 8f : -8f);
+            SetButtonLabelStyle(leftBtn, 22f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             var label = MakeLabel(row.transform, "Preset",
                 isP1 ? GetPresetName(_p1PresetIdx) : GetPresetName(_p2PresetIdx),
-                new Vector2(0f, 0f), new Vector2(250f, 48f), 18, Color.white);
+                new Vector2(0f, 0f), new Vector2(300f, 52f), 26, Color.white);
+            label.fontStyle = FontStyles.Bold | FontStyles.Italic;
             label.textWrappingMode = TextWrappingModes.NoWrap;
             label.overflowMode = TextOverflowModes.Ellipsis;
 
-            MakeButton(row.transform, "Right", ">", new Vector2(172f, 0f), new Vector2(42f, 42f),
+            var rightBtn = MakeButton(row.transform, "Right", ">", new Vector2(200f, 0f), new Vector2(46f, 46f),
                 isP1
                     ? () => ChangePreset(ref _p1PresetIdx, +1, _p1PresetLabel)
                     : () => ChangePreset(ref _p2PresetIdx, +1, _p2PresetLabel),
-                new Color(0.2f, 0.2f, 0.35f));
+                pColorDark);
+            StyleArcadeButton(rightBtn, pColorDark, slant > 0 ? 8f : -8f);
+            SetButtonLabelStyle(rightBtn, 22f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             if (isP1) _p1PresetLabel = label;
             else       _p2PresetLabel = label;
 
             // カテゴリラベル（初期キャラ / 生成済み）
             var catLabel = MakeLabel(row.transform, "Category", "初期キャラ",
-                new Vector2(0f, -26f), new Vector2(250f, 22f), 12f,
-                new Color(0.65f, 0.75f, 0.9f));
+                new Vector2(0f, -32f), new Vector2(300f, 22f), 13f, PromptFighters.UI.UITheme.Gold);
             catLabel.textWrappingMode = TextWrappingModes.NoWrap;
             if (isP1) _p1CategoryLabel = catLabel;
             else       _p2CategoryLabel = catLabel;
 
-            var gridFrame = CreateUIObject(isP1 ? "P1IconGridFrame" : "P2IconGridFrame", parent);
-            var gfRt = gridFrame.GetComponent<RectTransform>();
-            gfRt.anchoredPosition = new Vector2(cx, 168f);
-            gfRt.sizeDelta = new Vector2(392f, 210f);
-            AddImage(gridFrame, new Color(0.015f, 0.018f, 0.035f, 0.82f));
-            MakeOutline(gridFrame.transform, "GridTop", new Vector2(0f, 104f), new Vector2(392f, 2f), pColor);
-
-            var grid = CreateUIObject(isP1 ? "P1IconGrid" : "P2IconGrid", gridFrame.transform);
-            StretchFull(grid.GetComponent<RectTransform>());
-            var layout = grid.AddComponent<GridLayoutGroup>();
-            layout.cellSize = new Vector2(86f, 58f);
-            layout.spacing = new Vector2(8f, 8f);
-            layout.padding = new RectOffset(12, 12, 6, 6);
-            layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-            layout.constraintCount = 4;
-            if (isP1) _p1IconGrid = grid.transform;
-            else _p2IconGrid = grid.transform;
-
-            var prevPage = MakeButton(gridFrame.transform, "PrevPage", "<", new Vector2(-166f, -88f), new Vector2(42f, 30f),
-                () => ChangeIconPage(isP1, -1), new Color(0.12f, 0.13f, 0.18f));
-            SetButtonLabelStyle(prevPage, 15f, FontStyles.Bold, Color.white);
-            var nextPage = MakeButton(gridFrame.transform, "NextPage", ">", new Vector2(166f, -88f), new Vector2(42f, 30f),
-                () => ChangeIconPage(isP1, 1), new Color(0.12f, 0.13f, 0.18f));
-            SetButtonLabelStyle(nextPage, 15f, FontStyles.Bold, Color.white);
-            var pageLabel = MakeLabel(gridFrame.transform, "PageLabel", "1/1",
-                new Vector2(0f, -88f), new Vector2(120f, 24f), 12f, new Color(0.82f, 0.9f, 1f));
-            if (isP1) _p1PageLabel = pageLabel;
-            else _p2PageLabel = pageLabel;
-
+            // ── 大きなキャラプレビュー（左） ──
             var previewFrame = CreateUIObject(isP1 ? "P1PreviewFrame" : "P2PreviewFrame", parent);
             var pfRt = previewFrame.GetComponent<RectTransform>();
-            pfRt.anchoredPosition = new Vector2(cx - 120f, -72f);
-            pfRt.sizeDelta = new Vector2(150f, 150f);
-            AddImage(previewFrame, new Color(0.01f, 0.012f, 0.02f, 0.72f));
-            MakeOutline(previewFrame.transform, "PreviewTop", new Vector2(0f, 74f), new Vector2(150f, 3f), pColor);
+            pfRt.anchoredPosition = new Vector2(cx - 168f, 92f);
+            pfRt.sizeDelta = new Vector2(280f, 360f);
+            var pfImg = AddImage(previewFrame, new Color(0.012f, 0.014f, 0.024f, 0.92f));
+            pfImg.sprite = PromptFighters.UI.UITheme.VGradient; pfImg.type = Image.Type.Simple;
+            MakeSlantBar(previewFrame.transform, "PreviewTop", new Vector2(0f, 178f), new Vector2(280f, 5f), pColor, slant);
+            MakeSlantBar(previewFrame.transform, "PreviewBottom", new Vector2(0f, -178f), new Vector2(280f, 5f), pColor, slant);
 
             var previewGo = CreateUIObject(isP1 ? "P1PreviewImage" : "P2PreviewImage", previewFrame.transform);
             var pvRt = previewGo.GetComponent<RectTransform>();
             pvRt.anchorMin = Vector2.zero;
             pvRt.anchorMax = Vector2.one;
-            pvRt.offsetMin = new Vector2(18f, 12f);
-            pvRt.offsetMax = new Vector2(-18f, -12f);
+            pvRt.offsetMin = new Vector2(22f, 18f);
+            pvRt.offsetMax = new Vector2(-22f, -18f);
             var preview = previewGo.AddComponent<Image>();
             preview.preserveAspect = true;
             preview.raycastTarget = false;
@@ -600,29 +571,186 @@ namespace PromptFighters.GameFlow
             if (isP1) _p1PreviewImage = preview;
             else _p2PreviewImage = preview;
 
-            var detailBg = CreateUIObject(isP1 ? "P1DetailBg" : "P2DetailBg", parent);
-            var dbRt = detailBg.GetComponent<RectTransform>();
-            dbRt.anchoredPosition = new Vector2(cx + 84f, -72f);
-            dbRt.sizeDelta = new Vector2(248f, 172f);
-            AddImage(detailBg, new Color(0.015f, 0.018f, 0.035f, 0.82f));
+            // ── ステータスグラフ＋技（右パネル） ──
+            var statPanel = CreateUIObject(isP1 ? "P1StatPanel" : "P2StatPanel", parent);
+            var spRt = statPanel.GetComponent<RectTransform>();
+            spRt.anchoredPosition = new Vector2(cx + 168f, 92f);
+            spRt.sizeDelta = new Vector2(330f, 360f);
+            var spImg = AddImage(statPanel, new Color(0.012f, 0.014f, 0.024f, 0.92f));
+            spImg.sprite = PromptFighters.UI.UITheme.VGradient; spImg.type = Image.Type.Simple;
+            MakeSlantBar(statPanel.transform, "StatTop", new Vector2(0f, 178f), new Vector2(330f, 5f), pColor, slant);
 
-            var detailText = MakeLabel(detailBg.transform, "DetailText", "",
-                Vector2.zero, new Vector2(228f, 156f), 10.5f, new Color(0.9f, 0.95f, 1f));
+            MakeLabel(statPanel.transform, "StatHeader", "STATUS",
+                new Vector2(0f, 152f), new Vector2(300f, 24f), 16f, PromptFighters.UI.UITheme.Gold)
+                .fontStyle = FontStyles.Bold | FontStyles.Italic;
+
+            var fills  = new Image[StatAxisLabels.Length];
+            var values = new TextMeshProUGUI[StatAxisLabels.Length];
+            for (int i = 0; i < StatAxisLabels.Length; i++)
+            {
+                MakeStatGauge(statPanel.transform, StatAxisLabels[i],
+                    new Vector2(0f, 118f - i * 28f), new Vector2(300f, 22f), pColor,
+                    out fills[i], out values[i]);
+            }
+            if (isP1) { _p1StatFills = fills; _p1StatValues = values; }
+            else      { _p2StatFills = fills; _p2StatValues = values; }
+
+            MakeOutline(statPanel.transform, "StatDiv", new Vector2(0f, -54f), new Vector2(300f, 2f),
+                new Color(pColor.r, pColor.g, pColor.b, 0.4f));
+
+            var detailText = MakeLabel(statPanel.transform, "DetailText", "",
+                new Vector2(0f, -116f), new Vector2(300f, 120f), 12.5f, PromptFighters.UI.UITheme.Ink);
             detailText.alignment = TextAlignmentOptions.TopLeft;
             detailText.textWrappingMode = TextWrappingModes.Normal;
             if (isP1) _p1DetailText = detailText;
             else _p2DetailText = detailText;
 
-            MakeLabel(parent, isP1 ? "P1ExistingHint" : "P2ExistingHint",
-                "既存キャラ選択",
-                new Vector2(cx, -182f), new Vector2(300f, 26f), 13f, new Color(0.72f, 0.8f, 1f));
+            // ── キャラ選択グリッド（下部） ──
+            var gridFrame = CreateUIObject(isP1 ? "P1IconGridFrame" : "P2IconGridFrame", parent);
+            var gfRt = gridFrame.GetComponent<RectTransform>();
+            gfRt.anchoredPosition = new Vector2(cx, -210f);
+            gfRt.sizeDelta = new Vector2(700f, 196f);
+            var gfImg = AddImage(gridFrame, new Color(0.012f, 0.014f, 0.024f, 0.88f));
+            gfImg.sprite = PromptFighters.UI.UITheme.VGradient; gfImg.type = Image.Type.Simple;
+            MakeSlantBar(gridFrame.transform, "GridTop", new Vector2(0f, 96f), new Vector2(700f, 4f), pColor, slant);
+            MakeLabel(gridFrame.transform, isP1 ? "P1GridHint" : "P2GridHint", "キャラを選択",
+                new Vector2(-280f, 78f), new Vector2(180f, 22f), 12f, PromptFighters.UI.UITheme.InkDim)
+                .alignment = TextAlignmentOptions.Left;
 
-            var deleteBtn = MakeButton(parent, isP1 ? "P1DeleteGeneratedBtn" : "P2DeleteGeneratedBtn", "生成キャラ削除",
-                new Vector2(cx, -220f), new Vector2(190f, 38f), () => DeleteSelectedCharacter(isP1),
-                new Color(0.32f, 0.08f, 0.08f, 1f));
-            SetButtonLabelStyle(deleteBtn, 14f, FontStyles.Bold, Color.white);
+            var grid = CreateUIObject(isP1 ? "P1IconGrid" : "P2IconGrid", gridFrame.transform);
+            var gRt = grid.GetComponent<RectTransform>();
+            gRt.anchorMin = Vector2.zero; gRt.anchorMax = Vector2.one;
+            gRt.offsetMin = new Vector2(8f, 8f); gRt.offsetMax = new Vector2(-8f, -28f);
+            var layout = grid.AddComponent<GridLayoutGroup>();
+            layout.cellSize = new Vector2(100f, 66f);
+            layout.spacing = new Vector2(9f, 9f);
+            layout.padding = new RectOffset(10, 10, 4, 4);
+            layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+            layout.constraintCount = 6;
+            if (isP1) _p1IconGrid = grid.transform;
+            else _p2IconGrid = grid.transform;
+
+            var prevPage = MakeButton(gridFrame.transform, "PrevPage", "<", new Vector2(-300f, 78f), new Vector2(40f, 28f),
+                () => ChangeIconPage(isP1, -1), pColorDark);
+            SetButtonLabelStyle(prevPage, 15f, FontStyles.Bold, Color.white);
+            var nextPage = MakeButton(gridFrame.transform, "NextPage", ">", new Vector2(-180f, 78f), new Vector2(40f, 28f),
+                () => ChangeIconPage(isP1, 1), pColorDark);
+            SetButtonLabelStyle(nextPage, 15f, FontStyles.Bold, Color.white);
+            var pageLabel = MakeLabel(gridFrame.transform, "PageLabel", "1/1",
+                new Vector2(-240f, 78f), new Vector2(50f, 22f), 12f, PromptFighters.UI.UITheme.Ink);
+            if (isP1) _p1PageLabel = pageLabel;
+            else _p2PageLabel = pageLabel;
+
+            // 生成キャラ削除（グリッド右上）
+            var deleteBtn = MakeButton(gridFrame.transform, isP1 ? "P1DeleteGeneratedBtn" : "P2DeleteGeneratedBtn", "生成キャラ削除",
+                new Vector2(280f, 78f), new Vector2(150f, 28f), () => DeleteSelectedCharacter(isP1),
+                PromptFighters.UI.UITheme.P2NeonDark);
+            SetButtonLabelStyle(deleteBtn, 13f, FontStyles.Bold, Color.white);
             if (isP1) _p1DeleteButton = deleteBtn;
             else _p2DeleteButton = deleteBtn;
+
+            // コントローラー接続状態（バッジ下）
+            var gpLabel = MakeLabel(parent, isP1 ? "P1GpStatus" : "P2GpStatus",
+                "",
+                new Vector2(cx - 230f, 366f), new Vector2(320f, 20f), 11, Color.gray);
+            gpLabel.alignment = TextAlignmentOptions.Left;
+            if (isP1) _p1GamepadLabel = gpLabel;
+            else      _p2GamepadLabel = gpLabel;
+        }
+
+        // ステータスグラフの軸ラベル（norm計算順と一致させること）
+        static readonly string[] StatAxisLabels = { "スピード", "ジャンプ", "ガード", "重さ", "パワー", "リーチ" };
+
+        void MakeStatGauge(Transform parent, string axis, Vector2 pos, Vector2 size, Color pColor,
+            out Image fill, out TextMeshProUGUI valLabel)
+        {
+            var go = CreateUIObject("Gauge_" + axis, parent);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchoredPosition = pos;
+            rt.sizeDelta = size;
+
+            var nameLabel = MakeLabel(go.transform, "Name", axis,
+                new Vector2(-size.x * 0.5f + 44f, 0f), new Vector2(88f, size.y), 13f, PromptFighters.UI.UITheme.InkDim);
+            nameLabel.alignment = TextAlignmentOptions.Left;
+            nameLabel.fontStyle = FontStyles.Bold;
+
+            float trackW = size.x - 152f;
+            float trackCx = -size.x * 0.5f + 96f + trackW * 0.5f;
+
+            var track = CreateUIObject("Track", go.transform);
+            var trRt = track.GetComponent<RectTransform>();
+            trRt.anchoredPosition = new Vector2(trackCx, 0f);
+            trRt.sizeDelta = new Vector2(trackW, 12f);
+            AddImage(track, PromptFighters.UI.UITheme.SteelDark);
+
+            var fillGo = CreateUIObject("Fill", track.transform);
+            var fRt = fillGo.GetComponent<RectTransform>();
+            fRt.anchorMin = Vector2.zero;
+            fRt.anchorMax = Vector2.one;
+            fRt.offsetMin = fRt.offsetMax = Vector2.zero;
+            fill = fillGo.AddComponent<Image>();
+            fill.sprite = PromptFighters.UI.UITheme.VGradient;
+            fill.type = Image.Type.Simple;
+            fill.color = pColor;
+            fill.raycastTarget = false;
+
+            valLabel = MakeLabel(go.transform, "Val", "",
+                new Vector2(size.x * 0.5f - 26f, 0f), new Vector2(52f, size.y), 13f, Color.white);
+            valLabel.alignment = TextAlignmentOptions.Right;
+            valLabel.fontStyle = FontStyles.Bold;
+        }
+
+        static float[] ComputeStatNorms(CharacterData data, out string[] vals)
+        {
+            var s = data?.stats ?? new CharacterStats();
+            float avgDmg = 0f, avgRange = 0f; int n = 0;
+            if (data?.skills != null)
+                foreach (var sk in data.skills)
+                {
+                    if (sk?.parameters == null) continue;
+                    avgDmg += sk.parameters.damage;
+                    avgRange += sk.parameters.range;
+                    n++;
+                }
+            if (n > 0) { avgDmg /= n; avgRange /= n; }
+
+            var norms = new[]
+            {
+                Mathf.InverseLerp(3f, 8f, s.groundMoveSpeed),
+                Mathf.InverseLerp(8f, 16f, s.jumpForce),
+                Mathf.InverseLerp(40f, 100f, s.guardDurability),
+                Mathf.InverseLerp(0.6f, 1.6f, s.weight),
+                Mathf.InverseLerp(5f, 30f, avgDmg),
+                Mathf.InverseLerp(0.8f, 3f, avgRange),
+            };
+            for (int i = 0; i < norms.Length; i++)
+                norms[i] = Mathf.Clamp(norms[i], 0.05f, 1f);
+
+            vals = new[]
+            {
+                s.groundMoveSpeed.ToString("F1"),
+                s.jumpForce.ToString("F0"),
+                s.guardDurability.ToString("F0"),
+                s.weight.ToString("F2"),
+                avgDmg.ToString("F0"),
+                avgRange.ToString("F1"),
+            };
+            return norms;
+        }
+
+        void SetStats(bool isP1, CharacterData data)
+        {
+            var fills  = isP1 ? _p1StatFills  : _p2StatFills;
+            var values = isP1 ? _p1StatValues : _p2StatValues;
+            if (fills == null) return;
+            var norms = ComputeStatNorms(data, out var vals);
+            for (int i = 0; i < fills.Length && i < norms.Length; i++)
+            {
+                if (fills[i] != null)
+                    fills[i].rectTransform.anchorMax = new Vector2(norms[i], 1f);
+                if (values != null && values[i] != null)
+                    values[i].text = vals[i];
+            }
         }
 
         void BuildTrainingPanel()
@@ -935,6 +1063,11 @@ namespace PromptFighters.GameFlow
             SetPreview(_p2PreviewImage, _p2PresetIdx);
             SetDetail(_p1DetailText, _p1PresetIdx);
             SetDetail(_p2DetailText, _p2PresetIdx);
+            if (_presets != null)
+            {
+                if (_p1PresetIdx >= 0 && _p1PresetIdx < _presets.Count) SetStats(true, _presets[_p1PresetIdx]);
+                if (_p2PresetIdx >= 0 && _p2PresetIdx < _presets.Count) SetStats(false, _presets[_p2PresetIdx]);
+            }
         }
 
         void SetPreview(Image image, int idx)
@@ -959,20 +1092,16 @@ namespace PromptFighters.GameFlow
         {
             if (data == null) return "---";
 
-            var s = data.stats ?? new CharacterStats();
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine($"地上 {s.groundMoveSpeed:F1}  空中 {s.airMoveSpeed:F1}");
-            sb.AppendLine($"ジャンプ {s.jumpForce:F1}  2段 {s.airJumpHeightMultiplier:F2}  歩き {s.walkSpeedRatio:F2}");
-            sb.AppendLine($"ガード {s.guardDurability:F0}  軽さ {s.lightness:F2}");
-            sb.AppendLine($"回避 地上{s.groundDodgeDistance:F1}  空中{s.airDodgeDistance:F1}");
-            for (int i = 0; i < data.skills.Length; i++)
-            {
-                var skill = data.skills[i];
-                if (skill == null) continue;
-                string slot = i switch { 0 => "A", 1 => "B", 2 => "C", 3 => "S", _ => "?" };
-                sb.AppendLine($"{slot}: {skill.skill_name}");
-                sb.AppendLine($"  威力{skill.parameters.damage:F0}  リーチ{skill.parameters.range:F1}");
-            }
+            sb.AppendLine("<b>技</b>");
+            if (data.skills != null)
+                for (int i = 0; i < data.skills.Length; i++)
+                {
+                    var skill = data.skills[i];
+                    if (skill == null) continue;
+                    string slot = i switch { 0 => "A", 1 => "B", 2 => "C", 3 => "S", _ => "?" };
+                    sb.AppendLine($"<color=#FFC72E>{slot}</color> {skill.skill_name}  <size=85%>威{skill.parameters.damage:F0}/リ{skill.parameters.range:F1}</size>");
+                }
             return sb.ToString();
         }
 

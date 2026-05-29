@@ -279,7 +279,7 @@ namespace PromptFighters.UI
         {
             _titleLabel.text  = title;
             _statusLabel.text = status;
-            _titleLabel.color = new Color(1f, 0.95f, 0.35f);
+            _titleLabel.color = UITheme.Gold;
             _statusLabel.color = Color.white;
             _bannerGroup.alpha = 1f;
         }
@@ -345,6 +345,21 @@ namespace PromptFighters.UI
             _bannerGroup       = bannerGo.AddComponent<CanvasGroup>();
             _bannerGroup.alpha = 0f;
 
+            // スチール地の半透明バッキング＋ゴールドの斜めアンダーライン
+            var bannerBg = UITheme.AddImage(bannerGo.transform, "BannerBg",
+                new Color(PromptFighters.UI.UITheme.SteelDark.r, PromptFighters.UI.UITheme.SteelDark.g, PromptFighters.UI.UITheme.SteelDark.b, 0.55f),
+                UITheme.VGradient);
+            bannerBg.type = UnityEngine.UI.Image.Type.Simple;
+            var bannerEdgeGo = new GameObject("BannerEdge");
+            bannerEdgeGo.transform.SetParent(bannerGo.transform, false);
+            var beRt = bannerEdgeGo.AddComponent<RectTransform>();
+            beRt.anchorMin = new Vector2(0f, 0f); beRt.anchorMax = new Vector2(1f, 0f);
+            beRt.pivot = new Vector2(0.5f, 0f); beRt.sizeDelta = new Vector2(0f, 5f);
+            beRt.anchoredPosition = Vector2.zero;
+            var beImg = bannerEdgeGo.AddComponent<UnityEngine.UI.Image>();
+            beImg.color = UITheme.Gold; beImg.raycastTarget = false;
+            bannerEdgeGo.AddComponent<UISkew>().slantPixels = 28f;
+
             var titleGo = new GameObject("Title");
             titleGo.transform.SetParent(bannerGo.transform, false);
             var titleRect = titleGo.AddComponent<RectTransform>();
@@ -354,8 +369,8 @@ namespace PromptFighters.UI
             titleRect.offsetMax = new Vector2(-20f, -8f);
 
             _titleLabel = titleGo.AddComponent<TextMeshProUGUI>();
-            UITheme.Apply(_titleLabel, 72f, FontStyles.Bold);
-            _titleLabel.color            = new Color(1f, 0.95f, 0.35f);
+            UITheme.Apply(_titleLabel, 72f, FontStyles.Bold | FontStyles.Italic);
+            _titleLabel.color            = UITheme.Gold;
             _titleLabel.alignment        = TextAlignmentOptions.Center;
             _titleLabel.textWrappingMode = TextWrappingModes.NoWrap;
 
@@ -395,9 +410,13 @@ namespace PromptFighters.UI
             effectTextRect.offsetMax = new Vector2(-16f, -8f);
 
             _effectLabel = effectTextGo.AddComponent<TextMeshProUGUI>();
-            UITheme.Apply(_effectLabel, 80f, FontStyles.Bold);
-            _effectLabel.color     = new Color(1f, 0.95f, 0.3f);
+            UITheme.Apply(_effectLabel, 88f, FontStyles.Bold | FontStyles.Italic);
+            _effectLabel.color     = UITheme.Gold;
             _effectLabel.alignment = TextAlignmentOptions.Center;
+            _effectLabel.enableVertexGradient = true;
+            _effectLabel.colorGradient = new VertexGradient(
+                new Color(1f, 0.95f, 0.55f), new Color(1f, 0.95f, 0.55f),
+                UITheme.Gold, UITheme.Gold);
 
             // ── 下部字幕欄（天使の発言）──
             var subGo = new GameObject("AngelSubtitle");
@@ -414,7 +433,20 @@ namespace PromptFighters.UI
             _subtitleGroup.alpha = 0f;
 
             var subBg = subGo.AddComponent<UnityEngine.UI.Image>();
-            subBg.color = new Color(0f, 0f, 0f, 0.55f);
+            subBg.sprite = UITheme.VGradient;
+            subBg.type = UnityEngine.UI.Image.Type.Simple;
+            subBg.color = new Color(PromptFighters.UI.UITheme.SteelDark.r, PromptFighters.UI.UITheme.SteelDark.g, PromptFighters.UI.UITheme.SteelDark.b, 0.62f);
+
+            // ゴールドの斜めトップアクセント
+            var subAccentGo = new GameObject("SubAccent");
+            subAccentGo.transform.SetParent(subGo.transform, false);
+            var saRt = subAccentGo.AddComponent<RectTransform>();
+            saRt.anchorMin = new Vector2(0f, 1f); saRt.anchorMax = new Vector2(1f, 1f);
+            saRt.pivot = new Vector2(0.5f, 1f); saRt.sizeDelta = new Vector2(0f, 4f);
+            saRt.anchoredPosition = Vector2.zero;
+            var saImg = subAccentGo.AddComponent<UnityEngine.UI.Image>();
+            saImg.color = UITheme.Gold; saImg.raycastTarget = false;
+            subAccentGo.AddComponent<UISkew>().slantPixels = 24f;
 
             var subTextGo = new GameObject("SubtitleText");
             subTextGo.transform.SetParent(subGo.transform, false);
@@ -425,8 +457,8 @@ namespace PromptFighters.UI
             subTextRect.offsetMax = new Vector2(-24f, -8f);
 
             _subtitleLabel = subTextGo.AddComponent<TextMeshProUGUI>();
-            UITheme.Apply(_subtitleLabel, 40f);
-            _subtitleLabel.color            = new Color(1f, 0.95f, 0.35f);
+            UITheme.Apply(_subtitleLabel, 40f, FontStyles.Bold | FontStyles.Italic);
+            _subtitleLabel.color            = UITheme.Gold;
             _subtitleLabel.alignment        = TextAlignmentOptions.Center;
             _subtitleLabel.textWrappingMode = TextWrappingModes.Normal;
             _subtitleLabel.overflowMode     = TextOverflowModes.Truncate;
