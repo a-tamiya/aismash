@@ -47,7 +47,9 @@ namespace PromptFighters.AI
                 req.downloadHandler = new DownloadHandlerBuffer();
                 req.SetRequestHeader("Content-Type", "application/json");
                 req.SetRequestHeader("Authorization", "Bearer " + key);
-                req.timeout = 60;
+                // 非ストリーミングのため生成中はデータが来ない。低速モデルでは1キャラ2分かかる
+                // こともあるので長めに取る（150s×MaxGenerateAttempts回＝最大約5分待つ）。
+                req.timeout = 150;
 
                 yield return req.SendWebRequest();
 
