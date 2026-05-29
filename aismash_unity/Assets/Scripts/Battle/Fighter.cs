@@ -8,7 +8,7 @@ namespace PromptFighters.Battle
     public enum FighterState { Idle, Moving, Jumping, Falling, Guarding, Dodging, Stunned, Grabbed, Dead }
 
     [RequireComponent(typeof(Rigidbody2D), typeof(BoxCollider2D))]
-    public class Fighter : MonoBehaviour
+    public partial class Fighter : MonoBehaviour
     {
         [Header("Stats")]
         public float maxHP = 300f;
@@ -1345,21 +1345,6 @@ namespace PromptFighters.Battle
             DamagePopup.SpawnText(transform.position, $"+{amount:0}", new Color(0.4f, 1f, 0.4f), 1.6f);
         }
 
-        public void StartTemporarySpeedChange(float multiplier, float duration)
-            => StartCoroutine(TemporarySpeedChange(multiplier, duration));
-
-        public void StartTemporaryJumpChange(float multiplier, float duration)
-            => StartCoroutine(TemporaryJumpChange(multiplier, duration));
-
-        public void StartTemporaryDamageBoost(float multiplier, float duration)
-            => StartCoroutine(TemporaryDamageBoost(multiplier, duration));
-
-        public void StartTemporaryInvincible(float duration)
-            => StartCoroutine(TemporaryInvincible(duration));
-
-        public void StartTemporaryChaos(float duration)
-            => StartCoroutine(TemporaryChaos(duration));
-
         public void DrainHP(float ratio)
         {
             if (State == FighterState.Dead) return;
@@ -1368,29 +1353,6 @@ namespace PromptFighters.Battle
             OnHPChanged?.Invoke(CurrentHP, maxHP);
             DamagePopup.Spawn(transform.position, dmg, false);
             if (CurrentHP <= 0f) Die();
-        }
-
-        public void StartTemporaryGravityChange(float multiplier, float duration)
-            => StartCoroutine(TemporaryGravityChange(multiplier, duration));
-
-        public void StartTemporarySizeChange(float multiplier, float duration)
-            => StartCoroutine(TemporarySizeChange(multiplier, duration));
-
-        public void StartTemporaryReflect(float duration)
-        {
-            _reflectTimer = Mathf.Max(_reflectTimer, duration);
-            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "REFLECT!", ReflectColor, 2.2f);
-        }
-
-        public void StartCounter(float duration, float damage, float knockback, Vector2 kbDir, float stun)
-        {
-            _counterTimer    = Mathf.Max(_counterTimer, duration);
-            _counterDamage   = damage;
-            _counterKnockback= knockback;
-            _counterKbDir    = kbDir;
-            _counterStun     = stun;
-            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "COUNTER!", CounterColor, 1.5f);
-            BattleLogger.Instance?.LogEvent($"{PlayerLabel()}がカウンター構え");
         }
 
         public void StartGroundBounce(float force)
@@ -1409,168 +1371,12 @@ namespace PromptFighters.Battle
             DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "GUARD UP!", new Color(0.28f, 0.72f, 1f), 1.8f);
         }
 
-        System.Collections.IEnumerator TemporarySpeedChange(float multiplier, float duration)
-        {
-            float origGround = moveSpeed;
-            float origAir    = airMoveSpeed;
-            _speedBoostTimer = duration;
-            moveSpeed    = origGround * multiplier;
-            airMoveSpeed = origAir * multiplier;
-            string label = multiplier >= 1f ? "SPEED UP!" : "SPEED DOWN!";
-            Color  col   = multiplier >= 1f ? SpeedBoostColor : SlowColor;
-            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, label, col, 2.2f);
-            yield return new WaitForSeconds(duration);
-            moveSpeed    = origGround;
-            airMoveSpeed = origAir;
-        }
-
-        System.Collections.IEnumerator TemporaryJumpChange(float multiplier, float duration)
-        {
-            float orig = jumpForce;
-            if (multiplier >= 1f) _jumpBoostTimer = duration;
-            jumpForce = orig * multiplier;
-            string jumpLabel = multiplier >= 1f ? "JUMP UP!" : "JUMP DOWN!";
-            Color  jumpCol   = multiplier >= 1f ? JumpBoostColor : SlowColor;
-            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, jumpLabel, jumpCol, 2.2f);
-            yield return new WaitForSeconds(duration);
-            jumpForce = orig;
-        }
-
-        System.Collections.IEnumerator TemporaryDamageBoost(float multiplier, float duration)
-        {
-            DamageMultiplier = multiplier;
-            string dmgLabel = multiplier >= 1f ? "POWER UP!" : "POWER DOWN!";
-            Color  dmgCol   = multiplier >= 1f ? DamageBoostColor : SlowColor;
-            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, dmgLabel, dmgCol, 2.2f);
-            yield return new WaitForSeconds(duration);
-            DamageMultiplier = 1f;
-        }
-
-        System.Collections.IEnumerator TemporaryGravityChange(float multiplier, float duration)
-        {
-            _rb.gravityScale = _defaultGravityScale * multiplier;
-            string gravLabel = multiplier > 1f ? "HEAVY!" : "FLOAT!";
-            Color  gravCol   = multiplier > 1f ? new Color(0.6f, 0.4f, 1f) : new Color(0.5f, 1f, 0.9f);
-            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, gravLabel, gravCol, 2.2f);
-            yield return new WaitForSeconds(duration);
-            if (!_dodgeGravitySuppressed) _rb.gravityScale = _defaultGravityScale;
-        }
-
-        System.Collections.IEnumerator TemporarySizeChange(float multiplier, float duration)
-        {
-            EnsureVisualRenderer();
-            if (_visualRoot == null) yield break;
-            Vector3 orig = _visualRoot.localScale;
-            _visualRoot.localScale = new Vector3(orig.x * multiplier, orig.y * multiplier, orig.z);
-            string sizeLabel = multiplier > 1f ? "BIG!" : "SMALL!";
-            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, sizeLabel, new Color(1f, 0.85f, 0.2f), 2.2f);
-            yield return new WaitForSeconds(duration);
-            if (_visualRoot != null) _visualRoot.localScale = orig;
-        }
-
-        System.Collections.IEnumerator TemporaryInvincible(float duration)
-        {
-            IsInvincible = true;
-            _transparencyTimer = Mathf.Max(_transparencyTimer, duration);
-            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "INVINCIBLE!", new Color(1f, 1f, 0.3f), 2.2f);
-            yield return new WaitForSeconds(duration);
-            IsInvincible = false;
-        }
-
-        System.Collections.IEnumerator TemporaryChaos(float duration)
-        {
-            InputReversed = true;
-            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "CHAOS!", ChaosColor, 2.2f);
-            yield return new WaitForSeconds(duration);
-            InputReversed = false;
-        }
-
-        // ── 新ギミック用メソッド ────────────────────────────────────────
-
-        public void StartTemporaryWind(float force, float duration)
-            => StartCoroutine(TemporaryWind(force, duration));
-
-        public void StartTemporaryFloorLava(float dpsRatio, float duration)
-            => StartCoroutine(TemporaryFloorLava(dpsRatio, duration));
-
-        public void StartTemporaryGuardDisable(float duration)
-        {
-            _guardDisabled = true;
-            _guardDisabledTimer = Mathf.Max(_guardDisabledTimer, duration);
-            if (State == FighterState.Guarding) SetGuard(false);
-            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "NO GUARD!", GuardDisableColor, 2.2f);
-            BattleLogger.Instance?.LogEvent($"{PlayerLabel()}のガード封印");
-        }
-
-        public void StartTemporarySkillSeal(int slot, float duration)
-        {
-            _sealedSlot = Mathf.Clamp(slot, 0, 3);
-            _sealedSlotTimer = Mathf.Max(_sealedSlotTimer, duration);
-            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "SEALED!", SealColor, 2.2f);
-            BattleLogger.Instance?.LogEvent($"{PlayerLabel()}のスロット{_sealedSlot}封印");
-        }
-
-        public void StartTemporarySuperKnockback(float duration)
-            => StartCoroutine(TemporarySuperKnockback(duration));
-
         public void StartHPShare(Fighter partner, float duration)
         {
             _hpSharePartner = partner;
             _hpShareTimer   = Mathf.Max(_hpShareTimer, duration);
             DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "HP LINK!", HPShareColor, 2.2f);
             BattleLogger.Instance?.LogEvent($"{PlayerLabel()}がHPリンク開始");
-        }
-
-        System.Collections.IEnumerator TemporaryWind(float force, float duration)
-        {
-            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "WIND!", WindColor, 2.2f);
-            float elapsed = 0f;
-            while (elapsed < duration && State != FighterState.Dead)
-            {
-                _rb.AddForce(new Vector2(force, 0f), ForceMode2D.Force);
-                elapsed += Time.deltaTime;
-                yield return null;
-            }
-        }
-
-        System.Collections.IEnumerator TemporaryFloorLava(float dpsRatio, float duration)
-        {
-            float elapsed  = 0f;
-            float tickTimer = 0f;
-            float dps = maxHP * dpsRatio;
-            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "FLOOR LAVA!", LavaColor, 2.2f);
-            while (elapsed < duration && State != FighterState.Dead)
-            {
-                elapsed    += Time.deltaTime;
-                if (IsGrounded)
-                {
-                    tickTimer += Time.deltaTime;
-                    if (tickTimer >= 0.5f)
-                    {
-                        tickTimer = 0f;
-                        float dmg = dps * 0.5f;
-                        CurrentHP = Mathf.Max(0f, CurrentHP - dmg);
-                        OnHPChanged?.Invoke(CurrentHP, maxHP);
-                        DamagePopup.Spawn(transform.position, dmg, false);
-                        if (CurrentHP <= 0f) { Die(); yield break; }
-                    }
-                }
-                else tickTimer = 0f;
-                yield return null;
-            }
-        }
-
-        System.Collections.IEnumerator TemporarySuperKnockback(float duration)
-        {
-            if (_superKnockbackOrigWeight < 0f) _superKnockbackOrigWeight = weight;
-            weight = Mathf.Max(0.2f, weight * 0.3f);
-            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "FRAGILE!", SuperKBColor, 2.2f);
-            yield return new WaitForSeconds(duration);
-            if (_superKnockbackOrigWeight >= 0f)
-            {
-                weight = _superKnockbackOrigWeight;
-                _superKnockbackOrigWeight = -1f;
-            }
         }
 
         void OnDrawGizmosSelected()
