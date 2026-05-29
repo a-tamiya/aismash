@@ -564,7 +564,7 @@ namespace PromptFighters.Battle.Skills
                 p.StunTime                 = skill.parameters.stun_time;
                 p.GuardDamage              = skill.parameters.guard_damage;
                 p.Status                   = SkillEnumParser.ParseStatus(a.status);
-                p.StatusDuration           = a.duration;
+                p.StatusDuration           = a.status_duration > 0f ? a.status_duration : a.duration;
                 p.StatusChance             = Mathf.Clamp01(a.chance);
                 p.Element                  = skill.element;
                 p.EffectSprite             = a.hide_effect ? null : _fighter.GetEffectSprite(skill.slot);
@@ -764,7 +764,7 @@ namespace PromptFighters.Battle.Skills
             var st = SkillEnumParser.ParseStatus(a.status);
             if (st == StatusType.None) return;
             if (UnityEngine.Random.value > a.chance) return;
-            _fighter.Opponent.ApplyStatus(st, a.duration);
+            _fighter.Opponent.ApplyStatus(st, a.status_duration > 0f ? a.status_duration : a.duration);
         }
 
         (Vector2 kbDir, bool isFixed) ComputeKnockback(SkillAction a, float defaultX, float defaultY)
@@ -788,7 +788,7 @@ namespace PromptFighters.Battle.Skills
             var st = SkillEnumParser.ParseStatus(a.status);
             if (st == StatusType.None) return;
             hb.Status = st;
-            hb.StatusDuration = a.duration;
+            hb.StatusDuration = a.status_duration > 0f ? a.status_duration : a.duration;
             hb.StatusChance = Mathf.Clamp01(a.chance);
         }
 
