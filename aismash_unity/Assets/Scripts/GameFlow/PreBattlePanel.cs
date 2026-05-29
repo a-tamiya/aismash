@@ -1107,8 +1107,7 @@ namespace PromptFighters.GameFlow
             if (image == null || _presets == null || idx < 0 || idx >= _presets.Count) return;
 
             var data = _presets[idx];
-            if (data.characterSprite == null && !string.IsNullOrEmpty(data.spritePath))
-                data.characterSprite = SpriteLoader.LoadWithWhiteBgRemoved(data.spritePath);
+            EnsurePreviewSprite(data);
 
             image.sprite = data.characterSprite;
             image.enabled = image.sprite != null;
@@ -1187,11 +1186,27 @@ namespace PromptFighters.GameFlow
             }
         }
 
+        readonly HashSet<CharacterData> _spriteLoading = new HashSet<CharacterData>();
+
+        // プレビュー用スプライトをバックグラウンドI/Oで非同期ロードする。
+        // 同じdataの二重ロードはガードし、完了後にプレビュー/アイコンを更新する。
         void EnsurePreviewSprite(CharacterData data)
         {
-            if (data == null) return;
-            if (data.characterSprite == null && !string.IsNullOrEmpty(data.spritePath))
-                data.characterSprite = SpriteLoader.LoadWithWhiteBgRemoved(data.spritePath);
+            if (data == null || data.characterSprite != null) return;
+            if (string.IsNullOrEmpty(data.spritePath)) return;
+            if (!_spriteLoading.Add(data)) return; // 既にロード中
+            StartCoroutine(LoadPreviewSpriteCo(data));
+        }
+
+        IEnumerator LoadPreviewSpriteCo(CharacterData data)
+        {
+            yield return SpriteLoader.LoadWithWhiteBgRemovedAsync(data.spritePath, s => data.characterSprite = s);
+            _spriteLoading.Remove(data);
+            if (data.characterSprite != null)
+            {
+                RefreshCharacterPreview();
+                RebuildIconGrids();
+            }
         }
 
         string GetPresetName(int idx)
