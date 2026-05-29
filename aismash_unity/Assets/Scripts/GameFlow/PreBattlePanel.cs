@@ -1278,6 +1278,8 @@ namespace PromptFighters.GameFlow
             _pendingData1 = null;
             _pendingData2 = null;
             string errorMsg = null;
+            bool aiOk1 = false;
+            bool aiOk2 = false;
 
             if (genP1)
             {
@@ -1289,6 +1291,7 @@ namespace PromptFighters.GameFlow
                     data =>
                     {
                         _pendingData1 = data;
+                        aiOk1 = true;
                         CharacterSaveManager.Save(data);
                         // 即座にプリセットリストへ追加し選択状態にする
                         if (!_presets.Contains(data)) _presets.Add(data);
@@ -1310,6 +1313,7 @@ namespace PromptFighters.GameFlow
                     data =>
                     {
                         _pendingData2 = data;
+                        aiOk2 = true;
                         CharacterSaveManager.Save(data);
                         if (!_presets.Contains(data)) _presets.Add(data);
                         _p2PresetIdx = _presets.Count - 1;
@@ -1336,15 +1340,24 @@ namespace PromptFighters.GameFlow
                     _p2NameInput?.text, _p2FeatureInput?.text, preset2);
             }
 
-            // 画像生成は新規生成した側だけ行う。既存キャラ側は選択中スプライトをそのまま使う。
-            if ((genP1 || genP2) && !DebugSettings.SkipImageGeneration)
+            // 画像生成はAIキャラ生成が成功した側だけ行う。
+            // 画像はローカル生成できないため、キャラ生成が失敗（API不通）した側で
+            // 画像生成を試みても無駄に長時間ハングするだけなのでスキップする。
+            bool genImg1 = genP1 && aiOk1;
+            bool genImg2 = genP2 && aiOk2;
+            if ((genImg1 || genImg2) && !DebugSettings.SkipImageGeneration)
             {
                 UpdateGeneratingStatus("キャラクター画像を生成中...");
-                yield return GenerateImages(_pendingData1, _pendingData2, genP1, genP2);
+                yield return GenerateImages(_pendingData1, _pendingData2, genImg1, genImg2);
             }
             else if (DebugSettings.SkipImageGeneration)
             {
                 UpdateGeneratingStatus("[デバッグ] 画像生成をスキップしました");
+            }
+            else if ((genP1 && !aiOk1) || (genP2 && !aiOk2))
+            {
+                UpdateGeneratingStatus("画像生成をスキップしました（選択中の画像を使用します）");
+                yield return new WaitForSeconds(1.0f);
             }
 
             _generatingPanel?.SetActive(false);
