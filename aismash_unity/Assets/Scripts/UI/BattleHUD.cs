@@ -9,20 +9,24 @@ namespace PromptFighters.UI
     [RequireComponent(typeof(Canvas))]
     public class BattleHUD : MonoBehaviour
     {
-        // ── Palette ────────────────────────────────────────────────────
-        static readonly Color BgDeep    = new Color(0.01f, 0.03f, 0.07f, 0.93f);
-        static readonly Color BgMid     = new Color(0.03f, 0.06f, 0.12f, 0.96f);
-        static readonly Color BgBar     = new Color(0.01f, 0.02f, 0.05f, 1.00f);
-        static readonly Color BgSlot    = new Color(0.02f, 0.04f, 0.09f, 0.97f);
-        static readonly Color P1Col     = new Color(0.12f, 0.62f, 1.00f);
-        static readonly Color P2Col     = new Color(1.00f, 0.20f, 0.20f);
-        static readonly Color TextWht   = Color.white;
-        static readonly Color TextDim   = new Color(0.50f, 0.65f, 0.82f);
-        static readonly Color GuardFull = new Color(0.28f, 0.72f, 1.00f);
-        static readonly Color GuardLow  = new Color(0.85f, 0.18f, 0.92f);
-        static readonly Color TimerEdge = new Color(0.22f, 0.55f, 1.00f, 0.60f);
-        static readonly Color GlowLine  = new Color(0.18f, 0.50f, 1.00f, 0.35f);
-        static readonly Color UrgentCol = new Color(1.00f, 0.22f, 0.18f);
+        // ── Palette (アーケード格ゲー調) ───────────────────────────────
+        static readonly Color BgDeep    = UITheme.Steel;
+        static readonly Color BgMid     = new Color(0.05f, 0.06f, 0.09f, 0.98f);
+        static readonly Color BgBar     = UITheme.SteelDark;
+        static readonly Color BgSlot    = new Color(0.04f, 0.05f, 0.08f, 0.98f);
+        static readonly Color P1Col     = UITheme.P1Neon;
+        static readonly Color P2Col     = UITheme.P2Neon;
+        static readonly Color TextWht   = UITheme.Ink;
+        static readonly Color TextDim   = UITheme.InkDim;
+        static readonly Color GuardFull = new Color(0.30f, 0.80f, 1.00f);
+        static readonly Color GuardLow  = new Color(0.95f, 0.30f, 0.30f);
+        static readonly Color TimerEdge = UITheme.Gold;
+        static readonly Color GlowLine  = new Color(UITheme.Gold.r, UITheme.Gold.g, UITheme.Gold.b, 0.55f);
+        static readonly Color UrgentCol = UITheme.Urgent;
+        static readonly Color Bevel     = new Color(UITheme.SteelLight.r, UITheme.SteelLight.g, UITheme.SteelLight.b, 0.55f);
+
+        // バーのスラント量(px)。1P/2Pで対称になるよう符号反転して使う。
+        const float Slant = 16f;
 
         static readonly Gradient HpGrad = MakeHpGrad();
         static Gradient MakeHpGrad()
@@ -241,13 +245,13 @@ namespace PromptFighters.UI
             tcRt.anchorMax = new Vector2(0.5f, 1f);
             tcRt.sizeDelta = new Vector2(TIMER_W, TOTAL_H);
             tcRt.anchoredPosition = new Vector2(0f, -TOTAL_H * 0.5f);
-            tc.AddComponent<Image>().color = new Color(0.01f, 0.03f, 0.08f, 1f);
+            tc.AddComponent<Image>().color = UITheme.SteelDark;
 
-            // timer border lines
-            AddLine(tc.transform, "BdT", 0,1,1,1,   0,-1f,0,0,     TimerEdge);
-            AddLine(tc.transform, "BdB", 0,0,1,0,   0, 0f,0,1f,    TimerEdge);
-            AddLine(tc.transform, "BdL", 0,0,0,1,   0, 0f,1f,0,    TimerEdge);
-            AddLine(tc.transform, "BdR", 1,0,1,1,  -1f,0f,0,0,     TimerEdge);
+            // timer border lines (ゴールド枠 / 上下を2pxで強調)
+            AddLine(tc.transform, "BdT", 0,1,1,1,   0,-2f,0,0,     TimerEdge);
+            AddLine(tc.transform, "BdB", 0,0,1,0,   0, 0f,0,2f,    TimerEdge);
+            AddLine(tc.transform, "BdL", 0,0,0,1,   0, 0f,1f,0,    new Color(TimerEdge.r,TimerEdge.g,TimerEdge.b,0.5f));
+            AddLine(tc.transform, "BdR", 1,0,1,1,  -1f,0f,0,0,     new Color(TimerEdge.r,TimerEdge.g,TimerEdge.b,0.5f));
 
             // "TIME" sublabel
             var tlGo = MakeUI("TLabel", tc.transform);
@@ -261,8 +265,8 @@ namespace PromptFighters.UI
             var tnGo = MakeUI("TimerNum", tc.transform);
             Anch(tnGo, 0,0, 1,1,  2,2,-2,-16f);
             _timerText = tnGo.AddComponent<TextMeshProUGUI>();
-            _timerText.text = "99"; _timerText.fontSize = 50f;
-            _timerText.fontStyle = FontStyles.Bold;
+            _timerText.text = "99"; _timerText.fontSize = 52f;
+            _timerText.fontStyle = FontStyles.Bold | FontStyles.Italic;
             _timerText.alignment = TextAlignmentOptions.Center;
             _timerText.color = TextWht;
             UITheme.Apply(_timerText);
@@ -289,20 +293,28 @@ namespace PromptFighters.UI
             const float NAME_H = 17f;
             const float GUARD_H= 7f;
             Color pCol = isP1 ? P1Col : P2Col;
+            float slant = isP1 ? Slant : -Slant;
 
-            // bg
+            // bg (メタリックなスチール地)
             parent.gameObject.AddComponent<Image>().color = BgMid;
 
-            // top accent line (2px, player color)
+            // 上端ベベルハイライト
+            var bevelTop = MakeUI("Bevel", parent);
+            Anch(bevelTop, 0,1,1,1,  0,-3f,0,-1f);
+            bevelTop.AddComponent<Image>().color = Bevel;
+
+            // top accent line (3px, player color)
             var accent = MakeUI("Accent", parent);
-            Anch(accent, 0,1,1,1,  0,-2f,0,0);
+            Anch(accent, 0,1,1,1,  0,-3f,0,0);
             accent.AddComponent<Image>().color = pCol;
 
-            // outer vertical stripe
+            // outer vertical stripe (スラント付きネオン)
             var stripe = MakeUI("Stripe", parent);
             if (isP1) Anch(stripe, 0,0,0,1,  0,0, STRIPE,0);
             else      Anch(stripe, 1,0,1,1,  -STRIPE,0, 0,0);
-            stripe.AddComponent<Image>().color = pCol;
+            var stripeImg = stripe.AddComponent<Image>();
+            stripeImg.color = pCol;
+            UITheme.Skew(stripeImg, slant);
 
             // name label
             float nameL = isP1 ? STRIPE + IPAD : NUM_W + IPAD * 2f;
@@ -311,7 +323,7 @@ namespace PromptFighters.UI
             Anch(nameGo, 0,1,1,1,  nameL, -(2f+IPAD+NAME_H), -nameR, -(2f+IPAD));
             var nmTmp = nameGo.AddComponent<TextMeshProUGUI>();
             nmTmp.text = isP1 ? "1P" : "2P";
-            nmTmp.fontSize = 13f; nmTmp.fontStyle = FontStyles.Bold;
+            nmTmp.fontSize = 13f; nmTmp.fontStyle = FontStyles.Bold | FontStyles.Italic;
             nmTmp.alignment = isP1 ? TextAlignmentOptions.Left : TextAlignmentOptions.Right;
             nmTmp.color = pCol;
             nmTmp.textWrappingMode = TextWrappingModes.NoWrap;
@@ -325,7 +337,7 @@ namespace PromptFighters.UI
             else      Anch(numGo, 0,0,0,1,  IPAD, GUARD_H+IPAD, NUM_W+IPAD, -(2f+IPAD));
             var numTmp = numGo.AddComponent<TextMeshProUGUI>();
             numTmp.text = "300"; numTmp.fontSize = 30f;
-            numTmp.fontStyle = FontStyles.Bold;
+            numTmp.fontStyle = FontStyles.Bold | FontStyles.Italic;
             numTmp.alignment = isP1 ? TextAlignmentOptions.Right : TextAlignmentOptions.Left;
             numTmp.color = TextWht;
             numTmp.textWrappingMode = TextWrappingModes.NoWrap;
@@ -338,28 +350,40 @@ namespace PromptFighters.UI
             float barR = isP1 ? NUM_W + IPAD * 2f : STRIPE + IPAD;
             var barBg = MakeUI("BarBg", parent);
             Anch(barBg, 0,0,1,1,  barL, GUARD_H+IPAD, -barR, -(2f+IPAD+NAME_H+2f));
-            barBg.AddComponent<Image>().color = BgBar;
+            var barBgImg = barBg.AddComponent<Image>();
+            barBgImg.color = BgBar;
+            UITheme.Skew(barBgImg, slant);
 
-            // HP fill
+            // HP fill (メタリックグラデ + スラント)
             var fillGo = MakeUI("HPFill", barBg.transform);
             FillParent(fillGo);
             var fi = fillGo.AddComponent<Image>();
+            fi.sprite = UITheme.VGradient;
             fi.color = HpGrad.Evaluate(1f);
+            UITheme.Skew(fi, slant);
             hpFill = fi; hpRect = fillGo.GetComponent<RectTransform>();
 
-            // subtle inner border on bar
-            AddLine(barBg.transform, "BarT", 0,1,1,1, 0,-1f,0,0, new Color(1,1,1,0.12f));
+            // バー枠ネオンライン(上下)
+            var barTop = MakeUI("BarT", barBg.transform);
+            Anch(barTop, 0,1,1,1, 0,-2f,0,0);
+            var barTopImg = barTop.AddComponent<Image>();
+            barTopImg.color = new Color(pCol.r, pCol.g, pCol.b, 0.5f);
+            UITheme.Skew(barTopImg, slant);
 
             // Guard bar background
             var grdBg = MakeUI("GrdBg", parent);
             Anch(grdBg, 0,0,1,0,  barL, IPAD, -barR, IPAD+GUARD_H);
-            grdBg.AddComponent<Image>().color = BgBar;
+            var grdBgImg = grdBg.AddComponent<Image>();
+            grdBgImg.color = BgBar;
+            UITheme.Skew(grdBgImg, slant);
 
             // Guard fill
             var grdGo = MakeUI("GrdFill", grdBg.transform);
             FillParent(grdGo);
             var gi = grdGo.AddComponent<Image>();
+            gi.sprite = UITheme.VGradient;
             gi.color = GuardFull;
+            UITheme.Skew(gi, slant);
             grdFill = gi; grdRect = grdGo.GetComponent<RectTransform>();
         }
 

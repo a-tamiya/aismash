@@ -7,7 +7,7 @@ namespace PromptFighters.UI
     public class TimerUI : MonoBehaviour
     {
         public TextMeshProUGUI timerText;
-        public Color urgentColor = Color.red;
+        public Color urgentColor = UITheme.Urgent;
         public float urgentThreshold = 10f;
 
         Color _normalColor;
@@ -16,7 +16,7 @@ namespace PromptFighters.UI
         {
             if (timerText != null)
             {
-                UITheme.Apply(timerText, 55f, FontStyles.Bold);
+                UITheme.Apply(timerText, 55f, FontStyles.Bold | FontStyles.Italic);
                 _normalColor = timerText.color;
             }
             if (BattleManager.Instance != null)

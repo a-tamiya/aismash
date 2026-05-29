@@ -70,7 +70,20 @@ namespace PromptFighters.UI
             panelRect.anchoredPosition = Vector2.zero;
             panelRect.sizeDelta = new Vector2(0f, 100f);
 
-            panelGo.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.72f);
+            panelGo.AddComponent<Image>().color = new Color(0.03f, 0.04f, 0.06f, 0.82f);
+
+            // 上端ゴールドアクセントライン
+            var accentGo = new GameObject("Accent");
+            accentGo.transform.SetParent(panelGo.transform, false);
+            var accRect = accentGo.AddComponent<RectTransform>();
+            accRect.anchorMin = new Vector2(0f, 1f);
+            accRect.anchorMax = new Vector2(1f, 1f);
+            accRect.pivot     = new Vector2(0.5f, 1f);
+            accRect.sizeDelta = new Vector2(0f, 3f);
+            accRect.anchoredPosition = Vector2.zero;
+            var accImg = accentGo.AddComponent<Image>();
+            accImg.color = UITheme.Gold;
+            accImg.raycastTarget = false;
 
             _group       = panelGo.AddComponent<CanvasGroup>();
             _group.alpha = 0f;

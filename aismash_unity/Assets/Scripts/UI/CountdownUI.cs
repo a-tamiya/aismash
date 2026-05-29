@@ -12,10 +12,10 @@ namespace PromptFighters.UI
         Image           _flash;
 
         // number → (text color, flash color)
-        static readonly Color Col3      = new Color(0.30f, 0.72f, 1.00f);
-        static readonly Color Col2      = new Color(1.00f, 0.80f, 0.12f);
-        static readonly Color Col1      = new Color(1.00f, 0.28f, 0.22f);
-        static readonly Color ColFight  = new Color(1.00f, 0.86f, 0.08f);
+        static readonly Color Col3      = UITheme.P1Neon;
+        static readonly Color Col2      = UITheme.Gold;
+        static readonly Color Col1      = UITheme.Urgent;
+        static readonly Color ColFight  = UITheme.Gold;
 
         void Start()
         {
@@ -58,10 +58,10 @@ namespace PromptFighters.UI
             tRt.anchoredPosition = new Vector2(0f, 18f);
             _text = tGo.AddComponent<TextMeshProUGUI>();
             _text.fontSize = 128f;
-            _text.fontStyle = FontStyles.Bold;
+            _text.fontStyle = FontStyles.Bold | FontStyles.Italic;
             _text.alignment = TextAlignmentOptions.Center;
             _text.color = Color.white;
-            UITheme.Apply(_text, 128f, FontStyles.Bold);
+            UITheme.Apply(_text, 128f, FontStyles.Bold | FontStyles.Italic);
         }
 
         void OnCountdown(float t)
@@ -88,9 +88,9 @@ namespace PromptFighters.UI
             if (_text == null) return;
             _text.gameObject.SetActive(true);
             string label = winnerIdx == 0 ? "1P WIN!" : winnerIdx == 1 ? "2P WIN!" : "DRAW";
-            Color col    = winnerIdx == 0 ? new Color(0.3f, 0.72f, 1f)
-                         : winnerIdx == 1 ? new Color(1f, 0.28f, 0.22f)
-                         :                  new Color(1f, 0.86f, 0.08f);
+            Color col    = winnerIdx == 0 ? UITheme.P1Neon
+                         : winnerIdx == 1 ? UITheme.P2Neon
+                         :                  UITheme.Gold;
             _text.text     = label;
             _text.fontSize = 96f;
             _text.color    = col;

@@ -84,8 +84,8 @@ namespace PromptFighters.GameFlow
         Image _platformToggleBg;
         TextMeshProUGUI _platformToggleLabel;
 
-        static readonly Color ToggleOnColor  = new Color(0.15f, 0.55f, 0.9f, 1f);
-        static readonly Color ToggleOffColor = new Color(0.18f, 0.18f, 0.22f, 1f);
+        static readonly Color ToggleOnColor  = PromptFighters.UI.UITheme.Gold;
+        static readonly Color ToggleOffColor = new Color(0.14f, 0.15f, 0.19f, 1f);
 
         void Awake()
         {
@@ -192,29 +192,50 @@ namespace PromptFighters.GameFlow
 
             var bg = _titlePanel.AddComponent<Image>();
             bg.sprite = CreateGradientSprite(
-                new Color(0.015f, 0.02f, 0.05f, 1f),
-                new Color(0.08f, 0.0f, 0.18f, 1f),
-                new Color(0.0f, 0.12f, 0.20f, 1f),
-                new Color(0.0f, 0.0f, 0.03f, 1f));
+                new Color(0.05f, 0.06f, 0.09f, 1f),
+                new Color(0.06f, 0.07f, 0.11f, 1f),
+                new Color(0.012f, 0.014f, 0.022f, 1f),
+                new Color(0.0f, 0.0f, 0.012f, 1f));
             bg.type = Image.Type.Simple;
 
             var cg = _titlePanel.AddComponent<CanvasGroup>();
             cg.interactable = true;
             cg.blocksRaycasts = true;
 
+            // ── 斜めのネオンサイドストライプ（1P青 / 2P赤） ──
+            MakeSlantBar(_titlePanel.transform, "P1Stripe",
+                new Vector2(-820f, 0f), new Vector2(150f, 1100f),
+                new Color(PromptFighters.UI.UITheme.P1Neon.r, PromptFighters.UI.UITheme.P1Neon.g, PromptFighters.UI.UITheme.P1Neon.b, 0.10f), 110f);
+            MakeSlantBar(_titlePanel.transform, "P1StripeThin",
+                new Vector2(-690f, 0f), new Vector2(26f, 1100f),
+                new Color(PromptFighters.UI.UITheme.P1Neon.r, PromptFighters.UI.UITheme.P1Neon.g, PromptFighters.UI.UITheme.P1Neon.b, 0.22f), 110f);
+            MakeSlantBar(_titlePanel.transform, "P2Stripe",
+                new Vector2(820f, 0f), new Vector2(150f, 1100f),
+                new Color(PromptFighters.UI.UITheme.P2Neon.r, PromptFighters.UI.UITheme.P2Neon.g, PromptFighters.UI.UITheme.P2Neon.b, 0.10f), 110f);
+            MakeSlantBar(_titlePanel.transform, "P2StripeThin",
+                new Vector2(690f, 0f), new Vector2(26f, 1100f),
+                new Color(PromptFighters.UI.UITheme.P2Neon.r, PromptFighters.UI.UITheme.P2Neon.g, PromptFighters.UI.UITheme.P2Neon.b, 0.22f), 110f);
+
             _titleTopGlow = MakePanel(_titlePanel.transform, "TopGlow",
-                new Vector2(0, 245), new Vector2(900, 120),
-                new Color(0.1f, 0.45f, 1f, 0.22f));
+                new Vector2(0, 245), new Vector2(1000, 130),
+                new Color(PromptFighters.UI.UITheme.P1Neon.r, PromptFighters.UI.UITheme.P1Neon.g, PromptFighters.UI.UITheme.P1Neon.b, 0.16f));
             _titleBottomGlow = MakePanel(_titlePanel.transform, "BottomGlow",
-                new Vector2(0, -245), new Vector2(920, 140),
-                new Color(1f, 0.2f, 0.55f, 0.18f));
-            MakePanel(_titlePanel.transform, "CenterFrame",
-                new Vector2(0, 4), new Vector2(760, 380),
-                new Color(0.02f, 0.025f, 0.055f, 0.72f));
-            MakeOutline(_titlePanel.transform, "FrameTop", new Vector2(0, 198), new Vector2(760, 3),
-                new Color(0.7f, 0.95f, 1f, 0.75f));
-            MakeOutline(_titlePanel.transform, "FrameBottom", new Vector2(0, -190), new Vector2(760, 3),
-                new Color(1f, 0.65f, 0.2f, 0.75f));
+                new Vector2(0, -245), new Vector2(1000, 150),
+                new Color(PromptFighters.UI.UITheme.P2Neon.r, PromptFighters.UI.UITheme.P2Neon.g, PromptFighters.UI.UITheme.P2Neon.b, 0.14f));
+
+            // ── センターフレーム（スチール地＋ゴールドの斜めエッジ） ──
+            var frame = MakePanel(_titlePanel.transform, "CenterFrame",
+                new Vector2(0, 4), new Vector2(820, 400), PromptFighters.UI.UITheme.Steel);
+            frame.sprite = PromptFighters.UI.UITheme.VGradient;
+            frame.type = Image.Type.Simple;
+            MakeSlantBar(_titlePanel.transform, "FrameTop", new Vector2(0, 206), new Vector2(820, 5),
+                PromptFighters.UI.UITheme.Gold, 22f);
+            MakeSlantBar(_titlePanel.transform, "FrameBottom", new Vector2(0, -198), new Vector2(820, 5),
+                PromptFighters.UI.UITheme.Gold, 22f);
+
+            // ── タイトルロゴ背後のゴールドスラッシュ ──
+            MakeSlantBar(_titlePanel.transform, "TitleSlash", new Vector2(0, 70f), new Vector2(700f, 96f),
+                new Color(PromptFighters.UI.UITheme.GoldDim.r, PromptFighters.UI.UITheme.GoldDim.g, PromptFighters.UI.UITheme.GoldDim.b, 0.22f), 40f);
 
             // ロゴ画像 (Resources/Art/logo.png) があれば表示、なければテキストフォールバック
             var logoSprite = Resources.Load<Sprite>("Art/logo");
@@ -235,63 +256,76 @@ namespace PromptFighters.GameFlow
             else
             {
                 MakeLabel(_titlePanel.transform, "TitleKicker", "AI PROMPT FIGHTER",
-                    new Vector2(0, 120), new Vector2(620, 44), 22, new Color(0.75f, 0.95f, 1f));
+                    new Vector2(0, 124), new Vector2(620, 44), 22, PromptFighters.UI.UITheme.P1Neon)
+                    .fontStyle = FontStyles.Bold | FontStyles.Italic;
+                // 影
+                var titleShadow = MakeLabel(_titlePanel.transform, "TitleShadow", "PROMPT FIGHTERS",
+                    new Vector2(4, 50), new Vector2(800, 96), 64, new Color(0f, 0f, 0f, 0.6f));
+                titleShadow.fontStyle = FontStyles.Bold | FontStyles.Italic;
+                titleShadow.characterSpacing = 4f;
                 var title = MakeLabel(_titlePanel.transform, "TitleMain", "PROMPT FIGHTERS",
-                    new Vector2(0, 54), new Vector2(760, 92), 58, new Color(1f, 0.92f, 0.46f));
-                title.fontStyle = FontStyles.Bold;
-                title.characterSpacing = 2f;
+                    new Vector2(0, 54), new Vector2(800, 96), 64, PromptFighters.UI.UITheme.Gold);
+                title.fontStyle = FontStyles.Bold | FontStyles.Italic;
+                title.characterSpacing = 4f;
                 _titleMainRect = title.rectTransform;
             }
 
             MakeLabel(_titlePanel.transform, "TitleSub",
                 "プロンプトでファイターを作ろう。API準備中はプリセットで対戦・トレーニングができます。",
-                new Vector2(0, -25), new Vector2(700, 38), 15, new Color(0.92f, 0.96f, 1f));
+                new Vector2(0, -25), new Vector2(700, 38), 15, PromptFighters.UI.UITheme.Ink);
             MakeLabel(_titlePanel.transform, "ApiNote",
                 "現在はプリセットキャラ・サンプル技・トレーニングモードでプレイできます。",
-                new Vector2(0, -58), new Vector2(700, 28), 13, new Color(0.72f, 0.84f, 1f));
+                new Vector2(0, -58), new Vector2(700, 28), 13, PromptFighters.UI.UITheme.InkDim);
 
             var startButton = MakeButton(_titlePanel.transform, "GameStartBtn", "ゲームスタート",
-                new Vector2(0, -128), new Vector2(310, 62), ShowCharacterSelect,
-                new Color(0.92f, 0.42f, 0.08f, 1f));
-            SetButtonLabelStyle(startButton, 22f, FontStyles.Bold, new Color(1f, 0.98f, 0.9f));
+                new Vector2(0, -128), new Vector2(340, 66), ShowCharacterSelect,
+                PromptFighters.UI.UITheme.Gold);
+            StyleArcadeButton(startButton, PromptFighters.UI.UITheme.Gold, 18f);
+            SetButtonLabelStyle(startButton, 24f, FontStyles.Bold | FontStyles.Italic, new Color(0.12f, 0.08f, 0.0f));
             _startButtonRect = startButton.GetComponent<RectTransform>();
-            MakeLabel(_titlePanel.transform, "StartHelp", "スペース / エンターキー",
-                new Vector2(0, -178), new Vector2(320, 24), 13, new Color(0.8f, 0.88f, 1f));
+            MakeLabel(_titlePanel.transform, "StartHelp", "▶ スペース / エンターキー",
+                new Vector2(0, -178), new Vector2(320, 24), 13, PromptFighters.UI.UITheme.InkDim);
 
             // AI機能トグルボタン
             MakeLabel(_titlePanel.transform, "AiToggleLabel", "AI機能",
-                new Vector2(-100f, -220f), new Vector2(80f, 24f), 13, new Color(0.72f, 0.84f, 1f));
+                new Vector2(-100f, -220f), new Vector2(80f, 24f), 13, PromptFighters.UI.UITheme.InkDim);
 
             var commentaryBtn = MakeButton(_titlePanel.transform, "CommentaryToggle",
                 CommentaryToggleText(),
                 new Vector2(20f, -220f), new Vector2(150f, 34f),
                 OnCommentaryToggle, ToggleOnColor);
+            StyleArcadeButton(commentaryBtn, ToggleOnColor, 10f);
             _commentaryToggleBg   = commentaryBtn.GetComponent<Image>();
             _commentaryToggleLabel = commentaryBtn.GetComponentInChildren<TextMeshProUGUI>();
+            _commentaryToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
             var angelBtn = MakeButton(_titlePanel.transform, "AngelToggle",
                 AngelToggleText(),
                 new Vector2(180f, -220f), new Vector2(150f, 34f),
                 OnAngelToggle, ToggleOnColor);
+            StyleArcadeButton(angelBtn, ToggleOnColor, 10f);
             _angelToggleBg   = angelBtn.GetComponent<Image>();
             _angelToggleLabel = angelBtn.GetComponentInChildren<TextMeshProUGUI>();
+            _angelToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
             // ステージ設定トグル（2行目）
             MakeLabel(_titlePanel.transform, "StageToggleLabel", "ステージ",
-                new Vector2(-100f, -262f), new Vector2(80f, 24f), 13, new Color(0.72f, 0.84f, 1f));
+                new Vector2(-100f, -262f), new Vector2(80f, 24f), 13, PromptFighters.UI.UITheme.InkDim);
 
             var platformBtn = MakeButton(_titlePanel.transform, "PlatformToggle",
                 PlatformToggleText(),
                 new Vector2(20f, -262f), new Vector2(150f, 34f),
                 OnPlatformToggle, ToggleOnColor);
+            StyleArcadeButton(platformBtn, ToggleOnColor, 10f);
             _platformToggleBg    = platformBtn.GetComponent<Image>();
             _platformToggleLabel = platformBtn.GetComponentInChildren<TextMeshProUGUI>();
+            _platformToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
             RefreshToggleVisuals();
 
             MakeLabel(_titlePanel.transform, "Footer",
                 "1P: WASD + J/K/L/G    スマッシュ: A/Dはじき+J    2P: 矢印 + テンキー2/3/1/0",
-                new Vector2(0, -286), new Vector2(760, 28), 12, new Color(0.76f, 0.82f, 0.9f));
+                new Vector2(0, -300), new Vector2(820, 28), 12, PromptFighters.UI.UITheme.InkDim);
         }
 
         static string CommentaryToggleText() =>
@@ -340,31 +374,45 @@ namespace PromptFighters.GameFlow
 
             var bg = _panel.AddComponent<Image>();
             bg.sprite = CreateGradientSprite(
-                new Color(0.02f, 0.02f, 0.06f, 1f),
-                new Color(0.06f, 0f, 0.14f, 1f),
-                new Color(0f, 0.08f, 0.16f, 1f),
-                new Color(0f, 0f, 0.04f, 1f));
+                new Color(0.05f, 0.06f, 0.09f, 1f),
+                new Color(0.06f, 0.07f, 0.11f, 1f),
+                new Color(0.012f, 0.014f, 0.022f, 1f),
+                new Color(0.0f, 0.0f, 0.012f, 1f));
             bg.type = Image.Type.Simple;
 
             var cg = _panel.AddComponent<CanvasGroup>();
             cg.interactable = true;
             cg.blocksRaycasts = true;
 
-            // ── ヘッダー ──
+            // ── ヘッダー（スチール地＋ゴールドの斜めライン） ──
             var header = CreateUIObject("Header", _panel.transform);
             var hRt = header.GetComponent<RectTransform>();
             hRt.anchorMin = new Vector2(0f, 1f);
             hRt.anchorMax = new Vector2(1f, 1f);
-            hRt.offsetMin = new Vector2(0f, -80f);
+            hRt.offsetMin = new Vector2(0f, -88f);
             hRt.offsetMax = Vector2.zero;
-            header.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.5f);
+            var hImg = header.AddComponent<Image>();
+            hImg.sprite = PromptFighters.UI.UITheme.VGradient;
+            hImg.type = Image.Type.Simple;
+            hImg.color = PromptFighters.UI.UITheme.Steel;
+            MakeOutline(_panel.transform, "HeaderEdge", new Vector2(0, 496), new Vector2(2200, 4),
+                PromptFighters.UI.UITheme.Gold);
 
+            MakeSlantBar(_panel.transform, "TitleSlash", new Vector2(0, 522f), new Vector2(420f, 50f),
+                new Color(PromptFighters.UI.UITheme.GoldDim.r, PromptFighters.UI.UITheme.GoldDim.g, PromptFighters.UI.UITheme.GoldDim.b, 0.30f), 24f);
             MakeLabel(_panel.transform, "PanelTitle", "キャラクター選択",
-                new Vector2(0, 504), new Vector2(700, 56), 32, new Color(1f, 0.88f, 0.3f));
+                new Vector2(0, 522), new Vector2(700, 56), 34, PromptFighters.UI.UITheme.Gold)
+                .fontStyle = FontStyles.Bold | FontStyles.Italic;
 
-            // ── 中央仕切り線 ──
-            MakeOutline(_panel.transform, "Divider", new Vector2(0, 0), new Vector2(3, 860),
-                new Color(1f, 1f, 1f, 0.12f));
+            // ── 中央 VS ディバイダ ──
+            MakeSlantBar(_panel.transform, "Divider", new Vector2(0, 0), new Vector2(8, 880),
+                new Color(PromptFighters.UI.UITheme.Gold.r, PromptFighters.UI.UITheme.Gold.g, PromptFighters.UI.UITheme.Gold.b, 0.35f), 60f);
+            var vsShadow = MakeLabel(_panel.transform, "VsShadow", "VS",
+                new Vector2(4, 360), new Vector2(160, 120), 76, new Color(0f, 0f, 0f, 0.55f));
+            vsShadow.fontStyle = FontStyles.Bold | FontStyles.Italic;
+            MakeLabel(_panel.transform, "Vs", "VS",
+                new Vector2(0, 364), new Vector2(160, 120), 76, PromptFighters.UI.UITheme.Gold)
+                .fontStyle = FontStyles.Bold | FontStyles.Italic;
 
             // ── 1P エリア（左半分） ──
             BuildPlayerColumn(_panel.transform, true);
@@ -374,22 +422,25 @@ namespace PromptFighters.GameFlow
 
             // ── フッター: ボタン ──
             var startBtn = MakeButton(_panel.transform, "StartBtn", "バトル開始",
-                new Vector2(-300, -460), new Vector2(250, 64), OnStartPressed,
-                new Color(0.1f, 0.55f, 0.1f, 1f));
-            SetButtonLabelStyle(startBtn, 22f, FontStyles.Bold, Color.white);
+                new Vector2(-300, -460), new Vector2(260, 68), OnStartPressed,
+                PromptFighters.UI.UITheme.Gold);
+            StyleArcadeButton(startBtn, PromptFighters.UI.UITheme.Gold, 16f);
+            SetButtonLabelStyle(startBtn, 23f, FontStyles.Bold | FontStyles.Italic, new Color(0.12f, 0.08f, 0f));
 
             var trainBtn = MakeButton(_panel.transform, "TrainingBtn", "トレーニング",
-                new Vector2(0, -460), new Vector2(250, 64), OnTrainingPressed,
-                new Color(0.1f, 0.25f, 0.65f, 1f));
-            SetButtonLabelStyle(trainBtn, 22f, FontStyles.Bold, Color.white);
+                new Vector2(0, -460), new Vector2(260, 68), OnTrainingPressed,
+                PromptFighters.UI.UITheme.P1Neon);
+            StyleArcadeButton(trainBtn, PromptFighters.UI.UITheme.P1Neon, 16f);
+            SetButtonLabelStyle(trainBtn, 23f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             var genBtn = MakeButton(_panel.transform, "GenerateBtn", "キャラ生成",
-                new Vector2(300, -460), new Vector2(250, 64), ShowGenerationSetupPanel,
-                new Color(0.55f, 0.22f, 0.08f, 1f));
-            SetButtonLabelStyle(genBtn, 22f, FontStyles.Bold, Color.white);
+                new Vector2(300, -460), new Vector2(260, 68), ShowGenerationSetupPanel,
+                PromptFighters.UI.UITheme.P2Neon);
+            StyleArcadeButton(genBtn, PromptFighters.UI.UITheme.P2Neon, 16f);
+            SetButtonLabelStyle(genBtn, 23f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             MakeLabel(_panel.transform, "StartHelp", "スペース: 既存キャラでバトル / T: トレーニング / G: 新規生成",
-                new Vector2(0, -505), new Vector2(800, 28), 14, new Color(0.72f, 0.8f, 1f));
+                new Vector2(0, -505), new Vector2(800, 28), 14, PromptFighters.UI.UITheme.InkDim);
 
             // ── 操作ガイド ──
             MakeLabel(_panel.transform, "CtrlHelp",
@@ -428,25 +479,30 @@ namespace PromptFighters.GameFlow
         void BuildPlayerColumn(Transform parent, bool isP1)
         {
             float cx = isP1 ? -480f : 480f;
-            var pColor = isP1 ? new Color(0.4f, 0.75f, 1f) : new Color(1f, 0.55f, 0.35f);
-            var bgColor = isP1
-                ? new Color(0.08f, 0.12f, 0.22f, 0.6f)
-                : new Color(0.22f, 0.08f, 0.08f, 0.6f);
+            var pColor = isP1 ? PromptFighters.UI.UITheme.P1Neon : PromptFighters.UI.UITheme.P2Neon;
+            var pColorDark = isP1 ? PromptFighters.UI.UITheme.P1NeonDark : PromptFighters.UI.UITheme.P2NeonDark;
+            float slant = isP1 ? 18f : -18f;
+            var bgColor = new Color(pColorDark.r, pColorDark.g, pColorDark.b, 0.28f);
 
-            // 背景
+            // 背景（ネオン地＋上端の斜めエッジ）
             var colBg = CreateUIObject(isP1 ? "P1ColBg" : "P2ColBg", parent);
             var cbRt = colBg.GetComponent<RectTransform>();
             cbRt.anchorMin = new Vector2(isP1 ? 0f : 0.5f, 0f);
             cbRt.anchorMax = new Vector2(isP1 ? 0.5f : 1f, 1f);
             cbRt.offsetMin = isP1 ? new Vector2(0f, 80f) : new Vector2(0f, 80f);
             cbRt.offsetMax = isP1 ? new Vector2(-2f, -80f) : new Vector2(0f, -80f);
-            colBg.AddComponent<Image>().color = bgColor;
+            var cbImg = colBg.AddComponent<Image>();
+            cbImg.sprite = PromptFighters.UI.UITheme.VGradient;
+            cbImg.type = Image.Type.Simple;
+            cbImg.color = bgColor;
 
-            // プレイヤーバッジ
-            MakeLabel(parent, isP1 ? "P1Badge" : "P2Badge",
+            // プレイヤーバッジ（斜めネオンプレート）
+            MakeSlantBar(parent, isP1 ? "P1BadgePlate" : "P2BadgePlate",
+                new Vector2(cx, 362f), new Vector2(150f, 64f), pColor, slant);
+            var badge = MakeLabel(parent, isP1 ? "P1Badge" : "P2Badge",
                 isP1 ? "1P" : "2P",
-                new Vector2(cx, 360f), new Vector2(100f, 60f), 40, pColor)
-                .fontStyle = FontStyles.Bold;
+                new Vector2(cx, 362f), new Vector2(150f, 64f), 42, Color.white);
+            badge.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
             // コントローラー接続状態
             var gpLabel = MakeLabel(parent, isP1 ? "P1GpStatus" : "P2GpStatus",
@@ -455,9 +511,9 @@ namespace PromptFighters.GameFlow
             if (isP1) _p1GamepadLabel = gpLabel;
             else      _p2GamepadLabel = gpLabel;
 
-            // カラーライン
-            MakeOutline(parent, isP1 ? "P1Line" : "P2Line",
-                new Vector2(cx, 310f), new Vector2(280f, 3f), pColor);
+            // カラーライン（斜め）
+            MakeSlantBar(parent, isP1 ? "P1Line" : "P2Line",
+                new Vector2(cx, 308f), new Vector2(300f, 4f), pColor, slant);
 
             // 選択中キャラ名
             var row = CreateUIObject(isP1 ? "P1Row" : "P2Row", parent);
@@ -646,7 +702,7 @@ namespace PromptFighters.GameFlow
         void BuildGenerationColumn(Transform parent, bool isP1)
         {
             float cx = isP1 ? -330f : 330f;
-            var pColor = isP1 ? new Color(0.4f, 0.75f, 1f) : new Color(1f, 0.55f, 0.35f);
+            var pColor = isP1 ? PromptFighters.UI.UITheme.P1Neon : PromptFighters.UI.UITheme.P2Neon;
 
             MakePanel(parent, isP1 ? "P1GenBg" : "P2GenBg",
                 new Vector2(cx, 35f), new Vector2(520f, 650f), new Color(0.01f, 0.014f, 0.03f, 0.72f));
@@ -1692,6 +1748,43 @@ namespace PromptFighters.GameFlow
         static Image MakeOutline(Transform parent, string name, Vector2 pos, Vector2 size, Color color)
         {
             return MakePanel(parent, name, pos, size, color);
+        }
+
+        // アーケード調: 平行四辺形のメタリックバー（縦グラデ＋シアー）
+        static Image MakeSlantBar(Transform parent, string name, Vector2 pos, Vector2 size, Color color, float slant)
+        {
+            var go = CreateUIObject(name, parent);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchoredPosition = pos;
+            rt.sizeDelta = size;
+            var img = go.AddComponent<Image>();
+            img.sprite = PromptFighters.UI.UITheme.VGradient;
+            img.type = Image.Type.Simple;
+            img.color = color;
+            img.raycastTarget = false;
+            PromptFighters.UI.UITheme.Skew(img, slant);
+            return img;
+        }
+
+        // アーケード調: 既存ボタンをメタリック平行四辺形にスタイルする（ネオン縁付き）
+        static void StyleArcadeButton(Button btn, Color baseColor, float slant)
+        {
+            if (btn == null) return;
+            var img = btn.GetComponent<Image>();
+            if (img != null)
+            {
+                img.sprite = PromptFighters.UI.UITheme.VGradient;
+                img.type = Image.Type.Simple;
+                img.color = baseColor;
+                PromptFighters.UI.UITheme.Skew(img, slant);
+            }
+            var rt = btn.GetComponent<RectTransform>();
+            // 下辺ネオンライン
+            var edge = MakeSlantBar(btn.transform, "BtnEdge",
+                new Vector2(0f, -rt.sizeDelta.y * 0.5f + 2f),
+                new Vector2(rt.sizeDelta.x, 4f),
+                new Color(1f, 1f, 1f, 0.85f), slant);
+            edge.transform.SetAsFirstSibling();
         }
 
         static Image AddImage(GameObject go, Color color)

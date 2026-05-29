@@ -12,18 +12,18 @@ namespace PromptFighters.UI
 {
     public class BattleResultUI : MonoBehaviour
     {
-        // ── Palette ────────────────────────────────────────────────────
-        static readonly Color BgOverlay  = new Color(0.01f, 0.02f, 0.05f, 0.90f);
-        static readonly Color BgPanel    = new Color(0.02f, 0.05f, 0.10f, 0.97f);
-        static readonly Color BgCard     = new Color(0.03f, 0.07f, 0.14f, 1.00f);
-        static readonly Color BgComment  = new Color(0.02f, 0.06f, 0.12f, 1.00f);
-        static readonly Color P1Col      = new Color(0.12f, 0.62f, 1.00f);
-        static readonly Color P2Col      = new Color(1.00f, 0.20f, 0.20f);
-        static readonly Color DrawCol    = new Color(1.00f, 0.82f, 0.10f);
-        static readonly Color TextWht    = Color.white;
-        static readonly Color TextDim    = new Color(0.55f, 0.68f, 0.82f);
-        static readonly Color TextMuted  = new Color(0.38f, 0.50f, 0.65f);
-        static readonly Color EdgeLine   = new Color(0.22f, 0.50f, 1.00f, 0.40f);
+        // ── Palette (アーケード格ゲー調) ───────────────────────────────
+        static readonly Color BgOverlay  = new Color(0.01f, 0.01f, 0.02f, 0.92f);
+        static readonly Color BgPanel    = UITheme.Steel;
+        static readonly Color BgCard     = new Color(0.04f, 0.05f, 0.08f, 1.00f);
+        static readonly Color BgComment  = UITheme.SteelDark;
+        static readonly Color P1Col      = UITheme.P1Neon;
+        static readonly Color P2Col      = UITheme.P2Neon;
+        static readonly Color DrawCol    = UITheme.Gold;
+        static readonly Color TextWht    = UITheme.Ink;
+        static readonly Color TextDim    = UITheme.InkDim;
+        static readonly Color TextMuted  = new Color(0.45f, 0.40f, 0.28f);
+        static readonly Color EdgeLine   = new Color(UITheme.Gold.r, UITheme.Gold.g, UITheme.Gold.b, 0.55f);
 
         // ── State ──────────────────────────────────────────────────────
         GameObject      _overlay;
@@ -110,7 +110,7 @@ namespace PromptFighters.UI
             _winnerText = wGo.AddComponent<TextMeshProUGUI>();
             _winnerText.text      = "1P WIN";
             _winnerText.fontSize  = 68f;
-            _winnerText.fontStyle = FontStyles.Bold;
+            _winnerText.fontStyle = FontStyles.Bold | FontStyles.Italic;
             _winnerText.alignment = TextAlignmentOptions.Center;
             _winnerText.color     = P1Col;
             UITheme.Apply(_winnerText);
@@ -128,14 +128,16 @@ namespace PromptFighters.UI
             var cmtBg = Make("CommentBg", panel.transform);
             Anch(cmtBg, 0,0,1,0, 20f,58f,-20f,148f);
             cmtBg.AddComponent<Image>().color = BgComment;
-            AddLine(cmtBg.transform, "CmtT", 0,1,1,1, 0,-1f,0,0, new Color(0.22f,0.50f,1f,0.35f));
+            AddLine(cmtBg.transform, "CmtT", 0,1,1,1, 0,-2f,0,0, EdgeLine);
 
             // "AI ANALYSIS" label
             var cmtHeader = Make("CmtHeader", cmtBg.transform);
             Anch(cmtHeader, 0,1,1,1, 10f,-20f,-10f,-2f);
             var cmtH = cmtHeader.AddComponent<TextMeshProUGUI>();
             cmtH.text = "■  AI ANALYSIS"; cmtH.fontSize = 9f;
-            cmtH.alignment = TextAlignmentOptions.Left; cmtH.color = new Color(0.28f,0.62f,1f,0.8f);
+            cmtH.fontStyle = FontStyles.Bold | FontStyles.Italic;
+            cmtH.alignment = TextAlignmentOptions.Left;
+            cmtH.color = new Color(UITheme.Gold.r, UITheme.Gold.g, UITheme.Gold.b, 0.9f);
             UITheme.Apply(cmtH);
 
             var cmtGo = Make("CommentText", cmtBg.transform);

@@ -78,8 +78,10 @@ namespace PromptFighters.Battle
             if (PromptFighters.Audio.GameAudioManager.Instance == null &&
                 GetComponent<PromptFighters.Audio.GameAudioManager>() == null)
                 gameObject.AddComponent<PromptFighters.Audio.GameAudioManager>();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             if (GetComponent<BattleDebugTuner>() == null)
                 gameObject.AddComponent<BattleDebugTuner>();
+#endif
             if (GetComponent<CommentaryController>() == null)
                 gameObject.AddComponent<CommentaryController>();
             if (GetComponent<AngelController>() == null)

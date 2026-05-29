@@ -154,6 +154,8 @@ namespace PromptFighters.AI
             onProgress?.Invoke($"バリエーション画像を並列生成中... (14枚)");
             var editEntries = BuildEditEntries(data);
             int pending = editEntries.Count;
+            int failedCount = 0;
+            var failedIds = new List<CharacterSpriteId>();
 
             foreach (var entry in editEntries)
             {
@@ -178,11 +180,20 @@ namespace PromptFighters.AI
                     {
                         Debug.LogWarning($"[AIImage] {spriteId} 生成失敗（Idle1で代替）: {err}");
                         set.Set(spriteId, baseSprite);
+                        failedCount++;
+                        failedIds.Add(spriteId);
                         pending--;
                     }));
             }
 
             yield return new WaitUntil(() => pending == 0);
+
+            if (failedCount > 0)
+            {
+                string failedList = string.Join(", ", failedIds);
+                Debug.LogWarning($"[AIImage] {failedCount}枚の画像生成に失敗しIdle1で代替しました: {failedList}");
+                onProgress?.Invoke($"⚠ {failedCount}枚の画像生成に失敗（Idle1で代替）: {failedList}");
+            }
 
             onSuccess?.Invoke(set);
         }

@@ -26,7 +26,7 @@ namespace PromptFighters.UI
             var tmp = go.AddComponent<TextMeshPro>();
             tmp.alignment    = TextAlignmentOptions.Center;
             tmp.sortingOrder = 20;
-            tmp.fontStyle    = FontStyles.Bold;
+            tmp.fontStyle    = FontStyles.Bold | FontStyles.Italic;
 
             if (blocked)
             {
@@ -74,7 +74,7 @@ namespace PromptFighters.UI
             tmp.fontSize     = fontSize;
             tmp.color        = color;
             tmp.text         = text;
-            tmp.fontStyle    = FontStyles.Bold;
+            tmp.fontStyle    = FontStyles.Bold | FontStyles.Italic;
             tmp.alignment    = TextAlignmentOptions.Center;
             tmp.sortingOrder = 21;
             UITheme.Apply(tmp);
