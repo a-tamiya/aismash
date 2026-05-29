@@ -1,9 +1,11 @@
 using UnityEngine;
+using System.Collections;
 using System.Collections.Generic;
 
 namespace PromptFighters.Battle.Skills
 {
-    // 一定時間だけ存在する近接攻撃判定。SkillExecutorが生成・破棄する。
+    // 一定時間だけ存在する近接攻撃判定。SkillExecutorが生成する。
+    // GC負荷軽減のためオブジェクトプールで再利用する（box用/circle用で別プール）。
     public class Hitbox : MonoBehaviour
     {
         public Fighter      Owner;
@@ -34,38 +36,145 @@ namespace PromptFighters.Battle.Skills
         readonly HashSet<Battle.SummonEntity> _hitSummons = new HashSet<Battle.SummonEntity>();
         int _hitsLanded;
 
-        // デバッグオーバーレイ（col.boundsに毎フレーム追従する独立オブジェクト）
+        // デバッグオーバーレイ（col.boundsに毎フレーム追従する独立オブジェクト。プール対象と一緒に再利用）
         SpriteRenderer _debugSr;
+
+        bool _isCircle;
+        bool _released;
+        SpriteRenderer _sr;
+        Collider2D _col;
+
+        static readonly Stack<Hitbox> s_boxPool    = new Stack<Hitbox>();
+        static readonly Stack<Hitbox> s_circlePool = new Stack<Hitbox>();
 
         public static Hitbox Spawn(Fighter owner, Vector2 worldPos, Vector2 size, float lifetime)
         {
-            var go = new GameObject("Hitbox");
-            go.transform.position = worldPos;
-            var col = go.AddComponent<BoxCollider2D>(); // 明示的追加（RequireComponent削除済み）
-            col.isTrigger = true;
-            col.size      = Vector2.one; // スケールで大きさを制御するためcolliderは1x1
+            var hb = Acquire(circle: false);
+            hb.transform.position = worldPos;
+            hb.transform.localScale = new Vector3(size.x, size.y, 1f);
+            var box = (BoxCollider2D)hb._col;
+            box.size = Vector2.one; // スケールで大きさを制御するためcolliderは1x1
 
-            var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite       = RuntimeSprite.Square();
-            sr.color        = new Color(1f, 1f, 0f, 0.55f);
-            sr.sortingOrder = 10;
-            go.transform.localScale = new Vector3(size.x, size.y, 1f);
+            hb._sr.sprite       = RuntimeSprite.Square();
+            hb._sr.color        = new Color(1f, 1f, 0f, 0.55f);
+            hb._sr.enabled      = true;
 
-            var hb = go.AddComponent<Hitbox>();
             hb.Owner    = owner;
             hb.Lifetime = lifetime;
             hb.DesiredWorldSize = size;
+            hb.BeginDeferredActivate();
+            return hb;
+        }
 
-            // デバッグオーバーレイ作成
+        // ring形状用: CircleCollider2Dで生成する
+        public static Hitbox SpawnCircle(Fighter owner, Vector2 worldPos, float radius, float lifetime)
+        {
+            var hb = Acquire(circle: true);
+            hb.transform.position = worldPos;
+            hb.transform.localScale = Vector3.one;
+            var circle = (CircleCollider2D)hb._col;
+            circle.radius = radius;
+
+            hb._sr.sprite = RuntimeSprite.Square();
+            hb._sr.color  = new Color(1f, 1f, 0f, 0f); // 不可視（ring は常にHideVisual扱い）
+            hb._sr.enabled = true;
+
+            hb.Owner      = owner;
+            hb.Lifetime   = lifetime;
+            hb.HideVisual = true;
+            hb.BeginDeferredActivate();
+            return hb;
+        }
+
+        static Hitbox Acquire(bool circle)
+        {
+            var pool = circle ? s_circlePool : s_boxPool;
+            Hitbox hb = null;
+            while (pool.Count > 0)
+            {
+                hb = pool.Pop();
+                if (hb != null) break; // 破棄済み（シーン遷移等）はスキップ
+            }
+            if (hb == null) hb = Create(circle);
+            hb.ResetState();
+            hb.gameObject.SetActive(true);
+            return hb;
+        }
+
+        static Hitbox Create(bool circle)
+        {
+            var go = new GameObject(circle ? "HitboxRing" : "Hitbox");
+            Collider2D col;
+            if (circle)
+            {
+                var c = go.AddComponent<CircleCollider2D>();
+                c.isTrigger = true;
+                col = c;
+            }
+            else
+            {
+                var b = go.AddComponent<BoxCollider2D>();
+                b.isTrigger = true;
+                b.size      = Vector2.one;
+                col = b;
+            }
+
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite       = RuntimeSprite.Square();
+            sr.sortingOrder = 10;
+
+            var hb = go.AddComponent<Hitbox>();
+            hb._isCircle = circle;
+            hb._sr  = sr;
+            hb._col = col;
+
+            // デバッグオーバーレイ（独立オブジェクト。プール対象と寿命を共有して再利用）
             var dbGo = new GameObject("HitboxDebug");
             var dbSr = dbGo.AddComponent<SpriteRenderer>();
-            dbSr.sprite       = RuntimeSprite.Square();
-            dbSr.color        = new Color(1f, 0.35f, 0f, 0.6f); // 橙: 攻撃判定
+            dbSr.sprite       = circle ? RuntimeSprite.Circle() : RuntimeSprite.Square();
+            dbSr.color        = circle ? new Color(0.3f, 1f, 0.3f, 0.6f) : new Color(1f, 0.35f, 0f, 0.6f);
             dbSr.sortingOrder = 12;
             dbSr.enabled      = false;
             hb._debugSr = dbSr;
 
             return hb;
+        }
+
+        // 再利用前に全状態を初期化する
+        void ResetState()
+        {
+            _released = false;
+            _hitTargets.Clear();
+            _nextHitTimes.Clear();
+            _hitSummons.Clear();
+            _hitsLanded = 0;
+
+            Owner = null;
+            Damage = 0f;
+            Knockback = 0f;
+            KnockbackDir = Vector2.right;
+            StunTime = 0f;
+            GuardDamage = 0f;
+            Status = StatusType.None;
+            StatusDuration = 0f;
+            StatusChance = 1f;
+            Element = Element.None;
+            EffectSprite = null;
+            FlipEffectX = false;
+            MaxHits = 1;
+            Lifetime = 0.1f;
+            FollowOwner = false;
+            HideVisual = false;
+            DamageIncludesOwnerBoost = false;
+            OwnerLocalOffset = Vector2.zero;
+            DesiredWorldSize = Vector2.zero;
+            FixedKnockbackDir = false;
+            GroundBounce = false;
+            IsSmashHit = false;
+
+            transform.rotation = Quaternion.identity;
+            if (_col != null) _col.enabled = true;
+            if (!_isCircle && _col is BoxCollider2D box) { box.size = Vector2.one; box.offset = Vector2.zero; }
         }
 
         public void SetDebugColor(Color c)
@@ -73,58 +182,37 @@ namespace PromptFighters.Battle.Skills
             if (_debugSr != null) _debugSr.color = c;
         }
 
-        // ring形状用: CircleCollider2Dで生成する
-        public static Hitbox SpawnCircle(Fighter owner, Vector2 worldPos, float radius, float lifetime)
+        void BeginDeferredActivate()
         {
-            var go = new GameObject("HitboxRing");
-            go.transform.position = worldPos;
-
-            var col = go.AddComponent<CircleCollider2D>();
-            col.isTrigger = true;
-            col.radius    = radius;
-
-            var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite = RuntimeSprite.Square();
-            sr.color  = new Color(1f, 1f, 0f, 0f); // 不可視（ring は常にHideVisual扱い）
-            sr.sortingOrder = 10;
-            go.transform.localScale = Vector3.one;
-
-            var hb = go.AddComponent<Hitbox>();
-            hb.Owner      = owner;
-            hb.Lifetime   = lifetime;
-            hb.HideVisual = true;
-
-            var dbGo = new GameObject("HitboxDebug");
-            var dbSr = dbGo.AddComponent<SpriteRenderer>();
-            dbSr.sprite       = RuntimeSprite.Circle(); // 円スプライトで実形状を表示
-            dbSr.color        = new Color(0.3f, 1f, 0.3f, 0.6f); // 緑: リング判定
-            dbSr.sortingOrder = 12;
-            dbSr.enabled      = false;
-            hb._debugSr = dbSr;
-
-            return hb;
+            StopAllCoroutines();
+            StartCoroutine(DeferredActivate());
         }
 
-        void Start()
+        // 旧Start()相当。呼び出し側がフィールドを設定し終えた次フレームに発火する。
+        IEnumerator DeferredActivate()
         {
+            yield return null;
+            if (_released) yield break;
+
             Color ec = SkillEnumParser.ElementColor(Element);
-            var sr = GetComponent<SpriteRenderer>();
             if (HideVisual)
             {
-                sr.enabled = false;
+                _sr.enabled = false;
             }
             else if (EffectSprite != null)
             {
-                sr.sprite = EffectSprite;
-                sr.color  = Color.white;
-                sr.flipX  = FlipEffectX;
-                FitColliderAndVisualToWorldSize(sr);
+                _sr.sprite = EffectSprite;
+                _sr.color  = Color.white;
+                _sr.flipX  = FlipEffectX;
+                FitColliderAndVisualToWorldSize(_sr);
             }
             else
             {
-                sr.color = new Color(ec.r, ec.g, ec.b, 0.65f);
+                _sr.color = new Color(ec.r, ec.g, ec.b, 0.65f);
             }
-            Destroy(gameObject, Lifetime);
+
+            yield return new WaitForSeconds(Lifetime);
+            Release();
         }
 
         void LateUpdate()
@@ -141,24 +229,28 @@ namespace PromptFighters.Battle.Skills
             if (_debugSr == null) return;
             bool show = DebugSettings.ShowHitboxes;
             _debugSr.enabled = show;
-            if (show)
+            if (show && _col != null)
             {
-                var col2d = GetComponent<Collider2D>();
-                if (col2d != null)
-                {
-                    var b = col2d.bounds;
-                    _debugSr.transform.position   = b.center;
-                    _debugSr.transform.rotation   = Quaternion.identity;
-                    _debugSr.transform.localScale = new Vector3(b.size.x, b.size.y, 1f);
-                }
+                var b = _col.bounds;
+                _debugSr.transform.position   = b.center;
+                _debugSr.transform.rotation   = Quaternion.identity;
+                _debugSr.transform.localScale = new Vector3(b.size.x, b.size.y, 1f);
             }
 
             // デバッグ中はエフェクトスプライトを非表示にしてブロックのみ見せる
-            if (!HideVisual)
-            {
-                var sr = GetComponent<SpriteRenderer>();
-                if (sr != null) sr.enabled = !show;
-            }
+            if (!HideVisual && _sr != null)
+                _sr.enabled = !show;
+        }
+
+        // プールへ返却する
+        void Release()
+        {
+            if (_released) return;
+            _released = true;
+            StopAllCoroutines();
+            if (_debugSr != null) _debugSr.enabled = false;
+            gameObject.SetActive(false);
+            (_isCircle ? s_circlePool : s_boxPool).Push(this);
         }
 
         void OnDestroy()
@@ -168,7 +260,7 @@ namespace PromptFighters.Battle.Skills
 
         void FitColliderAndVisualToWorldSize(SpriteRenderer sr)
         {
-            var col = GetComponent<BoxCollider2D>();
+            var col = _col as BoxCollider2D;
             if (col == null || sr?.sprite == null) return;
 
             Vector2 spriteSize = sr.sprite.bounds.size;
@@ -198,6 +290,7 @@ namespace PromptFighters.Battle.Skills
 
         void TryHit(Collider2D other)
         {
+            if (_released) return;
             if (_hitsLanded >= MaxHits) return;
 
             // 召喚物へのヒット
@@ -207,11 +300,8 @@ namespace PromptFighters.Battle.Skills
                 _hitSummons.Add(summon);
                 summon.TakeHit(Damage);
                 _hitsLanded++;
-                if (_hitsLanded >= MaxHits)
-                {
-                    var c = GetComponent<Collider2D>();
-                    if (c != null) c.enabled = false;
-                }
+                if (_hitsLanded >= MaxHits && _col != null)
+                    _col.enabled = false;
                 return;
             }
 
@@ -228,11 +318,10 @@ namespace PromptFighters.Battle.Skills
             _hitsLanded++;
             if (MaxHits > 1)
                 _nextHitTimes[target] = Time.time + Mathf.Max(0.04f, Lifetime / Mathf.Max(1, MaxHits));
-            if (_hitsLanded >= MaxHits)
+            if (_hitsLanded >= MaxHits && _col != null)
             {
                 // コライダーを無効化してビジュアルは lifetime まで表示し続ける
-                var col = GetComponent<Collider2D>();
-                if (col != null) col.enabled = false;
+                _col.enabled = false;
             }
         }
 
