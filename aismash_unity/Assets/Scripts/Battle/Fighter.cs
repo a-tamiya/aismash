@@ -429,6 +429,7 @@ namespace PromptFighters.Battle
                 else if (_guardDisabled         )  c = Color.Lerp(GuardDisableColor,Color.white, (Mathf.Sin(Time.time * 10f) + 1f) * 0.3f);
                 else if (_sealedSlot >= 0       )  c = Color.Lerp(SealColor,        Color.white, (Mathf.Sin(Time.time * 8f)  + 1f) * 0.3f);
                 else if (_hpShareTimer     > 0f)   c = Color.Lerp(HPShareColor,     Color.white, (Mathf.Sin(Time.time * 6f)  + 1f) * 0.3f);
+                else if (_barrierHP        > 0f)   c = Color.Lerp(new Color(0.4f, 0.8f, 1f), Color.white, (Mathf.Sin(Time.time * 7f) + 1f) * 0.3f);
             }
 
             _sprite.color = WithDebugAlpha(c);

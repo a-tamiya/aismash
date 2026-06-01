@@ -20,8 +20,37 @@ namespace PromptFighters.Battle
             DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "BARRIER!",
                 new Color(0.4f, 0.8f, 1f), 2.2f);
             BattleLogger.Instance?.LogEvent($"{PlayerLabel()}がバリア展開");
-            yield return new WaitForSeconds(duration);
+
+            var aura = CreateBarrierAura();
+            var auraSr = aura != null ? aura.GetComponent<SpriteRenderer>() : null;
+            float elapsed = 0f;
+            // 効果中はオーラを表示。時間切れ or 吸収しきりで終了。
+            while (elapsed < duration && _barrierHP > 0f && State != FighterState.Dead)
+            {
+                if (auraSr != null)
+                {
+                    float pulse = (Mathf.Sin(Time.time * 6f) + 1f) * 0.5f;
+                    auraSr.color = new Color(0.4f, 0.8f, 1f, 0.20f + 0.18f * pulse);
+                    aura.transform.localScale = Vector3.one * (2.2f + 0.12f * pulse);
+                }
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
             _barrierHP = 0f;
+            if (aura != null) Destroy(aura);
+        }
+
+        GameObject CreateBarrierAura()
+        {
+            var go = new GameObject("BarrierAura");
+            go.transform.SetParent(transform, false);
+            go.transform.localPosition = new Vector3(0f, 0.75f, 0f);
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = Skills.RuntimeSprite.Circle();
+            sr.color = new Color(0.4f, 0.8f, 1f, 0.3f);
+            sr.sortingOrder = 8; // キャラの少し手前に半透明で重ねる
+            go.transform.localScale = Vector3.one * 2.2f;
+            return go;
         }
 
         // 一定時間、相手を中心点へ継続的に引き寄せる（gravity_well アクション用）。
