@@ -330,7 +330,7 @@ namespace PromptFighters.Battle.Skills
                 ["command_throw"]      = DoCommandThrow,
                 ["shockwave"]          = SpawnShockwave,
                 ["gravity_well"]       = (skill, a, pm) => DoGravityWell(skill, a),
-                ["lifesteal"]          = (skill, a, pm) => { if (a.lifesteal_ratio <= 0f) a.lifesteal_ratio = 0.5f; SpawnMeleeHitbox(skill, a, pm); },
+                ["lifesteal"]          = (skill, a, pm) => { if (a.lifesteal_ratio <= 0f) a.lifesteal_ratio = 0.3f; SpawnMeleeHitbox(skill, a, pm); },
                 ["delay"]              = (skill, a, pm) => { /* no-op: time制御で表現 */ },
             };
         }
@@ -764,40 +764,37 @@ namespace PromptFighters.Battle.Skills
                 a.hide_effect ? null : _fighter.GetEffectSprite(skill.slot), desiredSize, a);
         }
 
-        // heal_self: HP回復。power=回復量(HP)。未指定なら最大HPの8%。
+        // heal_self: HP回復。power=回復量(HP)。未指定なら最大HPの5%。
         void HealSelf(SkillAction a)
         {
-            float amount = a.power > 0f ? a.power : _fighter.MaxHP * 0.08f;
+            float amount = a.power > 0f ? a.power : _fighter.MaxHP * 0.05f;
             _fighter.Heal(amount);
         }
 
-        // barrier: 一定量のダメージを吸収するシールド。power=吸収量、duration=持続秒。
+        // barrier: 自己バフ。一定量を吸収するシールドを張る。power=吸収量、duration=持続秒。
+        // コルーチンで張るだけなので発動者はすぐ動ける（後隙は技のrecoveryで制御）。
         void DoBarrier(SkillAction a)
         {
             float amount   = a.power > 0f ? a.power : 15f;
-            float duration = a.duration > 0f ? a.duration : 4f;
+            float duration = a.duration > 0f ? a.duration : 5f;
             _fighter.StartBarrier(amount, duration);
         }
 
-        // command_throw: 近距離のガード不能投げ。範囲内なら確定ダメージ＋吹き飛ばし。
+        // command_throw: 範囲内の相手を掴み→引き寄せ→ガード不能の投げで締める（ワイヤー投げ）。
         void DoCommandThrow(SkillData skill, SkillAction a, float powerMultiplier)
         {
-            var opp = _fighter.Opponent;
-            if (opp == null) return;
+            if (_fighter.Opponent == null) return;
 
-            Vector2 delta = opp.transform.position - _fighter.transform.position;
+            // rangeを伸ばせばワイヤー投げ（遠距離から掴んで引き寄せる）になる。
             float range  = (a.range > 0f ? a.range
                           : (skill.parameters.range > 0f ? skill.parameters.range : 1.6f)) * _sizeScale;
             float height = (a.size_y > 0f ? a.size_y : 2.0f) * _sizeScale;
-            if (Mathf.Abs(delta.x) > range || Mathf.Abs(delta.y) > height) return;
-
             float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage)
                         * powerMultiplier * _fighter.DamageMultiplier;
-            float facing = _fighter.FacingRight ? 1f : -1f;
             var (kbDir, _) = ComputeKnockback(a, 1f, 0.8f);
-            Vector2 throwDir = new Vector2(facing * Mathf.Abs(kbDir.x), Mathf.Abs(kbDir.y));
-            opp.TakeThrow(dmg, skill.parameters.knockback * powerMultiplier, throwDir, skill.parameters.stun_time);
-            PromptFighters.Audio.GameAudioManager.Instance?.PlayGrab();
+            Vector2 throwDir = new Vector2(Mathf.Abs(kbDir.x), Mathf.Abs(kbDir.y));
+            _fighter.StartCommandThrow(range, height, dmg,
+                skill.parameters.knockback * powerMultiplier, throwDir, skill.parameters.stun_time);
         }
 
         // shockwave: 地面叩きつけで左右に発生する衝撃波。effect spriteで判定と見た目を一致させる。

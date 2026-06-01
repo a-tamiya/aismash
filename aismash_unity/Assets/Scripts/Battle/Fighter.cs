@@ -1060,6 +1060,44 @@ namespace PromptFighters.Battle
             _skillRecoveryTimer = Mathf.Max(_skillRecoveryTimer, seconds);
         }
 
+        // command_throw 用: 範囲内の相手を掴み→引き寄せ→投げる（ワイヤー投げ）。
+        // 既存の掴み機構を再利用し、ガード貫通の投げ(TakeThrow)で締める。
+        public void StartCommandThrow(float range, float height, float damage,
+                                      float knockback, Vector2 throwDir, float stun)
+            => StartCoroutine(CommandThrowRoutine(range, height, damage, knockback, throwDir, stun));
+
+        System.Collections.IEnumerator CommandThrowRoutine(float range, float height, float damage,
+                                                           float knockback, Vector2 throwDir, float stun)
+        {
+            var opp = Opponent;
+            if (opp == null || opp.State == FighterState.Dead || opp.IsDodging) yield break;
+
+            Vector2 delta = opp.transform.position - transform.position;
+            float forward = FacingRight ? delta.x : -delta.x;
+            if (forward < -0.3f || forward > range || Mathf.Abs(delta.y) > height)
+                yield break; // 空振り（掴み失敗）
+
+            // 掴み成立 → 引き寄せ
+            PromptFighters.Audio.GameAudioManager.Instance?.PlayGrab();
+            _heldOpponent = opp;
+            opp.BeginGrabbedBy(this);
+            _grabHoldTimer = 999f;       // TickGrabの自動リリースを抑止（手動で投げる）
+            ShowGrabSprite(0.5f);
+            BattleLogger.Instance?.LogEvent($"{PlayerLabel()}が掴んだ");
+
+            // 掴みモーション → 投げ移行
+            yield return new WaitForSeconds(0.22f);
+            if (_heldOpponent == null) yield break; // 途中で解除された
+
+            Fighter target = _heldOpponent;
+            ReleaseHeldOpponent(applyRecovery: false);
+            float dir = FacingRight ? 1f : -1f;
+            Vector2 kb = new Vector2(dir * Mathf.Abs(throwDir.x), throwDir.y);
+            target.transform.position = transform.position + new Vector3(dir * 0.6f, 0.2f, 0f);
+            target.TakeThrow(damage, knockback, kb, stun);
+            _grabCooldownTimer = Mathf.Max(_grabCooldownTimer, throwGrabCooldown);
+        }
+
         public void ResetForBattle(Vector3 spawnPos, bool faceRight = true)
         {
             CurrentHP           = maxHP;
