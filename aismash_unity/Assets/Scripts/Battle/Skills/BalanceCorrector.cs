@@ -190,6 +190,49 @@ namespace PromptFighters.Battle.Skills
                         if (a.damage_override >= 0f)
                             a.damage_override = Mathf.Clamp(a.damage_override, 0f, totalMaxDmg * 0.6f);
                     }
+
+                    // barrier: 吸収量・持続秒の上限。過大なシールドを防ぐ。
+                    if (a.type == "barrier")
+                    {
+                        if (a.power > 0f)    a.power    = Mathf.Clamp(a.power, 3f, 30f);
+                        if (a.duration > 0f) a.duration = Mathf.Clamp(a.duration, 0.5f, 6f);
+                    }
+
+                    // heal_self: 1回の回復量上限（HP直値）。未指定は実行側で最大HPの5%。
+                    if (a.type == "heal_self" && a.power > 0f)
+                        a.power = Mathf.Clamp(a.power, 0f, 18f);
+
+                    // gravity_well: 引力・半径・持続の上限。
+                    if (a.type == "gravity_well")
+                    {
+                        if (a.power > 0f)    a.power    = Mathf.Clamp(a.power, 4f, 40f);
+                        if (a.range > 0f)    a.range    = Mathf.Clamp(a.range, 1f, 5f);
+                        a.duration = Mathf.Clamp(a.duration > 0f ? a.duration : 1.2f, 0.3f, 2.5f);
+                    }
+
+                    // command_throw: 掴み範囲・高さの上限（ワイヤー投げでも届きすぎ防止）。
+                    if (a.type == "command_throw")
+                    {
+                        if (a.range  > 0f) a.range  = Mathf.Clamp(a.range, 1f, 4.5f);
+                        if (a.size_y > 0f) a.size_y = Mathf.Clamp(a.size_y, 1f, 3f);
+                    }
+
+                    // shockwave: 波1枚あたりのサイズと左右オフセットの上限。
+                    if (a.type == "shockwave")
+                    {
+                        if (a.size_x > 0f) a.size_x = Mathf.Clamp(a.size_x, 0.45f, 4.5f);
+                        if (a.size_y > 0f) a.size_y = Mathf.Clamp(a.size_y, 0.35f, 2.0f);
+                        if (a.range  > 0f) a.range  = Mathf.Clamp(a.range, 0.5f, 4.5f);
+                    }
+
+                    // lifesteal: 近接判定＋吸収割合。melee扱いのサイズ・割合をクランプ。
+                    if (a.type == "lifesteal")
+                    {
+                        a.range = Mathf.Clamp(a.range, 0f, 4.2f);
+                        if (a.size_x > 0f) a.size_x = Mathf.Clamp(a.size_x, 0.45f, 4.5f);
+                        if (a.size_y > 0f) a.size_y = Mathf.Clamp(a.size_y, 0.35f, 3.0f);
+                        a.lifesteal_ratio = Mathf.Clamp(a.lifesteal_ratio > 0f ? a.lifesteal_ratio : 0.3f, 0f, 0.5f);
+                    }
                 }
             }
 
@@ -253,6 +296,12 @@ namespace PromptFighters.Battle.Skills
                     case "counter":
                     case "reflector":
                     case "buff_self":
+                    case "barrier":
+                    case "heal_self":
+                    case "command_throw":
+                    case "shockwave":
+                    case "gravity_well":
+                    case "lifesteal":
                         return true;
                 }
             }

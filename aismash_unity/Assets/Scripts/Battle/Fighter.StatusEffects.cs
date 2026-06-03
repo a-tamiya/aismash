@@ -31,7 +31,7 @@ namespace PromptFighters.Battle
                 {
                     float pulse = (Mathf.Sin(Time.time * 6f) + 1f) * 0.5f;
                     auraSr.color = new Color(0.4f, 0.8f, 1f, 0.20f + 0.18f * pulse);
-                    aura.transform.localScale = Vector3.one * (2.2f + 0.12f * pulse);
+                    aura.transform.localScale = Vector3.one * ((2.2f + 0.12f * pulse) * _charSizeScale);
                 }
                 elapsed += Time.deltaTime;
                 yield return null;
@@ -44,12 +44,12 @@ namespace PromptFighters.Battle
         {
             var go = new GameObject("BarrierAura");
             go.transform.SetParent(transform, false);
-            go.transform.localPosition = new Vector3(0f, 0.75f, 0f);
+            go.transform.localPosition = new Vector3(0f, 0.75f * _charSizeScale, 0f);
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sprite = Skills.RuntimeSprite.Circle();
             sr.color = new Color(0.4f, 0.8f, 1f, 0.3f);
             sr.sortingOrder = 8; // キャラの少し手前に半透明で重ねる
-            go.transform.localScale = Vector3.one * 2.2f;
+            go.transform.localScale = Vector3.one * (2.2f * _charSizeScale);
             return go;
         }
 

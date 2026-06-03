@@ -531,6 +531,12 @@ namespace PromptFighters.Battle
                 ButtonSkill(executor, "Buff Jump", DebugBuff("jump"));
                 ButtonSkill(executor, "Buff Transparent", DebugBuff("transparent"));
                 ButtonSkill(executor, "Buff Damage", DebugBuff("damage"));
+                ButtonSkill(executor, "Command Throw", DebugCommandThrow());
+                ButtonSkill(executor, "Barrier", DebugBarrier());
+                ButtonSkill(executor, "Shockwave", DebugShockwave());
+                ButtonSkill(executor, "Gravity Well", DebugGravityWell());
+                ButtonSkill(executor, "Lifesteal", DebugLifesteal());
+                ButtonSkill(executor, "Heal Self", DebugHealSelf());
             }
 
             GUILayout.Space(8f);
@@ -711,5 +717,89 @@ namespace PromptFighters.Battle
                 },
             };
         }
+
+        static SkillData DebugCommandThrow() => new SkillData
+        {
+            slot = SkillSlot.AttackC,
+            skill_name = "DBG コマンド投げ",
+            description = "掴んで投げる（ガード貫通）",
+            element = Element.Physical,
+            risk_level = RiskLevel.High,
+            parameters = Params(8f, 1.8f, 0.05f, 0.1f, 0.3f, 1, 6f, 0.4f, 0f),
+            actions = new List<SkillAction>
+            {
+                new SkillAction { type = "command_throw", time = 0.05f, range = 1.8f, size_y = 2.0f },
+            },
+        };
+
+        static SkillData DebugBarrier() => new SkillData
+        {
+            slot = SkillSlot.AttackC,
+            skill_name = "DBG バリア",
+            description = "自己バフ：ダメージ吸収",
+            element = Element.None,
+            risk_level = RiskLevel.Low,
+            parameters = Params(0f, 0.5f, 0f, 0.02f, 0.2f, 1, 0f, 0f, 0f),
+            actions = new List<SkillAction>
+            {
+                new SkillAction { type = "barrier", time = 0f, power = 10f, duration = 3f },
+            },
+        };
+
+        static SkillData DebugShockwave() => new SkillData
+        {
+            slot = SkillSlot.AttackC,
+            skill_name = "DBG 衝撃波",
+            description = "左右に広がる地面波",
+            element = Element.Physical,
+            risk_level = RiskLevel.Medium,
+            parameters = Params(5f, 2.2f, 0.06f, 0.25f, 0.34f, 1, 4f, 0.1f, 0.6f),
+            actions = new List<SkillAction>
+            {
+                new SkillAction { type = "shockwave", time = 0.06f, range = 2.2f, size_x = 2.0f, size_y = 0.8f, spawn_y = 0.3f },
+            },
+        };
+
+        static SkillData DebugGravityWell() => new SkillData
+        {
+            slot = SkillSlot.AttackC,
+            skill_name = "DBG 重力場",
+            description = "範囲に引力を発生",
+            element = Element.Dark,
+            risk_level = RiskLevel.Medium,
+            parameters = Params(0f, 3.5f, 0.05f, 0.1f, 0.28f, 1, 0f, 0f, 0f),
+            actions = new List<SkillAction>
+            {
+                new SkillAction { type = "gravity_well", time = 0.05f, range = 3.5f, power = 18f, spawn_x = 2.5f, spawn_y = 1.0f, duration = 1.2f },
+            },
+        };
+
+        static SkillData DebugLifesteal() => new SkillData
+        {
+            slot = SkillSlot.AttackA,
+            skill_name = "DBG 吸収近接",
+            description = "与ダメの一部を回復",
+            element = Element.Dark,
+            risk_level = RiskLevel.Medium,
+            parameters = Params(6f, 1.1f, 0.04f, 0.14f, 0.26f, 1, 3f, 0.08f, 0.6f),
+            actions = new List<SkillAction>
+            {
+                new SkillAction { type = "lifesteal", time = 0.04f, range = 1.1f, size_y = 1.1f, spawn_x = 0.9f, spawn_y = 0.55f, follow_owner = true, lifesteal_ratio = 0.3f },
+            },
+        };
+
+        static SkillData DebugHealSelf() => new SkillData
+        {
+            slot = SkillSlot.AttackC,
+            skill_name = "DBG 自己回復",
+            description = "最大HPの5%回復",
+            element = Element.None,
+            risk_level = RiskLevel.Low,
+            parameters = Params(0f, 0.5f, 0f, 0.02f, 0.3f, 1, 0f, 0f, 0f),
+            actions = new List<SkillAction>
+            {
+                new SkillAction { type = "heal_self", time = 0f },
+            },
+        };
     }
 }
