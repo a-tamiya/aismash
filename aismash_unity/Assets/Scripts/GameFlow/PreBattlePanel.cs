@@ -20,8 +20,13 @@ namespace PromptFighters.GameFlow
         int _builtInPresetCount = 0; // プリセット（初期キャラ）の件数。以降が生成済みキャラ。
         int _p1PresetIdx = 0;
         int _p2PresetIdx = 1;
-        int _p1IconPage = 0;
-        int _p2IconPage = 0;
+
+        // 共有ロスター（スマブラ風キャラ選択グリッド）
+        const int RosterColumns = 9;
+        const int RosterRows = 2;
+        Transform _rosterGrid;
+        int _rosterPage = 0;
+        TextMeshProUGUI _rosterPageLabel;
 
         TextMeshProUGUI _p1GamepadLabel;
         TextMeshProUGUI _p2GamepadLabel;
@@ -29,8 +34,6 @@ namespace PromptFighters.GameFlow
         TextMeshProUGUI _p2PresetLabel;
         TextMeshProUGUI _p1CategoryLabel;
         TextMeshProUGUI _p2CategoryLabel;
-        Transform _p1IconGrid;
-        Transform _p2IconGrid;
         TextMeshProUGUI _p1DetailText;
         TextMeshProUGUI _p2DetailText;
         Image[] _p1StatFills;
@@ -45,8 +48,6 @@ namespace PromptFighters.GameFlow
         int _previewIdleFrame;
         Button _p1DeleteButton;
         Button _p2DeleteButton;
-        TextMeshProUGUI _p1PageLabel;
-        TextMeshProUGUI _p2PageLabel;
         TMP_InputField _p1NameInput;
         TMP_InputField _p1FeatureInput;
         TMP_InputField _p2NameInput;
@@ -154,6 +155,8 @@ namespace PromptFighters.GameFlow
                 }
 
                 if (IsEditingText()) return;
+
+                HandleRosterCursorInput();
 
                 if (WasMenuConfirmPressed()) OnStartPressed();
                 if (WasTrainingPressed()) OnTrainingPressed();
@@ -446,6 +449,9 @@ namespace PromptFighters.GameFlow
             // ── 2P エリア（右半分） ──
             BuildPlayerColumn(_panel.transform, false);
 
+            // ── 共有ロスター（スマブラ風キャラ選択グリッド） ──
+            BuildSharedRoster(_panel.transform);
+
             // ── フッター: ボタン ──
             var startBtn = MakeButton(_panel.transform, "StartBtn", "バトル開始",
                 new Vector2(-300, -460), new Vector2(260, 68), OnStartPressed,
@@ -524,35 +530,19 @@ namespace PromptFighters.GameFlow
                 new Vector2(cx - 300f, 404f), new Vector2(120f, 56f), 38, Color.white);
             badge.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
-            // 選択中キャラ名（中央・大きく、左右に < > ）
+            // 選択中キャラ名（中央・大きく）
             var row = CreateUIObject(isP1 ? "P1Row" : "P2Row", parent);
             var rowRt = row.GetComponent<RectTransform>();
             rowRt.anchorMin = rowRt.anchorMax = new Vector2(0.5f, 0.5f);
             rowRt.anchoredPosition = new Vector2(cx + 20f, 404f);
             rowRt.sizeDelta = new Vector2(440f, 52f);
 
-            var leftBtn = MakeButton(row.transform, "Left", "<", new Vector2(-200f, 0f), new Vector2(46f, 46f),
-                isP1
-                    ? () => ChangePreset(ref _p1PresetIdx, -1, _p1PresetLabel)
-                    : () => ChangePreset(ref _p2PresetIdx, -1, _p2PresetLabel),
-                pColorDark);
-            StyleArcadeButton(leftBtn, pColorDark, slant > 0 ? 8f : -8f);
-            SetButtonLabelStyle(leftBtn, 22f, FontStyles.Bold | FontStyles.Italic, Color.white);
-
             var label = MakeLabel(row.transform, "Preset",
                 isP1 ? GetPresetName(_p1PresetIdx) : GetPresetName(_p2PresetIdx),
-                new Vector2(0f, 0f), new Vector2(300f, 52f), 26, Color.white);
+                new Vector2(0f, 0f), new Vector2(420f, 52f), 26, Color.white);
             label.fontStyle = FontStyles.Bold | FontStyles.Italic;
             label.textWrappingMode = TextWrappingModes.NoWrap;
             label.overflowMode = TextOverflowModes.Ellipsis;
-
-            var rightBtn = MakeButton(row.transform, "Right", ">", new Vector2(200f, 0f), new Vector2(46f, 46f),
-                isP1
-                    ? () => ChangePreset(ref _p1PresetIdx, +1, _p1PresetLabel)
-                    : () => ChangePreset(ref _p2PresetIdx, +1, _p2PresetLabel),
-                pColorDark);
-            StyleArcadeButton(rightBtn, pColorDark, slant > 0 ? 8f : -8f);
-            SetButtonLabelStyle(rightBtn, 22f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             if (isP1) _p1PresetLabel = label;
             else       _p2PresetLabel = label;
@@ -621,42 +611,9 @@ namespace PromptFighters.GameFlow
             if (isP1) _p1DetailText = detailText;
             else _p2DetailText = detailText;
 
-            // ── キャラ選択グリッド（下部） ──
-            var gridFrame = CreateUIObject(isP1 ? "P1IconGridFrame" : "P2IconGridFrame", parent);
-            var gfRt = gridFrame.GetComponent<RectTransform>();
-            gfRt.anchoredPosition = new Vector2(cx, -210f);
-            gfRt.sizeDelta = new Vector2(700f, 196f);
-            var gfImg = AddImage(gridFrame, new Color(0.012f, 0.014f, 0.024f, 0.88f));
-            gfImg.sprite = PromptFighters.UI.UITheme.VGradient; gfImg.type = Image.Type.Simple;
-            MakeSlantBar(gridFrame.transform, "GridTop", new Vector2(0f, 96f), new Vector2(700f, 4f), pColor, slant);
-
-            var grid = CreateUIObject(isP1 ? "P1IconGrid" : "P2IconGrid", gridFrame.transform);
-            var gRt = grid.GetComponent<RectTransform>();
-            gRt.anchorMin = Vector2.zero; gRt.anchorMax = Vector2.one;
-            gRt.offsetMin = new Vector2(8f, 8f); gRt.offsetMax = new Vector2(-8f, -28f);
-            var layout = grid.AddComponent<GridLayoutGroup>();
-            layout.cellSize = new Vector2(100f, 66f);
-            layout.spacing = new Vector2(9f, 9f);
-            layout.padding = new RectOffset(10, 10, 4, 4);
-            layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-            layout.constraintCount = 6;
-            if (isP1) _p1IconGrid = grid.transform;
-            else _p2IconGrid = grid.transform;
-
-            var prevPage = MakeButton(gridFrame.transform, "PrevPage", "<", new Vector2(-300f, 78f), new Vector2(40f, 28f),
-                () => ChangeIconPage(isP1, -1), pColorDark);
-            SetButtonLabelStyle(prevPage, 15f, FontStyles.Bold, Color.white);
-            var nextPage = MakeButton(gridFrame.transform, "NextPage", ">", new Vector2(-180f, 78f), new Vector2(40f, 28f),
-                () => ChangeIconPage(isP1, 1), pColorDark);
-            SetButtonLabelStyle(nextPage, 15f, FontStyles.Bold, Color.white);
-            var pageLabel = MakeLabel(gridFrame.transform, "PageLabel", "1/1",
-                new Vector2(-240f, 78f), new Vector2(50f, 22f), 12f, PromptFighters.UI.UITheme.Ink);
-            if (isP1) _p1PageLabel = pageLabel;
-            else _p2PageLabel = pageLabel;
-
-            // 生成キャラ削除（グリッド右上）
-            var deleteBtn = MakeButton(gridFrame.transform, isP1 ? "P1DeleteGeneratedBtn" : "P2DeleteGeneratedBtn", "生成キャラ削除",
-                new Vector2(280f, 78f), new Vector2(150f, 28f), () => DeleteSelectedCharacter(isP1),
+            // 生成キャラ削除（プレビュー枠の下）
+            var deleteBtn = MakeButton(parent, isP1 ? "P1DeleteGeneratedBtn" : "P2DeleteGeneratedBtn", "生成キャラ削除",
+                new Vector2(cx - 168f, -106f), new Vector2(150f, 28f), () => DeleteSelectedCharacter(isP1),
                 PromptFighters.UI.UITheme.P2NeonDark);
             SetButtonLabelStyle(deleteBtn, 13f, FontStyles.Bold, Color.white);
             if (isP1) _p1DeleteButton = deleteBtn;
@@ -669,6 +626,109 @@ namespace PromptFighters.GameFlow
             gpLabel.alignment = TextAlignmentOptions.Left;
             if (isP1) _p1GamepadLabel = gpLabel;
             else      _p2GamepadLabel = gpLabel;
+        }
+
+        // スマブラ風の共有キャラロスター。1P/2Pそれぞれのカーソルでセルを選ぶ。
+        void BuildSharedRoster(Transform parent)
+        {
+            var frame = CreateUIObject("RosterFrame", parent);
+            var frRt = frame.GetComponent<RectTransform>();
+            frRt.anchoredPosition = new Vector2(0f, -248f);
+            frRt.sizeDelta = new Vector2(1480f, 212f);
+            var frImg = AddImage(frame, new Color(0.012f, 0.014f, 0.024f, 0.92f));
+            frImg.sprite = PromptFighters.UI.UITheme.VGradient; frImg.type = Image.Type.Simple;
+            MakeSlantBar(frame.transform, "RosterTop", new Vector2(0f, 104f), new Vector2(1480f, 4f),
+                PromptFighters.UI.UITheme.Gold, 24f);
+
+            // 操作ヒント
+            MakeLabel(parent, "RosterHint",
+                "1P: WASD でカーソル移動 / 2P: 矢印キー　（左半分クリック=1P・右半分クリック=2P）",
+                new Vector2(0f, -134f), new Vector2(1000f, 22f), 12f, PromptFighters.UI.UITheme.InkDim);
+
+            var grid = CreateUIObject("RosterGrid", frame.transform);
+            var gRt = grid.GetComponent<RectTransform>();
+            gRt.anchorMin = Vector2.zero; gRt.anchorMax = Vector2.one;
+            gRt.offsetMin = new Vector2(14f, 10f); gRt.offsetMax = new Vector2(-14f, -10f);
+            var layout = grid.AddComponent<GridLayoutGroup>();
+            layout.cellSize = new Vector2(150f, 86f);
+            layout.spacing = new Vector2(10f, 8f);
+            layout.padding = new RectOffset(6, 6, 4, 4);
+            layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+            layout.constraintCount = RosterColumns;
+            layout.childAlignment = TextAnchor.UpperCenter;
+            _rosterGrid = grid.transform;
+
+            // ページ送り（ロスターが1ページに収まらない場合のみ機能）
+            var prevPage = MakeButton(frame.transform, "RosterPrev", "<",
+                new Vector2(-704f, 104f), new Vector2(40f, 28f), () => ChangeRosterPage(-1),
+                PromptFighters.UI.UITheme.SteelDark);
+            SetButtonLabelStyle(prevPage, 15f, FontStyles.Bold, Color.white);
+            var nextPage = MakeButton(frame.transform, "RosterNext", ">",
+                new Vector2(704f, 104f), new Vector2(40f, 28f), () => ChangeRosterPage(1),
+                PromptFighters.UI.UITheme.SteelDark);
+            SetButtonLabelStyle(nextPage, 15f, FontStyles.Bold, Color.white);
+            _rosterPageLabel = MakeLabel(frame.transform, "RosterPage", "1/1",
+                new Vector2(648f, 104f), new Vector2(50f, 22f), 12f, PromptFighters.UI.UITheme.Ink);
+        }
+
+        // ロスターセル1枚（ポートレート＋名前＋選択カーソル色＋左右クリック領域）を生成。
+        void MakeRosterCell(Transform parent, int idx, CharacterData data)
+        {
+            bool selP1 = idx == _p1PresetIdx;
+            bool selP2 = idx == _p2PresetIdx;
+
+            var cell = CreateUIObject($"Cell_{idx}", parent);
+            var bg = cell.AddComponent<Image>();
+            bg.color = (selP1 && selP2) ? PromptFighters.UI.UITheme.Gold
+                     : selP1 ? PromptFighters.UI.UITheme.P1Neon
+                     : selP2 ? PromptFighters.UI.UITheme.P2Neon
+                     : new Color(0.08f, 0.09f, 0.13f, 1f);
+            bg.raycastTarget = false;
+
+            var portraitGo = CreateUIObject("Portrait", cell.transform);
+            var pRt = portraitGo.GetComponent<RectTransform>();
+            pRt.anchorMin = new Vector2(0f, 0f); pRt.anchorMax = new Vector2(1f, 1f);
+            pRt.offsetMin = new Vector2(4f, 22f); pRt.offsetMax = new Vector2(-4f, -4f);
+            var pImg = portraitGo.AddComponent<Image>();
+            pImg.sprite = data.characterSprite;
+            pImg.preserveAspect = true;
+            pImg.raycastTarget = false;
+            pImg.color = data.characterSprite != null ? Color.white : new Color(0.35f, 0.38f, 0.45f);
+
+            var nm = MakeLabel(cell.transform, "Name", data.characterName,
+                new Vector2(0f, -33f), new Vector2(146f, 18f), 11f, Color.white);
+            nm.fontStyle = FontStyles.Bold;
+            nm.textWrappingMode = TextWrappingModes.NoWrap;
+            nm.overflowMode = TextOverflowModes.Ellipsis;
+            nm.raycastTarget = false;
+
+            AddRosterClickZone(cell.transform, true, idx);   // 左半分 → 1P
+            AddRosterClickZone(cell.transform, false, idx);  // 右半分 → 2P
+        }
+
+        void AddRosterClickZone(Transform parent, bool leftHalf, int idx)
+        {
+            var go = CreateUIObject(leftHalf ? "PickP1" : "PickP2", parent);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(leftHalf ? 0f : 0.5f, 0f);
+            rt.anchorMax = new Vector2(leftHalf ? 0.5f : 1f, 1f);
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var img = go.AddComponent<Image>();
+            img.color = new Color(0f, 0f, 0f, 0f); // 透明だがレイキャストは受ける
+            var btn = go.AddComponent<Button>();
+            btn.transition = Selectable.Transition.None;
+            bool assignP1 = leftHalf;
+            int captured = idx;
+            btn.onClick.AddListener(() => SelectPreset(assignP1, captured));
+        }
+
+        void ChangeRosterPage(int delta)
+        {
+            if (_presets == null || _presets.Count == 0) return;
+            int pageSize = RosterColumns * RosterRows;
+            int maxPage = Mathf.Max(0, (_presets.Count - 1) / pageSize);
+            _rosterPage = Mathf.Clamp(_rosterPage + delta, 0, maxPage);
+            RebuildSharedGrid();
         }
 
         // ステータスグラフの軸ラベル（norm計算順と一致させること）
@@ -1064,23 +1124,45 @@ namespace PromptFighters.GameFlow
             FillPlayer(_pendingData2, _confirmP2Name, _confirmP2Desc, _confirmP2Stats, _confirmP2Image, _confirmP2SkillTexts);
         }
 
-        void ChangePreset(ref int idx, int delta, TextMeshProUGUI label)
+        // キャラ選択画面でのカーソル操作。1P=WASD、2P=矢印キー、ゲームパッドはdパッド。
+        void HandleRosterCursorInput()
         {
-            if (_presets == null || _presets.Count == 0) return;
-            idx = (idx + delta + _presets.Count) % _presets.Count;
-            if (label != null) label.text = GetPresetName(idx);
-            UpdateCategoryLabels();
-            RefreshCharacterPreview();
-            RebuildIconGrids();
+            var kb = UnityEngine.InputSystem.Keyboard.current;
+            if (kb != null)
+            {
+                if (kb.aKey.wasPressedThisFrame) MoveRosterCursor(true, -1, 0);
+                if (kb.dKey.wasPressedThisFrame) MoveRosterCursor(true, 1, 0);
+                if (kb.wKey.wasPressedThisFrame) MoveRosterCursor(true, 0, -1);
+                if (kb.sKey.wasPressedThisFrame) MoveRosterCursor(true, 0, 1);
+                if (kb.leftArrowKey.wasPressedThisFrame) MoveRosterCursor(false, -1, 0);
+                if (kb.rightArrowKey.wasPressedThisFrame) MoveRosterCursor(false, 1, 0);
+                if (kb.upArrowKey.wasPressedThisFrame) MoveRosterCursor(false, 0, -1);
+                if (kb.downArrowKey.wasPressedThisFrame) MoveRosterCursor(false, 0, 1);
+            }
+
+            var pads = UnityEngine.InputSystem.Gamepad.all;
+            if (pads.Count > 0) ReadPadCursor(pads[0], true);
+            if (pads.Count > 1) ReadPadCursor(pads[1], false);
         }
 
-        void ChangeIconPage(bool isP1, int delta)
+        void ReadPadCursor(UnityEngine.InputSystem.Gamepad gp, bool isP1)
+        {
+            if (gp == null) return;
+            if (gp.dpad.left.wasPressedThisFrame) MoveRosterCursor(isP1, -1, 0);
+            if (gp.dpad.right.wasPressedThisFrame) MoveRosterCursor(isP1, 1, 0);
+            if (gp.dpad.up.wasPressedThisFrame) MoveRosterCursor(isP1, 0, -1);
+            if (gp.dpad.down.wasPressedThisFrame) MoveRosterCursor(isP1, 0, 1);
+        }
+
+        // 1P/2Pカーソルをグリッド上で移動する（dx=左右, dy=上下）。
+        void MoveRosterCursor(bool isP1, int dx, int dy)
         {
             if (_presets == null || _presets.Count == 0) return;
-            int maxPage = Mathf.Max(0, (_presets.Count - 1) / 12);
-            if (isP1) _p1IconPage = Mathf.Clamp(_p1IconPage + delta, 0, maxPage);
-            else _p2IconPage = Mathf.Clamp(_p2IconPage + delta, 0, maxPage);
-            RebuildIconGrids();
+            int idx = isP1 ? _p1PresetIdx : _p2PresetIdx;
+            int ni = idx + dx + dy * RosterColumns;
+            if (ni < 0 || ni >= _presets.Count) return;
+            _rosterPage = ni / (RosterColumns * RosterRows);
+            SelectPreset(isP1, ni);
         }
 
         void SelectPreset(bool isP1, int idx)
@@ -1188,40 +1270,27 @@ namespace PromptFighters.GameFlow
                    $"回避距離 地上 {s.groundDodgeDistance:F1} / 空中 {s.airDodgeDistance:F1}";
         }
 
-        void RebuildIconGrids()
+        void RebuildIconGrids() => RebuildSharedGrid();
+
+        void RebuildSharedGrid()
         {
-            RebuildIconGrid(_p1IconGrid, true);
-            RebuildIconGrid(_p2IconGrid, false);
-        }
+            if (_rosterGrid == null || _presets == null) return;
 
-        void RebuildIconGrid(Transform grid, bool isP1)
-        {
-            if (grid == null || _presets == null) return;
+            for (int i = _rosterGrid.childCount - 1; i >= 0; i--)
+                Destroy(_rosterGrid.GetChild(i).gameObject);
 
-            for (int i = grid.childCount - 1; i >= 0; i--)
-                Destroy(grid.GetChild(i).gameObject);
-
-            int selected = isP1 ? _p1PresetIdx : _p2PresetIdx;
-            int page = isP1 ? _p1IconPage : _p2IconPage;
-            int maxPage = Mathf.Max(0, (_presets.Count - 1) / 12);
-            page = Mathf.Clamp(page, 0, maxPage);
-            if (isP1) _p1IconPage = page;
-            else _p2IconPage = page;
-            int start = page * 12;
-            int end = Mathf.Min(_presets.Count, start + 12);
-            var pageLabel = isP1 ? _p1PageLabel : _p2PageLabel;
-            if (pageLabel != null) pageLabel.text = $"{page + 1}/{maxPage + 1}";
+            int pageSize = RosterColumns * RosterRows;
+            int maxPage = Mathf.Max(0, (_presets.Count - 1) / pageSize);
+            _rosterPage = Mathf.Clamp(_rosterPage, 0, maxPage);
+            int start = _rosterPage * pageSize;
+            int end = Mathf.Min(_presets.Count, start + pageSize);
+            if (_rosterPageLabel != null) _rosterPageLabel.text = $"{_rosterPage + 1}/{maxPage + 1}";
 
             for (int i = start; i < end; i++)
             {
-                int idx = i;
                 var data = _presets[i];
                 EnsurePreviewSprite(data);
-                bool isSelected = idx == selected;
-                Color bg = isSelected
-                    ? (isP1 ? PromptFighters.UI.UITheme.P1Neon : PromptFighters.UI.UITheme.P2Neon)
-                    : new Color(0.08f, 0.09f, 0.13f, 1f);
-                MakeIconButton(grid, $"Icon_{idx}", data.characterSprite, idx + 1, () => SelectPreset(isP1, idx), bg);
+                MakeRosterCell(_rosterGrid, i, data);
             }
         }
 

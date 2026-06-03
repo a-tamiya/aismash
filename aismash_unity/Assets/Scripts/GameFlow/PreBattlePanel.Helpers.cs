@@ -219,41 +219,6 @@ namespace PromptFighters.GameFlow
             return btn;
         }
 
-        static Button MakeIconButton(Transform parent, string name, Sprite sprite, int number,
-            System.Action onClick, Color bgColor)
-        {
-            var go = CreateUIObject(name, parent);
-            var rt = go.GetComponent<RectTransform>();
-            rt.sizeDelta = new Vector2(86f, 58f);
-
-            var bg = go.AddComponent<Image>();
-            bg.color = bgColor;
-
-            var btn = go.AddComponent<Button>();
-            var cols = btn.colors;
-            cols.highlightedColor = new Color(0.55f, 0.65f, 0.85f);
-            cols.pressedColor = new Color(0.08f, 0.08f, 0.1f);
-            btn.colors = cols;
-            btn.onClick.AddListener(() => onClick?.Invoke());
-
-            var imageGo = CreateUIObject("Portrait", go.transform);
-            var imgRt = imageGo.GetComponent<RectTransform>();
-            imgRt.anchorMin = new Vector2(0f, 0f);
-            imgRt.anchorMax = new Vector2(1f, 1f);
-            imgRt.offsetMin = new Vector2(6f, 4f);
-            imgRt.offsetMax = new Vector2(-6f, -4f);
-            var img = imageGo.AddComponent<Image>();
-            img.sprite = sprite;
-            img.preserveAspect = true;
-            img.raycastTarget = false;
-            img.color = sprite != null ? Color.white : new Color(0.35f, 0.38f, 0.45f);
-
-            var badge = MakeLabel(go.transform, "No", number.ToString(),
-                new Vector2(-31f, 19f), new Vector2(22f, 18f), 10f, Color.white);
-            badge.fontStyle = FontStyles.Bold;
-            return btn;
-        }
-
         static Image MakePortrait(Transform parent, string name, Vector2 pos, Vector2 size)
         {
             var frame = CreateUIObject(name + "Frame", parent);
