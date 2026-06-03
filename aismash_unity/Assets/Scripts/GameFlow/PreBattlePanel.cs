@@ -77,6 +77,9 @@ namespace PromptFighters.GameFlow
         Image _confirmP2Image;
         CharacterData _pendingData1;
         CharacterData _pendingData2;
+        GameObject _deleteConfirmPanel;
+        TextMeshProUGUI _deleteConfirmNameText;
+        bool _deletePendingIsP1;
         Coroutine _generationCoroutine;
         bool _generationTrainingActive;
         TextMeshProUGUI _debugSkipImageLabel;
@@ -118,6 +121,7 @@ namespace PromptFighters.GameFlow
             BuildGenerationSetupPanel();
             BuildGeneratingPanel();
             BuildSkillConfirmPanel();
+            BuildDeleteConfirmPanel();
             UITheme.ApplyAllInScene();
             RebuildIconGrids();
             RefreshCharacterPreview();
@@ -133,6 +137,14 @@ namespace PromptFighters.GameFlow
 
         void Update()
         {
+            // 削除確認モーダルが開いている間は他の入力を遮断
+            if (_deleteConfirmPanel != null && _deleteConfirmPanel.activeSelf)
+            {
+                if (WasMenuConfirmPressed()) ConfirmDeleteCharacter();
+                else if (WasKeyboardCancelPressed()) HideDeleteConfirm();
+                return;
+            }
+
             if (_titlePanel != null && _titlePanel.activeSelf)
             {
                 AnimateTitle();
@@ -615,7 +627,7 @@ namespace PromptFighters.GameFlow
 
             // 生成キャラ削除（プレビュー枠の下）
             var deleteBtn = MakeButton(parent, isP1 ? "P1DeleteGeneratedBtn" : "P2DeleteGeneratedBtn", "生成キャラ削除",
-                new Vector2(cx - 168f, -106f), new Vector2(150f, 28f), () => DeleteSelectedCharacter(isP1),
+                new Vector2(cx - 168f, -106f), new Vector2(150f, 28f), () => RequestDeleteCharacter(isP1),
                 PromptFighters.UI.UITheme.P2NeonDark);
             SetButtonLabelStyle(deleteBtn, 13f, FontStyles.Bold, Color.white);
             if (isP1) _p1DeleteButton = deleteBtn;
@@ -660,17 +672,28 @@ namespace PromptFighters.GameFlow
             layout.childAlignment = TextAnchor.UpperCenter;
             _rosterGrid = grid.transform;
 
-            // ページ送り（ロスターが1ページに収まらない場合のみ機能）
-            var prevPage = MakeButton(frame.transform, "RosterPrev", "<",
-                new Vector2(-704f, 112f), new Vector2(40f, 26f), () => ChangeRosterPage(-1),
-                PromptFighters.UI.UITheme.SteelDark);
-            SetButtonLabelStyle(prevPage, 15f, FontStyles.Bold, Color.white);
-            var nextPage = MakeButton(frame.transform, "RosterNext", ">",
-                new Vector2(704f, 112f), new Vector2(40f, 26f), () => ChangeRosterPage(1),
-                PromptFighters.UI.UITheme.SteelDark);
-            SetButtonLabelStyle(nextPage, 15f, FontStyles.Bold, Color.white);
-            _rosterPageLabel = MakeLabel(frame.transform, "RosterPage", "1/1",
-                new Vector2(648f, 112f), new Vector2(50f, 22f), 12f, PromptFighters.UI.UITheme.Ink);
+            // ヘッダー: タイトルプレート＋ページ表示
+            MakeSlantBar(frame.transform, "RosterTitlePlate", new Vector2(-636f, 112f), new Vector2(232f, 30f),
+                new Color(PromptFighters.UI.UITheme.Gold.r, PromptFighters.UI.UITheme.Gold.g, PromptFighters.UI.UITheme.Gold.b, 0.20f), 16f);
+            MakeLabel(frame.transform, "RosterTitle", "CHARACTER SELECT",
+                new Vector2(-636f, 112f), new Vector2(280f, 28f), 15f, PromptFighters.UI.UITheme.Gold)
+                .fontStyle = FontStyles.Bold | FontStyles.Italic;
+
+            _rosterPageLabel = MakeLabel(frame.transform, "RosterPage", "1 / 1",
+                new Vector2(0f, 112f), new Vector2(120f, 24f), 14f, PromptFighters.UI.UITheme.Ink);
+            _rosterPageLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
+
+            // ページ送り（ロスター左右に配置。1ページに収まらない場合のみ機能）
+            var prevPage = MakeButton(frame.transform, "RosterPrev", "‹",
+                new Vector2(-748f, 0f), new Vector2(50f, 156f), () => ChangeRosterPage(-1),
+                PromptFighters.UI.UITheme.P1Neon);
+            StyleArcadeButton(prevPage, PromptFighters.UI.UITheme.P1NeonDark, 12f);
+            SetButtonLabelStyle(prevPage, 40f, FontStyles.Bold, Color.white);
+            var nextPage = MakeButton(frame.transform, "RosterNext", "›",
+                new Vector2(748f, 0f), new Vector2(50f, 156f), () => ChangeRosterPage(1),
+                PromptFighters.UI.UITheme.P2Neon);
+            StyleArcadeButton(nextPage, PromptFighters.UI.UITheme.P2NeonDark, -12f);
+            SetButtonLabelStyle(nextPage, 40f, FontStyles.Bold, Color.white);
         }
 
         // ロスターセル1枚（ポートレート＋名前＋選択カーソル色＋左右クリック領域）を生成。
@@ -1112,6 +1135,68 @@ namespace PromptFighters.GameFlow
                 new Vector2(0, -475), new Vector2(600, 28), 13f, PromptFighters.UI.UITheme.InkDim);
         }
 
+        // 生成キャラ削除の確認モーダル（アーケード調・誤削除防止）。
+        void BuildDeleteConfirmPanel()
+        {
+            _deleteConfirmPanel = CreateUIObject("DeleteConfirmOverlay", transform);
+            StretchFull(_deleteConfirmPanel.GetComponent<RectTransform>());
+            _deleteConfirmPanel.SetActive(false);
+
+            // 背景を暗転（クリックは奥へ通さない）
+            var dim = _deleteConfirmPanel.AddComponent<Image>();
+            dim.color = new Color(0f, 0f, 0f, 0.72f);
+            var cg = _deleteConfirmPanel.AddComponent<CanvasGroup>();
+            cg.interactable = true; cg.blocksRaycasts = true;
+
+            // ダイアログ枠
+            var box = CreateUIObject("DeleteBox", _deleteConfirmPanel.transform);
+            var bRt = box.GetComponent<RectTransform>();
+            bRt.anchoredPosition = new Vector2(0f, 0f);
+            bRt.sizeDelta = new Vector2(620f, 320f);
+            var boxImg = box.AddComponent<Image>();
+            boxImg.sprite = PromptFighters.UI.UITheme.VGradient; boxImg.type = Image.Type.Simple;
+            boxImg.color = new Color(0.05f, 0.055f, 0.08f, 0.99f);
+
+            // 上下のネオン縁（危険色）
+            MakeSlantBar(box.transform, "DelTop", new Vector2(0f, 158f), new Vector2(620f, 6f),
+                PromptFighters.UI.UITheme.Urgent, 18f);
+            MakeSlantBar(box.transform, "DelBottom", new Vector2(0f, -158f), new Vector2(620f, 6f),
+                new Color(PromptFighters.UI.UITheme.Urgent.r, PromptFighters.UI.UITheme.Urgent.g, PromptFighters.UI.UITheme.Urgent.b, 0.55f), -18f);
+
+            // タイトル
+            MakeSlantBar(box.transform, "DelTitlePlate", new Vector2(0f, 108f), new Vector2(300f, 50f),
+                new Color(PromptFighters.UI.UITheme.Urgent.r, PromptFighters.UI.UITheme.Urgent.g, PromptFighters.UI.UITheme.Urgent.b, 0.22f), 16f);
+            MakeLabel(box.transform, "DelTitle", "⚠ 削除の確認",
+                new Vector2(0f, 108f), new Vector2(560f, 50f), 28f, PromptFighters.UI.UITheme.Urgent)
+                .fontStyle = FontStyles.Bold | FontStyles.Italic;
+
+            // 対象キャラ名
+            _deleteConfirmNameText = MakeLabel(box.transform, "DelName", "",
+                new Vector2(0f, 36f), new Vector2(560f, 36f), 22f, Color.white);
+            _deleteConfirmNameText.fontStyle = FontStyles.Bold;
+            _deleteConfirmNameText.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
+
+            MakeLabel(box.transform, "DelHint", "この操作は取り消せません。",
+                new Vector2(0f, -6f), new Vector2(560f, 28f), 14f, PromptFighters.UI.UITheme.InkDim);
+
+            // キャンセル（左・スティール）
+            var cancelBtn = MakeButton(box.transform, "DelCancel", "キャンセル",
+                new Vector2(-150f, -94f), new Vector2(230f, 64f), HideDeleteConfirm,
+                PromptFighters.UI.UITheme.SteelLight);
+            StyleArcadeButton(cancelBtn, PromptFighters.UI.UITheme.SteelLight, 14f);
+            SetButtonLabelStyle(cancelBtn, 20f, FontStyles.Bold | FontStyles.Italic, Color.white);
+
+            // 削除する（右・危険色）
+            var delBtn = MakeButton(box.transform, "DelConfirm", "削除する",
+                new Vector2(150f, -94f), new Vector2(230f, 64f), ConfirmDeleteCharacter,
+                PromptFighters.UI.UITheme.Urgent);
+            StyleArcadeButton(delBtn, PromptFighters.UI.UITheme.Urgent, 14f);
+            SetButtonLabelStyle(delBtn, 20f, FontStyles.Bold | FontStyles.Italic, Color.white);
+
+            MakeLabel(box.transform, "DelKeyHint", "Enter: 削除　Esc: キャンセル",
+                new Vector2(0f, -140f), new Vector2(560f, 24f), 12f, PromptFighters.UI.UITheme.InkDim);
+        }
+
         void RefreshSkillConfirmContent()
         {
             void FillPlayer(CharacterData d, TextMeshProUGUI nameT, TextMeshProUGUI descT,
@@ -1306,7 +1391,7 @@ namespace PromptFighters.GameFlow
             _displayedPage = _rosterPage;
             int start = _rosterPage * pageSize;
             int end = Mathf.Min(_presets.Count, start + pageSize);
-            if (_rosterPageLabel != null) _rosterPageLabel.text = $"{_rosterPage + 1}/{maxPage + 1}";
+            if (_rosterPageLabel != null) _rosterPageLabel.text = $"{_rosterPage + 1} / {maxPage + 1}";
 
             for (int i = start; i < end; i++)
             {
@@ -1774,6 +1859,30 @@ namespace PromptFighters.GameFlow
                    "2P: 矢印 移動 / テンキー2 3 1 技 / ←/→はじき+2 スマッシュ / 0 つかみ / 右Shift ガード・回避\n" +
                    "Pad: Y ジャンプ / LT・LB つかみ / RT・RB ガード・回避 / B A X 技 / はじき+B スマッシュ    " +
                    $"{esc}    Rキー: 位置・HP・技状態をリセット";
+        }
+
+        // 削除ボタン押下。誤削除防止のため即削除せず確認モーダルを開く。
+        void RequestDeleteCharacter(bool isP1)
+        {
+            if (_presets == null) return;
+            int idx = isP1 ? _p1PresetIdx : _p2PresetIdx;
+            if (idx < _builtInPresetCount || idx < 0 || idx >= _presets.Count) return; // 初期キャラは削除不可
+
+            _deletePendingIsP1 = isP1;
+            if (_deleteConfirmNameText != null)
+                _deleteConfirmNameText.text = $"<color=#FFC72E>{_presets[idx].characterName}</color> を削除します";
+            if (_deleteConfirmPanel != null) _deleteConfirmPanel.SetActive(true);
+        }
+
+        void HideDeleteConfirm()
+        {
+            if (_deleteConfirmPanel != null) _deleteConfirmPanel.SetActive(false);
+        }
+
+        void ConfirmDeleteCharacter()
+        {
+            HideDeleteConfirm();
+            DeleteSelectedCharacter(_deletePendingIsP1);
         }
 
         void DeleteSelectedCharacter(bool isP1)
