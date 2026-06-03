@@ -466,7 +466,7 @@ namespace PromptFighters.GameFlow
             SetButtonLabelStyle(genBtn, 23f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             // ── ロビー設定トグル（実況・天使・台・CPU） ──
-            BuildLobbyToggles(_panel.transform, -520f);
+            BuildLobbyToggles(_panel.transform, -372f);
 
             BuildTrainingPanel();
         }
