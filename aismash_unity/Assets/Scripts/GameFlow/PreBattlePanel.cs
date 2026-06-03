@@ -87,6 +87,8 @@ namespace PromptFighters.GameFlow
         TextMeshProUGUI _angelToggleLabel;
         Image _platformToggleBg;
         TextMeshProUGUI _platformToggleLabel;
+        Image _cpuToggleBg;
+        TextMeshProUGUI _cpuToggleLabel;
 
         static readonly Color ToggleOnColor  = PromptFighters.UI.UITheme.Gold;
         static readonly Color ToggleOffColor = new Color(0.14f, 0.15f, 0.19f, 1f);
@@ -325,6 +327,15 @@ namespace PromptFighters.GameFlow
             _platformToggleLabel = platformBtn.GetComponentInChildren<TextMeshProUGUI>();
             _platformToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
+            var cpuBtn = MakeButton(_titlePanel.transform, "CpuToggle",
+                CpuToggleText(),
+                new Vector2(190f, -262f), new Vector2(150f, 34f),
+                OnCpuToggle, ToggleOnColor);
+            StyleArcadeButton(cpuBtn, ToggleOnColor, 10f);
+            _cpuToggleBg    = cpuBtn.GetComponent<Image>();
+            _cpuToggleLabel = cpuBtn.GetComponentInChildren<TextMeshProUGUI>();
+            _cpuToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
+
             RefreshToggleVisuals();
 
             MakeLabel(_titlePanel.transform, "Footer",
@@ -338,6 +349,8 @@ namespace PromptFighters.GameFlow
             PromptFighters.UI.AngelController.Enabled ? "天使 ON" : "天使 OFF";
         static string PlatformToggleText() =>
             PromptFighters.Battle.StagePlatformSpawner.PlatformsEnabled ? "台 ON" : "台 OFF";
+        static string CpuToggleText() =>
+            PromptFighters.Battle.FighterAI.Enabled ? "CPU ON" : "CPU OFF";
 
         void OnCommentaryToggle()
         {
@@ -358,17 +371,26 @@ namespace PromptFighters.GameFlow
             RefreshToggleVisuals();
         }
 
+        void OnCpuToggle()
+        {
+            PromptFighters.Battle.FighterAI.Enabled = !PromptFighters.Battle.FighterAI.Enabled;
+            RefreshToggleVisuals();
+        }
+
         void RefreshToggleVisuals()
         {
             bool ce = PromptFighters.UI.CommentaryController.Enabled;
             bool ae = PromptFighters.UI.AngelController.Enabled;
             bool pe = PromptFighters.Battle.StagePlatformSpawner.PlatformsEnabled;
+            bool cpu = PromptFighters.Battle.FighterAI.Enabled;
             if (_commentaryToggleBg  != null) _commentaryToggleBg.color  = ce ? ToggleOnColor  : ToggleOffColor;
             if (_commentaryToggleLabel != null) _commentaryToggleLabel.text = CommentaryToggleText();
             if (_angelToggleBg       != null) _angelToggleBg.color       = ae ? ToggleOnColor  : ToggleOffColor;
             if (_angelToggleLabel    != null) _angelToggleLabel.text    = AngelToggleText();
             if (_platformToggleBg    != null) _platformToggleBg.color    = pe ? ToggleOnColor  : ToggleOffColor;
             if (_platformToggleLabel != null) _platformToggleLabel.text  = PlatformToggleText();
+            if (_cpuToggleBg         != null) _cpuToggleBg.color         = cpu ? ToggleOnColor : ToggleOffColor;
+            if (_cpuToggleLabel      != null) _cpuToggleLabel.text       = CpuToggleText();
         }
 
         void BuildPanel()

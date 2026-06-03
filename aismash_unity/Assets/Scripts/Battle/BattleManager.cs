@@ -113,6 +113,8 @@ namespace PromptFighters.Battle
                 fighter2.Opponent = fighter1;
             }
 
+            ApplyCpuControl();
+
             // ゲーム開始直後にデフォルト画像を適用（StartCountdown前でも表示）
             var defaultData = new CharacterData();
             ApplySprite(fighter1, defaultData);
@@ -123,6 +125,25 @@ namespace PromptFighters.Battle
             ApplyFighterScale(fighter2);
             fighter1?.ResetForBattle(fighter1SpawnPos, faceRight: true);
             fighter2?.ResetForBattle(fighter2SpawnPos, faceRight: false);
+        }
+
+        // CPU対戦トグルに応じて2P側を FighterInput / FighterAI で切り替える。
+        void ApplyCpuControl()
+        {
+            if (fighter2 == null) return;
+            var input = fighter2.GetComponent<FighterInput>();
+            var ai    = fighter2.GetComponent<FighterAI>();
+            if (FighterAI.Enabled)
+            {
+                if (ai == null) ai = fighter2.gameObject.AddComponent<FighterAI>();
+                ai.enabled = true;
+                if (input != null) input.enabled = false;
+            }
+            else
+            {
+                if (ai != null) ai.enabled = false;
+                if (input != null) input.enabled = true;
+            }
         }
 
         void Update()
@@ -153,6 +174,7 @@ namespace PromptFighters.Battle
 
             GetComponent<StagePlatformSpawner>()?.SpawnPlatforms();
             ApplyCharacters(data1, data2);
+            ApplyCpuControl();
 
             Phase     = BattlePhase.Countdown;
             Countdown = countdownLength;
@@ -164,6 +186,7 @@ namespace PromptFighters.Battle
             if (Phase != BattlePhase.Setup && Phase != BattlePhase.Training) return;
 
             ApplyCharacters(data1, data2);
+            ApplyCpuControl();
             Phase = BattlePhase.Training;
             TimeRemaining = 0f;
             OnTimerChanged?.Invoke(TimeRemaining);
