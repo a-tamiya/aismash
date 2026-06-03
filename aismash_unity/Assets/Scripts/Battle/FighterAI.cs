@@ -8,8 +8,11 @@ namespace PromptFighters.Battle
     [RequireComponent(typeof(Fighter))]
     public class FighterAI : MonoBehaviour
     {
+        public enum CpuLevel { Off, Easy, Normal, Hard }
+
         // ロビーの「CPU対戦」トグル。BattleManager が 2P 側へ適用する。
-        public static bool Enabled = false;
+        public static CpuLevel Level = CpuLevel.Off;
+        public static bool Enabled => Level != CpuLevel.Off;
 
         [Range(0f, 1f)] public float aggression       = 0.6f;  // 攻めの頻度
         [Range(0f, 1f)] public float defense          = 0.5f;  // ガード/回避の頻度
@@ -29,6 +32,25 @@ namespace PromptFighters.Battle
         {
             _fighter = GetComponent<Fighter>();
             _skills  = GetComponent<SkillExecutor>();
+        }
+
+        void OnEnable()
+        {
+            ApplyLevel();
+        }
+
+        // 難易度プリセットを反映。攻め頻度・守り頻度・反応速度（判断間隔）で強弱を表現。
+        public void ApplyLevel()
+        {
+            switch (Level)
+            {
+                case CpuLevel.Easy:
+                    aggression = 0.35f; defense = 0.30f; decisionInterval = 0.30f; break;
+                case CpuLevel.Hard:
+                    aggression = 0.85f; defense = 0.75f; decisionInterval = 0.10f; break;
+                default: // Normal
+                    aggression = 0.60f; defense = 0.50f; decisionInterval = 0.18f; break;
+            }
         }
 
         void Update()

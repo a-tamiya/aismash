@@ -137,6 +137,7 @@ namespace PromptFighters.Battle
             {
                 if (ai == null) ai = fighter2.gameObject.AddComponent<FighterAI>();
                 ai.enabled = true;
+                ai.ApplyLevel();
                 if (input != null) input.enabled = false;
             }
             else

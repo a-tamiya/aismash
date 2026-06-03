@@ -39,6 +39,10 @@ namespace PromptFighters.GameFlow
         TextMeshProUGUI[] _p2StatValues;
         Image _p1PreviewImage;
         Image _p2PreviewImage;
+        CharacterData _p1PreviewData;
+        CharacterData _p2PreviewData;
+        float _previewIdleTimer;
+        int _previewIdleFrame;
         Button _p1DeleteButton;
         Button _p2DeleteButton;
         TextMeshProUGUI _p1PageLabel;
@@ -139,6 +143,7 @@ namespace PromptFighters.GameFlow
             if (_panel != null && _panel.activeSelf)
             {
                 RefreshGamepadLabels();
+                AnimatePreviewIdle();
                 var kb = UnityEngine.InputSystem.Keyboard.current;
                 if (_waitForMenuInputRelease)
                 {
@@ -291,56 +296,42 @@ namespace PromptFighters.GameFlow
             _startButtonRect = startButton.GetComponent<RectTransform>();
             MakeLabel(_titlePanel.transform, "StartHelp", "▶ スペース / エンターキー",
                 new Vector2(0, -178), new Vector2(320, 24), 13, PromptFighters.UI.UITheme.InkDim);
+        }
 
-            // AI機能トグルボタン
-            MakeLabel(_titlePanel.transform, "AiToggleLabel", "AI機能",
-                new Vector2(-100f, -220f), new Vector2(80f, 24f), 13, PromptFighters.UI.UITheme.InkDim);
+        // 実況・天使・台・CPU のロビートグルを1行に並べて生成する。キャラ選択画面で使用。
+        void BuildLobbyToggles(Transform parent, float rowY)
+        {
+            float[] xs = { -255f, -85f, 85f, 255f };
 
-            var commentaryBtn = MakeButton(_titlePanel.transform, "CommentaryToggle",
-                CommentaryToggleText(),
-                new Vector2(20f, -220f), new Vector2(150f, 34f),
-                OnCommentaryToggle, ToggleOnColor);
+            var commentaryBtn = MakeButton(parent, "CommentaryToggle", CommentaryToggleText(),
+                new Vector2(xs[0], rowY), new Vector2(150f, 34f), OnCommentaryToggle, ToggleOnColor);
             StyleArcadeButton(commentaryBtn, ToggleOnColor, 10f);
-            _commentaryToggleBg   = commentaryBtn.GetComponent<Image>();
+            _commentaryToggleBg    = commentaryBtn.GetComponent<Image>();
             _commentaryToggleLabel = commentaryBtn.GetComponentInChildren<TextMeshProUGUI>();
             _commentaryToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
-            var angelBtn = MakeButton(_titlePanel.transform, "AngelToggle",
-                AngelToggleText(),
-                new Vector2(180f, -220f), new Vector2(150f, 34f),
-                OnAngelToggle, ToggleOnColor);
+            var angelBtn = MakeButton(parent, "AngelToggle", AngelToggleText(),
+                new Vector2(xs[1], rowY), new Vector2(150f, 34f), OnAngelToggle, ToggleOnColor);
             StyleArcadeButton(angelBtn, ToggleOnColor, 10f);
-            _angelToggleBg   = angelBtn.GetComponent<Image>();
+            _angelToggleBg    = angelBtn.GetComponent<Image>();
             _angelToggleLabel = angelBtn.GetComponentInChildren<TextMeshProUGUI>();
             _angelToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
-            // ステージ設定トグル（2行目）
-            MakeLabel(_titlePanel.transform, "StageToggleLabel", "ステージ",
-                new Vector2(-100f, -262f), new Vector2(80f, 24f), 13, PromptFighters.UI.UITheme.InkDim);
-
-            var platformBtn = MakeButton(_titlePanel.transform, "PlatformToggle",
-                PlatformToggleText(),
-                new Vector2(20f, -262f), new Vector2(150f, 34f),
-                OnPlatformToggle, ToggleOnColor);
+            var platformBtn = MakeButton(parent, "PlatformToggle", PlatformToggleText(),
+                new Vector2(xs[2], rowY), new Vector2(150f, 34f), OnPlatformToggle, ToggleOnColor);
             StyleArcadeButton(platformBtn, ToggleOnColor, 10f);
             _platformToggleBg    = platformBtn.GetComponent<Image>();
             _platformToggleLabel = platformBtn.GetComponentInChildren<TextMeshProUGUI>();
             _platformToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
-            var cpuBtn = MakeButton(_titlePanel.transform, "CpuToggle",
-                CpuToggleText(),
-                new Vector2(190f, -262f), new Vector2(150f, 34f),
-                OnCpuToggle, ToggleOnColor);
+            var cpuBtn = MakeButton(parent, "CpuToggle", CpuToggleText(),
+                new Vector2(xs[3], rowY), new Vector2(150f, 34f), OnCpuToggle, ToggleOnColor);
             StyleArcadeButton(cpuBtn, ToggleOnColor, 10f);
             _cpuToggleBg    = cpuBtn.GetComponent<Image>();
             _cpuToggleLabel = cpuBtn.GetComponentInChildren<TextMeshProUGUI>();
             _cpuToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
             RefreshToggleVisuals();
-
-            MakeLabel(_titlePanel.transform, "Footer",
-                "1P: WASD + J/K/L/G    スマッシュ: A/Dはじき+J    2P: 矢印 + テンキー2/3/1/0",
-                new Vector2(0, -300), new Vector2(820, 28), 12, PromptFighters.UI.UITheme.InkDim);
         }
 
         static string CommentaryToggleText() =>
@@ -349,8 +340,16 @@ namespace PromptFighters.GameFlow
             PromptFighters.UI.AngelController.Enabled ? "天使 ON" : "天使 OFF";
         static string PlatformToggleText() =>
             PromptFighters.Battle.StagePlatformSpawner.PlatformsEnabled ? "台 ON" : "台 OFF";
-        static string CpuToggleText() =>
-            PromptFighters.Battle.FighterAI.Enabled ? "CPU ON" : "CPU OFF";
+        static string CpuToggleText()
+        {
+            switch (PromptFighters.Battle.FighterAI.Level)
+            {
+                case PromptFighters.Battle.FighterAI.CpuLevel.Easy:   return "CPU 弱";
+                case PromptFighters.Battle.FighterAI.CpuLevel.Normal: return "CPU 中";
+                case PromptFighters.Battle.FighterAI.CpuLevel.Hard:   return "CPU 強";
+                default:                                              return "CPU OFF";
+            }
+        }
 
         void OnCommentaryToggle()
         {
@@ -373,7 +372,8 @@ namespace PromptFighters.GameFlow
 
         void OnCpuToggle()
         {
-            PromptFighters.Battle.FighterAI.Enabled = !PromptFighters.Battle.FighterAI.Enabled;
+            PromptFighters.Battle.FighterAI.Level =
+                (PromptFighters.Battle.FighterAI.CpuLevel)(((int)PromptFighters.Battle.FighterAI.Level + 1) % 4);
             RefreshToggleVisuals();
         }
 
@@ -465,14 +465,8 @@ namespace PromptFighters.GameFlow
             StyleArcadeButton(genBtn, PromptFighters.UI.UITheme.P2Neon, 16f);
             SetButtonLabelStyle(genBtn, 23f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
-            MakeLabel(_panel.transform, "StartHelp", "スペース: 既存キャラでバトル / T: トレーニング / G: 新規生成",
-                new Vector2(0, -505), new Vector2(800, 28), 14, PromptFighters.UI.UITheme.InkDim);
-
-            // ── 操作ガイド ──
-            MakeLabel(_panel.transform, "CtrlHelp",
-                "1P: WASD 移動 / J 基本技A / K 基本技B / L 基本技C / A/Dはじき+J スマッシュ / G つかみ / 左Shift ガード・回避\n" +
-                "2P: 矢印キー 移動 / テンキー2 基本技A / 3 基本技B / 1 基本技C / ←/→はじき+2 スマッシュ / 0 つかみ / 右Shift ガード・回避",
-                new Vector2(0, 540 - 810), new Vector2(840, 52), 13, new Color(0.72f, 0.78f, 0.92f));
+            // ── ロビー設定トグル（実況・天使・台・CPU） ──
+            BuildLobbyToggles(_panel.transform, -520f);
 
             BuildTrainingPanel();
         }
@@ -635,9 +629,6 @@ namespace PromptFighters.GameFlow
             var gfImg = AddImage(gridFrame, new Color(0.012f, 0.014f, 0.024f, 0.88f));
             gfImg.sprite = PromptFighters.UI.UITheme.VGradient; gfImg.type = Image.Type.Simple;
             MakeSlantBar(gridFrame.transform, "GridTop", new Vector2(0f, 96f), new Vector2(700f, 4f), pColor, slant);
-            MakeLabel(gridFrame.transform, isP1 ? "P1GridHint" : "P2GridHint", "キャラを選択",
-                new Vector2(-280f, 78f), new Vector2(180f, 22f), 12f, PromptFighters.UI.UITheme.InkDim)
-                .alignment = TextAlignmentOptions.Left;
 
             var grid = CreateUIObject(isP1 ? "P1IconGrid" : "P2IconGrid", gridFrame.transform);
             var gRt = grid.GetComponent<RectTransform>();
@@ -1130,9 +1121,35 @@ namespace PromptFighters.GameFlow
 
             var data = _presets[idx];
             EnsurePreviewSprite(data);
+            EnsureSpriteSet(data); // 待機モーション用に Idle1/2/3 を読み込む
+
+            if (image == _p1PreviewImage) _p1PreviewData = data;
+            else if (image == _p2PreviewImage) _p2PreviewData = data;
 
             image.sprite = data.characterSprite;
             image.enabled = image.sprite != null;
+            _previewIdleTimer = 0f;
+            _previewIdleFrame = 0;
+        }
+
+        // ロビーのキャラプレビューを待機モーション（Idle1→2→3）でループ再生する。
+        void AnimatePreviewIdle()
+        {
+            _previewIdleTimer += Time.unscaledDeltaTime;
+            if (_previewIdleTimer < 0.3f) return;
+            _previewIdleTimer = 0f;
+            _previewIdleFrame = (_previewIdleFrame + 1) % 3;
+
+            ApplyIdleFrame(_p1PreviewImage, _p1PreviewData);
+            ApplyIdleFrame(_p2PreviewImage, _p2PreviewData);
+        }
+
+        void ApplyIdleFrame(Image image, CharacterData data)
+        {
+            if (image == null || data?.spriteSet == null) return;
+            var id = (CharacterSpriteId)((int)CharacterSpriteId.Idle1 + _previewIdleFrame);
+            var s = data.spriteSet.Get(id, data.characterSprite);
+            if (s != null) { image.sprite = s; image.enabled = true; }
         }
 
         void SetDetail(TextMeshProUGUI label, int idx)
