@@ -775,8 +775,8 @@ namespace PromptFighters.Battle.Skills
         // コルーチンで張るだけなので発動者はすぐ動ける（後隙は技のrecoveryで制御）。
         void DoBarrier(SkillAction a)
         {
-            float amount   = a.power > 0f ? a.power : 15f;
-            float duration = a.duration > 0f ? a.duration : 5f;
+            float amount   = a.power > 0f ? a.power : 10f;
+            float duration = a.duration > 0f ? a.duration : 3f;
             _fighter.StartBarrier(amount, duration);
         }
 
