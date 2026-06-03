@@ -23,10 +23,12 @@ namespace PromptFighters.GameFlow
 
         // 共有ロスター（スマブラ風キャラ選択グリッド）
         const int RosterColumns = 9;
-        const int RosterRows = 2;
+        const int RosterRows = 3;
         Transform _rosterGrid;
         int _rosterPage = 0;
+        int _displayedPage = -1;
         TextMeshProUGUI _rosterPageLabel;
+        readonly Dictionary<int, Image> _rosterCellBgs = new Dictionary<int, Image>();
 
         TextMeshProUGUI _p1GamepadLabel;
         TextMeshProUGUI _p2GamepadLabel;
@@ -633,24 +635,24 @@ namespace PromptFighters.GameFlow
         {
             var frame = CreateUIObject("RosterFrame", parent);
             var frRt = frame.GetComponent<RectTransform>();
-            frRt.anchoredPosition = new Vector2(0f, -248f);
-            frRt.sizeDelta = new Vector2(1480f, 212f);
+            frRt.anchoredPosition = new Vector2(0f, -230f);
+            frRt.sizeDelta = new Vector2(1480f, 232f);
             var frImg = AddImage(frame, new Color(0.012f, 0.014f, 0.024f, 0.92f));
             frImg.sprite = PromptFighters.UI.UITheme.VGradient; frImg.type = Image.Type.Simple;
-            MakeSlantBar(frame.transform, "RosterTop", new Vector2(0f, 104f), new Vector2(1480f, 4f),
+            MakeSlantBar(frame.transform, "RosterTop", new Vector2(0f, 112f), new Vector2(1480f, 4f),
                 PromptFighters.UI.UITheme.Gold, 24f);
 
             // 操作ヒント
             MakeLabel(parent, "RosterHint",
                 "1P: WASD でカーソル移動 / 2P: 矢印キー　（左半分クリック=1P・右半分クリック=2P）",
-                new Vector2(0f, -134f), new Vector2(1000f, 22f), 12f, PromptFighters.UI.UITheme.InkDim);
+                new Vector2(0f, -104f), new Vector2(1000f, 20f), 12f, PromptFighters.UI.UITheme.InkDim);
 
             var grid = CreateUIObject("RosterGrid", frame.transform);
             var gRt = grid.GetComponent<RectTransform>();
             gRt.anchorMin = Vector2.zero; gRt.anchorMax = Vector2.one;
-            gRt.offsetMin = new Vector2(14f, 10f); gRt.offsetMax = new Vector2(-14f, -10f);
+            gRt.offsetMin = new Vector2(14f, 8f); gRt.offsetMax = new Vector2(-14f, -8f);
             var layout = grid.AddComponent<GridLayoutGroup>();
-            layout.cellSize = new Vector2(150f, 86f);
+            layout.cellSize = new Vector2(150f, 62f);
             layout.spacing = new Vector2(10f, 8f);
             layout.padding = new RectOffset(6, 6, 4, 4);
             layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
@@ -660,15 +662,15 @@ namespace PromptFighters.GameFlow
 
             // ページ送り（ロスターが1ページに収まらない場合のみ機能）
             var prevPage = MakeButton(frame.transform, "RosterPrev", "<",
-                new Vector2(-704f, 104f), new Vector2(40f, 28f), () => ChangeRosterPage(-1),
+                new Vector2(-704f, 112f), new Vector2(40f, 26f), () => ChangeRosterPage(-1),
                 PromptFighters.UI.UITheme.SteelDark);
             SetButtonLabelStyle(prevPage, 15f, FontStyles.Bold, Color.white);
             var nextPage = MakeButton(frame.transform, "RosterNext", ">",
-                new Vector2(704f, 104f), new Vector2(40f, 28f), () => ChangeRosterPage(1),
+                new Vector2(704f, 112f), new Vector2(40f, 26f), () => ChangeRosterPage(1),
                 PromptFighters.UI.UITheme.SteelDark);
             SetButtonLabelStyle(nextPage, 15f, FontStyles.Bold, Color.white);
             _rosterPageLabel = MakeLabel(frame.transform, "RosterPage", "1/1",
-                new Vector2(648f, 104f), new Vector2(50f, 22f), 12f, PromptFighters.UI.UITheme.Ink);
+                new Vector2(648f, 112f), new Vector2(50f, 22f), 12f, PromptFighters.UI.UITheme.Ink);
         }
 
         // ロスターセル1枚（ポートレート＋名前＋選択カーソル色＋左右クリック領域）を生成。
@@ -679,16 +681,14 @@ namespace PromptFighters.GameFlow
 
             var cell = CreateUIObject($"Cell_{idx}", parent);
             var bg = cell.AddComponent<Image>();
-            bg.color = (selP1 && selP2) ? PromptFighters.UI.UITheme.Gold
-                     : selP1 ? PromptFighters.UI.UITheme.P1Neon
-                     : selP2 ? PromptFighters.UI.UITheme.P2Neon
-                     : new Color(0.08f, 0.09f, 0.13f, 1f);
+            bg.color = RosterCellColor(selP1, selP2);
             bg.raycastTarget = false;
+            _rosterCellBgs[idx] = bg;
 
             var portraitGo = CreateUIObject("Portrait", cell.transform);
             var pRt = portraitGo.GetComponent<RectTransform>();
             pRt.anchorMin = new Vector2(0f, 0f); pRt.anchorMax = new Vector2(1f, 1f);
-            pRt.offsetMin = new Vector2(4f, 22f); pRt.offsetMax = new Vector2(-4f, -4f);
+            pRt.offsetMin = new Vector2(4f, 16f); pRt.offsetMax = new Vector2(-4f, -3f);
             var pImg = portraitGo.AddComponent<Image>();
             pImg.sprite = data.characterSprite;
             pImg.preserveAspect = true;
@@ -696,7 +696,7 @@ namespace PromptFighters.GameFlow
             pImg.color = data.characterSprite != null ? Color.white : new Color(0.35f, 0.38f, 0.45f);
 
             var nm = MakeLabel(cell.transform, "Name", data.characterName,
-                new Vector2(0f, -33f), new Vector2(146f, 18f), 11f, Color.white);
+                new Vector2(0f, -23f), new Vector2(146f, 15f), 10f, Color.white);
             nm.fontStyle = FontStyles.Bold;
             nm.textWrappingMode = TextWrappingModes.NoWrap;
             nm.overflowMode = TextOverflowModes.Ellipsis;
@@ -720,6 +720,24 @@ namespace PromptFighters.GameFlow
             bool assignP1 = leftHalf;
             int captured = idx;
             btn.onClick.AddListener(() => SelectPreset(assignP1, captured));
+        }
+
+        static Color RosterCellColor(bool selP1, bool selP2)
+        {
+            return (selP1 && selP2) ? PromptFighters.UI.UITheme.Gold
+                 : selP1 ? PromptFighters.UI.UITheme.P1Neon
+                 : selP2 ? PromptFighters.UI.UITheme.P2Neon
+                 : new Color(0.08f, 0.09f, 0.13f, 1f);
+        }
+
+        // 選択カーソル色だけを既存セルに反映（グリッド再生成なしで高速）。
+        void RecolorRosterCells()
+        {
+            foreach (var kv in _rosterCellBgs)
+            {
+                if (kv.Value == null) continue;
+                kv.Value.color = RosterCellColor(kv.Key == _p1PresetIdx, kv.Key == _p2PresetIdx);
+            }
         }
 
         void ChangeRosterPage(int delta)
@@ -1181,7 +1199,9 @@ namespace PromptFighters.GameFlow
 
             UpdateCategoryLabels();
             RefreshCharacterPreview();
-            RebuildIconGrids();
+            // ページが変わらなければ再生成せず色だけ更新（カーソル移動を高速化）
+            if (_rosterPage != _displayedPage) RebuildSharedGrid();
+            else RecolorRosterCells();
         }
 
         void RefreshCharacterPreview()
@@ -1203,7 +1223,7 @@ namespace PromptFighters.GameFlow
 
             var data = _presets[idx];
             EnsurePreviewSprite(data);
-            EnsureSpriteSet(data); // 待機モーション用に Idle1/2/3 を読み込む
+            EnsureSpriteSetDeferred(data); // 待機モーション用 Idle1/2/3。選択直後フレームから外して表示遅延を防ぐ
 
             if (image == _p1PreviewImage) _p1PreviewData = data;
             else if (image == _p2PreviewImage) _p2PreviewData = data;
@@ -1278,10 +1298,12 @@ namespace PromptFighters.GameFlow
 
             for (int i = _rosterGrid.childCount - 1; i >= 0; i--)
                 Destroy(_rosterGrid.GetChild(i).gameObject);
+            _rosterCellBgs.Clear();
 
             int pageSize = RosterColumns * RosterRows;
             int maxPage = Mathf.Max(0, (_presets.Count - 1) / pageSize);
             _rosterPage = Mathf.Clamp(_rosterPage, 0, maxPage);
+            _displayedPage = _rosterPage;
             int start = _rosterPage * pageSize;
             int end = Mathf.Min(_presets.Count, start + pageSize);
             if (_rosterPageLabel != null) _rosterPageLabel.text = $"{_rosterPage + 1}/{maxPage + 1}";
@@ -1315,6 +1337,26 @@ namespace PromptFighters.GameFlow
                 RefreshCharacterPreview();
                 RebuildIconGrids();
             }
+        }
+
+        readonly HashSet<CharacterData> _spriteSetLoading = new HashSet<CharacterData>();
+
+        // 待機モーション用スプライトセットの同期ディスクI/Oを1フレーム遅延させ、
+        // キャラ選択直後の表示が待たされないようにする。
+        void EnsureSpriteSetDeferred(CharacterData data)
+        {
+            if (data == null) return;
+            if (HasPoseAndEffectSprites(data.spriteSet)) return;
+            if (string.IsNullOrEmpty(data.spriteDir)) return;
+            if (!_spriteSetLoading.Add(data)) return;
+            StartCoroutine(LoadSpriteSetCo(data));
+        }
+
+        IEnumerator LoadSpriteSetCo(CharacterData data)
+        {
+            yield return null; // プレビュー表示を先に出してからロード
+            EnsureSpriteSet(data);
+            _spriteSetLoading.Remove(data);
         }
 
         string GetPresetName(int idx)
