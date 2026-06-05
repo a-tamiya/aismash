@@ -203,6 +203,12 @@ namespace PromptFighters.GameFlow
         // 左スティックでカーソル移動＋表示、A押下でクリック、物理マウス操作で非表示。
         void UpdateGamepadCursor()
         {
+            // カーソルはタイトル/選択画面のUI操作専用。戦闘中など両パネルが
+            // 閉じている間は左スティック（＝移動入力）で出てこないよう抑止する。
+            bool uiActive = (_panel != null && _panel.activeSelf)
+                || (_titlePanel != null && _titlePanel.activeSelf);
+            if (!uiActive) { SetGamepadCursorVisible(false); return; }
+
             var gp = UnityEngine.InputSystem.Gamepad.current;
             if (gp == null) { SetGamepadCursorVisible(false); return; }
 
