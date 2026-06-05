@@ -90,13 +90,14 @@ namespace PromptFighters.GameFlow
         RectTransform _startButtonRect;
         bool _waitForMenuInputRelease;
 
-        // ゲームパッド左スティック駆動の仮想マウスカーソル
+        // ゲームパッド左スティック駆動の自前カーソル
         GameObject _gamepadCursor;
         RectTransform _gamepadCursorRect;
-        UnityEngine.InputSystem.UI.VirtualMouseInput _virtualMouse;
         Canvas _cursorCanvas;
         RectTransform _cursorCanvasRect;
         bool _gamepadCursorVisible;
+        Vector2 _cursorScreenPos;
+        const float CursorSpeed = 1500f; // スクリーンpx/秒
 
         // AI機能・ステージトグル
         Image _commentaryToggleBg;
@@ -144,8 +145,9 @@ namespace PromptFighters.GameFlow
             }
         }
 
-        // ゲームパッド左スティックで動く仮想マウスカーソルを構築。
-        // Input System の VirtualMouseInput が仮想Mouseデバイスを生成し、uGUIをそのまま操作できる。
+        // ゲームパッド左スティックで動く自前カーソルを構築。
+        // 位置はスクリーン座標で自己管理し（画面内にクランプ）、Aでカーソル位置を
+        // 手動レイキャストしてUIをクリックする。物理Mouseと仮想Mouseの座標ズレを避ける。
         void EnsureVirtualCursor()
         {
             var canvas = GetComponentInParent<Canvas>();
@@ -185,22 +187,8 @@ namespace PromptFighters.GameFlow
             dotImg.color = Color.white;
             dotImg.raycastTarget = false;
 
-            var vm = _gamepadCursor.AddComponent<UnityEngine.InputSystem.UI.VirtualMouseInput>();
-            vm.enabled = false; // アクション設定後にOnEnableを走らせる
-            // cursorTransform/cursorGraphic は割り当てない。位置はCanvasScalerを考慮して
-            // LateUpdate で ScreenPointToLocalPointInRectangle により自前で反映する
-            // （中心アンカーにスクリーン座標を入れると可動域が右上に偏るため）。
-            vm.cursorMode = UnityEngine.InputSystem.UI.VirtualMouseInput.CursorMode.SoftwareCursor;
-            vm.cursorSpeed = 1200f;
-            vm.stickAction = new UnityEngine.InputSystem.InputActionProperty(
-                new UnityEngine.InputSystem.InputAction("vmStick",
-                    UnityEngine.InputSystem.InputActionType.Value, "<Gamepad>/leftStick"));
-            vm.leftButtonAction = new UnityEngine.InputSystem.InputActionProperty(
-                new UnityEngine.InputSystem.InputAction("vmClick",
-                    UnityEngine.InputSystem.InputActionType.Button, "<Gamepad>/buttonSouth"));
-            vm.enabled = true;
-            _virtualMouse = vm;
-
+            _cursorScreenPos = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+            ApplyCursorPosition();
             SetGamepadCursorVisible(false);
         }
 
@@ -212,39 +200,62 @@ namespace PromptFighters.GameFlow
                 g.enabled = visible;
         }
 
-        // 左スティックを倒すとカーソル表示、物理マウスを動かすと非表示。
-        void UpdateGamepadCursorVisibility()
+        // 左スティックでカーソル移動＋表示、A押下でクリック、物理マウス操作で非表示。
+        void UpdateGamepadCursor()
         {
             var gp = UnityEngine.InputSystem.Gamepad.current;
             if (gp == null) { SetGamepadCursorVisible(false); return; }
 
-            if (gp.leftStick.ReadValue().sqrMagnitude > 0.08f)
+            Vector2 stick = gp.leftStick.ReadValue();
+            if (stick.sqrMagnitude > 0.04f)
+            {
                 SetGamepadCursorVisible(true);
+                _cursorScreenPos += stick * (CursorSpeed * Time.unscaledDeltaTime);
+                _cursorScreenPos.x = Mathf.Clamp(_cursorScreenPos.x, 0f, Screen.width);
+                _cursorScreenPos.y = Mathf.Clamp(_cursorScreenPos.y, 0f, Screen.height);
+                ApplyCursorPosition();
+            }
 
             var mouse = UnityEngine.InputSystem.Mouse.current;
             if (mouse != null && mouse.delta.ReadValue().sqrMagnitude > 1f)
                 SetGamepadCursorVisible(false);
+
+            if (_gamepadCursorVisible && gp.buttonSouth.wasPressedThisFrame)
+                DoGamepadCursorClick();
         }
 
-        // 仮想マウスのスクリーン座標をCanvasローカル座標へ変換してカーソルを配置。
-        // CanvasScalerのスケールや解像度差を吸収し、可動域が画面全体になるようにする。
-        void LateUpdate()
+        // スクリーン座標をCanvasローカル座標へ変換してカーソルを配置（CanvasScaler対応）。
+        void ApplyCursorPosition()
         {
-            if (!_gamepadCursorVisible || _virtualMouse == null || _gamepadCursorRect == null || _cursorCanvasRect == null)
-                return;
-            var vmouse = _virtualMouse.virtualMouse;
-            if (vmouse == null) return;
-
-            Vector2 screenPos = vmouse.position.ReadValue();
+            if (_gamepadCursorRect == null || _cursorCanvasRect == null) return;
             var cam = (_cursorCanvas != null && _cursorCanvas.renderMode != RenderMode.ScreenSpaceOverlay)
                 ? _cursorCanvas.worldCamera : null;
-            if (RectTransformUtility.ScreenPointToLocalPointInRectangle(_cursorCanvasRect, screenPos, cam, out var local))
+            if (RectTransformUtility.ScreenPointToLocalPointInRectangle(_cursorCanvasRect, _cursorScreenPos, cam, out var local))
                 _gamepadCursorRect.anchoredPosition = local;
+        }
+
+        // カーソル位置でUIをレイキャストし、ヒットした要素にクリックを送る。
+        void DoGamepadCursorClick()
+        {
+            var es = EventSystem.current;
+            if (es == null) return;
+            var ped = new PointerEventData(es) { position = _cursorScreenPos, button = PointerEventData.InputButton.Left };
+            var results = new List<RaycastResult>();
+            es.RaycastAll(ped, results);
+            if (results.Count == 0) return;
+
+            var target = results[0].gameObject;
+            var handler = ExecuteEvents.GetEventHandler<IPointerClickHandler>(target);
+            if (handler == null) return;
+            ped.pointerPressRaycast = ped.pointerCurrentRaycast = results[0];
+            ExecuteEvents.Execute(handler, ped, ExecuteEvents.pointerDownHandler);
+            ExecuteEvents.Execute(handler, ped, ExecuteEvents.pointerUpHandler);
+            ExecuteEvents.Execute(handler, ped, ExecuteEvents.pointerClickHandler);
         }
 
         void Update()
         {
-            UpdateGamepadCursorVisibility();
+            UpdateGamepadCursor();
 
             // 削除確認モーダルが開いている間は他の入力を遮断
             if (_deleteConfirmPanel != null && _deleteConfirmPanel.activeSelf)
