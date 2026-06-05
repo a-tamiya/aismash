@@ -1547,12 +1547,12 @@ namespace PromptFighters.GameFlow
 
         readonly HashSet<CharacterData> _spriteSetLoading = new HashSet<CharacterData>();
 
-        // 待機モーション用スプライトセットの同期ディスクI/Oを1フレーム遅延させ、
-        // キャラ選択直後の表示が待たされないようにする。
+        // 選択画面のプレビューが使うのは idle1/2/3 のみ。pose/effect は戦闘開始時に
+        // ロードするため、ここでは待機モーション3枚だけを非同期で読み込む。
         void EnsureSpriteSetDeferred(CharacterData data)
         {
             if (data == null) return;
-            if (HasPoseAndEffectSprites(data.spriteSet)) return;
+            if (HasIdleSprites(data.spriteSet)) return;
             if (string.IsNullOrEmpty(data.spriteDir)) return;
             if (!_spriteSetLoading.Add(data)) return;
             StartCoroutine(LoadSpriteSetCo(data));
@@ -1561,10 +1561,17 @@ namespace PromptFighters.GameFlow
         IEnumerator LoadSpriteSetCo(CharacterData data)
         {
             yield return null; // プレビュー表示(idle1)を先に出してからロード
-            // 1枚ずつフレーム分割で読み込み、選択フレームのヒッチを解消する。
-            // idle1/2/3 が先頭でロードされるため待機モーションは早期に揃う。
-            yield return CharacterSaveManager.LoadSpriteSetAsync(data);
+            // idle1/2/3 のみを1枚ずつフレーム分割で読み込み、選択時のヒッチを解消する。
+            yield return CharacterSaveManager.LoadSpriteSetAsync(data, idleOnly: true);
             _spriteSetLoading.Remove(data);
+        }
+
+        // 待機モーション(idle2/idle3)が揃っているか。選択画面の遅延ロード判定用。
+        static bool HasIdleSprites(CharacterSpriteSet spriteSet)
+        {
+            if (spriteSet?.sprites == null || spriteSet.sprites.Length < 3) return false;
+            return spriteSet.sprites[(int)CharacterSpriteId.Idle2] != null
+                && spriteSet.sprites[(int)CharacterSpriteId.Idle3] != null;
         }
 
         string GetPresetName(int idx)
@@ -1779,10 +1786,12 @@ namespace PromptFighters.GameFlow
                 data.characterSprite = loaded.Get(CharacterSpriteId.Idle1);
         }
 
+        // pose/effect スプライト（Jump 以降 = index 3..）が1枚でもあるか。
+        // idle1/2/3(index 0..2) は対象外。戦闘開始時の完全ロード判定に使う。
         static bool HasPoseAndEffectSprites(CharacterSpriteSet spriteSet)
         {
             if (spriteSet?.sprites == null) return false;
-            for (int i = 1; i < spriteSet.sprites.Length; i++)
+            for (int i = (int)CharacterSpriteId.Jump; i < spriteSet.sprites.Length; i++)
             {
                 if (spriteSet.sprites[i] != null) return true;
             }

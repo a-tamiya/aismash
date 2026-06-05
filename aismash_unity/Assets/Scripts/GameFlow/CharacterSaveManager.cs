@@ -160,8 +160,9 @@ namespace PromptFighters.GameFlow
 
         // スプライトセットを1枚ずつフレーム分割で非同期ロードし、data へ反映する。
         // SpriteEntries の並び順（idle1/2/3 が先頭）により待機モーションが最優先で揃う。
-        // 1フレームに15枚の同期デコードが集中して起きるヒッチを防ぐ。
-        public static IEnumerator LoadSpriteSetAsync(CharacterData data)
+        // 1フレームに大量の同期デコードが集中して起きるヒッチを防ぐ。
+        // idleOnly=true なら idle1/2/3 のみ読む（pose/effect は戦闘開始時にロード）。
+        public static IEnumerator LoadSpriteSetAsync(CharacterData data, bool idleOnly = false)
         {
             if (data == null || string.IsNullOrEmpty(data.spriteDir) || !Directory.Exists(data.spriteDir))
                 yield break;
@@ -169,8 +170,10 @@ namespace PromptFighters.GameFlow
             var set = data.spriteSet ?? new CharacterSpriteSet();
             data.spriteSet = set; // idle1 フォールバックで即アニメ可能にするため先に公開
 
-            foreach (var (id, filename) in SpriteEntries)
+            int count = idleOnly ? 3 : SpriteEntries.Length; // 先頭3つが idle1/2/3
+            for (int i = 0; i < count; i++)
             {
+                var (id, filename) = SpriteEntries[i];
                 if (set.sprites != null && (int)id < set.sprites.Length && set.sprites[(int)id] != null)
                     continue; // 既にロード済み
 
