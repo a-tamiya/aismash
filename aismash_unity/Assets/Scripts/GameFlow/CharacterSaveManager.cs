@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -155,6 +156,35 @@ namespace PromptFighters.GameFlow
             }
 
             return anyLoaded ? set : null;
+        }
+
+        // スプライトセットを1枚ずつフレーム分割で非同期ロードし、data へ反映する。
+        // SpriteEntries の並び順（idle1/2/3 が先頭）により待機モーションが最優先で揃う。
+        // 1フレームに15枚の同期デコードが集中して起きるヒッチを防ぐ。
+        public static IEnumerator LoadSpriteSetAsync(CharacterData data)
+        {
+            if (data == null || string.IsNullOrEmpty(data.spriteDir) || !Directory.Exists(data.spriteDir))
+                yield break;
+
+            var set = data.spriteSet ?? new CharacterSpriteSet();
+            data.spriteSet = set; // idle1 フォールバックで即アニメ可能にするため先に公開
+
+            foreach (var (id, filename) in SpriteEntries)
+            {
+                if (set.sprites != null && (int)id < set.sprites.Length && set.sprites[(int)id] != null)
+                    continue; // 既にロード済み
+
+                string path = Path.Combine(data.spriteDir, filename + ".png");
+                if (!File.Exists(path)) continue;
+
+                Sprite sprite = null;
+                yield return SpriteLoader.LoadDirectAsync(path, s => sprite = s);
+                if (sprite == null) continue;
+
+                set.Set(id, sprite);
+                if (data.characterSprite == null && id == CharacterSpriteId.Idle1)
+                    data.characterSprite = sprite;
+            }
         }
 
         static string Serialize(CharacterData d)

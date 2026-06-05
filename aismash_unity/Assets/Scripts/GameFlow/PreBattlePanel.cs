@@ -1560,8 +1560,10 @@ namespace PromptFighters.GameFlow
 
         IEnumerator LoadSpriteSetCo(CharacterData data)
         {
-            yield return null; // プレビュー表示を先に出してからロード
-            EnsureSpriteSet(data);
+            yield return null; // プレビュー表示(idle1)を先に出してからロード
+            // 1枚ずつフレーム分割で読み込み、選択フレームのヒッチを解消する。
+            // idle1/2/3 が先頭でロードされるため待機モーションは早期に揃う。
+            yield return CharacterSaveManager.LoadSpriteSetAsync(data);
             _spriteSetLoading.Remove(data);
         }
 
