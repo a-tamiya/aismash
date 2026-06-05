@@ -92,8 +92,10 @@ namespace PromptFighters.GameFlow
 
         // ゲームパッド左スティック駆動の仮想マウスカーソル
         GameObject _gamepadCursor;
-        UnityEngine.UI.Graphic _gamepadCursorGraphic;
+        RectTransform _gamepadCursorRect;
         UnityEngine.InputSystem.UI.VirtualMouseInput _virtualMouse;
+        Canvas _cursorCanvas;
+        RectTransform _cursorCanvasRect;
         bool _gamepadCursorVisible;
 
         // AI機能・ステージトグル
@@ -147,10 +149,13 @@ namespace PromptFighters.GameFlow
         void EnsureVirtualCursor()
         {
             var canvas = GetComponentInParent<Canvas>();
-            Transform canvasT = canvas != null ? canvas.transform : transform;
+            _cursorCanvas = canvas != null ? canvas.rootCanvas : null;
+            Transform canvasT = _cursorCanvas != null ? _cursorCanvas.transform : transform;
+            _cursorCanvasRect = canvasT as RectTransform;
 
             _gamepadCursor = CreateUIObject("GamepadCursor", canvasT);
             var rt = _gamepadCursor.GetComponent<RectTransform>();
+            _gamepadCursorRect = rt;
             rt.sizeDelta = new Vector2(30f, 30f);
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0.5f, 0.5f);
@@ -162,7 +167,6 @@ namespace PromptFighters.GameFlow
             outer.color = PromptFighters.UI.UITheme.Gold;
             outer.raycastTarget = false;
             rt.localRotation = Quaternion.Euler(0f, 0f, 45f);
-            _gamepadCursorGraphic = outer;
 
             var inner = CreateUIObject("CursorInner", _gamepadCursor.transform);
             var iRt = inner.GetComponent<RectTransform>();
@@ -183,10 +187,11 @@ namespace PromptFighters.GameFlow
 
             var vm = _gamepadCursor.AddComponent<UnityEngine.InputSystem.UI.VirtualMouseInput>();
             vm.enabled = false; // アクション設定後にOnEnableを走らせる
+            // cursorTransform/cursorGraphic は割り当てない。位置はCanvasScalerを考慮して
+            // LateUpdate で ScreenPointToLocalPointInRectangle により自前で反映する
+            // （中心アンカーにスクリーン座標を入れると可動域が右上に偏るため）。
             vm.cursorMode = UnityEngine.InputSystem.UI.VirtualMouseInput.CursorMode.SoftwareCursor;
-            vm.cursorGraphic = _gamepadCursorGraphic;
-            vm.cursorTransform = rt;
-            vm.cursorSpeed = 900f;
+            vm.cursorSpeed = 1200f;
             vm.stickAction = new UnityEngine.InputSystem.InputActionProperty(
                 new UnityEngine.InputSystem.InputAction("vmStick",
                     UnityEngine.InputSystem.InputActionType.Value, "<Gamepad>/leftStick"));
@@ -219,6 +224,22 @@ namespace PromptFighters.GameFlow
             var mouse = UnityEngine.InputSystem.Mouse.current;
             if (mouse != null && mouse.delta.ReadValue().sqrMagnitude > 1f)
                 SetGamepadCursorVisible(false);
+        }
+
+        // 仮想マウスのスクリーン座標をCanvasローカル座標へ変換してカーソルを配置。
+        // CanvasScalerのスケールや解像度差を吸収し、可動域が画面全体になるようにする。
+        void LateUpdate()
+        {
+            if (!_gamepadCursorVisible || _virtualMouse == null || _gamepadCursorRect == null || _cursorCanvasRect == null)
+                return;
+            var vmouse = _virtualMouse.virtualMouse;
+            if (vmouse == null) return;
+
+            Vector2 screenPos = vmouse.position.ReadValue();
+            var cam = (_cursorCanvas != null && _cursorCanvas.renderMode != RenderMode.ScreenSpaceOverlay)
+                ? _cursorCanvas.worldCamera : null;
+            if (RectTransformUtility.ScreenPointToLocalPointInRectangle(_cursorCanvasRect, screenPos, cam, out var local))
+                _gamepadCursorRect.anchoredPosition = local;
         }
 
         void Update()
