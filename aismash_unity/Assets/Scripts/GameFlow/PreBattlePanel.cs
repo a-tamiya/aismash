@@ -90,6 +90,12 @@ namespace PromptFighters.GameFlow
         RectTransform _startButtonRect;
         bool _waitForMenuInputRelease;
 
+        // ゲームパッド左スティック駆動の仮想マウスカーソル
+        GameObject _gamepadCursor;
+        UnityEngine.UI.Graphic _gamepadCursorGraphic;
+        UnityEngine.InputSystem.UI.VirtualMouseInput _virtualMouse;
+        bool _gamepadCursorVisible;
+
         // AI機能・ステージトグル
         Image _commentaryToggleBg;
         TextMeshProUGUI _commentaryToggleLabel;
@@ -122,6 +128,7 @@ namespace PromptFighters.GameFlow
             BuildGeneratingPanel();
             BuildSkillConfirmPanel();
             BuildDeleteConfirmPanel();
+            EnsureVirtualCursor();
             UITheme.ApplyAllInScene();
             RebuildIconGrids();
             RefreshCharacterPreview();
@@ -135,12 +142,93 @@ namespace PromptFighters.GameFlow
             }
         }
 
+        // ゲームパッド左スティックで動く仮想マウスカーソルを構築。
+        // Input System の VirtualMouseInput が仮想Mouseデバイスを生成し、uGUIをそのまま操作できる。
+        void EnsureVirtualCursor()
+        {
+            var canvas = GetComponentInParent<Canvas>();
+            Transform canvasT = canvas != null ? canvas.transform : transform;
+
+            _gamepadCursor = CreateUIObject("GamepadCursor", canvasT);
+            var rt = _gamepadCursor.GetComponent<RectTransform>();
+            rt.sizeDelta = new Vector2(30f, 30f);
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = Vector2.zero;
+
+            // 菱形レティクル（外:ゴールド / 内:ダーク / 中心:白ドット）
+            var outer = _gamepadCursor.AddComponent<Image>();
+            outer.sprite = PromptFighters.UI.UITheme.VGradient; outer.type = Image.Type.Simple;
+            outer.color = PromptFighters.UI.UITheme.Gold;
+            outer.raycastTarget = false;
+            rt.localRotation = Quaternion.Euler(0f, 0f, 45f);
+            _gamepadCursorGraphic = outer;
+
+            var inner = CreateUIObject("CursorInner", _gamepadCursor.transform);
+            var iRt = inner.GetComponent<RectTransform>();
+            iRt.anchorMin = Vector2.zero; iRt.anchorMax = Vector2.one;
+            iRt.offsetMin = new Vector2(5f, 5f); iRt.offsetMax = new Vector2(-5f, -5f);
+            var innerImg = inner.AddComponent<Image>();
+            innerImg.color = new Color(0.04f, 0.05f, 0.08f, 0.95f);
+            innerImg.raycastTarget = false;
+
+            var dot = CreateUIObject("CursorDot", _gamepadCursor.transform);
+            var dRt = dot.GetComponent<RectTransform>();
+            dRt.anchorMin = dRt.anchorMax = new Vector2(0.5f, 0.5f);
+            dRt.sizeDelta = new Vector2(8f, 8f);
+            dRt.anchoredPosition = Vector2.zero;
+            var dotImg = dot.AddComponent<Image>();
+            dotImg.color = Color.white;
+            dotImg.raycastTarget = false;
+
+            var vm = _gamepadCursor.AddComponent<UnityEngine.InputSystem.UI.VirtualMouseInput>();
+            vm.enabled = false; // アクション設定後にOnEnableを走らせる
+            vm.cursorMode = UnityEngine.InputSystem.UI.VirtualMouseInput.CursorMode.SoftwareCursor;
+            vm.cursorGraphic = _gamepadCursorGraphic;
+            vm.cursorTransform = rt;
+            vm.cursorSpeed = 900f;
+            vm.stickAction = new UnityEngine.InputSystem.InputActionProperty(
+                new UnityEngine.InputSystem.InputAction("vmStick",
+                    UnityEngine.InputSystem.InputActionType.Value, "<Gamepad>/leftStick"));
+            vm.leftButtonAction = new UnityEngine.InputSystem.InputActionProperty(
+                new UnityEngine.InputSystem.InputAction("vmClick",
+                    UnityEngine.InputSystem.InputActionType.Button, "<Gamepad>/buttonSouth"));
+            vm.enabled = true;
+            _virtualMouse = vm;
+
+            SetGamepadCursorVisible(false);
+        }
+
+        void SetGamepadCursorVisible(bool visible)
+        {
+            if (_gamepadCursor == null || _gamepadCursorVisible == visible) return;
+            _gamepadCursorVisible = visible;
+            foreach (var g in _gamepadCursor.GetComponentsInChildren<UnityEngine.UI.Graphic>(true))
+                g.enabled = visible;
+        }
+
+        // 左スティックを倒すとカーソル表示、物理マウスを動かすと非表示。
+        void UpdateGamepadCursorVisibility()
+        {
+            var gp = UnityEngine.InputSystem.Gamepad.current;
+            if (gp == null) { SetGamepadCursorVisible(false); return; }
+
+            if (gp.leftStick.ReadValue().sqrMagnitude > 0.08f)
+                SetGamepadCursorVisible(true);
+
+            var mouse = UnityEngine.InputSystem.Mouse.current;
+            if (mouse != null && mouse.delta.ReadValue().sqrMagnitude > 1f)
+                SetGamepadCursorVisible(false);
+        }
+
         void Update()
         {
+            UpdateGamepadCursorVisibility();
+
             // 削除確認モーダルが開いている間は他の入力を遮断
             if (_deleteConfirmPanel != null && _deleteConfirmPanel.activeSelf)
             {
-                if (WasMenuConfirmPressed()) ConfirmDeleteCharacter();
+                if (WasKeyboardConfirmPressed()) ConfirmDeleteCharacter();
                 else if (WasKeyboardCancelPressed()) HideDeleteConfirm();
                 return;
             }
@@ -172,7 +260,8 @@ namespace PromptFighters.GameFlow
 
                 HandleRosterCursorInput();
 
-                if (WasMenuConfirmPressed()) OnStartPressed();
+                // ゲームパッドAはカーソルのクリックに使うため、ここでは誤発進防止でキーボードのみ
+                if (WasKeyboardConfirmPressed()) OnStartPressed();
                 if (WasTrainingPressed()) OnTrainingPressed();
                 if (WasGeneratePressed()) ShowGenerationSetupPanel();
             }

@@ -44,6 +44,12 @@ namespace PromptFighters.GameFlow
             return kb != null && kb.escapeKey.wasPressedThisFrame;
         }
 
+        static bool WasKeyboardConfirmPressed()
+        {
+            var kb = Keyboard.current;
+            return kb != null && (kb.enterKey.wasPressedThisFrame || kb.spaceKey.wasPressedThisFrame);
+        }
+
         static bool WasTrainingPressed()
         {
             var kb = Keyboard.current;
