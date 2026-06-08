@@ -114,8 +114,7 @@ namespace PromptFighters.GameFlow
         Image _modeCoopBg;
         TextMeshProUGUI _modeCoopLabel;
         TextMeshProUGUI _modeHintLabel;
-        Button _bossPresetBtn;
-        Image _bossPresetBg;
+        GameObject _bossSelectorRoot;
         TextMeshProUGUI _bossPresetLabel;
         int _bossPresetIdx = 0;
 
@@ -485,15 +484,42 @@ namespace PromptFighters.GameFlow
             _cpuToggleLabel = cpuBtn.GetComponentInChildren<TextMeshProUGUI>();
             _cpuToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
-            // 協力モード時のみ表示するボスキャラ選択。トグル行の下に1つ配置。
-            _bossPresetBtn = MakeButton(parent, "BossPresetToggle", BossPresetText(),
-                new Vector2(0f, rowY - 44f), new Vector2(320f, 34f), OnBossPresetCycle, ToggleOnColor);
-            StyleArcadeButton(_bossPresetBtn, ToggleOnColor, 10f);
-            _bossPresetBg    = _bossPresetBtn.GetComponent<Image>();
-            _bossPresetLabel = _bossPresetBtn.GetComponentInChildren<TextMeshProUGUI>();
-            _bossPresetLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
+            // 協力モード時のみ表示するボスキャラ選択（◀ ボス名 ▶）。トグル行とフッターの間に配置。
+            BuildBossSelector(parent, -407f);
 
             RefreshToggleVisuals();
+        }
+
+        // 討伐ボスを選ぶ ◀ / ▶ 付きの選択行。協力モード時のみ表示。
+        void BuildBossSelector(Transform parent, float rowY)
+        {
+            _bossSelectorRoot = CreateUIObject("BossSelector", parent);
+            var rt = _bossSelectorRoot.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = Vector2.zero;
+            var t = _bossSelectorRoot.transform;
+
+            // 左端ラベル「討伐ボス」
+            MakeLabel(t, "BossSelectHeading", "討伐ボス",
+                new Vector2(-300f, rowY), new Vector2(120f, 30f), 15f, PromptFighters.UI.UITheme.Urgent)
+                .fontStyle = FontStyles.Bold | FontStyles.Italic;
+
+            var prevBtn = MakeButton(t, "BossPrev", "◀",
+                new Vector2(-185f, rowY), new Vector2(50f, 34f), OnBossPresetPrev, PromptFighters.UI.UITheme.Urgent);
+            StyleArcadeButton(prevBtn, PromptFighters.UI.UITheme.Urgent, 8f);
+            SetButtonLabelStyle(prevBtn, 20f, FontStyles.Bold, Color.white);
+
+            var nameBtn = MakeButton(t, "BossName", BossPresetText(),
+                new Vector2(0f, rowY), new Vector2(280f, 34f), OnBossPresetCycle, ToggleOffColor);
+            StyleArcadeButton(nameBtn, ToggleOffColor, 8f);
+            _bossPresetLabel = nameBtn.GetComponentInChildren<TextMeshProUGUI>();
+            _bossPresetLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
+
+            var nextBtn = MakeButton(t, "BossNext", "▶",
+                new Vector2(185f, rowY), new Vector2(50f, 34f), OnBossPresetCycle, PromptFighters.UI.UITheme.Urgent);
+            StyleArcadeButton(nextBtn, PromptFighters.UI.UITheme.Urgent, 8f);
+            SetButtonLabelStyle(nextBtn, 20f, FontStyles.Bold, Color.white);
         }
 
         string BossPresetText() =>
@@ -503,6 +529,14 @@ namespace PromptFighters.GameFlow
         {
             if (_presets == null || _presets.Count == 0) return;
             _bossPresetIdx = (_bossPresetIdx + 1) % _presets.Count;
+            SyncBossCharacter();
+            RefreshToggleVisuals();
+        }
+
+        void OnBossPresetPrev()
+        {
+            if (_presets == null || _presets.Count == 0) return;
+            _bossPresetIdx = (_bossPresetIdx - 1 + _presets.Count) % _presets.Count;
             SyncBossCharacter();
             RefreshToggleVisuals();
         }
@@ -615,7 +649,7 @@ namespace PromptFighters.GameFlow
                 _modeHintLabel.text = coop
                     ? "2人（または1P＋味方CPU）で強敵ボスに挑む。倒れた仲間は近づいて救助できる。"
                     : "1P と 2P が1対1で対戦する。CPU・トレーニングにも対応。";
-            if (_bossPresetBtn != null) _bossPresetBtn.gameObject.SetActive(coop);
+            if (_bossSelectorRoot != null) _bossSelectorRoot.SetActive(coop);
             if (coop)
             {
                 SyncBossCharacter();

@@ -594,6 +594,7 @@ namespace PromptFighters.Battle
             if (boss == null) return;
 
             var data = BuildBossCharacter();
+            EnsureBossSpriteSet(data);
             BossCharacter = data;
 
             boss.GetComponent<SkillExecutor>()?.LoadCharacter(data);
@@ -608,6 +609,31 @@ namespace PromptFighters.Battle
             ApplyFighterScale(boss);
             boss.ResetForBattle(bossSpawnPos, faceRight: false);
             boss.GetComponent<SkillExecutor>()?.ResetSkillState();
+        }
+
+        // ボスのプリセットはエフェクト/ポーズ用スプライトが未ロードのことがあり、技が四角で表示される。
+        // 保存先からフルロードして技エフェクトのスプライトを揃える（プレイヤーの EnsureSpriteSet 相当）。
+        static void EnsureBossSpriteSet(CharacterData data)
+        {
+            if (data == null) return;
+            if (HasPoseAndEffectSprites(data.spriteSet)) return;
+            if (string.IsNullOrEmpty(data.spriteDir)) return;
+
+            var loaded = CharacterSaveManager.LoadSpriteSet(data.spriteDir);
+            if (loaded == null) return;
+
+            data.spriteSet = loaded;
+            if (data.characterSprite == null)
+                data.characterSprite = loaded.Get(CharacterSpriteId.Idle1);
+        }
+
+        // pose/effect スプライト（Jump 以降 = index 3..）が1枚でもあるか。idle1/2/3 は対象外。
+        static bool HasPoseAndEffectSprites(CharacterSpriteSet spriteSet)
+        {
+            if (spriteSet?.sprites == null) return false;
+            for (int i = (int)CharacterSpriteId.Jump; i < spriteSet.sprites.Length; i++)
+                if (spriteSet.sprites[i] != null) return true;
+            return false;
         }
 
         // ボス用のキャラデータを用意する。選択済みがあればそれを、無ければプリセット先頭、最後に素のデータを返す。
