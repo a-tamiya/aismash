@@ -387,6 +387,14 @@ namespace PromptFighters.Battle
         void UpdateVisual()
         {
             if (_sprite == null) return;
+
+            // ダウン中は薄く灰色で半透明にして「救助が必要」と分かるようにする
+            if (IsDowned)
+            {
+                _sprite.color = new Color(0.55f, 0.55f, 0.6f, 0.5f);
+                return;
+            }
+
             UpdateStateSprite();
 
             // ヒットフラッシュ中は白点滅

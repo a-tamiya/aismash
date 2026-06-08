@@ -231,16 +231,27 @@ namespace PromptFighters.UI
             _visible   = true;
             _animTimer = 0f;
 
-            Color accent = winnerIndex == 0 ? P1Col : winnerIndex == 1 ? P2Col : DrawCol;
+            var bm = BattleManager.Instance;
+            bool coop = bm != null && bm.Mode == BattleMode.CoopVsBoss;
+
+            Color accent = coop
+                ? (winnerIndex == 0 ? P1Col : DrawCol)
+                : (winnerIndex == 0 ? P1Col : winnerIndex == 1 ? P2Col : DrawCol);
 
             if (_winnerBand != null)
                 _winnerBand.color = new Color(accent.r, accent.g, accent.b, 0.15f);
 
             if (_winnerText != null)
             {
-                var bm = BattleManager.Instance;
-                string roundStr = (bm != null && bm.bestOf3) ? "  " + RoundDotsText(winnerIndex, bm) : "";
-                _winnerText.text  = (winnerIndex == 0 ? "1P  WIN" : winnerIndex == 1 ? "2P  WIN" : "DRAW") + roundStr;
+                if (coop)
+                {
+                    _winnerText.text = winnerIndex == 0 ? "勝利！" : "敗北…";
+                }
+                else
+                {
+                    string roundStr = (bm != null && bm.bestOf3) ? "  " + RoundDotsText(winnerIndex, bm) : "";
+                    _winnerText.text = (winnerIndex == 0 ? "1P  WIN" : winnerIndex == 1 ? "2P  WIN" : "DRAW") + roundStr;
+                }
                 _winnerText.color = accent;
             }
 
@@ -383,6 +394,10 @@ namespace PromptFighters.UI
 
         static string FallbackComment(int winner, BattleManager bm)
         {
+            if (bm != null && bm.Mode == BattleMode.CoopVsBoss)
+                return winner == 0
+                    ? "強敵を打ち倒した！見事な連携だった。"
+                    : "ボスの圧倒的な力の前に敗れた…次こそ打ち倒せ。";
             if (winner < 0) return "互角の戦いの末、引き分けとなりました。";
             string wName = winner == 0 ? bm.Character1?.characterName ?? "1P" : bm.Character2?.characterName ?? "2P";
             return $"{wName} の勝利！自らの技の特徴を最大限に活かし、完璧な戦いを見せた。";
