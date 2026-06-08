@@ -258,13 +258,18 @@ namespace PromptFighters.Battle
         }
 
         // 協力モード用：ダウンした味方のそばに生存中の味方が一定時間いれば復活させる。
-        readonly Dictionary<Fighter, float> _reviveProgress = new Dictionary<Fighter, float>();
+        readonly Dictionary<Fighter, float>       _reviveProgress = new Dictionary<Fighter, float>();
+        readonly Dictionary<Fighter, ReviveGauge> _reviveGauges   = new Dictionary<Fighter, ReviveGauge>();
         void ReviveCheck()
         {
             for (int i = 0; i < Fighters.Count; i++)
             {
                 var downed = Fighters[i];
-                if (downed == null || !downed.IsDowned || downed.Team != FighterTeam.Players) continue;
+                if (downed == null || !downed.IsDowned || downed.Team != FighterTeam.Players)
+                {
+                    if (downed != null) ClearReviveGauge(downed);
+                    continue;
+                }
 
                 bool helperNear = false;
                 for (int j = 0; j < Fighters.Count; j++)
@@ -291,10 +296,38 @@ namespace PromptFighters.Battle
                         DamagePopup.SpawnText(downed.transform.position + Vector3.up * 1.0f,
                             "復活!", new Color(0.4f, 1f, 0.6f), 1.6f);
                         prog = 0f;
+                        ClearReviveGauge(downed);
+                    }
+                    else
+                    {
+                        UpdateReviveGauge(downed, prog / reviveHoldTime);
                     }
                 }
-                else prog = 0f;
+                else
+                {
+                    prog = 0f;
+                    ClearReviveGauge(downed);
+                }
                 _reviveProgress[downed] = prog;
+            }
+        }
+
+        void UpdateReviveGauge(Fighter downed, float t01)
+        {
+            if (!_reviveGauges.TryGetValue(downed, out var gauge) || gauge == null)
+            {
+                gauge = ReviveGauge.Create(downed.transform);
+                _reviveGauges[downed] = gauge;
+            }
+            gauge.SetProgress(t01);
+        }
+
+        void ClearReviveGauge(Fighter downed)
+        {
+            if (_reviveGauges.TryGetValue(downed, out var gauge))
+            {
+                if (gauge != null) Destroy(gauge.gameObject);
+                _reviveGauges.Remove(downed);
             }
         }
 
@@ -378,7 +411,33 @@ namespace PromptFighters.Battle
             Phase         = BattlePhase.Fighting;
             TimeRemaining = battleDuration;
             OnBattleStart?.Invoke();
+            if (Mode == BattleMode.CoopVsBoss && boss != null) StartCoroutine(BossEntrancePulse());
             Debug.Log("[Battle] FIGHT!");
+        }
+
+        // ボス登場演出：一瞬大きくして着地するようにスケールを戻す。
+        IEnumerator BossEntrancePulse()
+        {
+            if (boss == null) yield break;
+            Vector3 baseScale = boss.transform.localScale;
+            float magX = Mathf.Abs(baseScale.x);
+            float dur = 0.45f;
+            float t = 0f;
+            DamagePopup.SpawnText(boss.transform.position + Vector3.up * 1.6f,
+                "BOSS", new Color(1f, 0.3f, 0.3f), 2.0f);
+            while (t < dur && boss != null)
+            {
+                t += Time.deltaTime;
+                float k = 1f + 0.35f * Mathf.Sin(Mathf.PI * Mathf.Clamp01(t / dur));
+                float sign = boss.FacingRight ? 1f : -1f;
+                boss.transform.localScale = new Vector3(sign * magX * k, baseScale.y * k, baseScale.z);
+                yield return null;
+            }
+            if (boss != null)
+            {
+                float sign = boss.FacingRight ? 1f : -1f;
+                boss.transform.localScale = new Vector3(sign * magX, baseScale.y, baseScale.z);
+            }
         }
 
         void EndByTimeout()

@@ -116,15 +116,19 @@ namespace PromptFighters.UI
         void OnFight()
         {
             if (_text == null) return;
+            bool coop = BattleManager.Instance != null
+                        && BattleManager.Instance.Mode == BattleMode.CoopVsBoss;
+
             _text.gameObject.SetActive(true);
-            _text.text     = "FIGHT!";
-            _text.fontSize = 108f;
-            _text.color    = ColFight;
+            _text.text     = coop ? "最強ボスを倒せ！" : "FIGHT!";
+            _text.fontSize = coop ? 84f : 108f;
+            Color col      = coop ? UITheme.Urgent : ColFight;
+            _text.color    = col;
 
             StopAllCoroutines();
-            StartCoroutine(Punch(1.4f, 1.0f, 0.20f));
-            StartCoroutine(Flash(new Color(ColFight.r, ColFight.g, ColFight.b, 0f), 0.35f, 0.55f));
-            StartCoroutine(HideAfter(0.85f));
+            StartCoroutine(Punch(coop ? 1.7f : 1.4f, 1.0f, coop ? 0.28f : 0.20f));
+            StartCoroutine(Flash(new Color(col.r, col.g, col.b, 0f), coop ? 0.45f : 0.35f, coop ? 0.65f : 0.55f));
+            StartCoroutine(HideAfter(coop ? 1.2f : 0.85f));
         }
 
         IEnumerator Punch(float fromScale, float toScale, float duration)
