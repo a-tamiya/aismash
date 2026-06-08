@@ -1215,18 +1215,54 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PromptFighters.Battle.Fighter
   maxHP: 100
   moveSpeed: 5
+  airMoveSpeed: 4
   jumpForce: 12
+  maxAirJumps: 1
+  shortHopMultiplier: 0.62
+  fastFallSpeed: 7.5
+  fastFallMinAirTime: 0.18
+  fastFallMaxUpwardSpeed: 1.2
+  walkSpeedRatio: 0.35
+  airJumpHeightMultiplier: 0.45
+  dashInputThreshold: 0.75
+  weight: 1
   guardDamageRatio: 0.15
   maxGuardDurability: 100
   guardTimeDrainPerSecond: 18
   guardHitDamageRatio: 0.45
+  guardRecoveryPerSecond: 8
+  guardRecoveryDelay: 0
   guardBreakLockDuration: 5
+  groundDodgeDistance: 4.2
+  airDodgeDistance: 3.5
+  dodgeDuration: 0.28
+  downDodgeDuration: 0.22
+  dodgeFallDistance: 3.5
+  grabParameters:
+    range: 1.5
+    startup: 0.08
+    recovery: 0.14
+  throwParameters:
+    front_damage: 10
+    front_knockback: 8
+    back_damage: 10
+    back_knockback: 10
+    up_damage: 10
+    up_knockback: 9
+    down_damage: 8
+    down_knockback: 7
+  maxGrabHoldSeconds: 1.1
+  grabReleaseRecovery: 0.12
+  throwGrabCooldown: 0.45
+  throwKnockbackScale: 1.1
+  throwReleaseOffset: 1.25
   groundCheck: {fileID: 1957225304}
   groundCheckRadius: 0.12
   groundLayer:
     serializedVersion: 2
     m_Bits: 256
-  Opponent: {fileID: 0}
+  _burnDamagePerTick: 2
+  _slowFactor: 0.5
 --- !u!4 &315558352
 Transform:
   m_ObjectHideFlags: 0
@@ -1412,13 +1448,16 @@ MonoBehaviour:
       startup: 0
       active_time: 0
       recovery: 0
-      cooldown: 0
       hit_count: 1
       knockback: 0
       stun_time: 0
       guard_damage: 0
       move_force: 0
     actions: []
+    follow_up_actions: []
+    follow_up_window: 0
+    chargeable: 0
+    max_charge_time: 0
   - slot: 0
     skill_name: 
     description: 
@@ -1430,13 +1469,16 @@ MonoBehaviour:
       startup: 0
       active_time: 0
       recovery: 0
-      cooldown: 0
       hit_count: 1
       knockback: 0
       stun_time: 0
       guard_damage: 0
       move_force: 0
     actions: []
+    follow_up_actions: []
+    follow_up_window: 0
+    chargeable: 0
+    max_charge_time: 0
   - slot: 0
     skill_name: 
     description: 
@@ -1448,13 +1490,16 @@ MonoBehaviour:
       startup: 0
       active_time: 0
       recovery: 0
-      cooldown: 0
       hit_count: 1
       knockback: 0
       stun_time: 0
       guard_damage: 0
       move_force: 0
     actions: []
+    follow_up_actions: []
+    follow_up_window: 0
+    chargeable: 0
+    max_charge_time: 0
   - slot: 0
     skill_name: 
     description: 
@@ -1466,13 +1511,16 @@ MonoBehaviour:
       startup: 0
       active_time: 0
       recovery: 0
-      cooldown: 0
       hit_count: 1
       knockback: 0
       stun_time: 0
       guard_damage: 0
       move_force: 0
     actions: []
+    follow_up_actions: []
+    follow_up_window: 0
+    chargeable: 0
+    max_charge_time: 0
   autoEquipSampleSkills: 1
 --- !u!28 &485837720
 Texture2D:
@@ -1656,6 +1704,349 @@ Transform:
   m_LocalScale: {x: 22, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &547761348
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 547761355}
+  - component: {fileID: 547761354}
+  - component: {fileID: 547761353}
+  - component: {fileID: 547761352}
+  - component: {fileID: 547761351}
+  - component: {fileID: 547761350}
+  - component: {fileID: 547761349}
+  m_Layer: 0
+  m_Name: Boss
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &547761349
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 547761348}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ae2de95de653a164e8a2e46954bfcc11, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PromptFighters.Battle.Skills.SkillExecutor
+  skills:
+  - slot: 0
+    skill_name: 
+    description: 
+    element: 0
+    risk_level: 0
+    parameters:
+      damage: 0
+      range: 0
+      startup: 0
+      active_time: 0
+      recovery: 0
+      hit_count: 1
+      knockback: 0
+      stun_time: 0
+      guard_damage: 0
+      move_force: 0
+    actions: []
+    follow_up_actions: []
+    follow_up_window: 0
+    chargeable: 0
+    max_charge_time: 0
+  - slot: 0
+    skill_name: 
+    description: 
+    element: 0
+    risk_level: 0
+    parameters:
+      damage: 0
+      range: 0
+      startup: 0
+      active_time: 0
+      recovery: 0
+      hit_count: 1
+      knockback: 0
+      stun_time: 0
+      guard_damage: 0
+      move_force: 0
+    actions: []
+    follow_up_actions: []
+    follow_up_window: 0
+    chargeable: 0
+    max_charge_time: 0
+  - slot: 0
+    skill_name: 
+    description: 
+    element: 0
+    risk_level: 0
+    parameters:
+      damage: 0
+      range: 0
+      startup: 0
+      active_time: 0
+      recovery: 0
+      hit_count: 1
+      knockback: 0
+      stun_time: 0
+      guard_damage: 0
+      move_force: 0
+    actions: []
+    follow_up_actions: []
+    follow_up_window: 0
+    chargeable: 0
+    max_charge_time: 0
+  - slot: 0
+    skill_name: 
+    description: 
+    element: 0
+    risk_level: 0
+    parameters:
+      damage: 0
+      range: 0
+      startup: 0
+      active_time: 0
+      recovery: 0
+      hit_count: 1
+      knockback: 0
+      stun_time: 0
+      guard_damage: 0
+      move_force: 0
+    actions: []
+    follow_up_actions: []
+    follow_up_window: 0
+    chargeable: 0
+    max_charge_time: 0
+  autoEquipSampleSkills: 1
+--- !u!114 &547761350
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 547761348}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 26ec7c8f7aeeb2946a56f60ffa782433, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PromptFighters.Battle.FighterInput
+  playerIndex: 1
+--- !u!114 &547761351
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 547761348}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0d6b1ce5df519284c90a1686f6534ec1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PromptFighters.Battle.Fighter
+  maxHP: 100
+  moveSpeed: 5
+  airMoveSpeed: 4
+  jumpForce: 12
+  maxAirJumps: 1
+  shortHopMultiplier: 0.62
+  fastFallSpeed: 7.5
+  fastFallMinAirTime: 0.18
+  fastFallMaxUpwardSpeed: 1.2
+  walkSpeedRatio: 0.35
+  airJumpHeightMultiplier: 0.45
+  dashInputThreshold: 0.75
+  weight: 1
+  guardDamageRatio: 0.15
+  maxGuardDurability: 100
+  guardTimeDrainPerSecond: 18
+  guardHitDamageRatio: 0.45
+  guardRecoveryPerSecond: 8
+  guardRecoveryDelay: 0
+  guardBreakLockDuration: 5
+  groundDodgeDistance: 4.2
+  airDodgeDistance: 3.5
+  dodgeDuration: 0.28
+  downDodgeDuration: 0.22
+  dodgeFallDistance: 3.5
+  grabParameters:
+    range: 1.5
+    startup: 0.08
+    recovery: 0.14
+  throwParameters:
+    front_damage: 10
+    front_knockback: 8
+    back_damage: 10
+    back_knockback: 10
+    up_damage: 10
+    up_knockback: 9
+    down_damage: 8
+    down_knockback: 7
+  maxGrabHoldSeconds: 1.1
+  grabReleaseRecovery: 0.12
+  throwGrabCooldown: 0.45
+  throwKnockbackScale: 1.1
+  throwReleaseOffset: 1.25
+  groundCheck: {fileID: 1184971379}
+  groundCheckRadius: 0.12
+  groundLayer:
+    serializedVersion: 2
+    m_Bits: 256
+  _burnDamagePerTick: 2
+  _slowFactor: 0.5
+--- !u!61 &547761352
+BoxCollider2D:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 547761348}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Density: 1
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_ForceSendLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_ForceReceiveLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_ContactCaptureLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_CallbackLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_IsTrigger: 0
+  m_UsedByEffector: 0
+  m_CompositeOperation: 0
+  m_CompositeOrder: 0
+  m_Offset: {x: 0, y: 0}
+  m_SpriteTilingProperty:
+    border: {x: 0, y: 0, z: 0, w: 0}
+    pivot: {x: 0.5, y: 0.5}
+    oldSize: {x: 1, y: 1}
+    newSize: {x: 1, y: 1}
+    adaptiveTilingThreshold: 0.5
+    drawMode: 0
+    adaptiveTiling: 0
+  m_AutoTiling: 0
+  m_Size: {x: 1, y: 1}
+  m_EdgeRadius: 0
+--- !u!50 &547761353
+Rigidbody2D:
+  serializedVersion: 5
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 547761348}
+  m_BodyType: 0
+  m_Simulated: 1
+  m_UseFullKinematicContacts: 0
+  m_UseAutoMass: 0
+  m_Mass: 1
+  m_LinearDamping: 0
+  m_AngularDamping: 0.05
+  m_GravityScale: 2.5
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_Interpolate: 0
+  m_SleepingMode: 1
+  m_CollisionDetection: 0
+  m_Constraints: 4
+--- !u!212 &547761354
+SpriteRenderer:
+  serializedVersion: 2
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 547761348}
+  m_Enabled: 1
+  m_CastShadows: 0
+  m_ReceiveShadows: 0
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 1
+  m_LightProbeUsage: 1
+  m_ReflectionProbeUsage: 1
+  m_RayTracingMode: 0
+  m_RayTraceProcedural: 0
+  m_RayTracingAccelStructBuildFlagsOverride: 0
+  m_RayTracingAccelStructBuildFlags: 1
+  m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: 2100000, guid: 9dfc825aed78fcd4ba02077103263b40, type: 2}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 0
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 0
+  m_MaskInteraction: 0
+  m_Sprite: {fileID: 992075588}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_FlipX: 0
+  m_FlipY: 0
+  m_DrawMode: 0
+  m_Size: {x: 1, y: 1}
+  m_AdaptiveModeThreshold: 0.5
+  m_SpriteTileMode: 0
+  m_WasSpriteAssigned: 1
+  m_SpriteSortPoint: 0
+--- !u!4 &547761355
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 547761348}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: -1.5, z: 0}
+  m_LocalScale: {x: -1, y: 2, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1184971379}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &602783413
@@ -1955,12 +2346,16 @@ MonoBehaviour:
   battleDuration: 60
   countdownLength: 3
   trainingRespawnDelay: 1
+  bestOf3: 1
   fighter1: {fileID: 1711540623}
   fighter2: {fileID: 315558351}
+  boss: {fileID: 547761351}
   fighter1SpawnPos: {x: -4, y: -1.8, z: 0}
   fighter2SpawnPos: {x: 4, y: -1.8, z: 0}
+  bossSpawnPos: {x: 0, y: -1.8, z: 0}
   nameplateOffset: {x: 0, y: 2.35, z: 0}
   stageHalfWidth: 7
+  fighterScale: 1.12
 --- !u!4 &819546708
 Transform:
   m_ObjectHideFlags: 0
@@ -2746,6 +3141,37 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1148537049}
   m_CullTransparentMesh: 1
+--- !u!1 &1184971378
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1184971379}
+  m_Layer: 0
+  m_Name: GroundCheck
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1184971379
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1184971378}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: -0.52, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 547761355}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!213 &1234230776
 Sprite:
   m_ObjectHideFlags: 0
@@ -3400,18 +3826,54 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PromptFighters.Battle.Fighter
   maxHP: 100
   moveSpeed: 5
+  airMoveSpeed: 4
   jumpForce: 12
+  maxAirJumps: 1
+  shortHopMultiplier: 0.62
+  fastFallSpeed: 7.5
+  fastFallMinAirTime: 0.18
+  fastFallMaxUpwardSpeed: 1.2
+  walkSpeedRatio: 0.35
+  airJumpHeightMultiplier: 0.45
+  dashInputThreshold: 0.75
+  weight: 1
   guardDamageRatio: 0.15
   maxGuardDurability: 100
   guardTimeDrainPerSecond: 18
   guardHitDamageRatio: 0.45
+  guardRecoveryPerSecond: 8
+  guardRecoveryDelay: 0
   guardBreakLockDuration: 5
+  groundDodgeDistance: 4.2
+  airDodgeDistance: 3.5
+  dodgeDuration: 0.28
+  downDodgeDuration: 0.22
+  dodgeFallDistance: 3.5
+  grabParameters:
+    range: 1.5
+    startup: 0.08
+    recovery: 0.14
+  throwParameters:
+    front_damage: 10
+    front_knockback: 8
+    back_damage: 10
+    back_knockback: 10
+    up_damage: 10
+    up_knockback: 9
+    down_damage: 8
+    down_knockback: 7
+  maxGrabHoldSeconds: 1.1
+  grabReleaseRecovery: 0.12
+  throwGrabCooldown: 0.45
+  throwKnockbackScale: 1.1
+  throwReleaseOffset: 1.25
   groundCheck: {fileID: 779165785}
   groundCheckRadius: 0.12
   groundLayer:
     serializedVersion: 2
     m_Bits: 256
-  Opponent: {fileID: 0}
+  _burnDamagePerTick: 2
+  _slowFactor: 0.5
 --- !u!4 &1711540624
 Transform:
   m_ObjectHideFlags: 0
@@ -3597,13 +4059,16 @@ MonoBehaviour:
       startup: 0
       active_time: 0
       recovery: 0
-      cooldown: 0
       hit_count: 1
       knockback: 0
       stun_time: 0
       guard_damage: 0
       move_force: 0
     actions: []
+    follow_up_actions: []
+    follow_up_window: 0
+    chargeable: 0
+    max_charge_time: 0
   - slot: 0
     skill_name: 
     description: 
@@ -3615,13 +4080,16 @@ MonoBehaviour:
       startup: 0
       active_time: 0
       recovery: 0
-      cooldown: 0
       hit_count: 1
       knockback: 0
       stun_time: 0
       guard_damage: 0
       move_force: 0
     actions: []
+    follow_up_actions: []
+    follow_up_window: 0
+    chargeable: 0
+    max_charge_time: 0
   - slot: 0
     skill_name: 
     description: 
@@ -3633,13 +4101,16 @@ MonoBehaviour:
       startup: 0
       active_time: 0
       recovery: 0
-      cooldown: 0
       hit_count: 1
       knockback: 0
       stun_time: 0
       guard_damage: 0
       move_force: 0
     actions: []
+    follow_up_actions: []
+    follow_up_window: 0
+    chargeable: 0
+    max_charge_time: 0
   - slot: 0
     skill_name: 
     description: 
@@ -3651,13 +4122,16 @@ MonoBehaviour:
       startup: 0
       active_time: 0
       recovery: 0
-      cooldown: 0
       hit_count: 1
       knockback: 0
       stun_time: 0
       guard_damage: 0
       move_force: 0
     actions: []
+    follow_up_actions: []
+    follow_up_window: 0
+    chargeable: 0
+    max_charge_time: 0
   autoEquipSampleSkills: 1
 --- !u!1 &1723936843
 GameObject:
@@ -4773,3 +5247,4 @@ SceneRoots:
   - {fileID: 602783417}
   - {fileID: 2108556336}
   - {fileID: 1910789463}
+  - {fileID: 547761355}
