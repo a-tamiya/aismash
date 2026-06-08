@@ -110,6 +110,10 @@ namespace PromptFighters.GameFlow
         TextMeshProUGUI _cpuToggleLabel;
         Image _coopToggleBg;
         TextMeshProUGUI _coopToggleLabel;
+        Button _bossPresetBtn;
+        Image _bossPresetBg;
+        TextMeshProUGUI _bossPresetLabel;
+        int _bossPresetIdx = 0;
 
         static readonly Color ToggleOnColor  = PromptFighters.UI.UITheme.Gold;
         static readonly Color ToggleOffColor = new Color(0.14f, 0.15f, 0.19f, 1f);
@@ -484,7 +488,35 @@ namespace PromptFighters.GameFlow
             _coopToggleLabel = coopBtn.GetComponentInChildren<TextMeshProUGUI>();
             _coopToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
+            // 協力モード時のみ表示するボスキャラ選択。トグル行の下に1つ配置。
+            _bossPresetBtn = MakeButton(parent, "BossPresetToggle", BossPresetText(),
+                new Vector2(0f, rowY - 44f), new Vector2(320f, 34f), OnBossPresetCycle, ToggleOnColor);
+            StyleArcadeButton(_bossPresetBtn, ToggleOnColor, 10f);
+            _bossPresetBg    = _bossPresetBtn.GetComponent<Image>();
+            _bossPresetLabel = _bossPresetBtn.GetComponentInChildren<TextMeshProUGUI>();
+            _bossPresetLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
+
             RefreshToggleVisuals();
+        }
+
+        string BossPresetText() =>
+            $"ボス: {GetPresetName(_bossPresetIdx)}";
+
+        void OnBossPresetCycle()
+        {
+            if (_presets == null || _presets.Count == 0) return;
+            _bossPresetIdx = (_bossPresetIdx + 1) % _presets.Count;
+            SyncBossCharacter();
+            RefreshToggleVisuals();
+        }
+
+        // 選択中のボスキャラをBattleManagerへ反映する。
+        void SyncBossCharacter()
+        {
+            if (_presets == null || _presets.Count == 0) return;
+            if (_bossPresetIdx < 0 || _bossPresetIdx >= _presets.Count) _bossPresetIdx = 0;
+            PromptFighters.Battle.BattleManager.RequestedBossCharacter =
+                PromptCharacterFactory.Clone(_presets[_bossPresetIdx]);
         }
 
         static string CommentaryToggleText() =>
@@ -561,6 +593,12 @@ namespace PromptFighters.GameFlow
             bool coop = PromptFighters.Battle.BattleManager.RequestedMode == PromptFighters.Battle.BattleMode.CoopVsBoss;
             if (_coopToggleBg        != null) _coopToggleBg.color        = coop ? ToggleOnColor : ToggleOffColor;
             if (_coopToggleLabel     != null) _coopToggleLabel.text      = CoopToggleText();
+            if (_bossPresetBtn != null) _bossPresetBtn.gameObject.SetActive(coop);
+            if (coop)
+            {
+                SyncBossCharacter();
+                if (_bossPresetLabel != null) _bossPresetLabel.text = BossPresetText();
+            }
         }
 
         void BuildPanel()

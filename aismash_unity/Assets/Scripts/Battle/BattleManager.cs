@@ -58,6 +58,9 @@ namespace PromptFighters.Battle
         // キャラ選択画面の「協力」トグルが起動前に設定する。シーンロードを跨いでもよいよう static。
         public static BattleMode RequestedMode = BattleMode.Versus;
 
+        // 協力モードでボスに使うキャラデータ。PreBattlePanelで選択して設定する。未設定ならプリセット先頭。
+        public static CharacterData RequestedBossCharacter;
+
         // 現在のバトル種別（既定は従来の1v1）。協力モードのみ追加処理を有効化する。
         public BattleMode  Mode          { get; set; } = BattleMode.Versus;
         // 登場している全ファイター（協力モードのターゲット解決に使う）。
@@ -605,9 +608,11 @@ namespace PromptFighters.Battle
             boss.GetComponent<SkillExecutor>()?.ResetSkillState();
         }
 
-        // ボス用のキャラデータを用意する。プリセットがあれば先頭を使い、無ければ素のデータを返す。
+        // ボス用のキャラデータを用意する。選択済みがあればそれを、無ければプリセット先頭、最後に素のデータを返す。
         CharacterData BuildBossCharacter()
         {
+            if (RequestedBossCharacter != null)
+                return RequestedBossCharacter;
             var presets = PresetCharacterLoader.LoadAll();
             if (presets != null && presets.Count > 0 && presets[0] != null)
                 return presets[0];
