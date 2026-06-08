@@ -370,7 +370,7 @@ namespace PromptFighters.Battle.Skills
             hb.FollowOwner = a.follow_owner;
             hb.OwnerLocalOffset = new Vector2(offsetX, offsetY);
             float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) *
-                        powerMultiplier * _fighter.DamageMultiplier;
+                        powerMultiplier * _fighter.EffectiveDamageMultiplier;
             hb.Damage         = dmg;
             hb.DamageIncludesOwnerBoost = true;
             hb.Knockback      = skill.parameters.knockback * powerMultiplier;
@@ -411,7 +411,7 @@ namespace PromptFighters.Battle.Skills
             hb.OwnerLocalOffset  = new Vector2(offsetX, offsetY);
             hb.HideVisual        = true;
             float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage)
-                        * powerMultiplier * _fighter.DamageMultiplier;
+                        * powerMultiplier * _fighter.EffectiveDamageMultiplier;
             hb.Damage            = dmg;
             hb.DamageIncludesOwnerBoost = true;
             hb.Knockback         = skill.parameters.knockback * powerMultiplier;
@@ -440,7 +440,7 @@ namespace PromptFighters.Battle.Skills
                     (Vector2)_fighter.transform.position + new Vector2(0f, offsetY),
                     radius, lifetime);
                 float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) *
-                            powerMultiplier * _fighter.DamageMultiplier;
+                            powerMultiplier * _fighter.EffectiveDamageMultiplier;
                 hb.Damage         = dmg;
                 hb.DamageIncludesOwnerBoost = true;
                 hb.Knockback      = skill.parameters.knockback * powerMultiplier;
@@ -515,7 +515,7 @@ namespace PromptFighters.Battle.Skills
             size *= HitboxVisualScale;
             var hb = Hitbox.Spawn(_fighter, position, size, lifetime);
             float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) *
-                        powerMultiplier * _fighter.DamageMultiplier;
+                        powerMultiplier * _fighter.EffectiveDamageMultiplier;
             hb.Damage         = dmg;
             hb.DamageIncludesOwnerBoost = true;
             hb.Knockback      = skill.parameters.knockback * powerMultiplier;
@@ -545,7 +545,7 @@ namespace PromptFighters.Battle.Skills
             float speed    = a.projectile_speed    > 0f ? a.projectile_speed    : 9f;
             float lifetime = a.projectile_lifetime > 0f ? a.projectile_lifetime : 1.5f;
             float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) *
-                        powerMultiplier * _fighter.DamageMultiplier;
+                        powerMultiplier * _fighter.EffectiveDamageMultiplier;
             Vector2 desiredSize = new Vector2(
                 (a.size_x > 0f ? a.size_x : Mathf.Clamp(speed * lifetime * 0.08f, 0.74f, 1.74f)) * HitboxVisualScale * _sizeScale,
                 (a.size_y > 0f ? a.size_y : 0.75f) * HitboxVisualScale * _sizeScale);
@@ -790,7 +790,7 @@ namespace PromptFighters.Battle.Skills
                           : (skill.parameters.range > 0f ? skill.parameters.range : 1.6f)) * _sizeScale;
             float height = (a.size_y > 0f ? a.size_y : 2.0f) * _sizeScale;
             float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage)
-                        * powerMultiplier * _fighter.DamageMultiplier;
+                        * powerMultiplier * _fighter.EffectiveDamageMultiplier;
             var (kbDir, _) = ComputeKnockback(a, 1f, 0.8f);
             Vector2 throwDir = new Vector2(Mathf.Abs(kbDir.x), Mathf.Abs(kbDir.y));
             _fighter.StartCommandThrow(range, height, dmg,
@@ -818,7 +818,7 @@ namespace PromptFighters.Battle.Skills
             var hb = Hitbox.Spawn(_fighter, pos,
                 new Vector2(w * HitboxVisualScale, h * HitboxVisualScale), life);
             float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage)
-                        * powerMultiplier * _fighter.DamageMultiplier;
+                        * powerMultiplier * _fighter.EffectiveDamageMultiplier;
             hb.Damage         = dmg;
             hb.DamageIncludesOwnerBoost = true;
             hb.Knockback      = skill.parameters.knockback * powerMultiplier;

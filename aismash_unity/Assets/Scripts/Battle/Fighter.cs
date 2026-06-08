@@ -186,6 +186,9 @@ namespace PromptFighters.Battle
 
         // ====== ギミック用プロパティ ======
         public float DamageMultiplier { get; private set; } = 1f;
+        // ボス強化用の恒常的な与ダメージ倍率（ステータス効果のDamageMultiplierとは独立に乗算）。
+        public float BossDamageScale  { get; set; } = 1f;
+        public float EffectiveDamageMultiplier => DamageMultiplier * BossDamageScale;
         public bool  IsInvincible     { get; private set; }
         public bool  InputReversed    { get; private set; }
         public bool  IsReflecting     => _reflectTimer > 0f;
@@ -602,7 +605,7 @@ namespace PromptFighters.Battle
             // リフレクターは飛び道具のみ反射（Projectile.cs で処理）。近接打撃は通常通り受ける。
 
             bool blocking = State == FighterState.Guarding && _guardBreakTimer <= 0f;
-            if (!blocking && applyOpponentDamageBoost && Opponent != null) damage *= Opponent.DamageMultiplier;
+            if (!blocking && applyOpponentDamageBoost && Opponent != null) damage *= Opponent.EffectiveDamageMultiplier;
             float actual  = blocking ? Mathf.Max(0f, damage * guardDamageRatio) : damage;
             actual        = AbsorbBarrier(actual);
             CurrentHP     = Mathf.Max(0f, CurrentHP - actual);
@@ -1118,6 +1121,7 @@ namespace PromptFighters.Battle
 
         public void ResetForBattle(Vector3 spawnPos, bool faceRight = true)
         {
+            IsDowned            = false;
             CurrentHP           = maxHP;
             _stunTimer          = 0f;
             _controlLockTimer   = 0f;
@@ -1461,6 +1465,9 @@ namespace PromptFighters.Battle
             _downedAiWasEnabled    = ai != null && ai.enabled;
             if (input != null) input.enabled = false;
             if (ai != null) ai.enabled = false;
+
+            DamagePopup.SpawnText(transform.position + Vector3.up * 1.0f,
+                "DOWN!", new Color(1f, 0.4f, 0.4f), 1.8f);
 
             OnDowned?.Invoke();
         }

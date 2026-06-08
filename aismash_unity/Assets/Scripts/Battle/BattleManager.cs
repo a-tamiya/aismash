@@ -3,6 +3,7 @@ using UnityEngine.InputSystem;
 using PromptFighters.Battle.Skills;
 using PromptFighters.Utils;
 using PromptFighters.UI;
+using PromptFighters.GameFlow;
 using System.Collections;
 using System.Collections.Generic;
 
@@ -39,6 +40,17 @@ namespace PromptFighters.Battle
         public Vector3 fighter1SpawnPos = new Vector3(-4f, -1.8f, 0f);
         public Vector3 fighter2SpawnPos = new Vector3( 4f, -1.8f, 0f);
         public Vector3 bossSpawnPos     = new Vector3( 0f, -1.8f, 0f);
+
+        [Header("Coop Boss Tuning")]
+        public float bossHpMultiplier   = 4f;    // プレイヤー基準HP(300)に対する倍率
+        public float bossSizeScale      = 1.6f;  // 見た目サイズ倍率
+        public float bossDamageScale    = 1.4f;  // 与ダメージ倍率
+        const float  BaseBossHp         = 300f;  // 倍率の基準HP（プレイヤー既定と同じ）
+
+        [Header("Coop Revive")]
+        public float reviveRange        = 1.2f;  // ダウン味方を復活させる接近距離
+        public float reviveHoldTime     = 1.2f;  // 復活に必要な滞在時間(秒)
+
         public Vector3 nameplateOffset = new Vector3(0f, 2.35f, 0f);
         public float stageHalfWidth = 6.5f;
         [Range(0.6f, 1.2f)] public float fighterScale = 1.12f;
@@ -73,6 +85,7 @@ namespace PromptFighters.Battle
 
         public CharacterData Character1 { get; private set; }
         public CharacterData Character2 { get; private set; }
+        public CharacterData BossCharacter { get; private set; }
 
         public event System.Action<float>        OnTimerChanged;
         public event System.Action<float>        OnCountdownChanged;
@@ -244,6 +257,47 @@ namespace PromptFighters.Battle
             }
         }
 
+        // 協力モード用：ダウンした味方のそばに生存中の味方が一定時間いれば復活させる。
+        readonly Dictionary<Fighter, float> _reviveProgress = new Dictionary<Fighter, float>();
+        void ReviveCheck()
+        {
+            for (int i = 0; i < Fighters.Count; i++)
+            {
+                var downed = Fighters[i];
+                if (downed == null || !downed.IsDowned || downed.Team != FighterTeam.Players) continue;
+
+                bool helperNear = false;
+                for (int j = 0; j < Fighters.Count; j++)
+                {
+                    var helper = Fighters[j];
+                    if (helper == null || helper == downed) continue;
+                    if (helper.Team != FighterTeam.Players) continue;
+                    if (helper.IsDowned || helper.State == FighterState.Dead) continue;
+                    Vector3 d = helper.transform.position - downed.transform.position;
+                    if (Mathf.Abs(d.x) <= reviveRange && Mathf.Abs(d.y) <= reviveRange * 1.5f)
+                    {
+                        helperNear = true;
+                        break;
+                    }
+                }
+
+                float prog = _reviveProgress.TryGetValue(downed, out var p) ? p : 0f;
+                if (helperNear)
+                {
+                    prog += Time.deltaTime;
+                    if (prog >= reviveHoldTime)
+                    {
+                        downed.Revive(0.5f);
+                        DamagePopup.SpawnText(downed.transform.position + Vector3.up * 1.0f,
+                            "復活!", new Color(0.4f, 1f, 0.6f), 1.6f);
+                        prog = 0f;
+                    }
+                }
+                else prog = 0f;
+                _reviveProgress[downed] = prog;
+            }
+        }
+
         // self から見て、反対陣営で生存中（Dead/Downedでない）の最も近いファイターを返す。いなければnull。
         Fighter NearestEnemy(Fighter self)
         {
@@ -275,7 +329,7 @@ namespace PromptFighters.Battle
                     break;
 
                 case BattlePhase.Fighting:
-                    if (Mode == BattleMode.CoopVsBoss) RefreshOpponents();
+                    if (Mode == BattleMode.CoopVsBoss) { RefreshOpponents(); ReviveCheck(); }
                     TimeRemaining = Mathf.Max(0f, TimeRemaining - Time.deltaTime);
                     OnTimerChanged?.Invoke(TimeRemaining);
                     if (TimeRemaining <= 0f) EndByTimeout();
@@ -291,6 +345,7 @@ namespace PromptFighters.Battle
             ApplyMode();
             GetComponent<StagePlatformSpawner>()?.SpawnPlatforms();
             ApplyCharacters(data1, data2);
+            if (Mode == BattleMode.CoopVsBoss) ApplyBoss();
             ApplyCpuControl();
 
             Phase     = BattlePhase.Countdown;
@@ -467,6 +522,37 @@ namespace PromptFighters.Battle
             ApplySprite(fighter2, data2);
 
             ResetFightersAndSkillState();
+        }
+
+        // 協力モードのボスにプリセットの技・ステータス・見た目を適用し、HP/サイズ/与ダメージを強化する。
+        void ApplyBoss()
+        {
+            if (boss == null) return;
+
+            var data = BuildBossCharacter();
+            BossCharacter = data;
+
+            boss.GetComponent<SkillExecutor>()?.LoadCharacter(data);
+            boss.ApplyCharacterStats(data.stats);
+            boss.SetGrabThrowParameters(data.grabParameters, data.throwParameters);
+            boss.SetSizeScale((data.sizeScale > 0f ? data.sizeScale : 1f) * bossSizeScale);
+            ApplySprite(boss, data);
+
+            boss.maxHP          = Mathf.Clamp(BaseBossHp * bossHpMultiplier, 1f, 4000f);
+            boss.BossDamageScale = Mathf.Max(0.1f, bossDamageScale);
+
+            ApplyFighterScale(boss);
+            boss.ResetForBattle(bossSpawnPos, faceRight: false);
+            boss.GetComponent<SkillExecutor>()?.ResetSkillState();
+        }
+
+        // ボス用のキャラデータを用意する。プリセットがあれば先頭を使い、無ければ素のデータを返す。
+        CharacterData BuildBossCharacter()
+        {
+            var presets = PresetCharacterLoader.LoadAll();
+            if (presets != null && presets.Count > 0 && presets[0] != null)
+                return presets[0];
+            return new CharacterData { characterName = "BOSS" };
         }
 
         void ResetFightersAndSkillState()
