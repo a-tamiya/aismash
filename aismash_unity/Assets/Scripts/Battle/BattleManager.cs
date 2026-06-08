@@ -218,9 +218,9 @@ namespace PromptFighters.Battle
         {
             if (Mode == BattleMode.CoopVsBoss)
             {
-                // ボスは常にAI（敵）
-                SetFighterAi(boss, enable: true);
-                // 2P枠：CPUトグルON=AI仲間(1人プレイ)、OFF=人間P2(2人プレイ)
+                // ボスは常にAI（敵）。難易度は味方トグルと独立に常に最高（Hard）固定。
+                SetFighterAi(boss, enable: true, levelOverride: FighterAI.CpuLevel.Hard);
+                // 2P枠：CPUトグルON=AI仲間(1人プレイ)、OFF=人間P2(2人プレイ)。強さはトグル準拠。
                 SetFighterAi(fighter2, enable: FighterAI.Enabled);
                 return;
             }
@@ -230,7 +230,8 @@ namespace PromptFighters.Battle
         }
 
         // 指定ファイターをAI操作/人間操作に切り替える。
-        static void SetFighterAi(Fighter fighter, bool enable)
+        // levelOverride 指定時はグローバルの難易度トグルと独立に強さを固定する。
+        static void SetFighterAi(Fighter fighter, bool enable, FighterAI.CpuLevel? levelOverride = null)
         {
             if (fighter == null) return;
             var input = fighter.GetComponent<FighterInput>();
@@ -239,7 +240,8 @@ namespace PromptFighters.Battle
             {
                 if (ai == null) ai = fighter.gameObject.AddComponent<FighterAI>();
                 ai.enabled = true;
-                ai.ApplyLevel();
+                if (levelOverride.HasValue) ai.ApplyLevel(levelOverride.Value);
+                else                        ai.ApplyLevel();
                 if (input != null) input.enabled = false;
             }
             else

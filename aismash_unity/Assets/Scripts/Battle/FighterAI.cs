@@ -39,10 +39,14 @@ namespace PromptFighters.Battle
             ApplyLevel();
         }
 
+        // ロビートグルの難易度を反映。
+        public void ApplyLevel() => ApplyLevel(Level);
+
         // 難易度プリセットを反映。攻め頻度・守り頻度・反応速度（判断間隔）で強弱を表現。
-        public void ApplyLevel()
+        // ボス等、グローバル設定と独立に強さを固定したい場合は level を明示指定する。
+        public void ApplyLevel(CpuLevel level)
         {
-            switch (Level)
+            switch (level)
             {
                 case CpuLevel.Easy:
                     aggression = 0.35f; defense = 0.30f; decisionInterval = 0.30f; break;
