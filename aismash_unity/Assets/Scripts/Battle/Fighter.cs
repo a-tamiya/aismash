@@ -1435,6 +1435,13 @@ namespace PromptFighters.Battle
             OnDeath?.Invoke();
         }
 
+        // 協力モードで3体以上いるとき、全ペアの体同士の当たりを無視するために使う。
+        public void IgnoreBodyCollisionWith(Fighter other)
+        {
+            if (other == null || _bodyCollider == null || other._bodyCollider == null) return;
+            Physics2D.IgnoreCollision(_bodyCollider, other._bodyCollider, true);
+        }
+
         bool _downedInputWasEnabled;
         bool _downedAiWasEnabled;
 

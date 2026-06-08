@@ -35,11 +35,17 @@ namespace PromptFighters.Battle
         [Header("References")]
         public Fighter fighter1;
         public Fighter fighter2;
+        public Fighter boss;   // 協力モードの3体目（バトルシーンに事前配置し割り当てる）。Versusでは非アクティブ化。
         public Vector3 fighter1SpawnPos = new Vector3(-4f, -1.8f, 0f);
         public Vector3 fighter2SpawnPos = new Vector3( 4f, -1.8f, 0f);
+        public Vector3 bossSpawnPos     = new Vector3( 0f, -1.8f, 0f);
         public Vector3 nameplateOffset = new Vector3(0f, 2.35f, 0f);
         public float stageHalfWidth = 6.5f;
         [Range(0.6f, 1.2f)] public float fighterScale = 1.12f;
+
+        // ロビー/キャラ選択画面が起動前に設定する（subtask7で配線）。シーンロードを跨いでもよいよう static。
+        public static BattleMode RequestedMode = BattleMode.Versus;
+        public static bool       CoopAllyIsCpu = true;  // 協力モードで1人プレイ時、2P枠をAI仲間にする
 
         // 現在のバトル種別（既定は従来の1v1）。協力モードのみ追加処理を有効化する。
         public BattleMode  Mode          { get; set; } = BattleMode.Versus;
@@ -109,50 +115,116 @@ namespace PromptFighters.Battle
 
         void Start()
         {
-            if (fighter1 != null) fighter1.OnDeath += () => HandleFighterDeath(1);
-            if (fighter2 != null) fighter2.OnDeath += () => HandleFighterDeath(0);
+            Mode = RequestedMode;
+
             EnsureNameplate(fighter1, "P1", new Color(0.4f, 0.75f, 1f));
             EnsureNameplate(fighter2, "P2", new Color(1f, 0.55f, 0.35f));
 
-            // 陣営を設定（フレンドリーファイア判定用）。1v1は別陣営にして互いに攻撃可能にする。
-            if (fighter1 != null) fighter1.Team = FighterTeam.Players;
-            if (fighter2 != null) fighter2.Team = FighterTeam.Enemies;
-
-            // ターゲット解決用の登録簿（協力モード時の3体目はサブタスク4で追加）。
-            Fighters.Clear();
-            if (fighter1 != null) Fighters.Add(fighter1);
-            if (fighter2 != null) Fighters.Add(fighter2);
-
-            // 相手参照をセット（つかみ・状態異常・AIコメント用）
-            if (fighter1 != null && fighter2 != null)
-            {
-                fighter1.Opponent = fighter2;
-                fighter2.Opponent = fighter1;
-            }
+            if (Mode == BattleMode.CoopVsBoss) SetupCoop();
+            else                               SetupVersus();
 
             ApplyCpuControl();
 
             // ゲーム開始直後にデフォルト画像を適用（StartCountdown前でも表示）
-            var defaultData = new CharacterData();
-            ApplySprite(fighter1, defaultData);
+            ApplySprite(fighter1, new CharacterData());
             ApplySprite(fighter2, new CharacterData());
+            if (boss != null && Mode == BattleMode.CoopVsBoss) ApplySprite(boss, new CharacterData());
 
             // Setup中はファイターを非アクティブな位置でスポーン
             ApplyFighterScale(fighter1);
             ApplyFighterScale(fighter2);
             fighter1?.ResetForBattle(fighter1SpawnPos, faceRight: true);
             fighter2?.ResetForBattle(fighter2SpawnPos, faceRight: false);
+            if (Mode == BattleMode.CoopVsBoss && boss != null)
+            {
+                ApplyFighterScale(boss);
+                boss.ResetForBattle(bossSpawnPos, faceRight: false);
+            }
         }
 
-        // CPU対戦トグルに応じて2P側を FighterInput / FighterAI で切り替える。
+        // 従来の1v1。陣営を分け、相互に相手参照を持たせる。
+        void SetupVersus()
+        {
+            if (fighter1 != null) fighter1.OnDeath += () => HandleFighterDeath(1);
+            if (fighter2 != null) fighter2.OnDeath += () => HandleFighterDeath(0);
+
+            if (fighter1 != null) fighter1.Team = FighterTeam.Players;
+            if (fighter2 != null) fighter2.Team = FighterTeam.Enemies;
+
+            Fighters.Clear();
+            if (fighter1 != null) Fighters.Add(fighter1);
+            if (fighter2 != null) Fighters.Add(fighter2);
+
+            if (fighter1 != null && fighter2 != null)
+            {
+                fighter1.Opponent = fighter2;
+                fighter2.Opponent = fighter1;
+            }
+
+            if (boss != null) boss.gameObject.SetActive(false); // 1v1ではボスを出さない
+        }
+
+        // 協力モード。P1・P2(味方)=Players、ボス=Enemies。ターゲットは RefreshOpponents が毎フレーム設定。
+        void SetupCoop()
+        {
+            bestOf3 = false;
+
+            if (fighter1 != null) fighter1.Team = FighterTeam.Players;
+            if (fighter2 != null) fighter2.Team = FighterTeam.Players;
+            if (boss != null)
+            {
+                boss.gameObject.SetActive(true);
+                boss.Team = FighterTeam.Enemies;
+                EnsureNameplate(boss, "BOSS", new Color(1f, 0.3f, 0.3f));
+            }
+
+            Fighters.Clear();
+            if (fighter1 != null) Fighters.Add(fighter1);
+            if (fighter2 != null) Fighters.Add(fighter2);
+            if (boss != null)     Fighters.Add(boss);
+
+            IgnoreAllFighterBodyCollisions();
+
+            // 勝敗イベント配線
+            if (boss != null)     boss.OnDeath      += HandleBossDeath;
+            if (fighter1 != null) fighter1.OnDowned += HandlePlayerDowned;
+            if (fighter2 != null) fighter2.OnDowned += HandlePlayerDowned;
+        }
+
+        // 登録された全ファイターのペアで体同士の当たりを無視する（押し合い防止）。
+        void IgnoreAllFighterBodyCollisions()
+        {
+            for (int i = 0; i < Fighters.Count; i++)
+                for (int j = i + 1; j < Fighters.Count; j++)
+                    Fighters[i]?.IgnoreBodyCollisionWith(Fighters[j]);
+        }
+
+        // 操作主体を割り当てる。Versusは2P側のCPUトグルに従う。Coopは敵ボスと（1人時の）AI仲間をAIにする。
         void ApplyCpuControl()
         {
-            if (fighter2 == null) return;
-            var input = fighter2.GetComponent<FighterInput>();
-            var ai    = fighter2.GetComponent<FighterAI>();
-            if (FighterAI.Enabled)
+            if (Mode == BattleMode.CoopVsBoss)
             {
-                if (ai == null) ai = fighter2.gameObject.AddComponent<FighterAI>();
+                // ボスは常にAI（敵）
+                SetFighterAi(boss, enable: true);
+                // 2P枠：1人プレイならAI仲間、2人プレイなら人間
+                if (CoopAllyIsCpu) SetFighterAi(fighter2, enable: true);
+                else               SetFighterAi(fighter2, enable: false);
+                return;
+            }
+
+            // Versus: CPU対戦トグルに応じて2P側を切り替える
+            SetFighterAi(fighter2, enable: FighterAI.Enabled);
+        }
+
+        // 指定ファイターをAI操作/人間操作に切り替える。
+        static void SetFighterAi(Fighter fighter, bool enable)
+        {
+            if (fighter == null) return;
+            var input = fighter.GetComponent<FighterInput>();
+            var ai    = fighter.GetComponent<FighterAI>();
+            if (enable)
+            {
+                if (ai == null) ai = fighter.gameObject.AddComponent<FighterAI>();
                 ai.enabled = true;
                 ai.ApplyLevel();
                 if (input != null) input.enabled = false;
@@ -404,6 +476,13 @@ namespace PromptFighters.Battle
             fighter2?.ResetForBattle(fighter2SpawnPos, faceRight: false);
             fighter1?.GetComponent<SkillExecutor>()?.ResetSkillState();
             fighter2?.GetComponent<SkillExecutor>()?.ResetSkillState();
+
+            if (Mode == BattleMode.CoopVsBoss && boss != null)
+            {
+                ApplyFighterScale(boss);
+                boss.ResetForBattle(bossSpawnPos, faceRight: false);
+                boss.GetComponent<SkillExecutor>()?.ResetSkillState();
+            }
         }
 
         void ApplyFighterScale(Fighter fighter)
