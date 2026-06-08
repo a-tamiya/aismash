@@ -159,6 +159,8 @@ namespace PromptFighters.Battle
         {
             var target = other.GetComponentInParent<Fighter>();
             if (target == null || target == Owner) return;
+            // フレンドリーファイアOFF：同陣営には当てない
+            if (Owner != null && target.Team == Owner.Team) return;
             if (target.IsDodging) return;
             if (_recentHits.Contains(target)) return;
 

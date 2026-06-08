@@ -7,6 +7,9 @@ namespace PromptFighters.Battle
 {
     public enum FighterState { Idle, Moving, Jumping, Falling, Guarding, Dodging, Stunned, Grabbed, Dead }
 
+    // 陣営。協力モードでフレンドリーファイア判定とターゲット選択に使う。1v1では全員Playersのまま影響なし。
+    public enum FighterTeam { Players, Enemies }
+
     [RequireComponent(typeof(Rigidbody2D), typeof(BoxCollider2D))]
     public partial class Fighter : MonoBehaviour
     {
@@ -77,6 +80,8 @@ namespace PromptFighters.Battle
         public bool FacingRight { get; set; } = true;
         public float LastMoveInputX { get; private set; }
         public int PlayerIndex { get; set; }
+        // 所属陣営（既定Players）。BattleManagerがスポーン時に設定。
+        public FighterTeam Team { get; set; } = FighterTeam.Players;
         public bool IsHoldingOpponent => _heldOpponent != null;
         public bool IsGrabbed => _grabbedBy != null;
         public bool IsDodging => State == FighterState.Dodging || _dodgeTimer > 0f;

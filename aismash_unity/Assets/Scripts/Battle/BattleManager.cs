@@ -106,6 +106,10 @@ namespace PromptFighters.Battle
             EnsureNameplate(fighter1, "P1", new Color(0.4f, 0.75f, 1f));
             EnsureNameplate(fighter2, "P2", new Color(1f, 0.55f, 0.35f));
 
+            // 陣営を設定（フレンドリーファイア判定用）。1v1は別陣営にして互いに攻撃可能にする。
+            if (fighter1 != null) fighter1.Team = FighterTeam.Players;
+            if (fighter2 != null) fighter2.Team = FighterTeam.Enemies;
+
             // 相手参照をセット（つかみ・状態異常・AIコメント用）
             if (fighter1 != null && fighter2 != null)
             {

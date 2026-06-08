@@ -1504,3 +1504,67 @@ fallback：生成失敗時はサンプルキャラで継続
 - **MVP = Phase 1〜3**: 協力の土台（陣営/複数ターゲット/勝敗）→ ルールベースの最強ボス → アイテム取得式の支援。
 - AI仲間（1人時の自動参戦）まで含めて協力体験を完成させる。
 - 1v1 PvP は温存し、協力は別モードとして並走させる設計とする（既存資産への影響を最小化）。
+
+## 24. Phase 1 詳細設計（協力モードの土台）
+
+Phase 1 のゴールは「**陣営（チーム）・複数ターゲット・協力モードの勝敗**」という土台を、**既存の 1v1 に一切回帰を出さずに**追加すること。戦闘のダメージは Hitbox の当たり判定で適用され（`Opponent` 参照ではない）、`Opponent` は狙い（ホーミング/掴み/押し引き/カウンター/ステータス/AI）専用である、という現状アーキテクチャを前提とする。
+
+### 24.1 データモデル
+
+- `enum FighterTeam { Players, Enemies }` を追加。`Fighter.Team`（既定 `Players`）を持たせ、BattleManager がスポーン時に設定する。
+- `enum BattleMode { Versus, CoopVsBoss }` を BattleManager に追加。`Mode`（既定 `Versus`）。
+- BattleManager に登場全 Fighter の登録簿 `List<Fighter> Fighters` を持たせる。
+
+### 24.2 ターゲット解決（Opponent の決定）
+
+- **Versus**: 現状どおり。`Start()` で `fighter1.Opponent = fighter2; fighter2.Opponent = fighter1;` を相互設定するのみ。
+- **CoopVsBoss**: BattleManager の Fighting フェーズで毎フレーム `RefreshOpponents()` を呼び、各 Fighter の `Opponent` を「最も近い生存中の敵（反対陣営・abs(X距離)最小）」へ更新する。敵が全滅なら null。
+  - `NearestEnemy(self)`: `Fighters` を走査し、自分・同陣営・Dead・IsDowned を除外、`abs(f.x - self.x)` 最小を返す。
+- セットアップ時に一度だけ `IgnoreAllFighterBodyCollisions()` を呼び、全ペアの体同士の当たりを無視する（現状 2 体間でやっている処理を全ペアへ一般化）。
+
+### 24.3 フレンドリーファイア OFF
+
+- `Hitbox.TryHit` に `if (Owner != null && target.Team == Owner.Team) return;` を追加。
+- `SummonEntity` も同様に `Owner.Team` で同陣営を除外。
+- カウンター/反射/ステータス/押し引きは `Opponent`（＝最寄りの敵）を使うため自動的に正しく働く。
+
+### 24.4 3 体目（ボス／AI 仲間）
+
+- ボス Fighter をバトルシーンに配置（既存 Fighter のクローン）。`BattleManager.boss` 参照と `bossSpawnPos` を追加。`ApplyFighterScale` / `ResetForBattle` / `EnsureNameplate` を適用。
+- **1 人プレイ時**は 2P 枠を `FighterAI` の味方（Players 陣営）にする。`ApplyCpuControl` を一般化し、モードに応じて 人間／AI 仲間／AI 敵 を割り当てる。
+
+### 24.5 ダウン／復活
+
+- 協力モードでプレイヤー HP が 0 になったら **Dead ではなく Downed**：操作 OFF・ダウンポーズ・被ダメージ無効・復活可能。
+- `Fighter.IsDowned` と `Downed()` / `Revive()` を追加。`TakeDamage` の死亡分岐を `Mode==CoopVsBoss && Team==Players` で Downed 側へ振り分ける。
+- ボス HP が 0 なら Dead。
+- **勝敗**: ボス Dead → プレイヤー勝利／プレイヤー 2 人が同時に Downed → 敗北／時間切れ（2〜3 分）→ ボス勝利。協力では `bestOf3=false`。
+- **復活**: 生存中の仲間がダウン地点に約 1.5 秒留まる（踏む）と HP 一部回復で復活。回数無制限。**踏み判定は別サブステップ**。
+
+### 24.6 変更ファイル一覧
+
+| ファイル | 変更内容 |
+| --- | --- |
+| Fighter.cs | FighterTeam / Team、IsDowned・Downed()・Revive()、TakeDamage 分岐 |
+| BattleManager.cs | BattleMode / Mode、Fighters 登録簿、RefreshOpponents、boss、ApplyCpuControl 一般化、協力勝敗 |
+| Hitbox.cs | フレンドリーファイア OFF（Team チェック） |
+| SummonEntity.cs | フレンドリーファイア OFF（Team チェック） |
+| FighterAI.cs | 複数ターゲット対応（最小限） |
+| PreBattlePanel.cs | モード選択導線 |
+| バトルシーン | ボス用 3 体目の配置 |
+
+### 24.7 リスク低減
+
+- Versus は既存の Dead 経路をそのまま使う。
+- 協力モード専用の分岐はすべて `Mode==CoopVsBoss` でガードし、1v1 への回帰を防ぐ。
+
+### 24.8 実装サブタスク順
+
+1. FighterTeam enum + Fighter.Team + 全ペア体当たり無視（土台、回帰なし）
+2. Hitbox / SummonEntity のフレンドリーファイア OFF（Team チェック）
+3. BattleMode + Fighters 登録簿 + RefreshOpponents（協力のみ）
+4. 3 体目スポーン + ApplyCpuControl 一般化（AI 仲間／AI 敵）
+5. Downed／Revive 状態（踏み判定は別ステップ）
+6. 協力の勝敗 + 時間切れ
+7. PreBattlePanel のモード選択導線
+8. ボス HP 表示・カメラ調整（最小）
