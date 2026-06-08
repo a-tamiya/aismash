@@ -466,7 +466,12 @@ namespace PromptFighters.Battle
 
         void HandleFighterDeath(int winnerIndex)
         {
-            if (Mode == BattleMode.CoopVsBoss) return; // 協力モードはダウン/ボス撃破で判定
+            if (Mode == BattleMode.CoopVsBoss)
+            {
+                // 協力モードは原則ダウンで判定するが、万一プレイヤーが死亡経路に入った場合も全滅判定を通す。
+                HandlePlayerDowned();
+                return;
+            }
 
             if (Phase == BattlePhase.Training)
             {

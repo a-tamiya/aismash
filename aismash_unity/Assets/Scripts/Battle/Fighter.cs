@@ -364,7 +364,7 @@ namespace PromptFighters.Battle
                 OnHPChanged?.Invoke(CurrentHP, maxHP);
                 DamagePopup.Spawn(transform.position, _burnDamagePerTick, false);
                 BattleLogger.Instance?.LogDamage(Opponent != null ? Opponent.PlayerIndex : PlayerIndex, _burnDamagePerTick);
-                if (CurrentHP <= 0f) Die();
+                if (CurrentHP <= 0f) KillOrDown();
             }
         }
 
@@ -625,7 +625,7 @@ namespace PromptFighters.Battle
                 _hpSharePartner._applyingShare = true;
                 _hpSharePartner.CurrentHP = Mathf.Max(0f, _hpSharePartner.CurrentHP - actual * 0.5f);
                 _hpSharePartner.OnHPChanged?.Invoke(_hpSharePartner.CurrentHP, _hpSharePartner.maxHP);
-                if (_hpSharePartner.CurrentHP <= 0f) _hpSharePartner.Die();
+                if (_hpSharePartner.CurrentHP <= 0f) _hpSharePartner.KillOrDown();
                 _applyingShare = false;
                 if (_hpSharePartner != null) _hpSharePartner._applyingShare = false;
             }
@@ -656,14 +656,7 @@ namespace PromptFighters.Battle
             // ヒットストップ（KO時は TriggerKOSlow が担当するためスキップ）
             if (!blocking && actual > 0f && !willDie && BattleManager.Instance?.Phase == BattlePhase.Fighting)
                 BattleManager.Instance.TriggerHitStop(0.05f, 0.05f);
-            if (willDie)
-            {
-                var bm = BattleManager.Instance;
-                if (bm != null && bm.Mode == BattleMode.CoopVsBoss && Team == FighterTeam.Players)
-                    Downed();
-                else
-                    Die();
-            }
+            if (willDie) KillOrDown();
         }
 
         public void ApplyStatus(StatusType type, float duration)
@@ -745,7 +738,7 @@ namespace PromptFighters.Battle
             if (Opponent != null) BattleLogger.Instance?.LogDamage(Opponent.PlayerIndex, damage);
             DamagePopup.Spawn(transform.position, damage, false);
             _hitFlashTimer = 0.08f;
-            if (CurrentHP <= 0f) Die();
+            if (CurrentHP <= 0f) KillOrDown();
         }
 
         // バリアでダメージを吸収し、残りダメージを返す。
@@ -1438,6 +1431,17 @@ namespace PromptFighters.Battle
                 if (c != null && myCol != null) Physics2D.IgnoreCollision(myCol, c, false);
         }
 
+        // HPが0になった時の決着。協力モードのプレイヤー陣営はダウン（復活可能）、それ以外は死亡。
+        // 被ダメージ以外の経路（継続ダメージ・吸収・HP共有など）でも必ずこれを通すこと。
+        public void KillOrDown()
+        {
+            var bm = BattleManager.Instance;
+            if (bm != null && bm.Mode == BattleMode.CoopVsBoss && Team == FighterTeam.Players)
+                Downed();
+            else
+                Die();
+        }
+
         void Die()
         {
             RestoreDodgeGravity();
@@ -1528,7 +1532,7 @@ namespace PromptFighters.Battle
             CurrentHP = Mathf.Max(0f, CurrentHP - dmg);
             OnHPChanged?.Invoke(CurrentHP, maxHP);
             DamagePopup.Spawn(transform.position, dmg, false);
-            if (CurrentHP <= 0f) Die();
+            if (CurrentHP <= 0f) KillOrDown();
         }
 
         public void StartGroundBounce(float force)
