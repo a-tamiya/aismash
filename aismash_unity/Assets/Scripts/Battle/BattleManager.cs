@@ -43,9 +43,8 @@ namespace PromptFighters.Battle
         public float stageHalfWidth = 6.5f;
         [Range(0.6f, 1.2f)] public float fighterScale = 1.12f;
 
-        // ロビー/キャラ選択画面が起動前に設定する（subtask7で配線）。シーンロードを跨いでもよいよう static。
+        // キャラ選択画面の「協力」トグルが起動前に設定する。シーンロードを跨いでもよいよう static。
         public static BattleMode RequestedMode = BattleMode.Versus;
-        public static bool       CoopAllyIsCpu = true;  // 協力モードで1人プレイ時、2P枠をAI仲間にする
 
         // 現在のバトル種別（既定は従来の1v1）。協力モードのみ追加処理を有効化する。
         public BattleMode  Mode          { get; set; } = BattleMode.Versus;
@@ -206,9 +205,8 @@ namespace PromptFighters.Battle
             {
                 // ボスは常にAI（敵）
                 SetFighterAi(boss, enable: true);
-                // 2P枠：1人プレイならAI仲間、2人プレイなら人間
-                if (CoopAllyIsCpu) SetFighterAi(fighter2, enable: true);
-                else               SetFighterAi(fighter2, enable: false);
+                // 2P枠：CPUトグルON=AI仲間(1人プレイ)、OFF=人間P2(2人プレイ)
+                SetFighterAi(fighter2, enable: FighterAI.Enabled);
                 return;
             }
 

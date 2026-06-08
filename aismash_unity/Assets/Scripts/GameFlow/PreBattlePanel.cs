@@ -108,6 +108,8 @@ namespace PromptFighters.GameFlow
         TextMeshProUGUI _platformToggleLabel;
         Image _cpuToggleBg;
         TextMeshProUGUI _cpuToggleLabel;
+        Image _coopToggleBg;
+        TextMeshProUGUI _coopToggleLabel;
 
         static readonly Color ToggleOnColor  = PromptFighters.UI.UITheme.Gold;
         static readonly Color ToggleOffColor = new Color(0.14f, 0.15f, 0.19f, 1f);
@@ -442,10 +444,10 @@ namespace PromptFighters.GameFlow
                 new Vector2(0, -178), new Vector2(320, 24), 13, PromptFighters.UI.UITheme.InkDim);
         }
 
-        // 実況・天使・台・CPU のロビートグルを1行に並べて生成する。キャラ選択画面で使用。
+        // 実況・天使・台・CPU・協力 のロビートグルを1行に並べて生成する。キャラ選択画面で使用。
         void BuildLobbyToggles(Transform parent, float rowY)
         {
-            float[] xs = { -255f, -85f, 85f, 255f };
+            float[] xs = { -320f, -160f, 0f, 160f, 320f };
 
             var commentaryBtn = MakeButton(parent, "CommentaryToggle", CommentaryToggleText(),
                 new Vector2(xs[0], rowY), new Vector2(150f, 34f), OnCommentaryToggle, ToggleOnColor);
@@ -474,6 +476,13 @@ namespace PromptFighters.GameFlow
             _cpuToggleBg    = cpuBtn.GetComponent<Image>();
             _cpuToggleLabel = cpuBtn.GetComponentInChildren<TextMeshProUGUI>();
             _cpuToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
+
+            var coopBtn = MakeButton(parent, "CoopToggle", CoopToggleText(),
+                new Vector2(xs[4], rowY), new Vector2(150f, 34f), OnCoopToggle, ToggleOnColor);
+            StyleArcadeButton(coopBtn, ToggleOnColor, 10f);
+            _coopToggleBg    = coopBtn.GetComponent<Image>();
+            _coopToggleLabel = coopBtn.GetComponentInChildren<TextMeshProUGUI>();
+            _coopToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
             RefreshToggleVisuals();
         }
@@ -521,6 +530,20 @@ namespace PromptFighters.GameFlow
             RefreshToggleVisuals();
         }
 
+        static string CoopToggleText() =>
+            PromptFighters.Battle.BattleManager.RequestedMode == PromptFighters.Battle.BattleMode.CoopVsBoss
+                ? "協力 ON" : "協力 OFF";
+
+        void OnCoopToggle()
+        {
+            var m = PromptFighters.Battle.BattleManager.RequestedMode;
+            PromptFighters.Battle.BattleManager.RequestedMode =
+                m == PromptFighters.Battle.BattleMode.CoopVsBoss
+                    ? PromptFighters.Battle.BattleMode.Versus
+                    : PromptFighters.Battle.BattleMode.CoopVsBoss;
+            RefreshToggleVisuals();
+        }
+
         void RefreshToggleVisuals()
         {
             bool ce = PromptFighters.UI.CommentaryController.Enabled;
@@ -535,6 +558,9 @@ namespace PromptFighters.GameFlow
             if (_platformToggleLabel != null) _platformToggleLabel.text  = PlatformToggleText();
             if (_cpuToggleBg         != null) _cpuToggleBg.color         = cpu ? ToggleOnColor : ToggleOffColor;
             if (_cpuToggleLabel      != null) _cpuToggleLabel.text       = CpuToggleText();
+            bool coop = PromptFighters.Battle.BattleManager.RequestedMode == PromptFighters.Battle.BattleMode.CoopVsBoss;
+            if (_coopToggleBg        != null) _coopToggleBg.color        = coop ? ToggleOnColor : ToggleOffColor;
+            if (_coopToggleLabel     != null) _coopToggleLabel.text      = CoopToggleText();
         }
 
         void BuildPanel()
