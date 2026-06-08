@@ -17,6 +17,9 @@ namespace PromptFighters.Battle
         Ended,      // 勝敗確定
     }
 
+    // バトル種別。Versus=従来の1v1。CoopVsBoss=2人(+AI仲間)でボスに挑む協力モード。
+    public enum BattleMode { Versus, CoopVsBoss }
+
     public class BattleManager : MonoBehaviour
     {
         public static BattleManager Instance { get; private set; }
@@ -37,6 +40,11 @@ namespace PromptFighters.Battle
         public Vector3 nameplateOffset = new Vector3(0f, 2.35f, 0f);
         public float stageHalfWidth = 6.5f;
         [Range(0.6f, 1.2f)] public float fighterScale = 1.12f;
+
+        // 現在のバトル種別（既定は従来の1v1）。協力モードのみ追加処理を有効化する。
+        public BattleMode  Mode          { get; set; } = BattleMode.Versus;
+        // 登場している全ファイター（協力モードのターゲット解決に使う）。
+        public readonly List<Fighter> Fighters = new List<Fighter>();
 
         public float       TimeRemaining { get; private set; }
         public BattlePhase Phase         { get; private set; } = BattlePhase.Setup;
@@ -110,6 +118,11 @@ namespace PromptFighters.Battle
             if (fighter1 != null) fighter1.Team = FighterTeam.Players;
             if (fighter2 != null) fighter2.Team = FighterTeam.Enemies;
 
+            // ターゲット解決用の登録簿（協力モード時の3体目はサブタスク4で追加）。
+            Fighters.Clear();
+            if (fighter1 != null) Fighters.Add(fighter1);
+            if (fighter2 != null) Fighters.Add(fighter2);
+
             // 相手参照をセット（つかみ・状態異常・AIコメント用）
             if (fighter1 != null && fighter2 != null)
             {
@@ -151,6 +164,34 @@ namespace PromptFighters.Battle
             }
         }
 
+        // 協力モード用：各ファイターの狙う相手を「最も近い生存中の敵陣営」に毎フレーム更新する。
+        void RefreshOpponents()
+        {
+            for (int i = 0; i < Fighters.Count; i++)
+            {
+                var f = Fighters[i];
+                if (f == null) continue;
+                f.Opponent = NearestEnemy(f);
+            }
+        }
+
+        // self から見て、反対陣営で生存中（Dead/Downedでない）の最も近いファイターを返す。いなければnull。
+        Fighter NearestEnemy(Fighter self)
+        {
+            Fighter best = null;
+            float bestDist = float.MaxValue;
+            for (int i = 0; i < Fighters.Count; i++)
+            {
+                var f = Fighters[i];
+                if (f == null || f == self) continue;
+                if (f.Team == self.Team) continue;
+                if (f.State == FighterState.Dead || f.IsDowned) continue;
+                float d = Mathf.Abs(f.transform.position.x - self.transform.position.x);
+                if (d < bestDist) { bestDist = d; best = f; }
+            }
+            return best;
+        }
+
         void Update()
         {
             if (Keyboard.current?.f3Key.wasPressedThisFrame == true)
@@ -165,6 +206,7 @@ namespace PromptFighters.Battle
                     break;
 
                 case BattlePhase.Fighting:
+                    if (Mode == BattleMode.CoopVsBoss) RefreshOpponents();
                     TimeRemaining = Mathf.Max(0f, TimeRemaining - Time.deltaTime);
                     OnTimerChanged?.Invoke(TimeRemaining);
                     if (TimeRemaining <= 0f) EndByTimeout();

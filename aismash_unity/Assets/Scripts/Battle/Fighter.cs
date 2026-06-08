@@ -82,6 +82,8 @@ namespace PromptFighters.Battle
         public int PlayerIndex { get; set; }
         // 所属陣営（既定Players）。BattleManagerがスポーン時に設定。
         public FighterTeam Team { get; set; } = FighterTeam.Players;
+        // 協力モードでダウン（戦闘不能だが復活可能）中か。Downed/Reviveはサブタスク5で実装。
+        public bool IsDowned { get; private set; }
         public bool IsHoldingOpponent => _heldOpponent != null;
         public bool IsGrabbed => _grabbedBy != null;
         public bool IsDodging => State == FighterState.Dodging || _dodgeTimer > 0f;
