@@ -213,7 +213,10 @@ namespace PromptFighters.Battle.Skills
             }
             else
             {
-                _sr.color = new Color(ec.r, ec.g, ec.b, 0.65f);
+                // 画像生成失敗時のフォールバック。四角ではなく属性色のエネルギー塊で表示する。
+                _sr.sprite  = RuntimeSprite.Glow();
+                _sr.color   = new Color(ec.r, ec.g, ec.b, 0.85f);
+                _sr.flipX   = false;
                 _sr.enabled = true;
             }
 

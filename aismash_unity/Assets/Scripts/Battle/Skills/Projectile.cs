@@ -199,7 +199,9 @@ namespace PromptFighters.Battle.Skills
             }
             else
             {
-                _sr.color = SkillEnumParser.ElementColor(Element);
+                // 画像生成失敗時のフォールバック。四角ではなく属性色のエネルギー弾で表示する。
+                _sr.sprite = RuntimeSprite.Glow();
+                _sr.color  = SkillEnumParser.ElementColor(Element);
                 FitColliderAndVisualToWorldSize(_sr);
                 _sr.enabled = true;
             }

@@ -42,7 +42,7 @@ namespace PromptFighters.Battle
         public Vector3 bossSpawnPos     = new Vector3( 0f, -1.8f, 0f);
 
         [Header("Coop Boss Tuning")]
-        public float bossHpMultiplier   = 4f;    // プレイヤー基準HP(300)に対する倍率
+        public float bossHpMultiplier   = 2.5f;  // プレイヤー基準HP(300)に対する倍率
         public float bossSizeScale      = 1.6f;  // 見た目サイズ倍率
         public float bossDamageScale    = 1.4f;  // 与ダメージ倍率
         const float  BaseBossHp         = 300f;  // 倍率の基準HP（プレイヤー既定と同じ）

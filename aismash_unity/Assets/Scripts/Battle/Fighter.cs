@@ -104,6 +104,7 @@ namespace PromptFighters.Battle
         SpriteRenderer _sprite;
         SpriteRenderer _rootSprite;
         Transform _visualRoot;
+        [SerializeField] float downedVisualDrop = 0.35f; // ダウン時に伏せて見せる下げ量（ローカル）
         float _charSizeScale = 1f;
         SpriteRenderer _hurtboxDebugSr;
         SkillExecutor _skillExecutor;
@@ -388,10 +389,19 @@ namespace PromptFighters.Battle
         {
             if (_sprite == null) return;
 
-            // ダウン中は薄く灰色で半透明にして「救助が必要」と分かるようにする
+            // ダウン中はやられ（被ダメージ）ポーズで横たわらせ、灰色半透明で「救助が必要」と分かるようにする
             if (IsDowned)
             {
-                _sprite.color = new Color(0.55f, 0.55f, 0.6f, 0.5f);
+                var hurt = _spriteSet?.Get(CharacterSpriteId.Damage, _sprite.sprite);
+                if (hurt != null && _sprite.sprite != hurt) _sprite.sprite = hurt;
+                if (_visualRoot != null)
+                {
+                    // 顔の向きに倒れる（右向きなら頭が右へ）。倒れて少し下げ、地面に伏せて見せる。
+                    float dir = FacingRight ? 1f : -1f;
+                    _visualRoot.localRotation = Quaternion.Euler(0f, 0f, -90f * dir);
+                    _visualRoot.localPosition = new Vector3(0f, -downedVisualDrop, 0f);
+                }
+                _sprite.color = new Color(0.55f, 0.55f, 0.6f, 0.6f);
                 return;
             }
 
@@ -1497,6 +1507,9 @@ namespace PromptFighters.Battle
             var ai    = GetComponent<FighterAI>();
             if (input != null) input.enabled = _downedInputWasEnabled;
             if (ai != null) ai.enabled = _downedAiWasEnabled;
+
+            ApplyVisualScaleCorrection(); // 伏せ回転・位置をリセット
+            _sprite.color = Color.white;
 
             OnRevived?.Invoke();
         }

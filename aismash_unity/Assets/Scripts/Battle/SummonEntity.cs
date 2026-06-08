@@ -46,7 +46,7 @@ namespace PromptFighters.Battle
             rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
 
             var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite = sprite != null ? sprite : RuntimeSprite.Square();
+            sr.sprite = sprite != null ? sprite : RuntimeSprite.Glow();
             if (sprite == null)
             {
                 Color ec = SkillEnumParser.ElementColor(element);
