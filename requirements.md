@@ -1450,7 +1450,8 @@ fallback：生成失敗時はサンプルキャラで継続
 - デバッグモードはF12で開閉し、仮キャラのHP・移動速度・ジャンプ力・ガード耐久・重さを実行中に調整できる。デバッグ用チューナーはエディタ／開発ビルド時のみ自動付与し、製品ビルドには含めない。
 - F12デバッグモードでは、状態異常（STUN/BURN/SLOW/GUARD BREAK）、近接、本体判定、遠距離、設置、突進、テレポート、押し出し、引き寄せ、速度/ジャンプ/透明化/攻撃バフを任意の1P/2Pで即時発動して確認できる。透明化は見た目の確認用で、無敵効果は付けない。
 - 対戦中のキャラクター表示サイズ・技エフェクト・当たり判定は、直近調整値から約20%大きめを基準にする。
-- CPU対戦: ロビーの「CPU」トグルをONにすると、2P側を `FighterAI` が操作する（OpenAI API非依存）。`FighterAI` は `FighterInput` と同じ `Fighter`/`SkillExecutor` の公開APIを呼ぶだけの簡易ステートマシンで、相手との距離に応じて接近・技発動・掴み・ガード/回避・牽制（飛び道具）を確率と反応遅延つきで行う。難易度は `aggression`／`defense`／`decisionInterval` で調整する。`BattleManager.ApplyCpuControl()` がトグル状態に応じて `FighterInput` と `FighterAI` を排他的に有効化する。
+- CPU対戦: ロビーの「CPU」トグルをONにすると、選択した側を `FighterAI` が操作する（OpenAI API非依存）。`FighterAI` は `FighterInput` と同じ `Fighter`/`SkillExecutor` の公開APIを呼ぶだけの簡易ステートマシンで、相手との距離に応じて接近・技発動・掴み・ガード/回避・牽制（飛び道具）を確率と反応遅延つきで行う。難易度は `aggression`／`defense`／`decisionInterval` で調整する。`BattleManager.ApplyCpuControl()` がトグル状態に応じて `FighterInput` と `FighterAI` を排他的に有効化する。
+- **CPU操作側の選択**: ロビーの「CPU側: 1P/2P」トグル（`FighterAI.CpuSide`、1=1P/2=2P、既定2P）で、CPUが操作する側を選べる。1vs1・協力ボス討伐の両モードで有効。選択した側がCPU（ON時）、もう一方は常に人間。協力ではボスは常にAI(Hard)で、味方枠の選択側がCPUになる。
 - F12デバッグの技発動には command_throw / barrier / shockwave / gravity_well / lifesteal / heal_self の追加アクションも含む。
 
 ---

@@ -108,6 +108,8 @@ namespace PromptFighters.GameFlow
         TextMeshProUGUI _platformToggleLabel;
         Image _cpuToggleBg;
         TextMeshProUGUI _cpuToggleLabel;
+        Image _cpuSideToggleBg;
+        TextMeshProUGUI _cpuSideToggleLabel;
         // バトルモード選択（1 vs 1 / 協力ボス討伐）
         Image _modeVersusBg;
         TextMeshProUGUI _modeVersusLabel;
@@ -484,6 +486,14 @@ namespace PromptFighters.GameFlow
             _cpuToggleLabel = cpuBtn.GetComponentInChildren<TextMeshProUGUI>();
             _cpuToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
+            // CPUが操作する側（1P/2P）の選択。CPU ON時のみ意味を持つ。
+            var cpuSideBtn = MakeButton(parent, "CpuSideToggle", CpuSideToggleText(),
+                new Vector2(400f, rowY), new Vector2(140f, 34f), OnCpuSideToggle, ToggleOnColor);
+            StyleArcadeButton(cpuSideBtn, ToggleOnColor, 10f);
+            _cpuSideToggleBg    = cpuSideBtn.GetComponent<Image>();
+            _cpuSideToggleLabel = cpuSideBtn.GetComponentInChildren<TextMeshProUGUI>();
+            _cpuSideToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
+
             // 協力モード時のみ表示するボスキャラ選択（◀ ボス名 ▶）。トグル行とフッターの間に配置。
             BuildBossSelector(parent, -407f);
 
@@ -593,6 +603,16 @@ namespace PromptFighters.GameFlow
             RefreshToggleVisuals();
         }
 
+        static string CpuSideToggleText() =>
+            PromptFighters.Battle.FighterAI.CpuSide == 1 ? "CPU側: 1P" : "CPU側: 2P";
+
+        void OnCpuSideToggle()
+        {
+            PromptFighters.Battle.FighterAI.CpuSide =
+                PromptFighters.Battle.FighterAI.CpuSide == 1 ? 2 : 1;
+            RefreshToggleVisuals();
+        }
+
         // バトルモード選択行（1 vs 1 / 協力ボス討伐）をパネル上部に並べて生成する。
         void BuildModeSelector(Transform parent, float rowY)
         {
@@ -640,6 +660,9 @@ namespace PromptFighters.GameFlow
             if (_platformToggleLabel != null) _platformToggleLabel.text  = PlatformToggleText();
             if (_cpuToggleBg         != null) _cpuToggleBg.color         = cpu ? ToggleOnColor : ToggleOffColor;
             if (_cpuToggleLabel      != null) _cpuToggleLabel.text       = CpuToggleText();
+            // CPU側トグルはCPU有効時のみ点灯。OFF時はダミー表示（暗色）。
+            if (_cpuSideToggleBg     != null) _cpuSideToggleBg.color     = cpu ? ToggleOnColor : ToggleOffColor;
+            if (_cpuSideToggleLabel  != null) _cpuSideToggleLabel.text   = CpuSideToggleText();
             bool coop = PromptFighters.Battle.BattleManager.RequestedMode == PromptFighters.Battle.BattleMode.CoopVsBoss;
             if (_modeVersusBg   != null) _modeVersusBg.color = coop ? ToggleOffColor : ToggleOnColor;
             if (_modeCoopBg     != null) _modeCoopBg.color   = coop ? ToggleOnColor  : ToggleOffColor;

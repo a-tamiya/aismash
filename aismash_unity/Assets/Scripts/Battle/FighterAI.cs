@@ -10,9 +10,12 @@ namespace PromptFighters.Battle
     {
         public enum CpuLevel { Off, Easy, Normal, Hard }
 
-        // ロビーの「CPU対戦」トグル。BattleManager が 2P 側へ適用する。
+        // ロビーの「CPU対戦」トグル。BattleManager が CpuSide 側へ適用する。
         public static CpuLevel Level = CpuLevel.Off;
         public static bool Enabled => Level != CpuLevel.Off;
+
+        // CPUが操作する側（1=1P, 2=2P）。ロビーで選択。対戦・協力どちらでも有効。
+        public static int CpuSide = 2;
 
         [Range(0f, 1f)] public float aggression       = 0.6f;  // 攻めの頻度
         [Range(0f, 1f)] public float defense          = 0.5f;  // ガード/回避の頻度

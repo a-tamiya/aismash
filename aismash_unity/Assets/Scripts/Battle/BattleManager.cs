@@ -216,17 +216,19 @@ namespace PromptFighters.Battle
         // 操作主体を割り当てる。Versusは2P側のCPUトグルに従う。Coopは敵ボスと（1人時の）AI仲間をAIにする。
         void ApplyCpuControl()
         {
+            // CPUが操作する側はロビーで選択（CpuSide: 1=1P, 2=2P）。もう一方は常に人間。
+            Fighter cpuFighter   = FighterAI.CpuSide == 1 ? fighter1 : fighter2;
+            Fighter humanFighter = FighterAI.CpuSide == 1 ? fighter2 : fighter1;
+
             if (Mode == BattleMode.CoopVsBoss)
             {
                 // ボスは常にAI（敵）。難易度は味方トグルと独立に常に最高（Hard）固定。
                 SetFighterAi(boss, enable: true, levelOverride: FighterAI.CpuLevel.Hard);
-                // 2P枠：CPUトグルON=AI仲間(1人プレイ)、OFF=人間P2(2人プレイ)。強さはトグル準拠。
-                SetFighterAi(fighter2, enable: FighterAI.Enabled);
-                return;
             }
 
-            // Versus: CPU対戦トグルに応じて2P側を切り替える
-            SetFighterAi(fighter2, enable: FighterAI.Enabled);
+            // 選択した側をCPU（ON時）に、もう一方は人間に。強さはトグル準拠。
+            SetFighterAi(cpuFighter, enable: FighterAI.Enabled);
+            SetFighterAi(humanFighter, enable: false);
         }
 
         // 指定ファイターをAI操作/人間操作に切り替える。
