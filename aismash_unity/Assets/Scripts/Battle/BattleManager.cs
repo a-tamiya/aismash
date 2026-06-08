@@ -51,6 +51,11 @@ namespace PromptFighters.Battle
         // 登場している全ファイター（協力モードのターゲット解決に使う）。
         public readonly List<Fighter> Fighters = new List<Fighter>();
 
+        // Versus時のbestOf3初期値を保持（協力モードで一時的にfalseへ上書きするため）。
+        bool _versusBestOf3 = true;
+        // 一度きりのイベント購読が済んだか（モード切替で再購読しないため）。
+        bool _eventsWired;
+
         public float       TimeRemaining { get; private set; }
         public BattlePhase Phase         { get; private set; } = BattlePhase.Setup;
         public float       Countdown     { get; private set; }
@@ -114,14 +119,14 @@ namespace PromptFighters.Battle
 
         void Start()
         {
-            Mode = RequestedMode;
+            _versusBestOf3 = bestOf3;
 
             EnsureNameplate(fighter1, "P1", new Color(0.4f, 0.75f, 1f));
             EnsureNameplate(fighter2, "P2", new Color(1f, 0.55f, 0.35f));
+            if (boss != null) EnsureNameplate(boss, "BOSS", new Color(1f, 0.3f, 0.3f));
 
-            if (Mode == BattleMode.CoopVsBoss) SetupCoop();
-            else                               SetupVersus();
-
+            WireFighterEvents();
+            ApplyMode();
             ApplyCpuControl();
 
             // ゲーム開始直後にデフォルト画像を適用（StartCountdown前でも表示）
@@ -141,53 +146,47 @@ namespace PromptFighters.Battle
             }
         }
 
-        // 従来の1v1。陣営を分け、相互に相手参照を持たせる。
-        void SetupVersus()
+        // 一度きりのイベント購読。モード切替で再購読しないよう _eventsWired でガード。
+        void WireFighterEvents()
         {
-            if (fighter1 != null) fighter1.OnDeath += () => HandleFighterDeath(1);
-            if (fighter2 != null) fighter2.OnDeath += () => HandleFighterDeath(0);
+            if (_eventsWired) return;
+            _eventsWired = true;
+
+            if (fighter1 != null) { fighter1.OnDeath += () => HandleFighterDeath(1); fighter1.OnDowned += HandlePlayerDowned; }
+            if (fighter2 != null) { fighter2.OnDeath += () => HandleFighterDeath(0); fighter2.OnDowned += HandlePlayerDowned; }
+            if (boss != null)       boss.OnDeath     += HandleBossDeath;
+        }
+
+        // モード確定（バトル開始時に再実行可能）。陣営・ボス表示・bestOf3・ターゲット参照を切り替える。
+        public void ApplyMode()
+        {
+            Mode = RequestedMode;
+            bool coop = Mode == BattleMode.CoopVsBoss;
 
             if (fighter1 != null) fighter1.Team = FighterTeam.Players;
-            if (fighter2 != null) fighter2.Team = FighterTeam.Enemies;
+            if (fighter2 != null) fighter2.Team = coop ? FighterTeam.Players : FighterTeam.Enemies;
+            if (boss != null)
+            {
+                boss.Team = FighterTeam.Enemies;
+                boss.gameObject.SetActive(coop);
+            }
+
+            bestOf3 = coop ? false : _versusBestOf3;
 
             Fighters.Clear();
             if (fighter1 != null) Fighters.Add(fighter1);
             if (fighter2 != null) Fighters.Add(fighter2);
+            if (coop && boss != null) Fighters.Add(boss);
 
-            if (fighter1 != null && fighter2 != null)
+            if (coop)
+            {
+                IgnoreAllFighterBodyCollisions();
+            }
+            else if (fighter1 != null && fighter2 != null)
             {
                 fighter1.Opponent = fighter2;
                 fighter2.Opponent = fighter1;
             }
-
-            if (boss != null) boss.gameObject.SetActive(false); // 1v1ではボスを出さない
-        }
-
-        // 協力モード。P1・P2(味方)=Players、ボス=Enemies。ターゲットは RefreshOpponents が毎フレーム設定。
-        void SetupCoop()
-        {
-            bestOf3 = false;
-
-            if (fighter1 != null) fighter1.Team = FighterTeam.Players;
-            if (fighter2 != null) fighter2.Team = FighterTeam.Players;
-            if (boss != null)
-            {
-                boss.gameObject.SetActive(true);
-                boss.Team = FighterTeam.Enemies;
-                EnsureNameplate(boss, "BOSS", new Color(1f, 0.3f, 0.3f));
-            }
-
-            Fighters.Clear();
-            if (fighter1 != null) Fighters.Add(fighter1);
-            if (fighter2 != null) Fighters.Add(fighter2);
-            if (boss != null)     Fighters.Add(boss);
-
-            IgnoreAllFighterBodyCollisions();
-
-            // 勝敗イベント配線
-            if (boss != null)     boss.OnDeath      += HandleBossDeath;
-            if (fighter1 != null) fighter1.OnDowned += HandlePlayerDowned;
-            if (fighter2 != null) fighter2.OnDowned += HandlePlayerDowned;
         }
 
         // 登録された全ファイターのペアで体同士の当たりを無視する（押し合い防止）。
@@ -289,6 +288,7 @@ namespace PromptFighters.Battle
         {
             if (Phase != BattlePhase.Setup) return;
 
+            ApplyMode();
             GetComponent<StagePlatformSpawner>()?.SpawnPlatforms();
             ApplyCharacters(data1, data2);
             ApplyCpuControl();
@@ -302,6 +302,7 @@ namespace PromptFighters.Battle
         {
             if (Phase != BattlePhase.Setup && Phase != BattlePhase.Training) return;
 
+            ApplyMode();
             ApplyCharacters(data1, data2);
             ApplyCpuControl();
             Phase = BattlePhase.Training;
@@ -346,6 +347,8 @@ namespace PromptFighters.Battle
 
         void HandleFighterDeath(int winnerIndex)
         {
+            if (Mode == BattleMode.CoopVsBoss) return; // 協力モードはダウン/ボス撃破で判定
+
             if (Phase == BattlePhase.Training)
             {
                 if (_trainingResetRoutine == null)
