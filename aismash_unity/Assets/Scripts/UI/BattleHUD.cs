@@ -60,6 +60,14 @@ namespace PromptFighters.UI
         Fighter       _f1, _f2;
         SkillExecutor _se1, _se2;
 
+        // 協力モードのボスHPバー
+        Fighter          _boss;
+        GameObject       _bossBarRoot;
+        Image            _bossHpFill;
+        RectTransform    _bossHpRect;
+        TextMeshProUGUI  _bossHpNum;
+        static readonly Color BossCol = new Color(1f, 0.3f, 0.3f);
+
         static readonly string[] SlotJp    = { "基本技A", "基本技B", "基本技C", "スマッシュ" };
         static readonly string[] Keys1P    = { "J", "K", "L", "A+J" };
         static readonly string[] Keys2P    = { "テン2", "テン3", "テン1", "←+2" };
@@ -74,8 +82,9 @@ namespace PromptFighters.UI
         void Start()
         {
             var bm = BattleManager.Instance;
-            _f1  = bm?.fighter1;
-            _f2  = bm?.fighter2;
+            _f1   = bm?.fighter1;
+            _f2   = bm?.fighter2;
+            _boss = bm?.boss;
             _se1 = _f1?.GetComponent<SkillExecutor>();
             _se2 = _f2?.GetComponent<SkillExecutor>();
 
@@ -84,6 +93,7 @@ namespace PromptFighters.UI
 
             if (_f1 != null) { _f1.OnHPChanged    += (h, m) => UpdateHP(1, h, m);    _f1.OnGuardChanged += (g, m) => UpdateGuard(1, g, m); }
             if (_f2 != null) { _f2.OnHPChanged    += (h, m) => UpdateHP(2, h, m);    _f2.OnGuardChanged += (g, m) => UpdateGuard(2, g, m); }
+            if (_boss != null) _boss.OnHPChanged   += (h, m) => UpdateBossHP(h, m);
 
             if (bm != null)
             {
@@ -122,6 +132,10 @@ namespace PromptFighters.UI
             bool showDots = bm?.bestOf3 == true;
             if (_roundDots1) { _roundDots1.gameObject.SetActive(showDots); UpdateRoundDots(bm?.P1RoundWins ?? 0, bm?.P2RoundWins ?? 0); }
             if (_roundDots2) _roundDots2.gameObject.SetActive(showDots);
+
+            bool coop = bm?.Mode == BattleMode.CoopVsBoss;
+            if (_bossBarRoot) _bossBarRoot.SetActive(coop);
+            if (coop && _boss != null) UpdateBossHP(_boss.CurrentHP, _boss.maxHP);
         }
 
         void RefreshSkillNames(TextMeshProUGUI[] labels, SkillExecutor se)
@@ -183,6 +197,76 @@ namespace PromptFighters.UI
             _hudRoot = MakeUI("HUDRoot", transform);
             FillParent(_hudRoot);
             BuildTopBar();
+            BuildBossBar();
+        }
+
+        // 協力モードのボスHPバー（画面上部中央、トップバーの下）。Versusでは非表示。
+        void BuildBossBar()
+        {
+            const float TOTAL_H = 64f + 5f * 2f; // トップバー高（BuildTopBar基準）
+            const float BAR_H   = 26f;
+            const float W_FRAC  = 0.6f;          // 画面幅に対するバー幅の割合
+            const float NAME_H  = 16f;
+
+            _bossBarRoot = MakeUI("BossBar", _hudRoot.transform);
+            var rt = _bossBarRoot.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2((1f - W_FRAC) * 0.5f, 1f);
+            rt.anchorMax = new Vector2((1f + W_FRAC) * 0.5f, 1f);
+            rt.pivot     = new Vector2(0.5f, 1f);
+            rt.offsetMin = new Vector2(0f, -(TOTAL_H + 6f + NAME_H + BAR_H));
+            rt.offsetMax = new Vector2(0f, -(TOTAL_H + 6f));
+
+            // ボス名ラベル
+            var nameGo = MakeUI("BossName", _bossBarRoot.transform);
+            Anch(nameGo, 0,1,1,1,  0,-NAME_H,0,0);
+            var nm = nameGo.AddComponent<TextMeshProUGUI>();
+            nm.text = "BOSS"; nm.fontSize = 13f;
+            nm.fontStyle = FontStyles.Bold | FontStyles.Italic;
+            nm.alignment = TextAlignmentOptions.Center; nm.color = BossCol;
+            UITheme.Apply(nm);
+
+            // バー背景
+            var barBg = MakeUI("BossBarBg", _bossBarRoot.transform);
+            Anch(barBg, 0,0,1,1,  0,0,0,-NAME_H);
+            barBg.AddComponent<Image>().color = BgBar;
+
+            // 上端アクセント
+            var accent = MakeUI("BossAccent", barBg.transform);
+            Anch(accent, 0,1,1,1,  0,-2f,0,0);
+            accent.AddComponent<Image>().color = BossCol;
+
+            // HPフィル（中央から両側に減る：右から減らす単純実装）
+            var fillGo = MakeUI("BossHPFill", barBg.transform);
+            FillParent(fillGo);
+            var fi = fillGo.AddComponent<Image>();
+            fi.sprite = UITheme.VGradient;
+            fi.color  = HpGrad.Evaluate(1f);
+            _bossHpFill = fi; _bossHpRect = fillGo.GetComponent<RectTransform>();
+
+            // HP数値
+            var numGo = MakeUI("BossHPNum", barBg.transform);
+            FillParent(numGo);
+            var num = numGo.AddComponent<TextMeshProUGUI>();
+            num.text = "300"; num.fontSize = 16f;
+            num.fontStyle = FontStyles.Bold | FontStyles.Italic;
+            num.alignment = TextAlignmentOptions.Center; num.color = TextWht;
+            UITheme.Apply(num);
+            _bossHpNum = num;
+        }
+
+        void UpdateBossHP(float hp, float max)
+        {
+            if (_bossHpFill == null) return;
+            float t = max > 0f ? Mathf.Clamp01(hp / max) : 0f;
+            _bossHpFill.color = HpGrad.Evaluate(t);
+            if (_bossHpRect != null)
+            {
+                // 中央から両側へ縮む
+                _bossHpRect.anchorMin = new Vector2((1f - t) * 0.5f, 0f);
+                _bossHpRect.anchorMax = new Vector2((1f + t) * 0.5f, 1f);
+                _bossHpRect.offsetMin = _bossHpRect.offsetMax = Vector2.zero;
+            }
+            if (_bossHpNum) _bossHpNum.text = Mathf.CeilToInt(hp).ToString();
         }
 
         void BuildTopBar()
