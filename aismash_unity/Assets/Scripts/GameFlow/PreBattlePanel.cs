@@ -108,8 +108,12 @@ namespace PromptFighters.GameFlow
         TextMeshProUGUI _platformToggleLabel;
         Image _cpuToggleBg;
         TextMeshProUGUI _cpuToggleLabel;
-        Image _coopToggleBg;
-        TextMeshProUGUI _coopToggleLabel;
+        // バトルモード選択（1 vs 1 / 協力ボス討伐）
+        Image _modeVersusBg;
+        TextMeshProUGUI _modeVersusLabel;
+        Image _modeCoopBg;
+        TextMeshProUGUI _modeCoopLabel;
+        TextMeshProUGUI _modeHintLabel;
         Button _bossPresetBtn;
         Image _bossPresetBg;
         TextMeshProUGUI _bossPresetLabel;
@@ -340,7 +344,7 @@ namespace PromptFighters.GameFlow
             if (_skillConfirmPanel != null && _skillConfirmPanel.activeSelf)
             {
                 if (WasMenuConfirmPressed())
-                    OnSkillConfirmBattlePressed();
+                    OnSkillConfirmDonePressed();
                 if (WasCancelPressed())
                     ShowPanel();
             }
@@ -448,10 +452,10 @@ namespace PromptFighters.GameFlow
                 new Vector2(0, -178), new Vector2(320, 24), 13, PromptFighters.UI.UITheme.InkDim);
         }
 
-        // 実況・天使・台・CPU・協力 のロビートグルを1行に並べて生成する。キャラ選択画面で使用。
+        // 実況・天使・台・CPU のロビートグルを1行に並べて生成する。キャラ選択画面で使用。
         void BuildLobbyToggles(Transform parent, float rowY)
         {
-            float[] xs = { -320f, -160f, 0f, 160f, 320f };
+            float[] xs = { -240f, -80f, 80f, 240f };
 
             var commentaryBtn = MakeButton(parent, "CommentaryToggle", CommentaryToggleText(),
                 new Vector2(xs[0], rowY), new Vector2(150f, 34f), OnCommentaryToggle, ToggleOnColor);
@@ -480,13 +484,6 @@ namespace PromptFighters.GameFlow
             _cpuToggleBg    = cpuBtn.GetComponent<Image>();
             _cpuToggleLabel = cpuBtn.GetComponentInChildren<TextMeshProUGUI>();
             _cpuToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
-
-            var coopBtn = MakeButton(parent, "CoopToggle", CoopToggleText(),
-                new Vector2(xs[4], rowY), new Vector2(150f, 34f), OnCoopToggle, ToggleOnColor);
-            StyleArcadeButton(coopBtn, ToggleOnColor, 10f);
-            _coopToggleBg    = coopBtn.GetComponent<Image>();
-            _coopToggleLabel = coopBtn.GetComponentInChildren<TextMeshProUGUI>();
-            _coopToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
             // 協力モード時のみ表示するボスキャラ選択。トグル行の下に1つ配置。
             _bossPresetBtn = MakeButton(parent, "BossPresetToggle", BossPresetText(),
@@ -562,17 +559,36 @@ namespace PromptFighters.GameFlow
             RefreshToggleVisuals();
         }
 
-        static string CoopToggleText() =>
-            PromptFighters.Battle.BattleManager.RequestedMode == PromptFighters.Battle.BattleMode.CoopVsBoss
-                ? "協力 ON" : "協力 OFF";
-
-        void OnCoopToggle()
+        // バトルモード選択行（1 vs 1 / 協力ボス討伐）をパネル上部に並べて生成する。
+        void BuildModeSelector(Transform parent, float rowY)
         {
-            var m = PromptFighters.Battle.BattleManager.RequestedMode;
-            PromptFighters.Battle.BattleManager.RequestedMode =
-                m == PromptFighters.Battle.BattleMode.CoopVsBoss
-                    ? PromptFighters.Battle.BattleMode.Versus
-                    : PromptFighters.Battle.BattleMode.CoopVsBoss;
+            var versusBtn = MakeButton(parent, "ModeVersusBtn", "1 vs 1 対戦",
+                new Vector2(-145f, rowY), new Vector2(260f, 42f), OnSelectVersus, ToggleOnColor);
+            StyleArcadeButton(versusBtn, ToggleOnColor, 11f);
+            _modeVersusBg    = versusBtn.GetComponent<Image>();
+            _modeVersusLabel = versusBtn.GetComponentInChildren<TextMeshProUGUI>();
+            _modeVersusLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
+
+            var coopBtn = MakeButton(parent, "ModeCoopBtn", "ボス討伐（協力）",
+                new Vector2(145f, rowY), new Vector2(260f, 42f), OnSelectCoop, ToggleOnColor);
+            StyleArcadeButton(coopBtn, ToggleOnColor, 11f);
+            _modeCoopBg    = coopBtn.GetComponent<Image>();
+            _modeCoopLabel = coopBtn.GetComponentInChildren<TextMeshProUGUI>();
+            _modeCoopLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
+
+            _modeHintLabel = MakeLabel(parent, "ModeHint", "",
+                new Vector2(0f, rowY - 30f), new Vector2(460f, 22f), 12f, PromptFighters.UI.UITheme.InkDim);
+        }
+
+        void OnSelectVersus()
+        {
+            PromptFighters.Battle.BattleManager.RequestedMode = PromptFighters.Battle.BattleMode.Versus;
+            RefreshToggleVisuals();
+        }
+
+        void OnSelectCoop()
+        {
+            PromptFighters.Battle.BattleManager.RequestedMode = PromptFighters.Battle.BattleMode.CoopVsBoss;
             RefreshToggleVisuals();
         }
 
@@ -591,8 +607,14 @@ namespace PromptFighters.GameFlow
             if (_cpuToggleBg         != null) _cpuToggleBg.color         = cpu ? ToggleOnColor : ToggleOffColor;
             if (_cpuToggleLabel      != null) _cpuToggleLabel.text       = CpuToggleText();
             bool coop = PromptFighters.Battle.BattleManager.RequestedMode == PromptFighters.Battle.BattleMode.CoopVsBoss;
-            if (_coopToggleBg        != null) _coopToggleBg.color        = coop ? ToggleOnColor : ToggleOffColor;
-            if (_coopToggleLabel     != null) _coopToggleLabel.text      = CoopToggleText();
+            if (_modeVersusBg   != null) _modeVersusBg.color = coop ? ToggleOffColor : ToggleOnColor;
+            if (_modeCoopBg     != null) _modeCoopBg.color   = coop ? ToggleOnColor  : ToggleOffColor;
+            if (_modeVersusLabel != null) _modeVersusLabel.color = coop ? PromptFighters.UI.UITheme.InkDim : new Color(0.12f, 0.08f, 0f);
+            if (_modeCoopLabel   != null) _modeCoopLabel.color   = coop ? new Color(0.12f, 0.08f, 0f) : PromptFighters.UI.UITheme.InkDim;
+            if (_modeHintLabel  != null)
+                _modeHintLabel.text = coop
+                    ? "2人（または1P＋味方CPU）で強敵ボスに挑む。倒れた仲間は近づいて救助できる。"
+                    : "1P と 2P が1対1で対戦する。CPU・トレーニングにも対応。";
             if (_bossPresetBtn != null) _bossPresetBtn.gameObject.SetActive(coop);
             if (coop)
             {
@@ -647,6 +669,9 @@ namespace PromptFighters.GameFlow
             MakeLabel(_panel.transform, "Vs", "VS",
                 new Vector2(0, 364), new Vector2(160, 120), 76, PromptFighters.UI.UITheme.Gold)
                 .fontStyle = FontStyles.Bold | FontStyles.Italic;
+
+            // ── バトルモード選択（1 vs 1 / 協力ボス討伐） ──
+            BuildModeSelector(_panel.transform, 452f);
 
             // ── 1P エリア（左半分） ──
             BuildPlayerColumn(_panel.transform, true);
@@ -1315,15 +1340,15 @@ namespace PromptFighters.GameFlow
             }
 
             // フッター
-            var battleBtn = MakeButton(_skillConfirmPanel.transform, "BattleBtn", "バトル開始",
-                new Vector2(0, -428), new Vector2(340, 62), OnSkillConfirmBattlePressed,
+            var doneBtn = MakeButton(_skillConfirmPanel.transform, "DoneBtn", "ロスターに保存して戻る",
+                new Vector2(0, -428), new Vector2(380, 62), OnSkillConfirmDonePressed,
                 PromptFighters.UI.UITheme.Gold);
-            StyleArcadeButton(battleBtn, PromptFighters.UI.UITheme.Gold, 16f);
-            SetButtonLabelStyle(battleBtn, 25f, FontStyles.Bold | FontStyles.Italic, new Color(0.12f, 0.08f, 0f));
+            StyleArcadeButton(doneBtn, PromptFighters.UI.UITheme.Gold, 16f);
+            SetButtonLabelStyle(doneBtn, 23f, FontStyles.Bold | FontStyles.Italic, new Color(0.12f, 0.08f, 0f));
 
             MakeLabel(_skillConfirmPanel.transform, "BattleHint",
-                "スペースキー: バトル開始　Esc: 戻る",
-                new Vector2(0, -475), new Vector2(600, 28), 13f, PromptFighters.UI.UITheme.InkDim);
+                "生成したキャラはロスターに保存されます。キャラ選択画面でモードを選んでバトルへ。",
+                new Vector2(0, -475), new Vector2(720, 28), 13f, PromptFighters.UI.UITheme.InkDim);
         }
 
         // 生成キャラ削除の確認モーダル（アーケード調・誤削除防止）。
@@ -1681,18 +1706,17 @@ namespace PromptFighters.GameFlow
             _generationCoroutine = StartCoroutine(GenerateBothChars(preset1, preset2, hasP1Input, hasP2Input));
         }
 
-        void OnSkillConfirmBattlePressed()
+        // 生成キャラ確認後はロスターに保存済みなので、バトルへ進まずキャラ選択画面へ戻る。
+        void OnSkillConfirmDonePressed()
         {
-            if (BattleManager.Instance == null || _pendingData1 == null || _pendingData2 == null) return;
             if (_generationTrainingActive)
             {
-                BattleManager.Instance.ReturnToSetup();
+                BattleManager.Instance?.ReturnToSetup();
                 _generationTrainingActive = false;
             }
-            _panel?.SetActive(false);
-            _trainingPanel?.SetActive(false);
             _skillConfirmPanel?.SetActive(false);
-            BattleManager.Instance.StartCountdown(_pendingData1, _pendingData2);
+            _trainingPanel?.SetActive(false);
+            ShowPanel();
         }
 
         void CancelGeneration()
