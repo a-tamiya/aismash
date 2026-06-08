@@ -257,6 +257,8 @@ namespace PromptFighters.Battle
 
         void EndByTimeout()
         {
+            // 協力モードは時間切れ＝ボスの勝利（プレイヤー敗北）。
+            if (Mode == BattleMode.CoopVsBoss) { CoopEnd(playersWin: false); return; }
             if (fighter1 == null || fighter2 == null) { FinishRoundOrMatch(-1); return; }
             if      (fighter1.CurrentHP > fighter2.CurrentHP) FinishRoundOrMatch(0);
             else if (fighter2.CurrentHP > fighter1.CurrentHP) FinishRoundOrMatch(1);
@@ -312,6 +314,38 @@ namespace PromptFighters.Battle
             {
                 StartCoroutine(NextRoundRoutine());
             }
+        }
+
+        // ===== 協力モードの勝敗（CoopVsBoss） =====
+        // winnerIndex は 0=プレイヤー陣営の勝ち / 1=ボスの勝ち として OnBattleEnd を発火する。
+
+        // ボス（Enemies）撃破でプレイヤー勝利。OnDeathから呼ぶ（subtask4で配線）。
+        public void HandleBossDeath()
+        {
+            if (Mode != BattleMode.CoopVsBoss) return;
+            CoopEnd(playersWin: true);
+        }
+
+        // Players陣営のいずれかがダウンした際に呼ぶ。全員ダウンなら敗北。OnDownedから配線（subtask4）。
+        public void HandlePlayerDowned()
+        {
+            if (Mode != BattleMode.CoopVsBoss) return;
+            bool anyAlive = false;
+            for (int i = 0; i < Fighters.Count; i++)
+            {
+                var f = Fighters[i];
+                if (f == null || f.Team != FighterTeam.Players) continue;
+                if (!f.IsDowned && f.State != FighterState.Dead) { anyAlive = true; break; }
+            }
+            if (!anyAlive) CoopEnd(playersWin: false);
+        }
+
+        void CoopEnd(bool playersWin)
+        {
+            if (Phase == BattlePhase.Ended || Phase == BattlePhase.Training) return;
+            Phase = BattlePhase.Ended;
+            OnBattleEnd?.Invoke(playersWin ? 0 : 1);
+            Debug.Log($"[Battle] Coop {(playersWin ? "Players Win" : "Boss Wins")}");
         }
 
         IEnumerator NextRoundRoutine()

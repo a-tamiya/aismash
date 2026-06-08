@@ -93,6 +93,8 @@ namespace PromptFighters.Battle
         public event System.Action<float, float> OnGuardChanged;
         public event System.Action               OnGuardBroken;
         public event System.Action               OnDeath;
+        public event System.Action               OnDowned;   // 協力モードで戦闘不能（復活可能）になった
+        public event System.Action               OnRevived;  // 協力モードで復活した
         public event System.Action<float, bool>  OnDamageReceived; // (damage, wasBlocked)
         public event System.Action               OnJumped;
         public event System.Action               OnLanded;
@@ -581,6 +583,7 @@ namespace PromptFighters.Battle
                                bool applyOpponentDamageBoost = true)
         {
             if (State == FighterState.Dead) return;
+            if (IsDowned) return; // ダウン中は被ダメージ無効（復活待ち）
             if (State == FighterState.Dodging || _dodgeTimer > 0f) return;
             if (_grabbedBy != null) return;
             if (IsInvincible) return;
@@ -642,7 +645,14 @@ namespace PromptFighters.Battle
             // ヒットストップ（KO時は TriggerKOSlow が担当するためスキップ）
             if (!blocking && actual > 0f && !willDie && BattleManager.Instance?.Phase == BattlePhase.Fighting)
                 BattleManager.Instance.TriggerHitStop(0.05f, 0.05f);
-            if (willDie) Die();
+            if (willDie)
+            {
+                var bm = BattleManager.Instance;
+                if (bm != null && bm.Mode == BattleMode.CoopVsBoss && Team == FighterTeam.Players)
+                    Downed();
+                else
+                    Die();
+            }
         }
 
         public void ApplyStatus(StatusType type, float duration)
@@ -1423,6 +1433,46 @@ namespace PromptFighters.Battle
             _rb.linearVelocity = Vector2.zero;
             BattleManager.Instance?.TriggerKOSlow(transform.position);
             OnDeath?.Invoke();
+        }
+
+        bool _downedInputWasEnabled;
+        bool _downedAiWasEnabled;
+
+        // 協力モード専用：戦闘不能だが復活可能な状態にする。操作と被ダメージを止める。
+        public void Downed()
+        {
+            if (IsDowned || State == FighterState.Dead) return;
+            IsDowned = true;
+            RestoreDodgeGravity();
+            State = FighterState.Idle;
+            _rb.linearVelocity = Vector2.zero;
+            SetGuard(false);
+
+            var input = GetComponent<FighterInput>();
+            var ai    = GetComponent<FighterAI>();
+            _downedInputWasEnabled = input != null && input.enabled;
+            _downedAiWasEnabled    = ai != null && ai.enabled;
+            if (input != null) input.enabled = false;
+            if (ai != null) ai.enabled = false;
+
+            OnDowned?.Invoke();
+        }
+
+        // 仲間に踏まれて復活。HPを一定割合で回復し、ダウン前の操作主体（人間/AI）を戻す。
+        public void Revive(float hpRatio = 0.5f)
+        {
+            if (!IsDowned) return;
+            IsDowned = false;
+            CurrentHP = Mathf.Clamp(maxHP * hpRatio, 1f, maxHP);
+            OnHPChanged?.Invoke(CurrentHP, maxHP);
+            State = FighterState.Idle;
+
+            var input = GetComponent<FighterInput>();
+            var ai    = GetComponent<FighterAI>();
+            if (input != null) input.enabled = _downedInputWasEnabled;
+            if (ai != null) ai.enabled = _downedAiWasEnabled;
+
+            OnRevived?.Invoke();
         }
 
         void Flip()
