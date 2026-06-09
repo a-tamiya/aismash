@@ -117,7 +117,7 @@ namespace PromptFighters.AI
 
             string systemPrompt = BuildConceptSystemPrompt();
             string userPrompt   = BuildConceptUserPrompt(hint);
-            string body         = OpenAIRequest.BuildChatBody(LightModel, systemPrompt, userPrompt, jsonMode: true);
+            string body         = OpenAIRequest.BuildChatBody(Model, systemPrompt, userPrompt, jsonMode: true);
             string lastError = null;
 
             for (int attempt = 1; attempt <= MaxGenerateAttempts; attempt++)
