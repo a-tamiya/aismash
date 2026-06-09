@@ -285,7 +285,7 @@ namespace PromptFighters.Battle
                     if (helper == null || helper == downed) continue;
                     if (helper.Team != FighterTeam.Players) continue;
                     if (helper.IsDowned || helper.State == FighterState.Dead) continue;
-                    Vector3 d = helper.transform.position - downed.transform.position;
+                    Vector3 d = helper.transform.position - downed.ReviveAnchorPosition;
                     if (Mathf.Abs(d.x) <= reviveRange && Mathf.Abs(d.y) <= reviveRange * 1.5f)
                     {
                         helperNear = true;
@@ -323,7 +323,7 @@ namespace PromptFighters.Battle
         {
             if (!_reviveGauges.TryGetValue(downed, out var gauge) || gauge == null)
             {
-                gauge = ReviveGauge.Create(downed.transform);
+                gauge = ReviveGauge.Create(downed);
                 _reviveGauges[downed] = gauge;
             }
             gauge.SetProgress(t01);

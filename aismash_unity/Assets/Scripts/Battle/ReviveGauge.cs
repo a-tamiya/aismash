@@ -9,11 +9,11 @@ namespace PromptFighters.Battle
         const float Width  = 1.1f;
         const float Height = 0.16f;
 
-        Transform _target;
+        Fighter _target;
         SpriteRenderer _fill;
         Transform _fillTf;
 
-        public static ReviveGauge Create(Transform target)
+        public static ReviveGauge Create(Fighter target)
         {
             var go = new GameObject("ReviveGauge");
             var gauge = go.AddComponent<ReviveGauge>();
@@ -55,7 +55,7 @@ namespace PromptFighters.Battle
         void LateUpdate()
         {
             if (_target == null) { Destroy(gameObject); return; }
-            transform.position = _target.position + Vector3.up * 1.5f;
+            transform.position = _target.ReviveGaugePosition;
             transform.rotation = Quaternion.identity;
         }
     }

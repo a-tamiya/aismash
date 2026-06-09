@@ -1306,11 +1306,19 @@ namespace PromptFighters.GameFlow
                 new Vector2(cx, -78f), new Vector2(430f, 54f), 13f, new Color(0.72f, 0.78f, 0.9f));
 
             // AIに名前・特徴を考えてもらうボタン（人間が後で編集・確認できる）
+            float btnSlant = isP1 ? 14f : -14f;
             var conceptBtn = MakeButton(parent, isP1 ? "P1ConceptBtn" : "P2ConceptBtn",
-                "AIで名前・特徴を考える", new Vector2(cx, -135f), new Vector2(380f, 50f),
+                "AIで名前・特徴を考える", new Vector2(cx - 62f, -135f), new Vector2(300f, 50f),
                 () => OnConceptGeneratePressed(isP1), pColor);
-            StyleArcadeButton(conceptBtn, pColor, isP1 ? 14f : -14f);
-            SetButtonLabelStyle(conceptBtn, 18f, FontStyles.Bold | FontStyles.Italic, Color.white);
+            StyleArcadeButton(conceptBtn, pColor, btnSlant);
+            SetButtonLabelStyle(conceptBtn, 17f, FontStyles.Bold | FontStyles.Italic, Color.white);
+
+            // 名前・特徴をクリアするリセットボタン
+            var resetBtn = MakeButton(parent, isP1 ? "P1ResetBtn" : "P2ResetBtn",
+                "リセット", new Vector2(cx + 158f, -135f), new Vector2(108f, 50f),
+                () => OnResetConceptPressed(isP1), PromptFighters.UI.UITheme.SteelLight);
+            StyleArcadeButton(resetBtn, PromptFighters.UI.UITheme.SteelLight, btnSlant);
+            SetButtonLabelStyle(resetBtn, 16f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             var conceptStatus = MakeLabel(parent, isP1 ? "P1ConceptStatus" : "P2ConceptStatus",
                 "", new Vector2(cx, -180f), new Vector2(430f, 26f), 13f, new Color(0.72f, 0.82f, 0.95f));
@@ -1387,6 +1395,18 @@ namespace PromptFighters.GameFlow
                     if (isP1) _p1ConceptBusy = false; else _p2ConceptBusy = false;
                     if (button != null) button.interactable = true;
                 });
+        }
+
+        // 名前・特徴の入力欄をクリアして空に戻す。
+        void OnResetConceptPressed(bool isP1)
+        {
+            var nameInput    = isP1 ? _p1NameInput    : _p2NameInput;
+            var featureInput = isP1 ? _p1FeatureInput : _p2FeatureInput;
+            var statusLabel  = isP1 ? _p1ConceptStatus : _p2ConceptStatus;
+
+            if (nameInput != null) nameInput.text = "";
+            if (featureInput != null) featureInput.text = "";
+            if (statusLabel != null) statusLabel.text = "";
         }
 
         void BuildGeneratingPanel()

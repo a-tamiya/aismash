@@ -210,6 +210,12 @@ namespace PromptFighters.Battle
             _skillRecoveryTimer <= 0f;
 
         public SpriteRenderer VisualRenderer => _sprite;
+        public Vector3 ReviveAnchorPosition =>
+            IsDowned && _sprite != null ? _sprite.bounds.center : transform.position;
+        public Vector3 ReviveGaugePosition =>
+            IsDowned && _sprite != null
+                ? new Vector3(_sprite.bounds.center.x, _sprite.bounds.max.y + 0.35f, transform.position.z)
+                : transform.position + Vector3.up * 1.5f;
 
         void Awake()
         {
