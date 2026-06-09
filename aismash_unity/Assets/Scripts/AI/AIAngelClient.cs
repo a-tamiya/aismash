@@ -51,7 +51,7 @@ namespace PromptFighters.AI
             }
 
             string body = OpenAIRequest.BuildChatBody(
-                AICharacterClient.Model, BuildSystemPrompt(), BuildUserPrompt(voiceText, state),
+                AICharacterClient.LightModel, BuildSystemPrompt(), BuildUserPrompt(voiceText, state),
                 jsonMode: true);
             using var req = new UnityWebRequest(AICharacterClient.Endpoint, "POST");
             req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
