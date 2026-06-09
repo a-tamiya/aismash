@@ -52,6 +52,12 @@ namespace PromptFighters.GameFlow
         TMP_InputField _p1FeatureInput;
         TMP_InputField _p2NameInput;
         TMP_InputField _p2FeatureInput;
+        Button _p1ConceptButton;
+        Button _p2ConceptButton;
+        TextMeshProUGUI _p1ConceptStatus;
+        TextMeshProUGUI _p2ConceptStatus;
+        bool _p1ConceptBusy;
+        bool _p2ConceptBusy;
 
         GameObject _titlePanel;
         GameObject _panel;
@@ -1299,16 +1305,88 @@ namespace PromptFighters.GameFlow
                 "例: 雷をまとった小柄な剣士。素早く跳び回り、遠距離から雷を飛ばす。",
                 new Vector2(cx, -78f), new Vector2(430f, 54f), 13f, new Color(0.72f, 0.78f, 0.9f));
 
+            // AIに名前・特徴を考えてもらうボタン（人間が後で編集・確認できる）
+            var conceptBtn = MakeButton(parent, isP1 ? "P1ConceptBtn" : "P2ConceptBtn",
+                "AIで名前・特徴を考える", new Vector2(cx, -135f), new Vector2(380f, 50f),
+                () => OnConceptGeneratePressed(isP1), pColor);
+            StyleArcadeButton(conceptBtn, pColor, isP1 ? 14f : -14f);
+            SetButtonLabelStyle(conceptBtn, 18f, FontStyles.Bold | FontStyles.Italic, Color.white);
+
+            var conceptStatus = MakeLabel(parent, isP1 ? "P1ConceptStatus" : "P2ConceptStatus",
+                "", new Vector2(cx, -180f), new Vector2(430f, 26f), 13f, new Color(0.72f, 0.82f, 0.95f));
+
             if (isP1)
             {
                 _p1NameInput = nameInput;
                 _p1FeatureInput = featureInput;
+                _p1ConceptButton = conceptBtn;
+                _p1ConceptStatus = conceptStatus;
             }
             else
             {
                 _p2NameInput = nameInput;
                 _p2FeatureInput = featureInput;
+                _p2ConceptButton = conceptBtn;
+                _p2ConceptStatus = conceptStatus;
             }
+        }
+
+        // 「AIで名前・特徴を考える」ボタン。AIが原案を出し、入力欄へ流し込む（人間が編集・確認可能）。
+        void OnConceptGeneratePressed(bool isP1)
+        {
+            bool busy = isP1 ? _p1ConceptBusy : _p2ConceptBusy;
+            if (busy) return;
+
+            var nameInput    = isP1 ? _p1NameInput    : _p2NameInput;
+            var featureInput = isP1 ? _p1FeatureInput : _p2FeatureInput;
+            var statusLabel  = isP1 ? _p1ConceptStatus : _p2ConceptStatus;
+            var button       = isP1 ? _p1ConceptButton : _p2ConceptButton;
+
+            // 既存の入力があればヒントとして渡し、AIに膨らませてもらう
+            string nameHint = nameInput?.text;
+            string featHint = featureInput?.text;
+            string hint;
+            if (!string.IsNullOrWhiteSpace(nameHint) && !string.IsNullOrWhiteSpace(featHint))
+                hint = nameHint + " / " + featHint;
+            else if (!string.IsNullOrWhiteSpace(nameHint))
+                hint = nameHint;
+            else
+                hint = featHint ?? "";
+
+            if (isP1) _p1ConceptBusy = true; else _p2ConceptBusy = true;
+            if (button != null) button.interactable = false;
+            if (statusLabel != null)
+            {
+                statusLabel.color = new Color(0.72f, 0.82f, 0.95f);
+                statusLabel.text = "AIが考え中...";
+            }
+
+            AICharacterClient.GenerateConcept(this, hint,
+                concept =>
+                {
+                    if (nameInput != null && !string.IsNullOrWhiteSpace(concept.character_name))
+                        nameInput.text = concept.character_name;
+                    if (featureInput != null && !string.IsNullOrWhiteSpace(concept.features))
+                        featureInput.text = concept.features;
+                    if (statusLabel != null)
+                    {
+                        statusLabel.color = new Color(0.55f, 0.9f, 0.6f);
+                        statusLabel.text = "AIが原案を作成しました。編集して生成できます。";
+                    }
+                    if (isP1) _p1ConceptBusy = false; else _p2ConceptBusy = false;
+                    if (button != null) button.interactable = true;
+                },
+                err =>
+                {
+                    if (statusLabel != null)
+                    {
+                        statusLabel.color = new Color(1f, 0.55f, 0.5f);
+                        statusLabel.text = "生成に失敗しました。もう一度お試しください。";
+                    }
+                    Debug.LogWarning($"[PreBattlePanel] 原案生成失敗: {err}");
+                    if (isP1) _p1ConceptBusy = false; else _p2ConceptBusy = false;
+                    if (button != null) button.interactable = true;
+                });
         }
 
         void BuildGeneratingPanel()

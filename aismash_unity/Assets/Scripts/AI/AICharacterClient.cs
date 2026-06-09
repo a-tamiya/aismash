@@ -91,6 +91,149 @@ namespace PromptFighters.AI
             onError?.Invoke(lastError ?? "AI生成に失敗しました");
         }
 
+        // ── キャラ名・特徴文のAI発案（生成設定画面の「AIで考える」ボタン用） ──
+        [Serializable]
+        public class CharacterConcept
+        {
+            public string character_name;
+            public string features;
+        }
+
+        public static Coroutine GenerateConcept(MonoBehaviour runner, string hint,
+            Action<CharacterConcept> onSuccess, Action<string> onError)
+        {
+            return runner.StartCoroutine(GenerateConceptCoroutine(hint, onSuccess, onError));
+        }
+
+        static IEnumerator GenerateConceptCoroutine(string hint,
+            Action<CharacterConcept> onSuccess, Action<string> onError)
+        {
+            string key = ApiKey;
+            if (!AIImageClient.IsConfiguredApiKey(key))
+            {
+                onError?.Invoke("OpenAI APIキーが未設定です。環境変数 OPENAI_API_KEY を確認してください。");
+                yield break;
+            }
+
+            string systemPrompt = BuildConceptSystemPrompt();
+            string userPrompt   = BuildConceptUserPrompt(hint);
+            string body         = OpenAIRequest.BuildChatBody(LightModel, systemPrompt, userPrompt, jsonMode: true);
+            string lastError = null;
+
+            for (int attempt = 1; attempt <= MaxGenerateAttempts; attempt++)
+            {
+                using var req = new UnityWebRequest(Endpoint, "POST");
+                req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
+                req.downloadHandler = new DownloadHandlerBuffer();
+                req.SetRequestHeader("Content-Type", "application/json");
+                req.SetRequestHeader("Authorization", "Bearer " + key);
+                req.timeout = 60;
+
+                yield return req.SendWebRequest();
+
+                if (req.result != UnityWebRequest.Result.Success)
+                {
+                    lastError = $"{req.error}: {req.downloadHandler?.text}";
+                    Debug.LogWarning($"[AI] アイデア通信エラー({attempt}/{MaxGenerateAttempts}): {lastError}");
+                    if (attempt < MaxGenerateAttempts) yield return new WaitForSeconds(0.8f);
+                    continue;
+                }
+
+                bool parseFailed = false;
+                try
+                {
+                    string content = ParseContent(req.downloadHandler.text);
+                    string json    = ExtractJsonBlock(content);
+                    var concept = JsonUtility.FromJson<CharacterConcept>(json);
+                    if (concept == null || string.IsNullOrWhiteSpace(concept.features))
+                        throw new Exception("conceptが空です");
+                    concept.character_name = (concept.character_name ?? "").Trim();
+                    concept.features       = (concept.features ?? "").Trim();
+                    onSuccess?.Invoke(concept);
+                    yield break;
+                }
+                catch (Exception e)
+                {
+                    lastError = "AI応答の解析に失敗: " + e.Message;
+                    Debug.LogWarning($"[AI] アイデア解析エラー({attempt}/{MaxGenerateAttempts}): {e.Message}\nレスポンス: {req.downloadHandler.text}");
+                    parseFailed = true;
+                }
+
+                if (parseFailed && attempt < MaxGenerateAttempts)
+                    yield return new WaitForSeconds(0.4f);
+            }
+
+            onError?.Invoke(lastError ?? "アイデア生成に失敗しました");
+        }
+
+        // 発想の起点となるランダム種。毎回違う組み合わせを与えてテンプレ化を防ぐ。
+        static readonly string[] ConceptMotifs =
+        {
+            "炎", "氷", "雷", "風", "闇", "光", "水", "鋼鉄", "毒", "砂", "重力", "音",
+            "時間", "花", "獣", "機械", "幽霊", "星", "影", "結晶", "溶岩", "雪", "蜘蛛",
+            "稲妻", "霧", "宝石", "錆", "蒸気", "電脳", "深海", "オーロラ", "粘菌", "骨",
+            "紙", "墨", "鏡", "歯車", "薔薇", "蝶", "狼", "竜", "鴉", "蛇", "クラゲ"
+        };
+        static readonly string[] ConceptArchetypes =
+        {
+            "剣士", "拳闘士", "魔法使い", "狙撃手", "召喚士", "盾の騎士", "忍者", "格闘家",
+            "錬金術師", "吟遊詩人", "死霊術師", "槍使い", "二刀流の剣豪", "ガンマン", "僧侶",
+            "怪盗", "海賊", "侍", "巫女", "からくり人形", "重騎兵", "踊り子", "罠師",
+            "拳法家", "陰陽師", "機械工", "暗殺者", "聖騎士", "野獣使い", "賞金稼ぎ", "道化師"
+        };
+        static readonly string[] ConceptTones =
+        {
+            "冷酷", "陽気", "高貴", "狂気的", "クール", "熱血", "無口", "気品ある", "残忍",
+            "優雅", "飄々とした", "ストイック", "お調子者", "厳格", "純真", "皮肉屋",
+            "傲慢", "穏やか", "野心的", "陰険", "豪快", "ミステリアス"
+        };
+        static readonly string[] ConceptStyles =
+        {
+            "近接でラッシュをかける", "遠距離から狙撃する", "罠を設置して制圧する",
+            "使い魔を召喚して数で攻める", "カウンターで反撃する", "一撃必殺を狙う",
+            "瞬間移動でトリッキーに翻弄する", "重い一撃で叩きつける", "素早く跳び回る",
+            "吸血して粘り強く戦う", "ガードを固めて崩す", "コンボで畳みかける",
+            "飛び道具をばら撒く", "投げと掴みで圧倒する", "状態異常で搦め手を使う"
+        };
+
+        static readonly System.Random ConceptRng = new System.Random();
+        static string Pick(string[] arr) => arr[ConceptRng.Next(arr.Length)];
+
+        static string BuildConceptUserPrompt(string hint)
+        {
+            string motif     = Pick(ConceptMotifs);
+            string motif2    = Pick(ConceptMotifs);
+            string archetype = Pick(ConceptArchetypes);
+            string tone      = Pick(ConceptTones);
+            string style     = Pick(ConceptStyles);
+            int nonce        = ConceptRng.Next(100000, 999999);
+
+            string hintLine = string.IsNullOrWhiteSpace(hint)
+                ? ""
+                : $"プレイヤーの要望（最優先で取り入れること）: {hint.Trim()}\n";
+
+            return
+$@"個性的な2D格闘ゲームのキャラクターを1体、新しく考案してください。
+{hintLine}発想のテーマ種（必ずしも全部使わなくてよいが、ありきたりにせず意外性のある組み合わせにする）:
+- モチーフ: {motif} / {motif2}
+- 役割: {archetype}
+- 性格・口調: {tone}
+- 戦い方: {style}
+バリエーション種: {nonce}
+
+character_name と features を出力してください。前回までと毎回まったく違うタイプにすること。";
+        }
+
+        static string BuildConceptSystemPrompt() =>
+$@"あなたは2D格闘ゲームのキャラクター原案を生み出す、発想豊かなクリエイターです。JSONのみ出力（説明不要）。
+出力形式:
+{{ ""character_name"": ""..."", ""features"": ""..."" }}
+
+- character_name: 日本語。ありきたりでない、二つ名や異名を含む固有名にする（例: 蒼焔の剣鬼ヴァルガ、霧隠れの傀儡師サザレ、鋼鉄の聖女イレーネ）。全体で8〜18字程度。
+- features: そのキャラの見た目・性格・属性・間合い・戦い方・固有技を具体的に描いた日本語の文章（80〜140字）。後でこの文章を素材に技を自動生成するため、武器・属性（炎/氷/雷/闇/風など）・戦法（近接/遠距離/設置/召喚/カウンター等）・固有技名のいずれも手がかりとして必ず盛り込む。
+- 毎回まったく異なるタイプのキャラにする。『炎の剣士』『氷の魔法使い』のような定番に寄せず、与えられたテーマ種を起点に唯一無二の個性・意外な組み合わせを作る。
+- 実在のゲーム・アニメ・漫画・映画の版権キャラクター名や作品名は絶対に使わない。";
+
         // OpenAI Chat Completions レスポンスから content を取り出す
         [Serializable] class OAIResp   { public OAIChoice[] choices; }
         [Serializable] class OAIChoice { public OAIMsg message; }
