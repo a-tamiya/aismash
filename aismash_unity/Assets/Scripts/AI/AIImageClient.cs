@@ -20,7 +20,8 @@ namespace PromptFighters.AI
         const string CharacterSize = "1024x1536";
         const string EffectSize = "1536x1024";
         const string Quality = "low";
-        const int    MaxImageAttempts = 2;
+        // 失敗時のリトライ上限（ハードキャップ）。料金が嵩むため絶対にこれ以上は呼ばない。
+        const int    MaxImageAttempts = 3;
 
         static string _cachedApiKey;
 
@@ -390,31 +391,52 @@ namespace PromptFighters.AI
             Action<CharacterSpriteId, string, Sprite> onSuccess,
             Action<CharacterSpriteId, string> onError)
         {
-            var form = new List<IMultipartFormSection>
+            string sizeVal = string.IsNullOrEmpty(size) ? CharacterSize : size;
+            string respText = null;
+            string lastErr  = null;
+            bool   ok       = false;
+
+            // 失敗しても最大 MaxImageAttempts 回までしか呼ばない（料金暴走の防止）。
+            for (int attempt = 1; attempt <= MaxImageAttempts; attempt++)
             {
-                new MultipartFormDataSection("model",   Model),
-                new MultipartFormDataSection("prompt",  prompt),
-                new MultipartFormDataSection("size",    string.IsNullOrEmpty(size) ? CharacterSize : size),
-                new MultipartFormDataSection("quality", Quality),
-                new MultipartFormDataSection("n",       "1"),
-                new MultipartFormFileSection("image[]", basePngBytes, "reference.png", "image/png"),
-            };
+                // multipartはリクエストごとに作り直す必要がある（uploadHandlerが消費されるため）
+                var form = new List<IMultipartFormSection>
+                {
+                    new MultipartFormDataSection("model",   Model),
+                    new MultipartFormDataSection("prompt",  prompt),
+                    new MultipartFormDataSection("size",    sizeVal),
+                    new MultipartFormDataSection("quality", Quality),
+                    new MultipartFormDataSection("n",       "1"),
+                    new MultipartFormFileSection("image[]", basePngBytes, "reference.png", "image/png"),
+                };
 
-            using var req = UnityWebRequest.Post(EditsEndpoint, form);
-            req.SetRequestHeader("Authorization", "Bearer " + key);
-            req.timeout = 180;
+                using var req = UnityWebRequest.Post(EditsEndpoint, form);
+                req.SetRequestHeader("Authorization", "Bearer " + key);
+                req.timeout = 180;
 
-            yield return req.SendWebRequest();
+                yield return req.SendWebRequest();
 
-            if (req.result != UnityWebRequest.Result.Success)
+                if (req.result == UnityWebRequest.Result.Success)
+                {
+                    respText = req.downloadHandler.text;
+                    ok = true;
+                    break;
+                }
+
+                lastErr = $"{req.error}: {req.downloadHandler?.text}";
+                Debug.LogWarning($"[AIImage] エフェクト/ポーズ生成エラー({attempt}/{MaxImageAttempts}) {filename}: {lastErr}");
+                if (attempt < MaxImageAttempts) yield return new WaitForSeconds(1.5f);
+            }
+
+            if (!ok)
             {
-                onError?.Invoke(id, $"{req.error}: {req.downloadHandler?.text}");
+                onError?.Invoke(id, lastErr ?? "画像生成に失敗");
                 yield break;
             }
 
             try
             {
-                ParseImageResponse(req.downloadHandler.text, out string url, out string b64);
+                ParseImageResponse(respText, out string url, out string b64);
                 if (string.IsNullOrEmpty(b64))
                 {
                     onError?.Invoke(id, "b64_jsonが見つかりません");

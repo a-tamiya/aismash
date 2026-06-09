@@ -635,13 +635,14 @@ namespace PromptFighters.Battle.Skills
         static Vector2 DefaultMeleeOffset(SkillSlot slot, float range)
         {
             float x = range * 0.5f + 0.35f;
+            // Y はキャラの頭〜胴の高さ。低すぎると地面すれすれに見えるため、頭付近に合わせる。
             return slot switch
             {
-                SkillSlot.AttackA => new Vector2(x, 0.35f),
-                SkillSlot.AttackB => new Vector2(x, 0.75f),
-                SkillSlot.AttackC => new Vector2(x + 0.15f, 0.15f),
-                SkillSlot.SmashSide => new Vector2(x + 0.25f, 0.55f),
-                _ => new Vector2(x, 0.35f),
+                SkillSlot.AttackA => new Vector2(x, 0.95f),
+                SkillSlot.AttackB => new Vector2(x, 1.15f),
+                SkillSlot.AttackC => new Vector2(x + 0.15f, 0.8f),
+                SkillSlot.SmashSide => new Vector2(x + 0.25f, 1.05f),
+                _ => new Vector2(x, 0.95f),
             };
         }
 
