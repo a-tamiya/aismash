@@ -1046,7 +1046,7 @@ namespace PromptFighters.GameFlow
         }
 
         // ステータスグラフの軸ラベル（norm計算順と一致させること）
-        static readonly string[] StatAxisLabels = { "スピード", "ジャンプ", "ガード", "重さ", "パワー", "リーチ" };
+        static readonly string[] StatAxisLabels = { "HP", "パワー", "スピード", "ジャンプ", "ガード", "重さ" };
 
         void MakeStatGauge(Transform parent, string axis, Vector2 pos, Vector2 size, Color pColor,
             out Image fill, out TextMeshProUGUI valLabel)
@@ -1087,40 +1087,69 @@ namespace PromptFighters.GameFlow
             valLabel.fontStyle = FontStyles.Bold;
         }
 
-        static float[] ComputeStatNorms(CharacterData data, out string[] vals)
+        // 1技あたりの「全段ヒット時の総ダメージ」。多段ヒット(hit_count)や多発射(projectile_count)は合計する。
+        static float SkillFullHitTotal(SkillData sk)
+        {
+            if (sk?.parameters == null) return 0f;
+            float dmg = sk.parameters.damage;
+            int hits = Mathf.Max(1, sk.parameters.hit_count);
+            int proj = 1;
+            if (sk.actions != null)
+                foreach (var a in sk.actions)
+                    if (a != null && a.projectile_count > proj) proj = a.projectile_count;
+            return dmg * hits * proj;
+        }
+
+        // パワー基準＝各技の全段ヒット総ダメージの平均
+        static float CharacterPower(CharacterData data)
+        {
+            if (data?.skills == null) return 0f;
+            float sum = 0f; int n = 0;
+            foreach (var sk in data.skills)
+            {
+                if (sk == null) continue;
+                sum += SkillFullHitTotal(sk); n++;
+            }
+            return n > 0 ? sum / n : 0f;
+        }
+
+        // ステータスバーの生の指標（StatAxisLabelsと同順: HP, パワー, スピード, ジャンプ, ガード, 重さ）
+        static float[] RawMetrics(CharacterData data)
         {
             var s = data?.stats ?? new CharacterStats();
-            float avgDmg = 0f, avgRange = 0f; int n = 0;
-            if (data?.skills != null)
-                foreach (var sk in data.skills)
-                {
-                    if (sk?.parameters == null) continue;
-                    avgDmg += sk.parameters.damage;
-                    avgRange += sk.parameters.range;
-                    n++;
-                }
-            if (n > 0) { avgDmg /= n; avgRange /= n; }
+            return new[] { s.maxHP, CharacterPower(data), s.groundMoveSpeed, s.jumpForce, s.guardDurability, s.weight };
+        }
 
-            var norms = new[]
+        // 保存済み全キャラの中での相対値でバーを決める
+        static float[] ComputeStatNorms(CharacterData data, List<CharacterData> roster, out string[] vals)
+        {
+            var raw = RawMetrics(data);
+            int len = raw.Length;
+            var mn = (float[])raw.Clone();
+            var mx = (float[])raw.Clone();
+            if (roster != null)
+                foreach (var c in roster)
+                {
+                    if (c == null) continue;
+                    var r = RawMetrics(c);
+                    for (int i = 0; i < len; i++) { mn[i] = Mathf.Min(mn[i], r[i]); mx[i] = Mathf.Max(mx[i], r[i]); }
+                }
+
+            var norms = new float[len];
+            for (int i = 0; i < len; i++)
             {
-                Mathf.InverseLerp(3f, 8f, s.groundMoveSpeed),
-                Mathf.InverseLerp(8f, 16f, s.jumpForce),
-                Mathf.InverseLerp(40f, 100f, s.guardDurability),
-                Mathf.InverseLerp(0.6f, 1.6f, s.weight),
-                Mathf.InverseLerp(5f, 30f, avgDmg),
-                Mathf.InverseLerp(0.8f, 3f, avgRange),
-            };
-            for (int i = 0; i < norms.Length; i++)
-                norms[i] = Mathf.Clamp(norms[i], 0.05f, 1f);
+                norms[i] = mx[i] > mn[i] + 0.0001f ? Mathf.InverseLerp(mn[i], mx[i], raw[i]) : 0.5f;
+                norms[i] = Mathf.Clamp(norms[i], 0.08f, 1f);
+            }
 
             vals = new[]
             {
-                s.groundMoveSpeed.ToString("F1"),
-                s.jumpForce.ToString("F0"),
-                s.guardDurability.ToString("F0"),
-                s.weight.ToString("F2"),
-                avgDmg.ToString("F0"),
-                avgRange.ToString("F1"),
+                raw[0].ToString("F0"),
+                raw[1].ToString("F0"),
+                raw[2].ToString("F1"),
+                raw[3].ToString("F0"),
+                raw[4].ToString("F0"),
+                raw[5].ToString("F2"),
             };
             return norms;
         }
@@ -1130,7 +1159,7 @@ namespace PromptFighters.GameFlow
             var fills  = isP1 ? _p1StatFills  : _p2StatFills;
             var values = isP1 ? _p1StatValues : _p2StatValues;
             if (fills == null) return;
-            var norms = ComputeStatNorms(data, out var vals);
+            var norms = ComputeStatNorms(data, _presets, out var vals);
             for (int i = 0; i < fills.Length && i < norms.Length; i++)
             {
                 if (fills[i] != null)
@@ -1491,7 +1520,7 @@ namespace PromptFighters.GameFlow
                     if (skillTs[i] == null) continue;
                     var s = d.skills[i];
                     skillTs[i].text = s != null
-                        ? $"{s.skill_name}\n威力 {s.parameters.damage:F0} / リーチ {s.parameters.range:F1} / 発生 {s.parameters.startup:F2}s\n{s.description}"
+                        ? $"{s.skill_name}\n発生 {s.parameters.startup:F2}s\n{s.description}"
                         : "---";
                 }
             }
@@ -1623,6 +1652,12 @@ namespace PromptFighters.GameFlow
             if (data == null) return "---";
 
             var sb = new System.Text.StringBuilder();
+            if (!string.IsNullOrWhiteSpace(data.inputFeatures))
+            {
+                sb.AppendLine("<b>プロンプト</b>");
+                sb.AppendLine($"<color=#9FB3C8><i>{data.inputFeatures}</i></color>");
+                sb.AppendLine();
+            }
             sb.AppendLine("<b>技</b>");
             if (data.skills != null)
                 for (int i = 0; i < data.skills.Length; i++)
@@ -1630,7 +1665,7 @@ namespace PromptFighters.GameFlow
                     var skill = data.skills[i];
                     if (skill == null) continue;
                     string slot = i switch { 0 => "A", 1 => "B", 2 => "C", 3 => "S", _ => "?" };
-                    sb.AppendLine($"<color=#FFC72E>{slot}</color> {skill.skill_name}  <size=85%>威{skill.parameters.damage:F0}/リ{skill.parameters.range:F1}</size>");
+                    sb.AppendLine($"<color=#FFC72E>{slot}</color> {skill.skill_name}");
                 }
             return sb.ToString();
         }

@@ -78,6 +78,7 @@ namespace PromptFighters.Battle.Skills
     [System.Serializable]
     public class CharacterStats
     {
+        public float maxHP = 300f;          // 基準300。AI推論で±50（250〜350）の幅を持つ
         public float groundMoveSpeed = 5f;
         public float airMoveSpeed = 4f;
         public float jumpForce = 12f;

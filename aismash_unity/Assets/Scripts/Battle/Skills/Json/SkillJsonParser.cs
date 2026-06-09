@@ -83,6 +83,8 @@ namespace PromptFighters.Battle.Skills.Json
         static void ClampStats(CharacterStats stats)
         {
             if (stats == null) return;
+            if (stats.maxHP <= 0f) stats.maxHP = 300f;
+            stats.maxHP = Mathf.Clamp(stats.maxHP, 250f, 350f);
             stats.groundMoveSpeed = Mathf.Clamp(stats.groundMoveSpeed, 2.5f, 9.5f);
             stats.airMoveSpeed = Mathf.Clamp(stats.airMoveSpeed, 2.0f, 8.5f);
             stats.jumpForce = Mathf.Clamp(stats.jumpForce, 7f, 19f);

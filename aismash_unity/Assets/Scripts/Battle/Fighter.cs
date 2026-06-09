@@ -832,6 +832,8 @@ namespace PromptFighters.Battle
         public void ApplyCharacterStats(CharacterStats stats)
         {
             if (stats == null) return;
+            maxHP = Mathf.Clamp(stats.maxHP > 0f ? stats.maxHP : 300f, 250f, 350f);
+            CurrentHP = maxHP;
             moveSpeed = Mathf.Clamp(stats.groundMoveSpeed, 2.5f, 9.5f);
             airMoveSpeed = Mathf.Clamp(stats.airMoveSpeed, 2.0f, 8.5f);
             jumpForce = Mathf.Clamp(stats.jumpForce, 7f, 19f);
