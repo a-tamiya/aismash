@@ -34,8 +34,6 @@ namespace PromptFighters.GameFlow
         TextMeshProUGUI _p2GamepadLabel;
         TextMeshProUGUI _p1PresetLabel;
         TextMeshProUGUI _p2PresetLabel;
-        TextMeshProUGUI _p1CategoryLabel;
-        TextMeshProUGUI _p2CategoryLabel;
         TextMeshProUGUI _p1DetailText;
         TextMeshProUGUI _p2DetailText;
         Image[] _p1StatFills;
@@ -115,7 +113,6 @@ namespace PromptFighters.GameFlow
         TextMeshProUGUI _modeVersusLabel;
         Image _modeCoopBg;
         TextMeshProUGUI _modeCoopLabel;
-        TextMeshProUGUI _modeHintLabel;
         GameObject _bossSelectorRoot;
         TextMeshProUGUI _bossPresetLabel;
         int _bossPresetIdx = 0;
@@ -144,6 +141,10 @@ namespace PromptFighters.GameFlow
             BuildDeleteConfirmPanel();
             EnsureVirtualCursor();
             UITheme.ApplyAllInScene();
+            // ApplyAllInScene が全TMPの自動縮小・折り返しを既定へ戻すため、長いキャラ名が
+            // はみ出さないよう選択名ラベルだけ設定を再適用する
+            ConfigurePresetNameLabel(_p1PresetLabel);
+            ConfigurePresetNameLabel(_p2PresetLabel);
             RebuildIconGrids();
             RefreshCharacterPreview();
             UpdateCategoryLabels();
@@ -629,9 +630,6 @@ namespace PromptFighters.GameFlow
             _modeCoopBg    = coopBtn.GetComponent<Image>();
             _modeCoopLabel = coopBtn.GetComponentInChildren<TextMeshProUGUI>();
             _modeCoopLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
-
-            _modeHintLabel = MakeLabel(parent, "ModeHint", "",
-                new Vector2(0f, rowY - 30f), new Vector2(460f, 22f), 12f, PromptFighters.UI.UITheme.InkDim);
         }
 
         void OnSelectVersus()
@@ -668,10 +666,6 @@ namespace PromptFighters.GameFlow
             if (_modeCoopBg     != null) _modeCoopBg.color   = coop ? ToggleOnColor  : ToggleOffColor;
             if (_modeVersusLabel != null) _modeVersusLabel.color = coop ? PromptFighters.UI.UITheme.InkDim : new Color(0.12f, 0.08f, 0f);
             if (_modeCoopLabel   != null) _modeCoopLabel.color   = coop ? new Color(0.12f, 0.08f, 0f) : PromptFighters.UI.UITheme.InkDim;
-            if (_modeHintLabel  != null)
-                _modeHintLabel.text = coop
-                    ? "2人（または1P＋味方CPU）で強敵ボスに挑む。倒れた仲間は近づいて救助できる。"
-                    : "1P と 2P が1対1で対戦する。CPU・トレーニングにも対応。";
             if (_bossSelectorRoot != null) _bossSelectorRoot.SetActive(coop);
             if (coop)
             {
@@ -789,6 +783,18 @@ namespace PromptFighters.GameFlow
             }
         }
 
+        // 長いキャラ名が VS 中央へはみ出さないよう、1行・幅に収まるまで自動縮小する
+        static void ConfigurePresetNameLabel(TextMeshProUGUI label)
+        {
+            if (label == null) return;
+            label.fontStyle = FontStyles.Bold | FontStyles.Italic;
+            label.textWrappingMode = TextWrappingModes.NoWrap;
+            label.overflowMode = TextOverflowModes.Ellipsis;
+            label.enableAutoSizing = true;
+            label.fontSizeMin = 14f;
+            label.fontSizeMax = 26f;
+        }
+
         void BuildPlayerColumn(Transform parent, bool isP1)
         {
             float cx = isP1 ? -480f : 480f;
@@ -827,19 +833,10 @@ namespace PromptFighters.GameFlow
             var label = MakeLabel(row.transform, "Preset",
                 isP1 ? GetPresetName(_p1PresetIdx) : GetPresetName(_p2PresetIdx),
                 new Vector2(0f, 0f), new Vector2(420f, 52f), 26, Color.white);
-            label.fontStyle = FontStyles.Bold | FontStyles.Italic;
-            label.textWrappingMode = TextWrappingModes.NoWrap;
-            label.overflowMode = TextOverflowModes.Ellipsis;
+            ConfigurePresetNameLabel(label);
 
             if (isP1) _p1PresetLabel = label;
             else       _p2PresetLabel = label;
-
-            // カテゴリラベル（初期キャラ / 生成済み）
-            var catLabel = MakeLabel(row.transform, "Category", "初期キャラ",
-                new Vector2(0f, -32f), new Vector2(300f, 22f), 13f, PromptFighters.UI.UITheme.Gold);
-            catLabel.textWrappingMode = TextWrappingModes.NoWrap;
-            if (isP1) _p1CategoryLabel = catLabel;
-            else       _p2CategoryLabel = catLabel;
 
             // ── 大きなキャラプレビュー（左） ──
             var previewFrame = CreateUIObject(isP1 ? "P1PreviewFrame" : "P2PreviewFrame", parent);
@@ -891,10 +888,36 @@ namespace PromptFighters.GameFlow
             MakeOutline(statPanel.transform, "StatDiv", new Vector2(0f, -54f), new Vector2(300f, 2f),
                 new Color(pColor.r, pColor.g, pColor.b, 0.4f));
 
-            var detailText = MakeLabel(statPanel.transform, "DetailText", "",
-                new Vector2(0f, -116f), new Vector2(300f, 120f), 12.5f, PromptFighters.UI.UITheme.Ink);
+            // 技・プロンプト詳細はパネルからはみ出さないよう、マスク内で縦スクロール可能にする
+            var scrollGo = CreateUIObject("DetailScroll", statPanel.transform);
+            var scRt = scrollGo.GetComponent<RectTransform>();
+            scRt.anchoredPosition = new Vector2(0f, -116f);
+            scRt.sizeDelta = new Vector2(300f, 120f);
+            var scBg = scrollGo.AddComponent<Image>();
+            scBg.color = new Color(0f, 0f, 0f, 0.001f); // ほぼ透明・ホイールスクロール入力受付用
+            scrollGo.AddComponent<RectMask2D>();
+            var scroll = scrollGo.AddComponent<ScrollRect>();
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 20f;
+            scroll.viewport = scRt;
+
+            var detailText = MakeLabel(scrollGo.transform, "DetailText", "",
+                Vector2.zero, new Vector2(300f, 120f), 12.5f, PromptFighters.UI.UITheme.Ink);
+            var dtRt = detailText.rectTransform;
+            dtRt.anchorMin = new Vector2(0f, 1f);
+            dtRt.anchorMax = new Vector2(1f, 1f);
+            dtRt.pivot = new Vector2(0.5f, 1f);
+            dtRt.offsetMin = new Vector2(4f, 0f);
+            dtRt.offsetMax = new Vector2(-4f, 0f);
+            dtRt.anchoredPosition = new Vector2(0f, 0f);
             detailText.alignment = TextAlignmentOptions.TopLeft;
             detailText.textWrappingMode = TextWrappingModes.Normal;
+            detailText.raycastTarget = false;
+            var dtFitter = detailText.gameObject.AddComponent<ContentSizeFitter>();
+            dtFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            scroll.content = dtRt;
             if (isP1) _p1DetailText = detailText;
             else _p2DetailText = detailText;
 
@@ -926,11 +949,6 @@ namespace PromptFighters.GameFlow
             frImg.sprite = PromptFighters.UI.UITheme.VGradient; frImg.type = Image.Type.Simple;
             MakeSlantBar(frame.transform, "RosterTop", new Vector2(0f, 112f), new Vector2(1480f, 4f),
                 PromptFighters.UI.UITheme.Gold, 24f);
-
-            // 操作ヒント
-            MakeLabel(parent, "RosterHint",
-                "1P: WASD でカーソル移動 / 2P: 矢印キー　（左半分クリック=1P・右半分クリック=2P）",
-                new Vector2(0f, -104f), new Vector2(1000f, 20f), 12f, PromptFighters.UI.UITheme.InkDim);
 
             var grid = CreateUIObject("RosterGrid", frame.transform);
             var gRt = grid.GetComponent<RectTransform>();
@@ -1652,12 +1670,6 @@ namespace PromptFighters.GameFlow
             if (data == null) return "---";
 
             var sb = new System.Text.StringBuilder();
-            if (!string.IsNullOrWhiteSpace(data.inputFeatures))
-            {
-                sb.AppendLine("<b>プロンプト</b>");
-                sb.AppendLine($"<color=#9FB3C8><i>{data.inputFeatures}</i></color>");
-                sb.AppendLine();
-            }
             sb.AppendLine("<b>技</b>");
             if (data.skills != null)
                 for (int i = 0; i < data.skills.Length; i++)
@@ -1667,6 +1679,12 @@ namespace PromptFighters.GameFlow
                     string slot = i switch { 0 => "A", 1 => "B", 2 => "C", 3 => "S", _ => "?" };
                     sb.AppendLine($"<color=#FFC72E>{slot}</color> {skill.skill_name}");
                 }
+            if (!string.IsNullOrWhiteSpace(data.inputFeatures))
+            {
+                sb.AppendLine();
+                sb.AppendLine("<b>プロンプト</b>");
+                sb.AppendLine($"<color=#9FB3C8><i>{data.inputFeatures}</i></color>");
+            }
             return sb.ToString();
         }
 
@@ -2097,23 +2115,6 @@ namespace PromptFighters.GameFlow
 
         void UpdateCategoryLabels()
         {
-            if (_p1CategoryLabel != null)
-            {
-                bool isGenerated1 = _p1PresetIdx >= _builtInPresetCount;
-                _p1CategoryLabel.text  = isGenerated1 ? "生成済み" : "初期キャラ";
-                _p1CategoryLabel.color = isGenerated1
-                    ? new Color(1f, 0.85f, 0.2f)       // 金色：生成済み
-                    : new Color(0.65f, 0.75f, 0.9f);    // 薄青：初期キャラ
-            }
-            if (_p2CategoryLabel != null)
-            {
-                bool isGenerated2 = _p2PresetIdx >= _builtInPresetCount;
-                _p2CategoryLabel.text  = isGenerated2 ? "生成済み" : "初期キャラ";
-                _p2CategoryLabel.color = isGenerated2
-                    ? new Color(1f, 0.85f, 0.2f)
-                    : new Color(0.65f, 0.75f, 0.9f);
-            }
-
             if (_p1DeleteButton != null)
                 _p1DeleteButton.gameObject.SetActive(_p1PresetIdx >= _builtInPresetCount);
             if (_p2DeleteButton != null)
