@@ -134,6 +134,9 @@ namespace PromptFighters.Battle
             {
                 _defaultCamOrthoSize = _mainCam.orthographicSize;
                 _defaultCamPos       = _mainCam.transform.position;
+                // 距離に応じた自動ズーム＆シェイク適用を担うバトルカメラを付与
+                if (_mainCam.GetComponent<BattleCamera>() == null)
+                    _mainCam.gameObject.AddComponent<BattleCamera>();
             }
         }
 
@@ -784,6 +787,9 @@ namespace PromptFighters.Battle
         Vector3 _defaultCamPos;
         bool    _koSlowActive;
 
+        // KOスロー演出中か（BattleCameraが追従を一時停止する判定に使う）
+        public bool IsKoSlowActive => _koSlowActive;
+
         public void TriggerKOSlow(Vector3 koPosition)
         {
             if (_koSlowActive) return;
@@ -802,7 +808,10 @@ namespace PromptFighters.Battle
 
             float slowDuration = 2.5f;
             float zoomDuration = 0.25f;
-            float zoomInSize   = _defaultCamOrthoSize * 0.70f;
+            // 動的ズームで既に寄っている場合はそれより引かない（KO演出が「ズームアウト」に見えないように）
+            float zoomInSize   = Mathf.Min(
+                _mainCam != null ? _mainCam.orthographicSize : _defaultCamOrthoSize,
+                _defaultCamOrthoSize * 0.70f);
 
             Time.timeScale = 0.15f;
 
