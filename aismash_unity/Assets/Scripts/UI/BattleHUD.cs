@@ -13,7 +13,6 @@ namespace PromptFighters.UI
         static readonly Color BgDeep    = UITheme.Steel;
         static readonly Color BgMid     = new Color(0.05f, 0.06f, 0.09f, 0.98f);
         static readonly Color BgBar     = UITheme.SteelDark;
-        static readonly Color BgSlot    = new Color(0.04f, 0.05f, 0.08f, 0.98f);
         static readonly Color P1Col     = UITheme.P1Neon;
         static readonly Color P2Col     = UITheme.P2Neon;
         static readonly Color TextWht   = UITheme.Ink;
@@ -60,11 +59,7 @@ namespace PromptFighters.UI
         TextMeshProUGUI  _timerText;
         GameObject       _hudRoot;
 
-        readonly TextMeshProUGUI[] _p1Names = new TextMeshProUGUI[4];
-        readonly TextMeshProUGUI[] _p2Names = new TextMeshProUGUI[4];
-
         Fighter       _f1, _f2;
-        SkillExecutor _se1, _se2;
 
         // 協力モードのボスHPバー
         Fighter          _boss;
@@ -74,16 +69,6 @@ namespace PromptFighters.UI
         TextMeshProUGUI  _bossHpNum;
         static readonly Color BossCol = new Color(1f, 0.3f, 0.3f);
 
-        static readonly string[] SlotJp    = { "基本技A", "基本技B", "基本技C", "スマッシュ" };
-        static readonly string[] Keys1P    = { "J", "K", "L", "A+J" };
-        static readonly string[] Keys2P    = { "テン2", "テン3", "テン1", "←+2" };
-        static readonly Color[]  SlotCols  = {
-            new Color(1.00f, 0.28f, 0.28f),
-            new Color(0.28f, 0.58f, 1.00f),
-            new Color(0.20f, 0.90f, 0.48f),
-            new Color(1.00f, 0.76f, 0.08f),
-        };
-
         // ── Init ───────────────────────────────────────────────────────
         void Start()
         {
@@ -91,8 +76,6 @@ namespace PromptFighters.UI
             _f1   = bm?.fighter1;
             _f2   = bm?.fighter2;
             _boss = bm?.boss;
-            _se1 = _f1?.GetComponent<SkillExecutor>();
-            _se2 = _f2?.GetComponent<SkillExecutor>();
 
             BuildHUD();
             HideHUD();
@@ -158,8 +141,6 @@ namespace PromptFighters.UI
             var bm = BattleManager.Instance;
             if (bm?.Character1 != null && _hp1Name) _hp1Name.text = bm.Character1.characterName;
             if (bm?.Character2 != null && _hp2Name) _hp2Name.text = bm.Character2.characterName;
-            RefreshSkillNames(_p1Names, _se1);
-            RefreshSkillNames(_p2Names, _se2);
             if (_timerText) _timerText.text = Mathf.CeilToInt(bm?.TimeRemaining ?? 0f).ToString();
             bool showDots = bm?.bestOf3 == true;
             if (_roundDots1) { _roundDots1.gameObject.SetActive(showDots); UpdateRoundDots(bm?.P1RoundWins ?? 0, bm?.P2RoundWins ?? 0); }
@@ -168,16 +149,6 @@ namespace PromptFighters.UI
             bool coop = bm?.Mode == BattleMode.CoopVsBoss;
             if (_bossBarRoot) _bossBarRoot.SetActive(coop);
             if (coop && _boss != null) UpdateBossHP(_boss.CurrentHP, _boss.maxHP);
-        }
-
-        void RefreshSkillNames(TextMeshProUGUI[] labels, SkillExecutor se)
-        {
-            for (int i = 0; i < 4; i++)
-            {
-                if (labels[i] == null || se == null) continue;
-                var sk = se.GetSkill((SkillSlot)i);
-                labels[i].text = sk?.skill_name ?? SlotJp[i];
-            }
         }
 
         void UpdateHP(int player, float hp, float max)
@@ -227,7 +198,6 @@ namespace PromptFighters.UI
             FillParent(_hudRoot);
             BuildTopBar();
             BuildBossBar();
-            BuildSkillBars();
         }
 
         // 協力モードのボスHPバー（画面上部中央、トップバーの下）。Versusでは非表示。
@@ -508,98 +478,6 @@ namespace PromptFighters.UI
             gi.color = GuardFull;
             UITheme.Skew(gi, slant);
             grdFill = gi; grdRect = grdGo.GetComponent<RectTransform>();
-        }
-
-        void BuildSkillBars()
-        {
-            const float SH  = 84f;   // スロット高
-            const float PAD = 5f;
-            const float BOT = 102f;  // 実況バー（高さ100px）の上に配置
-
-            var sb1 = MakeUI("Skills1P", _hudRoot.transform);
-            Anch(sb1, 0,0, 0.5f,0,  PAD,BOT, -3f,BOT+SH);
-            BuildSlots(sb1.transform, true);
-
-            var sb2 = MakeUI("Skills2P", _hudRoot.transform);
-            Anch(sb2, 0.5f,0, 1f,0,  3f,BOT, -PAD,BOT+SH);
-            BuildSlots(sb2.transform, false);
-
-            // bottom glow line
-            var botLine = MakeUI("BotGlow", _hudRoot.transform);
-            Anch(botLine, 0,0,1,0,  0,BOT+SH+PAD-1f, 0,BOT+SH+PAD);
-            botLine.AddComponent<Image>().color = GlowLine;
-        }
-
-        void BuildSlots(Transform parent, bool isP1)
-        {
-            string[] keys = isP1 ? Keys1P : Keys2P;
-            var names     = isP1 ? _p1Names : _p2Names;
-            var se        = isP1 ? _se1 : _se2;
-
-            for (int i = 0; i < 4; i++)
-            {
-                float xMin = i * 0.25f + 0.004f;
-                float xMax = (i+1) * 0.25f - 0.004f;
-
-                var slot = MakeUI($"Slot{i}", parent);
-                var sRt = slot.GetComponent<RectTransform>();
-                sRt.anchorMin = new Vector2(xMin, 0f);
-                sRt.anchorMax = new Vector2(xMax, 1f);
-                sRt.offsetMin = sRt.offsetMax = Vector2.zero;
-                slot.AddComponent<Image>().color = BgSlot;
-
-                Color sc = SlotCols[i];
-
-                // colored top border (3px)
-                var topBord = MakeUI("TopB", slot.transform);
-                Anch(topBord, 0,1,1,1,  0,-3f,0,0);
-                topBord.AddComponent<Image>().color = sc;
-
-                // dim left edge
-                var leftB = MakeUI("LeftB", slot.transform);
-                Anch(leftB, 0,0,0,1,  0,0,1f,0);
-                leftB.AddComponent<Image>().color = new Color(sc.r, sc.g, sc.b, 0.22f);
-
-                // key badge
-                var kbGo = MakeUI("KeyBg", slot.transform);
-                var kbRt = kbGo.GetComponent<RectTransform>();
-                kbRt.anchorMin = kbRt.anchorMax = new Vector2(0.5f, 1f);
-                kbRt.sizeDelta = new Vector2(50f, 20f);
-                kbRt.anchoredPosition = new Vector2(0f, -14f);
-                kbGo.AddComponent<Image>().color = new Color(sc.r, sc.g, sc.b, 0.22f);
-
-                var kbLine = MakeUI("KBLine", kbGo.transform);
-                Anch(kbLine, 0,1,1,1, 0,-1f,0,0);
-                kbLine.AddComponent<Image>().color = new Color(sc.r, sc.g, sc.b, 0.7f);
-
-                var keyTxt = MakeUI("KeyTxt", kbGo.transform);
-                FillParent(keyTxt);
-                var kt = keyTxt.AddComponent<TextMeshProUGUI>();
-                kt.text = keys[i]; kt.fontSize = 13f; kt.fontStyle = FontStyles.Bold;
-                kt.alignment = TextAlignmentOptions.Center; kt.color = sc;
-                UITheme.Apply(kt);
-
-                // skill name
-                var nmGo = MakeUI("SkillName", slot.transform);
-                Anch(nmGo, 0,0.35f,1,1,  5f,0,-5f,-26f);
-                var nm = nmGo.AddComponent<TextMeshProUGUI>();
-                var sk = se?.GetSkill((SkillSlot)i);
-                nm.text = sk?.skill_name ?? SlotJp[i];
-                nm.fontSize = 17f; nm.fontStyle = FontStyles.Bold;
-                nm.alignment = TextAlignmentOptions.Center; nm.color = TextWht;
-                nm.textWrappingMode = TextWrappingModes.NoWrap;
-                nm.overflowMode = TextOverflowModes.Ellipsis;
-                UITheme.Apply(nm);
-                names[i] = nm;
-
-                // slot type label
-                var tpGo = MakeUI("SlotType", slot.transform);
-                Anch(tpGo, 0,0,1,0.38f,  4f,2f,-4f,0);
-                var tp = tpGo.AddComponent<TextMeshProUGUI>();
-                tp.text = SlotJp[i]; tp.fontSize = 12f;
-                tp.alignment = TextAlignmentOptions.Center; tp.color = TextDim;
-                UITheme.Apply(tp);
-            }
         }
 
         // ── Helpers ────────────────────────────────────────────────────
