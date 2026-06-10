@@ -28,20 +28,24 @@ namespace PromptFighters.AI
 
     public static class AIAngelClient
     {
+        // acquirerSlot: アイテム取得者（"player1"/"player2"）。指定すると取得者の願いを優先し、
+        // 「自分/相手」を取得者基準で解決させる。null（旧・天使の気まぐれ）も可。
         public static Coroutine DecideGimmick(MonoBehaviour runner,
             string voiceText,
             CommentaryBattleState battleState,
             Action<GimmickData> onSuccess,
-            Action<string> onError = null)
+            Action<string> onError = null,
+            string acquirerSlot = null)
         {
             return runner.StartCoroutine(
-                DecideCoroutine(voiceText, battleState, onSuccess, onError));
+                DecideCoroutine(voiceText, battleState, onSuccess, onError, acquirerSlot));
         }
 
         static IEnumerator DecideCoroutine(string voiceText,
             CommentaryBattleState state,
             Action<GimmickData> onSuccess,
-            Action<string> onError)
+            Action<string> onError,
+            string acquirerSlot = null)
         {
             string key = AIImageClient.ApiKey;
             if (!AIImageClient.IsConfiguredApiKey(key))
@@ -51,7 +55,7 @@ namespace PromptFighters.AI
             }
 
             string body = OpenAIRequest.BuildChatBody(
-                AICharacterClient.LightModel, BuildSystemPrompt(), BuildUserPrompt(voiceText, state),
+                AICharacterClient.LightModel, BuildSystemPrompt(), BuildUserPrompt(voiceText, state, acquirerSlot),
                 jsonMode: true);
             using var req = new UnityWebRequest(AICharacterClient.Endpoint, "POST");
             req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
@@ -97,14 +101,26 @@ namespace PromptFighters.AI
         static string BuildSystemPrompt() =>
             "あなたは2D格闘ゲームを見守る「気まぐれ天使」AIです。気まぐれにギミックを発動して試合をかき乱します。\n\n【天使の性格・ルール】\n- 観客の声がある場合はそれに応答してください\n- ただし強すぎる願い（即死・永続無敵など）ほど言うことを聞かない。機嫌を損ねて願った側にデバフをかけてもよい\n- 観客の声がない場合は試合を面白くする介入をする（負けている側を有利にするなど）\n- gimmick2/gimmick3を積極的に使い複合効果を出すこと\n- value/durationは観客の要求内容に応じて自由に決めてよい\n\n【ギミック一覧】\nバフ: hp_recover（value=回復割合）, hp_full（全回復）, speed_boost（value=速度倍率）, jump_boost（value=ジャンプ倍率）, damage_boost（value=ダメージ倍率）, invincible（無敵）, gravity_down（浮遊 value=重力倍率0.1〜0.8）, guard_fill（ガード全回復）, reflect（ダメージ反射 duration=秒）\nデバフ: hp_drain（value=削減割合）, hp_set（HPを指定割合にする value=割合）, speed_down, jump_down, damage_down, chaos（操作反転）, freeze（行動不能 duration=秒）, burn, guard_break, gravity_up（重力増 value=1.5〜5）, slow（スロー）, launch（吹き飛ばし value=強さ1〜5）\n特殊: hp_swap（HP入れ替え）, size_up, size_down, teleport（ランダム瞬間移動）, position_swap（P1とP2の位置入れ替え）\n地形: obstacle_platform（横足場 value=幅）, obstacle_wall（縦壁 value=高さ）, obstacle_bounce（バウンスパッド）, obstacle_rain（落下物 value=個数）, obstacle_tilt（斜め足場）\n※地形targetでplayer1=P1付近/player2=P2付近/その他=中央。gimmick2/3で複数同時可\n\ntarget: player1 / player2 / both / weaker / stronger / random\n\nmessageはプレイヤーへの人格攻撃なしで天使のセリフ（日本語・気まぐれな口調・30字以内）\n\nJSONのみ出力（不要フィールドは空文字/0でOK）：\n{\"gimmick\":\"...\",\"target\":\"...\",\"value\":0.0,\"duration\":0.0,\"gimmick2\":\"\",\"target2\":\"\",\"value2\":0.0,\"duration2\":0.0,\"gimmick3\":\"\",\"target3\":\"\",\"value3\":0.0,\"duration3\":0.0,\"message\":\"...\"}";
 
-        static string BuildUserPrompt(string voiceText, CommentaryBattleState s)
+        static string BuildUserPrompt(string voiceText, CommentaryBattleState s, string acquirerSlot)
         {
             string p1streak = s.hitStreakP1 >= 3 ? $" 連続{s.hitStreakP1}hit中" : "";
             string p2streak = s.hitStreakP2 >= 3 ? $" 連続{s.hitStreakP2}hit中" : "";
             string p1skill  = s.lastSkillP1 != "---" ? $" 直前技:{s.lastSkillP1}" : "";
             string p2skill  = s.lastSkillP2 != "---" ? $" 直前技:{s.lastSkillP2}" : "";
             string events   = !string.IsNullOrEmpty(s.recentEvents) ? $"\n直近の出来事: {s.recentEvents}" : "";
-            return $"観客の声：「{voiceText}」\n\n試合状況：\n- {s.player1Name} HP:{s.player1HpRatio*100f:0}% 与ダメ:{s.totalDamageP1:0}{p1streak}{p1skill}\n- {s.player2Name} HP:{s.player2HpRatio*100f:0}% 与ダメ:{s.totalDamageP2:0}{p2streak}{p2skill}\n- 残り時間: {s.timeRemaining:0}秒{events}";
+
+            string acquirerLine = "";
+            string voiceLine = $"観客の声：「{voiceText}」";
+            if (acquirerSlot == "player1" || acquirerSlot == "player2")
+            {
+                string who = acquirerSlot == "player1" ? s.player1Name : s.player2Name;
+                acquirerLine =
+                    $"【アイテム取得者】{acquirerSlot}（{who}）。\n" +
+                    $"取得者の「自分/わたし/オレ/こっち」はこのプレイヤー({acquirerSlot})、「相手/敵/あいつ」はもう一方を指す。\n" +
+                    $"取得者の願いは基本的に叶えること（target をそれに合わせる）。極端な即死・永続無敵だけは控えめに。\n\n";
+                voiceLine = $"取得者の願い：「{voiceText}」";
+            }
+            return $"{acquirerLine}{voiceLine}\n\n試合状況：\n- {s.player1Name} HP:{s.player1HpRatio*100f:0}% 与ダメ:{s.totalDamageP1:0}{p1streak}{p1skill}\n- {s.player2Name} HP:{s.player2HpRatio*100f:0}% 与ダメ:{s.totalDamageP2:0}{p2streak}{p2skill}\n- 残り時間: {s.timeRemaining:0}秒{events}";
         }
 
         static string ExtractJson(string text)

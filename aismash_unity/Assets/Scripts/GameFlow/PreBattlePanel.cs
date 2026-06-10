@@ -681,7 +681,7 @@ namespace PromptFighters.GameFlow
         static string CommentaryToggleText() =>
             PromptFighters.UI.CommentaryController.Enabled ? "実況 ON" : "実況 OFF";
         static string AngelToggleText() =>
-            PromptFighters.UI.AngelController.Enabled ? "天使 ON" : "天使 OFF";
+            PromptFighters.UI.AngelController.Enabled ? "アイテム ON" : "アイテム OFF";
         static string PlatformToggleText() =>
             PromptFighters.Battle.StagePlatformSpawner.PlatformsEnabled ? "台 ON" : "台 OFF";
         static string CpuToggleText()

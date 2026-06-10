@@ -43,7 +43,9 @@ namespace PromptFighters.AI
             AudioClip clip = Microphone.Start(null, false, clipSeconds, sampleRate);
             onRecordingStart?.Invoke();
 
-            yield return new WaitForSeconds(recordSeconds);
+            // 録音はスローモーション（Time.timeScale変更）の影響を受けない実時間で行う。
+            // マイクは実時間で録音されるため、ここをスケール時間にすると尺がズレる。
+            yield return new WaitForSecondsRealtime(recordSeconds);
             Microphone.End(null);
 
             byte[] wav = AudioClipToWav(clip, sampleRate, recordSeconds);

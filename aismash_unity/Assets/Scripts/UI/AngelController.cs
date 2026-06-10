@@ -3,32 +3,33 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using PromptFighters.AI;
+using PromptFighters.Audio;
 using PromptFighters.Battle;
 
 namespace PromptFighters.UI
 {
-    // 気まぐれ天使コントローラー。
-    // 自動タイマーで降臨 → 退屈メッセージ + 音声入力受付 → ギミック決定 → 中央大表示。
+    // 音声アイテム・コントローラー（旧「気まぐれ天使」を置き換え）。
+    // 一定間隔でスマッシュボール風の VoiceItem を出現させ、耐久を0にして
+    // 破壊した（取得した）プレイヤーに、スロー＋5秒の音声入力の権利を与える。
+    // 音声内容を LLM が解釈してギミックを決定・適用する（Whisper/AIAngelClient/AngelGimmickApplier を流用）。
+    // クラス名は既存参照（BattleManager/GameAudioManager/PreBattlePanel）維持のため踏襲。
     public class AngelController : MonoBehaviour
     {
         public static bool Enabled = true;
-        public float recordSeconds = 5f;
-
-        static readonly string[] BoredMessages =
-        {
-            "なんか退屈だなぁ…何か頼んでもいいよ？",
-            "ヒマすぎる…ちょっと手伝ってあげようか？",
-            "つまんないから、願い事を叶えてあげる！",
-            "ねぇねぇ、何かしてほしいことある？",
-            "気まぐれが発動！何か言ってみて♪",
-        };
+        public float recordSeconds  = 5f;
+        public float spawnInterval  = 20f;  // アイテム出現間隔（秒）
+        public float firstSpawnDelay = 8f;  // 試合開始から最初の出現まで
+        public float slowScale      = 0.4f; // 録音中のスローモーション倍率
 
         bool          _busy;
         BattleManager _bm;
         AngelGimmickApplier _applier;
-        Coroutine     _loopRoutine;
+        Coroutine     _spawnRoutine;
+        VoiceItem     _activeItem;
+        float         _recordEndRealtime;
+        bool          _listening;
 
-        // 上部バナー（天使降臨中）
+        // 上部バナー
         CanvasGroup     _bannerGroup;
         TextMeshProUGUI _titleLabel;
         TextMeshProUGUI _statusLabel;
@@ -38,7 +39,7 @@ namespace PromptFighters.UI
         TextMeshProUGUI _effectLabel;
         Coroutine       _effectFade;
 
-        // 下部字幕欄（天使の発言）
+        // 下部字幕欄
         CanvasGroup     _subtitleGroup;
         TextMeshProUGUI _subtitleLabel;
 
@@ -54,7 +55,12 @@ namespace PromptFighters.UI
         public void StopVoice()
         {
             _audioSource?.Stop();
-            if (_loopRoutine != null) { StopCoroutine(_loopRoutine); _loopRoutine = null; }
+            if (_spawnRoutine != null) { StopCoroutine(_spawnRoutine); _spawnRoutine = null; }
+            StopAllCoroutines();
+            _spawnRoutine = null;
+            if (_activeItem != null) { Destroy(_activeItem.gameObject); _activeItem = null; }
+            RestoreTimeScale();
+            _busy = false; _listening = false;
             if (_bannerGroup != null)   _bannerGroup.alpha   = 0f;
             if (_subtitleGroup != null) _subtitleGroup.alpha = 0f;
             if (_effectGroup != null)   _effectGroup.alpha   = 0f;
@@ -82,97 +88,172 @@ namespace PromptFighters.UI
         void OnBattleStart()
         {
             if (!Enabled) return;
-            if (_loopRoutine != null) StopCoroutine(_loopRoutine);
-            _loopRoutine = StartCoroutine(AngelLoop());
+            if (_spawnRoutine != null) StopCoroutine(_spawnRoutine);
+            _spawnRoutine = StartCoroutine(SpawnLoop());
         }
 
         void OnBattleEnd(int _)
         {
-            if (_loopRoutine != null) { StopCoroutine(_loopRoutine); _loopRoutine = null; }
+            if (_spawnRoutine != null) { StopCoroutine(_spawnRoutine); _spawnRoutine = null; }
+            if (_activeItem != null) { Destroy(_activeItem.gameObject); _activeItem = null; }
+            RestoreTimeScale();
+            _busy = false; _listening = false;
         }
 
-        IEnumerator AngelLoop()
+        // 一定間隔でアイテムを1個ずつ出現（同時に1個まで）。録音中は出さない。
+        IEnumerator SpawnLoop()
         {
-            yield return new WaitForSeconds(10f);
+            yield return new WaitForSeconds(firstSpawnDelay);
             while (true)
             {
-                if (Enabled && _bm != null && _bm.Phase == BattlePhase.Fighting && !_busy)
-                    yield return StartCoroutine(AngelSequence());
-                yield return new WaitForSeconds(15f);
+                if (Enabled && !_busy && _activeItem == null &&
+                    _bm != null && _bm.Phase == BattlePhase.Fighting)
+                {
+                    SpawnItem();
+                }
+                yield return new WaitForSeconds(spawnInterval);
             }
         }
 
-        IEnumerator AngelSequence()
+        void SpawnItem()
+        {
+            float halfW = _bm != null ? _bm.stageHalfWidth * 0.7f : 4.5f;
+            float x = Random.Range(-halfW, halfW);
+            float y = Random.Range(-0.4f, 2.6f); // 空中
+            _activeItem = VoiceItem.Spawn(new Vector2(x, y), halfW, OnItemBroken);
+            ShowBanner("[ アイテム出現！ ]", "攻撃して破壊すると…願いが叶う！");
+            if (_busy == false) StartCoroutine(HideBannerAfter(2.4f));
+        }
+
+        IEnumerator HideBannerAfter(float sec)
+        {
+            yield return new WaitForSeconds(sec);
+            if (!_busy) HideBanner();
+        }
+
+        // VoiceItem が破壊された＝取得された時のコールバック（breaker = 取得者）
+        void OnItemBroken(Fighter breaker)
+        {
+            _activeItem = null;
+            if (_busy) return; // 念のため二重起動防止
+            StartCoroutine(AcquireSequence(breaker));
+        }
+
+        IEnumerator AcquireSequence(Fighter breaker)
         {
             _busy = true;
 
-            // 1. 退屈メッセージを表示 + TTS + 音声入力受付
-            string boredMsg = BoredMessages[Random.Range(0, BoredMessages.Length)];
-            ShowBanner("[ 天使降臨中 ]", boredMsg);
-            ShowSubtitle(boredMsg);
+            string acquirerSlot = breaker != null && breaker == _bm?.fighter2 ? "player2" : "player1";
+            string acquirerName = acquirerSlot == "player2"
+                ? (_bm?.Character2?.characterName ?? "2P")
+                : (_bm?.Character1?.characterName ?? "1P");
 
-            bool ttsDone = false;
-            AITTSClient.Speak(this, boredMsg, _audioSource,
-                onComplete: () => ttsDone = true,
-                onError: err => ttsDone = true,
-                voice: AITTSClient.AngelVoice,
-                volume: 2.2f);
+            // 1. スローモーション開始（KO演出中は触らない）
+            bool slowed = false;
+            if (_bm == null || !_bm.IsKoSlowActive)
+            {
+                Time.timeScale = slowScale;
+                slowed = true;
+            }
 
+            ShowBanner($"[ {acquirerName} がアイテム獲得！ ]", "願いを話して！（マイクに向かって）");
+            GameAudioManager.Instance?.PlayGimmickBuff();
+
+            // 2. 5秒録音（実時間。スローでも尺は変わらない）
             string transcribed = null;
             bool   recordDone  = false;
-            bool   listeningStarted = false;
-            float  listeningEndTime = Time.time + recordSeconds;
+            _listening = false;
+            _recordEndRealtime = Time.unscaledTime + recordSeconds;
             WhisperClient.RecordAndTranscribe(this, recordSeconds,
                 text => { transcribed = text; recordDone = true; },
-                err  => { Debug.LogWarning("[Angel] Whisper: " + err); recordDone = true; },
+                err  => { Debug.LogWarning("[VoiceItem] Whisper: " + err); recordDone = true; },
                 onRecordingStart: () =>
                 {
-                    listeningStarted = true;
-                    listeningEndTime = Time.time + recordSeconds;
+                    _listening = true;
+                    _recordEndRealtime = Time.unscaledTime + recordSeconds;
                 });
 
-            while (!recordDone || !ttsDone)
+            while (!recordDone)
             {
-                if (!recordDone)
+                if (_listening)
                 {
-                    float remaining = listeningStarted ? Mathf.Max(0f, listeningEndTime - Time.time) : recordSeconds;
-                    if (listeningStarted && remaining > 0f)
-                        ShowListeningBanner(remaining);
-                    else
-                        ShowBanner("[ 天使降臨中 ]", "音声を解析中...");
+                    float remaining = Mathf.Max(0f, _recordEndRealtime - Time.unscaledTime);
+                    ShowListeningBanner(remaining);
+                }
+                else
+                {
+                    ShowBanner($"[ {acquirerName} がアイテム獲得！ ]", "マイク準備中...");
                 }
                 yield return null;
             }
+            _listening = false;
 
-            // 3. ギミック決定
-            ShowBanner("[ 天使降臨中 ]", "天使が考え中...");
+            // 3. スロー解除（解析・適用は通常速度で）
+            if (slowed) RestoreTimeScale();
+
+            // 4. ギミック決定（取得者を文脈に渡す）
+            ShowBanner("[ アイテム効果 ]", "願いを解析中...");
             var battleState = BuildBattleState();
             GimmickData gimmick = null;
             bool        decided = false;
+            bool        hadVoice = !string.IsNullOrEmpty(transcribed);
             AIAngelClient.DecideGimmick(this, transcribed ?? "", battleState,
                 data => { gimmick = data; decided = true; },
-                err  => { Debug.LogWarning("[Angel] " + err); decided = true; });
+                err  => { Debug.LogWarning("[VoiceItem] " + err); decided = true; },
+                acquirerSlot: acquirerSlot);
             float timeout = 18f;
-            while (!decided && timeout > 0f) { timeout -= Time.deltaTime; yield return null; }
+            while (!decided && timeout > 0f) { timeout -= Time.unscaledDeltaTime; yield return null; }
 
-            if (gimmick == null)
-                gimmick = new GimmickData { gimmick = "hp_recover", target = "weaker", value = 0.15f, message = "ちょっと退屈だから…HP少しあげる♪" };
+            // 5. 音声が取れなかった/失敗時は味方有利のランダム良効果でフォールバック
+            if (gimmick == null || !hadVoice)
+                gimmick = RandomGoodGimmick(acquirerSlot, acquirerName);
 
-            // 4. ギミック適用 + バナー更新 + 中央大表示 + TTS
-            ShowBanner("[ 気まぐれ天使 ]", gimmick.message);
+            // 6. 適用 + 表示 + TTS
+            ShowBanner("[ アイテム効果 ]", gimmick.message);
             ShowSubtitle(gimmick.message);
             _applier.Apply(gimmick, _bm?.fighter1, _bm?.fighter2);
             ShowEffectCenter(BuildEffectText(gimmick));
             AITTSClient.Speak(this, gimmick.message, _audioSource,
-                onError: err => Debug.LogWarning("[AngelTTS] " + err),
+                onError: e => Debug.LogWarning("[VoiceItemTTS] " + e),
                 voice: AITTSClient.AngelVoice,
-                volume: 2.2f);
+                volume: 2.0f);
 
-            yield return new WaitForSeconds(4f);
+            yield return new WaitForSecondsRealtime(3.5f);
             HideBanner();
             HideSubtitle();
 
             _busy = false;
+        }
+
+        void RestoreTimeScale()
+        {
+            // KO演出が時間制御中なら触らない（KO側が最後に1へ戻す）
+            if (_bm != null && _bm.IsKoSlowActive) return;
+            Time.timeScale = 1f;
+        }
+
+        // フォールバック：味方有利のランダムな良効果を取得者に付与
+        static GimmickData RandomGoodGimmick(string acquirerSlot, string acquirerName)
+        {
+            (string g, float v, float d, string msg)[] picks =
+            {
+                ("hp_recover",   0.30f, 0f, "HPが回復した！"),
+                ("speed_boost",  1.40f, 8f, "スピードアップ！"),
+                ("jump_boost",   1.40f, 8f, "ジャンプ強化！"),
+                ("damage_boost", 1.50f, 8f, "パワーアップ！"),
+                ("invincible",   0f,    4f, "無敵化！"),
+                ("guard_fill",   0f,    0f, "ガード全回復！"),
+                ("gravity_down", 0.50f, 8f, "ふわふわ浮遊！"),
+            };
+            var p = picks[Random.Range(0, picks.Length)];
+            return new GimmickData
+            {
+                gimmick  = p.g,
+                target   = acquirerSlot,
+                value    = p.v,
+                duration = p.d,
+                message  = $"{acquirerName}に{p.msg}",
+            };
         }
 
         static string BuildEffectText(GimmickData g)
@@ -241,9 +322,9 @@ namespace PromptFighters.UI
         IEnumerator EffectFadeRoutine()
         {
             _effectGroup.alpha = 1f;
-            yield return new WaitForSeconds(3f);
+            yield return new WaitForSecondsRealtime(3f);
             float t = 0f;
-            while (t < 0.6f) { t += Time.deltaTime; _effectGroup.alpha = 1f - t / 0.6f; yield return null; }
+            while (t < 0.6f) { t += Time.unscaledDeltaTime; _effectGroup.alpha = 1f - t / 0.6f; yield return null; }
             _effectGroup.alpha = 0f;
         }
 
@@ -289,7 +370,7 @@ namespace PromptFighters.UI
             _titleLabel.text = "[ 音声入力受付中 ]";
             _statusLabel.text = $"録音中: 願いを話してね！ 残り {remaining:0.0}秒";
 
-            float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 8f);
+            float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 8f);
             _titleLabel.color = Color.Lerp(new Color(1f, 0.9f, 0.2f), new Color(1f, 0.35f, 0.25f), pulse);
             _statusLabel.color = Color.Lerp(Color.white, new Color(1f, 0.55f, 0.45f), pulse);
             _bannerGroup.alpha = 1f;
@@ -307,7 +388,7 @@ namespace PromptFighters.UI
 
         void BuildUI()
         {
-            var canvasGo = new GameObject("AngelCanvas");
+            var canvasGo = new GameObject("VoiceItemCanvas");
             DontDestroyOnLoad(canvasGo);
 
             var canvas = canvasGo.AddComponent<Canvas>();
@@ -331,21 +412,20 @@ namespace PromptFighters.UI
             scaler.matchWidthOrHeight  = 0.5f;
             canvasGo.AddComponent<GraphicRaycaster>();
 
-            // ── 上部バナー（背景なし・全幅）──
-            var bannerGo = new GameObject("AngelBanner");
+            // ── 上部バナー ──
+            var bannerGo = new GameObject("ItemBanner");
             bannerGo.transform.SetParent(canvasGo.transform, false);
 
             var bannerRect = bannerGo.AddComponent<RectTransform>();
             bannerRect.anchorMin        = new Vector2(0f, 1f);
             bannerRect.anchorMax        = new Vector2(1f, 1f);
             bannerRect.pivot            = new Vector2(0.5f, 1f);
-            bannerRect.anchoredPosition = new Vector2(0f, -90f);  // HPバー(~74px)の下
+            bannerRect.anchoredPosition = new Vector2(0f, -90f);
             bannerRect.sizeDelta        = new Vector2(0f, 160f);
 
             _bannerGroup       = bannerGo.AddComponent<CanvasGroup>();
             _bannerGroup.alpha = 0f;
 
-            // スチール地の半透明バッキング＋ゴールドの斜めアンダーライン
             var bannerBg = UITheme.AddImage(bannerGo.transform, "BannerBg",
                 new Color(PromptFighters.UI.UITheme.SteelDark.r, PromptFighters.UI.UITheme.SteelDark.g, PromptFighters.UI.UITheme.SteelDark.b, 0.55f),
                 UITheme.VGradient);
@@ -387,7 +467,7 @@ namespace PromptFighters.UI
             _statusLabel.color     = Color.white;
             _statusLabel.alignment = TextAlignmentOptions.Center;
 
-            // ── 中央大表示（ギミック効果・背景なし）──
+            // ── 中央大表示（ギミック効果）──
             var effectGo = new GameObject("EffectDisplay");
             effectGo.transform.SetParent(canvasGo.transform, false);
 
@@ -418,15 +498,15 @@ namespace PromptFighters.UI
                 new Color(1f, 0.95f, 0.55f), new Color(1f, 0.95f, 0.55f),
                 UITheme.Gold, UITheme.Gold);
 
-            // ── 下部字幕欄（天使の発言）──
-            var subGo = new GameObject("AngelSubtitle");
+            // ── 下部字幕欄 ──
+            var subGo = new GameObject("ItemSubtitle");
             subGo.transform.SetParent(canvasGo.transform, false);
 
             var subRect = subGo.AddComponent<RectTransform>();
             subRect.anchorMin        = new Vector2(0f, 0f);
             subRect.anchorMax        = new Vector2(1f, 0f);
             subRect.pivot            = new Vector2(0.5f, 0f);
-            subRect.anchoredPosition = new Vector2(0f, 100f);  // 実況字幕(100px)の上
+            subRect.anchoredPosition = new Vector2(0f, 100f);
             subRect.sizeDelta        = new Vector2(0f, 90f);
 
             _subtitleGroup       = subGo.AddComponent<CanvasGroup>();
@@ -437,7 +517,6 @@ namespace PromptFighters.UI
             subBg.type = UnityEngine.UI.Image.Type.Simple;
             subBg.color = new Color(PromptFighters.UI.UITheme.SteelDark.r, PromptFighters.UI.UITheme.SteelDark.g, PromptFighters.UI.UITheme.SteelDark.b, 0.62f);
 
-            // ゴールドの斜めトップアクセント
             var subAccentGo = new GameObject("SubAccent");
             subAccentGo.transform.SetParent(subGo.transform, false);
             var saRt = subAccentGo.AddComponent<RectTransform>();

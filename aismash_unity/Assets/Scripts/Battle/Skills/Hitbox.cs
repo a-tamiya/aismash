@@ -35,6 +35,7 @@ namespace PromptFighters.Battle.Skills
         readonly HashSet<Fighter> _hitTargets = new HashSet<Fighter>();
         readonly Dictionary<Fighter, float> _nextHitTimes = new Dictionary<Fighter, float>();
         readonly HashSet<Battle.SummonEntity> _hitSummons = new HashSet<Battle.SummonEntity>();
+        readonly HashSet<Battle.VoiceItem> _hitVoiceItems = new HashSet<Battle.VoiceItem>();
         int _hitsLanded;
 
         // デバッグオーバーレイ（col.boundsに毎フレーム追従する独立オブジェクト。プール対象と一緒に再利用）
@@ -150,6 +151,7 @@ namespace PromptFighters.Battle.Skills
             _hitTargets.Clear();
             _nextHitTimes.Clear();
             _hitSummons.Clear();
+            _hitVoiceItems.Clear();
             _hitsLanded = 0;
 
             Owner = null;
@@ -305,6 +307,18 @@ namespace PromptFighters.Battle.Skills
         {
             if (_released) return;
             if (_hitsLanded >= MaxHits) return;
+
+            // 音声アイテムへのヒット（中立物：陣営問わず誰でも殴れる。最後に削った人が取得者）
+            var voiceItem = other.GetComponentInParent<Battle.VoiceItem>();
+            if (voiceItem != null && !_hitVoiceItems.Contains(voiceItem))
+            {
+                _hitVoiceItems.Add(voiceItem);
+                voiceItem.TakeHit(Damage, Owner);
+                _hitsLanded++;
+                if (_hitsLanded >= MaxHits && _col != null)
+                    _col.enabled = false;
+                return;
+            }
 
             // 召喚物へのヒット
             var summon = other.GetComponentInParent<Battle.SummonEntity>();

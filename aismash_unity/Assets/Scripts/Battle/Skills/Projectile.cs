@@ -320,6 +320,15 @@ namespace PromptFighters.Battle.Skills
                 return;
             }
 
+            // 音声アイテムへのヒット（中立物：陣営問わず誰でも殴れる。最後に削った人が取得者）
+            var voiceItem = other.GetComponentInParent<Battle.VoiceItem>();
+            if (voiceItem != null)
+            {
+                voiceItem.TakeHit(Damage, Owner);
+                if (!IsBoomerang) Release();
+                return;
+            }
+
             // 召喚物へのヒット
             var summon = other.GetComponentInParent<Battle.SummonEntity>();
             if (summon != null && summon.Owner != Owner)
