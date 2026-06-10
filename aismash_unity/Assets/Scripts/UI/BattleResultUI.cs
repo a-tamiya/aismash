@@ -134,7 +134,7 @@ namespace PromptFighters.UI
             var cmtHeader = Make("CmtHeader", cmtBg.transform);
             Anch(cmtHeader, 0,1,1,1, 10f,-20f,-10f,-2f);
             var cmtH = cmtHeader.AddComponent<TextMeshProUGUI>();
-            cmtH.text = "■  AI ANALYSIS"; cmtH.fontSize = 9f;
+            cmtH.text = "■  AI ANALYSIS"; cmtH.fontSize = 13f;
             cmtH.fontStyle = FontStyles.Bold | FontStyles.Italic;
             cmtH.alignment = TextAlignmentOptions.Left;
             cmtH.color = new Color(UITheme.Gold.r, UITheme.Gold.g, UITheme.Gold.b, 0.9f);
@@ -144,7 +144,7 @@ namespace PromptFighters.UI
             Anch(cmtGo, 0,0,1,1, 10f,6f,-10f,-22f);
             _commentText = cmtGo.AddComponent<TextMeshProUGUI>();
             _commentText.text = "AI が試合を分析中…";
-            _commentText.fontSize = 14f;
+            _commentText.fontSize = 17f;
             _commentText.alignment = TextAlignmentOptions.TopLeft;
             _commentText.color = new Color(0.82f, 0.90f, 1.00f);
             _commentText.textWrappingMode = TextWrappingModes.Normal;
@@ -155,7 +155,7 @@ namespace PromptFighters.UI
             Anch(prmtGo, 0,0,1,0, 0,14f,0,38f);
             _promptText = prmtGo.AddComponent<TextMeshProUGUI>();
             _promptText.text = "[ SPACE / ENTER ]  REMATCH";
-            _promptText.fontSize = 13f;
+            _promptText.fontSize = 16f;
             _promptText.alignment = TextAlignmentOptions.Center;
             _promptText.color = TextMuted;
             UITheme.Apply(_promptText);
@@ -184,7 +184,7 @@ namespace PromptFighters.UI
             var tagTxt = Make("TagTxt", tagGo.transform);
             FillRect(tagTxt.GetComponent<RectTransform>());
             var tt = tagTxt.AddComponent<TextMeshProUGUI>();
-            tt.text = isP1 ? "1P" : "2P"; tt.fontSize = 11f; tt.fontStyle = FontStyles.Bold;
+            tt.text = isP1 ? "1P" : "2P"; tt.fontSize = 14f; tt.fontStyle = FontStyles.Bold;
             tt.alignment = TextAlignmentOptions.Center; tt.color = pCol;
             UITheme.Apply(tt);
 
@@ -192,7 +192,7 @@ namespace PromptFighters.UI
             var nameGo = Make("CharName", card.transform);
             Anch(nameGo, 0,1,1,1, 44f,-32f,-8f,-8f);
             var nm = nameGo.AddComponent<TextMeshProUGUI>();
-            nm.text = isP1 ? "1P" : "2P"; nm.fontSize = 18f; nm.fontStyle = FontStyles.Bold;
+            nm.text = isP1 ? "1P" : "2P"; nm.fontSize = 22f; nm.fontStyle = FontStyles.Bold;
             nm.alignment = TextAlignmentOptions.Left; nm.color = TextWht;
             nm.textWrappingMode = TextWrappingModes.NoWrap;
             nm.overflowMode = TextOverflowModes.Ellipsis;
@@ -203,7 +203,7 @@ namespace PromptFighters.UI
             var statsGo = Make("Stats", card.transform);
             Anch(statsGo, 0,0,1,1, 10f,8f,-10f,-38f);
             var st = statsGo.AddComponent<TextMeshProUGUI>();
-            st.text = "---"; st.fontSize = 14f;
+            st.text = "---"; st.fontSize = 17f;
             st.alignment = TextAlignmentOptions.TopLeft;
             st.color = new Color(0.78f, 0.88f, 1.00f);
             st.textWrappingMode = TextWrappingModes.Normal;

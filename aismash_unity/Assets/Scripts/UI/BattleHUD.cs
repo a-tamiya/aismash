@@ -227,15 +227,16 @@ namespace PromptFighters.UI
             FillParent(_hudRoot);
             BuildTopBar();
             BuildBossBar();
+            BuildSkillBars();
         }
 
         // 協力モードのボスHPバー（画面上部中央、トップバーの下）。Versusでは非表示。
         void BuildBossBar()
         {
-            const float TOTAL_H = 64f + 5f * 2f; // トップバー高（BuildTopBar基準）
-            const float BAR_H   = 26f;
+            const float TOTAL_H = 92f + 5f * 2f; // トップバー高（BuildTopBar基準）
+            const float BAR_H   = 34f;
             const float W_FRAC  = 0.6f;          // 画面幅に対するバー幅の割合
-            const float NAME_H  = 16f;
+            const float NAME_H  = 22f;
 
             _bossBarRoot = MakeUI("BossBar", _hudRoot.transform);
             var rt = _bossBarRoot.GetComponent<RectTransform>();
@@ -249,7 +250,7 @@ namespace PromptFighters.UI
             var nameGo = MakeUI("BossName", _bossBarRoot.transform);
             Anch(nameGo, 0,1,1,1,  0,-NAME_H,0,0);
             var nm = nameGo.AddComponent<TextMeshProUGUI>();
-            nm.text = "BOSS"; nm.fontSize = 13f;
+            nm.text = "BOSS"; nm.fontSize = 18f;
             nm.fontStyle = FontStyles.Bold | FontStyles.Italic;
             nm.alignment = TextAlignmentOptions.Center; nm.color = BossCol;
             UITheme.Apply(nm);
@@ -276,7 +277,7 @@ namespace PromptFighters.UI
             var numGo = MakeUI("BossHPNum", barBg.transform);
             FillParent(numGo);
             var num = numGo.AddComponent<TextMeshProUGUI>();
-            num.text = "300"; num.fontSize = 16f;
+            num.text = "300"; num.fontSize = 22f;
             num.fontStyle = FontStyles.Bold | FontStyles.Italic;
             num.alignment = TextAlignmentOptions.Center; num.color = TextWht;
             UITheme.Apply(num);
@@ -300,8 +301,8 @@ namespace PromptFighters.UI
 
         void BuildTopBar()
         {
-            const float ZH      = 64f;   // HP zone height
-            const float TIMER_W = 108f;  // timer width
+            const float ZH      = 92f;   // HP zone height
+            const float TIMER_W = 136f;  // timer width
             const float PAD     = 5f;    // outer margin
             const float GAP     = 2f;    // zone–timer gap
             const float TOTAL_H = ZH + PAD * 2f;
@@ -337,7 +338,7 @@ namespace PromptFighters.UI
             Anch(rd1Go, 0f,1f, 0.5f,1f,  PAD+4f, -TOTAL_H+1f, -(TIMER_W*0.5f+GAP), -TOTAL_H+17f);
             _roundDots1 = rd1Go.AddComponent<TextMeshProUGUI>();
             _roundDots1.text = RoundDots(0, P1Col);
-            _roundDots1.fontSize = 15f;
+            _roundDots1.fontSize = 18f;
             _roundDots1.alignment = TextAlignmentOptions.Left;
             _roundDots1.color = Color.white;
             UITheme.Apply(_roundDots1);
@@ -346,7 +347,7 @@ namespace PromptFighters.UI
             Anch(rd2Go, 0.5f,1f, 1f,1f,  TIMER_W*0.5f+GAP, -TOTAL_H+1f, -PAD-4f, -TOTAL_H+17f);
             _roundDots2 = rd2Go.AddComponent<TextMeshProUGUI>();
             _roundDots2.text = RoundDots(0, P2Col);
-            _roundDots2.fontSize = 15f;
+            _roundDots2.fontSize = 18f;
             _roundDots2.alignment = TextAlignmentOptions.Right;
             _roundDots2.color = Color.white;
             UITheme.Apply(_roundDots2);
@@ -368,17 +369,17 @@ namespace PromptFighters.UI
 
             // "TIME" sublabel
             var tlGo = MakeUI("TLabel", tc.transform);
-            Anch(tlGo, 0,1, 1,1,  2,-14f,-2,0);
+            Anch(tlGo, 0,1, 1,1,  2,-18f,-2,0);
             var tl = tlGo.AddComponent<TextMeshProUGUI>();
-            tl.text = "TIME"; tl.fontSize = 9f;
+            tl.text = "TIME"; tl.fontSize = 12f;
             tl.alignment = TextAlignmentOptions.Center; tl.color = TextDim;
             UITheme.Apply(tl);
 
             // main timer number
             var tnGo = MakeUI("TimerNum", tc.transform);
-            Anch(tnGo, 0,0, 1,1,  2,2,-2,-16f);
+            Anch(tnGo, 0,0, 1,1,  2,2,-2,-20f);
             _timerText = tnGo.AddComponent<TextMeshProUGUI>();
-            _timerText.text = "99"; _timerText.fontSize = 52f;
+            _timerText.text = "99"; _timerText.fontSize = 64f;
             _timerText.fontStyle = FontStyles.Bold | FontStyles.Italic;
             _timerText.alignment = TextAlignmentOptions.Center;
             _timerText.color = TextWht;
@@ -400,11 +401,11 @@ namespace PromptFighters.UI
             //  inner sides  : stripe(3px) + pad(5px)
             //  inner numW   : 58px at inner edge
 
-            const float STRIPE = 3f;
-            const float IPAD   = 5f;
-            const float NUM_W  = 76f;
-            const float NAME_H = 17f;
-            const float GUARD_H= 7f;
+            const float STRIPE = 4f;
+            const float IPAD   = 6f;
+            const float NUM_W  = 104f;
+            const float NAME_H = 24f;
+            const float GUARD_H= 10f;
             Color pCol = isP1 ? P1Col : P2Col;
             float slant = isP1 ? Slant : -Slant;
 
@@ -436,7 +437,7 @@ namespace PromptFighters.UI
             Anch(nameGo, 0,1,1,1,  nameL, -(2f+IPAD+NAME_H), -nameR, -(2f+IPAD));
             var nmTmp = nameGo.AddComponent<TextMeshProUGUI>();
             nmTmp.text = isP1 ? "1P" : "2P";
-            nmTmp.fontSize = 13f; nmTmp.fontStyle = FontStyles.Bold | FontStyles.Italic;
+            nmTmp.fontSize = 19f; nmTmp.fontStyle = FontStyles.Bold | FontStyles.Italic;
             nmTmp.alignment = isP1 ? TextAlignmentOptions.Left : TextAlignmentOptions.Right;
             nmTmp.color = pCol;
             nmTmp.textWrappingMode = TextWrappingModes.NoWrap;
@@ -449,7 +450,7 @@ namespace PromptFighters.UI
             if (isP1) Anch(numGo, 1,0,1,1, -(NUM_W+IPAD), GUARD_H+IPAD, -IPAD, -(2f+IPAD));
             else      Anch(numGo, 0,0,0,1,  IPAD, GUARD_H+IPAD, NUM_W+IPAD, -(2f+IPAD));
             var numTmp = numGo.AddComponent<TextMeshProUGUI>();
-            numTmp.text = "300"; numTmp.fontSize = 30f;
+            numTmp.text = "300"; numTmp.fontSize = 40f;
             numTmp.fontStyle = FontStyles.Bold | FontStyles.Italic;
             numTmp.alignment = isP1 ? TextAlignmentOptions.Right : TextAlignmentOptions.Left;
             numTmp.color = TextWht;
@@ -511,20 +512,21 @@ namespace PromptFighters.UI
 
         void BuildSkillBars()
         {
-            const float SH  = 66f;
+            const float SH  = 84f;   // スロット高
             const float PAD = 5f;
+            const float BOT = 102f;  // 実況バー（高さ100px）の上に配置
 
             var sb1 = MakeUI("Skills1P", _hudRoot.transform);
-            Anch(sb1, 0,0, 0.5f,0,  PAD,PAD, -3f,SH+PAD);
+            Anch(sb1, 0,0, 0.5f,0,  PAD,BOT, -3f,BOT+SH);
             BuildSlots(sb1.transform, true);
 
             var sb2 = MakeUI("Skills2P", _hudRoot.transform);
-            Anch(sb2, 0.5f,0, 1f,0,  3f,PAD, -PAD,SH+PAD);
+            Anch(sb2, 0.5f,0, 1f,0,  3f,BOT, -PAD,BOT+SH);
             BuildSlots(sb2.transform, false);
 
             // bottom glow line
             var botLine = MakeUI("BotGlow", _hudRoot.transform);
-            Anch(botLine, 0,0,1,0,  0,SH+PAD*2-1f, 0,SH+PAD*2);
+            Anch(botLine, 0,0,1,0,  0,BOT+SH+PAD-1f, 0,BOT+SH+PAD);
             botLine.AddComponent<Image>().color = GlowLine;
         }
 
@@ -562,8 +564,8 @@ namespace PromptFighters.UI
                 var kbGo = MakeUI("KeyBg", slot.transform);
                 var kbRt = kbGo.GetComponent<RectTransform>();
                 kbRt.anchorMin = kbRt.anchorMax = new Vector2(0.5f, 1f);
-                kbRt.sizeDelta = new Vector2(34f, 15f);
-                kbRt.anchoredPosition = new Vector2(0f, -12f);
+                kbRt.sizeDelta = new Vector2(50f, 20f);
+                kbRt.anchoredPosition = new Vector2(0f, -14f);
                 kbGo.AddComponent<Image>().color = new Color(sc.r, sc.g, sc.b, 0.22f);
 
                 var kbLine = MakeUI("KBLine", kbGo.transform);
@@ -573,17 +575,17 @@ namespace PromptFighters.UI
                 var keyTxt = MakeUI("KeyTxt", kbGo.transform);
                 FillParent(keyTxt);
                 var kt = keyTxt.AddComponent<TextMeshProUGUI>();
-                kt.text = keys[i]; kt.fontSize = 10f; kt.fontStyle = FontStyles.Bold;
+                kt.text = keys[i]; kt.fontSize = 13f; kt.fontStyle = FontStyles.Bold;
                 kt.alignment = TextAlignmentOptions.Center; kt.color = sc;
                 UITheme.Apply(kt);
 
                 // skill name
                 var nmGo = MakeUI("SkillName", slot.transform);
-                Anch(nmGo, 0,0.35f,1,1,  5f,0,-5f,-22f);
+                Anch(nmGo, 0,0.35f,1,1,  5f,0,-5f,-26f);
                 var nm = nmGo.AddComponent<TextMeshProUGUI>();
                 var sk = se?.GetSkill((SkillSlot)i);
                 nm.text = sk?.skill_name ?? SlotJp[i];
-                nm.fontSize = 13f; nm.fontStyle = FontStyles.Bold;
+                nm.fontSize = 17f; nm.fontStyle = FontStyles.Bold;
                 nm.alignment = TextAlignmentOptions.Center; nm.color = TextWht;
                 nm.textWrappingMode = TextWrappingModes.NoWrap;
                 nm.overflowMode = TextOverflowModes.Ellipsis;
@@ -594,7 +596,7 @@ namespace PromptFighters.UI
                 var tpGo = MakeUI("SlotType", slot.transform);
                 Anch(tpGo, 0,0,1,0.38f,  4f,2f,-4f,0);
                 var tp = tpGo.AddComponent<TextMeshProUGUI>();
-                tp.text = SlotJp[i]; tp.fontSize = 9f;
+                tp.text = SlotJp[i]; tp.fontSize = 12f;
                 tp.alignment = TextAlignmentOptions.Center; tp.color = TextDim;
                 UITheme.Apply(tp);
             }
