@@ -356,7 +356,10 @@ namespace PromptFighters.Battle.Skills
             if (GroundBounce) target.StartGroundBounce(Knockback * 0.75f);
 
             if (IsSmashHit)
+            {
                 Battle.BattleManager.Instance?.TriggerHitStop(0.20f, 0.05f);
+                Battle.CameraShake.Shake(0.38f, 0.32f);
+            }
 
             if (Status != StatusType.None && Random.value <= StatusChance)
                 target.ApplyStatus(Status, StatusDuration);

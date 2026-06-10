@@ -173,8 +173,8 @@ namespace PromptFighters.Audio
         {
             StopBgm();
             StartLobbyBgm();
-            FindObjectOfType<CommentaryController>()?.StopVoice();
-            FindObjectOfType<AngelController>()?.StopVoice();
+            FindAnyObjectByType<CommentaryController>()?.StopVoice();
+            FindAnyObjectByType<AngelController>()?.StopVoice();
         }
 
         void StartLobbyBgm()

@@ -266,6 +266,7 @@ namespace PromptFighters.Battle
             if (!wasGrounded && IsGrounded && BattleManager.Instance != null && BattleManager.Instance.IsFighting)
             {
                 OnLanded?.Invoke();
+                SimpleFX.Dust(transform.position);
                 if (_groundBounceForce > 0f)
                 {
                     _rb.linearVelocity = new Vector2(_rb.linearVelocity.x, _groundBounceForce);
@@ -563,6 +564,7 @@ namespace PromptFighters.Battle
                 _airJumpsRemaining--;
                 force = jumpForce * Mathf.Sqrt(Mathf.Clamp(airJumpHeightMultiplier, 0.3f, 0.6f));
             }
+            SimpleFX.Dust(transform.position, 3, 0.8f);
             _rb.linearVelocity = new Vector2(_rb.linearVelocity.x, force);
             _airTime = 0f;
             _fastFallUsed = false;
@@ -668,6 +670,9 @@ namespace PromptFighters.Battle
             if (blocking) DamagePopup.SpawnText(transform.position, "GUARD", GuardColor, 1.6f);
             else          DamagePopup.Spawn(transform.position, actual, false);
             if (!blocking) _hitFlashTimer = 0.08f;
+            // ダメージ量に応じたカメラ揺れ（小ヒットはごく僅か、大ダメージほど強く）
+            if (!blocking && actual > 0f)
+                CameraShake.Shake(Mathf.Lerp(0.03f, 0.22f, Mathf.InverseLerp(4f, 30f, actual)), 0.16f);
             bool willDie = CurrentHP <= 0f;
             // ヒットストップ（KO時は TriggerKOSlow が担当するためスキップ）
             if (!blocking && actual > 0f && !willDie && BattleManager.Instance?.Phase == BattlePhase.Fighting)
@@ -754,6 +759,8 @@ namespace PromptFighters.Battle
             if (Opponent != null) BattleLogger.Instance?.LogDamage(Opponent.PlayerIndex, damage);
             DamagePopup.Spawn(transform.position, damage, false);
             _hitFlashTimer = 0.08f;
+            if (damage > 0f)
+                CameraShake.Shake(Mathf.Lerp(0.06f, 0.24f, Mathf.InverseLerp(4f, 30f, damage)), 0.18f);
             if (CurrentHP <= 0f) KillOrDown();
         }
 
@@ -1283,6 +1290,7 @@ namespace PromptFighters.Battle
             BattleLogger.Instance?.LogEvent($"{PlayerLabel()}のガードが割れた");
             if (Opponent != null) BattleLogger.Instance?.LogGuardBreak(Opponent.PlayerIndex);
             DamagePopup.SpawnText(transform.position, "GUARD BREAK", GuardBreakColor, 3.2f);
+            CameraShake.Shake(0.3f, 0.3f);
         }
 
         string PlayerLabel() => PlayerIndex == 0 ? "1P" : "2P";

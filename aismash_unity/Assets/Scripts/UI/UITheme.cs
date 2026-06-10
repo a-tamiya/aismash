@@ -73,7 +73,7 @@ namespace PromptFighters.UI
 
         public static void ApplyAllInScene()
         {
-            foreach (var text in Object.FindObjectsByType<TMP_Text>(FindObjectsSortMode.None))
+            foreach (var text in Object.FindObjectsByType<TMP_Text>())
                 Apply(text);
         }
 

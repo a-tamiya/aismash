@@ -73,7 +73,7 @@ namespace PromptFighters.UI
         // ── UI Construction ────────────────────────────────────────────
         void BuildUI()
         {
-            var canvas = GetComponentInParent<Canvas>() ?? FindFirstObjectByType<Canvas>();
+            var canvas = GetComponentInParent<Canvas>() ?? FindAnyObjectByType<Canvas>();
             Transform root = canvas != null ? canvas.transform : transform;
 
             // ─ Overlay ──────────────────────────────────────────────

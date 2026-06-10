@@ -795,6 +795,11 @@ namespace PromptFighters.Battle
             _koSlowActive  = true;
             _hitStopActive = true; // HitStopが上書きしないようにロック
 
+            // KO演出: 大きな揺れ＋「K.O.!!」表示
+            CameraShake.Shake(0.5f, 0.5f);
+            DamagePopup.SpawnText(koPosition + Vector3.up * 1.2f, "K.O.!!",
+                new Color(1f, 0.82f, 0.1f), 7f);
+
             float slowDuration = 2.5f;
             float zoomDuration = 0.25f;
             float zoomInSize   = _defaultCamOrthoSize * 0.70f;

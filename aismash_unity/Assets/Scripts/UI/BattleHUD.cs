@@ -46,6 +46,12 @@ namespace PromptFighters.UI
         // ── References ─────────────────────────────────────────────────
         Image            _hp1Fill,   _hp2Fill;
         RectTransform    _hp1Rect,   _hp2Rect;
+        // ダメージトレイル（削れた分が白く残り、遅れて減る）
+        RectTransform    _hp1TrailRect, _hp2TrailRect;
+        float            _hpT1 = 1f, _hpT2 = 1f;       // 現在のHP割合
+        float            _trail1 = 1f, _trail2 = 1f;   // トレイル表示割合
+        const float      TrailDrainPerSec = 0.45f;     // トレイルが減る速さ（割合/秒）
+        static readonly Color TrailCol = new Color(1f, 0.93f, 0.78f, 0.92f);
         Image            _grd1Fill,  _grd2Fill;
         RectTransform    _grd1Rect,  _grd2Rect;
         TextMeshProUGUI  _hp1Num,    _hp2Num;
@@ -113,6 +119,32 @@ namespace PromptFighters.UI
             if (!_timerText) return;
             _timerText.text  = Mathf.CeilToInt(t).ToString();
             _timerText.color = t <= 30f ? UrgentCol : TextWht;
+            // 残り10秒は鼓動するように拡縮して切迫感を出す
+            _timerText.transform.localScale = t <= 10f && t > 0f
+                ? Vector3.one * (1f + 0.16f * Mathf.Abs(Mathf.Sin(Time.time * 6f)))
+                : Vector3.one;
+        }
+
+        void Update()
+        {
+            TickTrail(ref _trail1, _hpT1, _hp1TrailRect, true);
+            TickTrail(ref _trail2, _hpT2, _hp2TrailRect, false);
+        }
+
+        static void TickTrail(ref float trail, float target, RectTransform rect, bool isP1)
+        {
+            if (rect == null) return;
+            if (trail < target) trail = target; // 回復時は即追従
+            else if (trail > target) trail = Mathf.MoveTowards(trail, target, Time.deltaTime * TrailDrainPerSec);
+            SetBarAnchors(rect, trail, isP1);
+        }
+
+        // HP/トレイルバー共通のアンカー設定（1Pは左から、2Pは右から伸びる）
+        static void SetBarAnchors(RectTransform rect, float t, bool fromLeft)
+        {
+            rect.anchorMin = fromLeft ? Vector2.zero       : new Vector2(1f - t, 0f);
+            rect.anchorMax = fromLeft ? new Vector2(t, 1f) : Vector2.one;
+            rect.offsetMin = rect.offsetMax = Vector2.zero;
         }
 
         void ShowHUD() { if (_hudRoot) _hudRoot.SetActive(true); }
@@ -156,12 +188,9 @@ namespace PromptFighters.UI
             if (img == null) return;
             float t = max > 0f ? Mathf.Clamp01(hp / max) : 0f;
             img.color = HpGrad.Evaluate(t);
-            if (rect != null)
-            {
-                rect.anchorMin = player == 1 ? Vector2.zero          : new Vector2(1f - t, 0f);
-                rect.anchorMax = player == 1 ? new Vector2(t, 1f)    : Vector2.one;
-                rect.offsetMin = rect.offsetMax = Vector2.zero;
-            }
+            if (rect != null) SetBarAnchors(rect, t, player == 1);
+            if (player == 1) { _hpT1 = t; if (_trail1 < t) _trail1 = t; }
+            else             { _hpT2 = t; if (_trail2 < t) _trail2 = t; }
             if (num) num.text = Mathf.CeilToInt(hp).ToString();
         }
 
@@ -437,6 +466,15 @@ namespace PromptFighters.UI
             var barBgImg = barBg.AddComponent<Image>();
             barBgImg.color = BgBar;
             UITheme.Skew(barBgImg, slant);
+
+            // ダメージトレイル（HPフィルの背面。削れた分が白く残って遅れて減る）
+            var trailGo = MakeUI("HPTrail", barBg.transform);
+            FillParent(trailGo);
+            var trailImg = trailGo.AddComponent<Image>();
+            trailImg.color = TrailCol;
+            UITheme.Skew(trailImg, slant);
+            if (isP1) _hp1TrailRect = trailGo.GetComponent<RectTransform>();
+            else      _hp2TrailRect = trailGo.GetComponent<RectTransform>();
 
             // HP fill (メタリックグラデ + スラント)
             var fillGo = MakeUI("HPFill", barBg.transform);
