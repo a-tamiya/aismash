@@ -30,6 +30,9 @@ namespace PromptFighters.Battle
         bool  _guardHold;
         float _guardReleaseTimer;
         float _actionCooldown;
+        // 相手のSkillExecutorキャッシュ（毎判断のGetComponentを避ける）
+        Fighter _cachedOpponent;
+        SkillExecutor _cachedOpponentSkills;
 
         void Awake()
         {
@@ -71,6 +74,10 @@ namespace PromptFighters.Battle
                 _fighter.SetGuard(false);
                 return;
             }
+
+            // 協力モード: ダウンした味方がいれば最優先で駆け寄り、そばに留まって復活させる
+            if (bm != null && bm.Mode == BattleMode.CoopVsBoss && TryAssistDownedAlly(bm))
+                return;
 
             var opp = _fighter.Opponent;
             if (opp == null || opp.State == FighterState.Dead)
@@ -199,10 +206,49 @@ namespace PromptFighters.Battle
             return false;
         }
 
-        static bool OpponentAttacking(Fighter opp)
+        bool OpponentAttacking(Fighter opp)
         {
-            var ex = opp.GetComponent<SkillExecutor>();
-            return ex != null && ex.IsExecuting;
+            if (opp != _cachedOpponent)
+            {
+                _cachedOpponent       = opp;
+                _cachedOpponentSkills = opp != null ? opp.GetComponent<SkillExecutor>() : null;
+            }
+            return _cachedOpponentSkills != null && _cachedOpponentSkills.IsExecuting;
+        }
+
+        // 協力モード: ダウン中の味方（Players陣営）に最も近い1体へ駆け寄る。
+        // 復活範囲内では停止して滞在し、BattleManagerのReviveCheckにゲージを進めさせる。
+        bool TryAssistDownedAlly(BattleManager bm)
+        {
+            if (_fighter.IsDowned || _fighter.Team != FighterTeam.Players) return false;
+
+            Fighter downed = null;
+            float best = float.MaxValue;
+            for (int i = 0; i < bm.Fighters.Count; i++)
+            {
+                var f = bm.Fighters[i];
+                if (f == null || f == _fighter) continue;
+                if (!f.IsDowned || f.Team != FighterTeam.Players) continue;
+                float d = Mathf.Abs(f.ReviveAnchorPosition.x - transform.position.x);
+                if (d < best) { best = d; downed = f; }
+            }
+            if (downed == null) return false;
+
+            _guardHold = false;
+            _fighter.SetGuard(false);
+            float dx = downed.ReviveAnchorPosition.x - transform.position.x;
+            // 復活判定（reviveRange）より少し内側を目標にし、境界での往復を防ぐ
+            if (Mathf.Abs(dx) > bm.reviveRange * 0.6f)
+            {
+                _fighter.Move(Mathf.Sign(dx));
+                if (_fighter.IsGrounded && downed.ReviveAnchorPosition.y - transform.position.y > 1.2f)
+                    _fighter.Jump();
+            }
+            else
+            {
+                _fighter.Move(0f);
+            }
+            return true;
         }
     }
 }

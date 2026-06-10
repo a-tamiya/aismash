@@ -22,6 +22,9 @@ namespace PromptFighters.Battle.Skills
         bool _isExecuting;
         bool _currentSkillHit;
         int _skillSerial;
+        // ヒット検知の購読先。協力モードではOpponentが毎フレーム変わるため、
+        // 購読時の相手を保持して確実に解除する（リーク防止）。
+        Fighter _skillHitSubscribedTo;
 
         // follow_up
         bool _followUpReady;
@@ -107,8 +110,7 @@ namespace PromptFighters.Battle.Skills
         {
             _isExecuting = true;
             _currentSkillHit = false;
-            if (_fighter.Opponent != null)
-                _fighter.Opponent.OnDamageReceived += MarkCurrentSkillHit;
+            SubscribeCurrentSkillHit();
 
             var actions = skill.follow_up_actions;
             int total = actions?.Count ?? 0;
@@ -186,8 +188,7 @@ namespace PromptFighters.Battle.Skills
             _isExecuting = true;
             int serial = ++_skillSerial;
             _currentSkillHit = false;
-            if (_fighter.Opponent != null)
-                _fighter.Opponent.OnDamageReceived += MarkCurrentSkillHit;
+            SubscribeCurrentSkillHit();
             float recovery = EffectiveRecovery(skill);
             float totalDuration = skill.parameters.startup + skill.parameters.active_time + recovery;
             float firstBeamTime = FirstActionTime(skill, "beam");
@@ -259,10 +260,19 @@ namespace PromptFighters.Battle.Skills
             _currentSkillHit = true;
         }
 
+        void SubscribeCurrentSkillHit()
+        {
+            UnsubscribeCurrentSkillHit();
+            if (_fighter == null || _fighter.Opponent == null) return;
+            _skillHitSubscribedTo = _fighter.Opponent;
+            _skillHitSubscribedTo.OnDamageReceived += MarkCurrentSkillHit;
+        }
+
         void UnsubscribeCurrentSkillHit()
         {
-            if (_fighter != null && _fighter.Opponent != null)
-                _fighter.Opponent.OnDamageReceived -= MarkCurrentSkillHit;
+            if (_skillHitSubscribedTo != null)
+                _skillHitSubscribedTo.OnDamageReceived -= MarkCurrentSkillHit;
+            _skillHitSubscribedTo = null;
         }
 
         IEnumerator PlayWhiffIfMissed(int serial, float delay)

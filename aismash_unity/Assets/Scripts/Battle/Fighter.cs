@@ -250,7 +250,7 @@ namespace PromptFighters.Battle
             bool onPlatform = false;
             if (!onGroundLayer)
             {
-                var spawner = BattleManager.Instance?.GetComponent<StagePlatformSpawner>();
+                var spawner = BattleManager.Instance?.PlatformSpawner;
                 if (spawner != null)
                 {
                     var platCols = spawner.GetColliders();
@@ -1414,7 +1414,7 @@ namespace PromptFighters.Battle
 
         public bool TryDropThrough()
         {
-            var spawner = BattleManager.Instance?.GetComponent<StagePlatformSpawner>();
+            var spawner = BattleManager.Instance?.PlatformSpawner;
             if (spawner == null) return false;
             var cols = spawner.GetColliders();
             if (cols.Count == 0) return false;
@@ -1465,7 +1465,10 @@ namespace PromptFighters.Battle
             RestoreDodgeGravity();
             State = FighterState.Dead;
             _rb.linearVelocity = Vector2.zero;
-            BattleManager.Instance?.TriggerKOSlow(transform.position);
+            // KOスロー演出は本戦のみ。トレーニング中は即リスポーンするため
+            // スロー＋カメラズームが残らないようスキップする。
+            if (BattleManager.Instance?.Phase == BattlePhase.Fighting)
+                BattleManager.Instance.TriggerKOSlow(transform.position);
             OnDeath?.Invoke();
         }
 

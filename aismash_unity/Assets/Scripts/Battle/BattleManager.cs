@@ -71,6 +71,9 @@ namespace PromptFighters.Battle
         // 一度きりのイベント購読が済んだか（モード切替で再購読しないため）。
         bool _eventsWired;
 
+        // 毎フレームのGetComponentを避けるためAwakeでキャッシュ（Fighterの接地判定などが参照）。
+        public StagePlatformSpawner PlatformSpawner { get; private set; }
+
         public float       TimeRemaining { get; private set; }
         public BattlePhase Phase         { get; private set; } = BattlePhase.Setup;
         public float       Countdown     { get; private set; }
@@ -124,6 +127,7 @@ namespace PromptFighters.Battle
                 gameObject.AddComponent<ComboCounter>();
             if (GetComponent<StagePlatformSpawner>() == null)
                 gameObject.AddComponent<StagePlatformSpawner>();
+            PlatformSpawner = GetComponent<StagePlatformSpawner>();
 
             _mainCam = Camera.main;
             if (_mainCam != null)
@@ -452,9 +456,12 @@ namespace PromptFighters.Battle
             // 協力モードは時間切れ＝ボスの勝利（プレイヤー敗北）。
             if (Mode == BattleMode.CoopVsBoss) { CoopEnd(playersWin: false); return; }
             if (fighter1 == null || fighter2 == null) { FinishRoundOrMatch(-1); return; }
-            if      (fighter1.CurrentHP > fighter2.CurrentHP) FinishRoundOrMatch(0);
-            else if (fighter2.CurrentHP > fighter1.CurrentHP) FinishRoundOrMatch(1);
-            else                                               FinishRoundOrMatch(-1);
+            // maxHPはキャラ毎に異なる（250〜350）ため、絶対値ではなく残りHP割合で比較する
+            float r1 = fighter1.CurrentHP / Mathf.Max(1f, fighter1.MaxHP);
+            float r2 = fighter2.CurrentHP / Mathf.Max(1f, fighter2.MaxHP);
+            if      (r1 > r2) FinishRoundOrMatch(0);
+            else if (r2 > r1) FinishRoundOrMatch(1);
+            else              FinishRoundOrMatch(-1);
         }
 
         void EndBattle(int winnerIndex)
@@ -742,18 +749,28 @@ namespace PromptFighters.Battle
 
         // ── ヒットストップ（Feature A）────────────────────────────────
         bool _hitStopActive;
+        float _hitStopUntilRealtime;
 
         public void TriggerHitStop(float duration, float timeScale = 0.05f)
         {
-            if (_hitStopActive) return; // 重複防止
-            StartCoroutine(HitStopCoroutine(duration, timeScale));
+            if (_koSlowActive) return; // KOスロー優先
+            float until = Time.realtimeSinceStartup + duration;
+            if (_hitStopActive)
+            {
+                // 実行中はより長い要求なら延長する（スマッシュの長停止が通常ヒットに潰されないように）
+                if (until > _hitStopUntilRealtime) _hitStopUntilRealtime = until;
+                return;
+            }
+            _hitStopUntilRealtime = until;
+            StartCoroutine(HitStopCoroutine(timeScale));
         }
 
-        IEnumerator HitStopCoroutine(float duration, float timeScale)
+        IEnumerator HitStopCoroutine(float timeScale)
         {
             _hitStopActive = true;
             Time.timeScale = timeScale;
-            yield return new WaitForSecondsRealtime(duration);
+            while (Time.realtimeSinceStartup < _hitStopUntilRealtime && !_koSlowActive)
+                yield return null;
             if (!_koSlowActive) // KOスロー中は timeScale を上書きしない
             {
                 Time.timeScale = 1f;
