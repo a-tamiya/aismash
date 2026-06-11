@@ -1202,6 +1202,7 @@ namespace PromptFighters.Battle
             transform.localScale = s;
             ApplyVisualScaleCorrection();
             ApplyColliderScaleCorrection();
+            ReapplyPermanentStats(); // 永続バフ・デバフをラウンドをまたいで保持
             OnHPChanged?.Invoke(CurrentHP, maxHP);
             OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
         }

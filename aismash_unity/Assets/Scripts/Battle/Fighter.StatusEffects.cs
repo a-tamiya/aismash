@@ -74,26 +74,100 @@ namespace PromptFighters.Battle
             }
         }
 
+        // ── ステータス系：永続倍率（ギミック）＋一時変化（スキル）の二層構成 ──
+        // 永続倍率はラウンドをまたいで保持し（ResetForBattleで再適用）、後の指示で上書き（後勝ち）。
+        // 一時変化（スキル）は永続倍率の上に乗算し、終了後は永続倍率値へ戻す。
+        [System.NonSerialized] public float PermSpeedMult   = 1f;
+        [System.NonSerialized] public float PermJumpMult    = 1f;
+        [System.NonSerialized] public float PermDamageMult  = 1f;
+        [System.NonSerialized] public float PermGravityMult = 1f;
+        [System.NonSerialized] public float PermSizeMult    = 1f;
+        float _moveSpeedBase, _airMoveSpeedBase; bool _speedBaseSet;
+        float _jumpForceBase; bool _jumpBaseSet;
+        Vector3 _visualBaseScale; bool _sizeBaseSet;
+        Coroutine _speedTempCo, _jumpTempCo, _damageTempCo;
+
+        void EnsureSpeedBase() { if (!_speedBaseSet) { _moveSpeedBase = moveSpeed; _airMoveSpeedBase = airMoveSpeed; _speedBaseSet = true; } }
+        void EnsureJumpBase()  { if (!_jumpBaseSet)  { _jumpForceBase = jumpForce; _jumpBaseSet = true; } }
+        void EnsureSizeBase()  { EnsureVisualRenderer(); if (!_sizeBaseSet && _visualRoot != null) { _visualBaseScale = _visualRoot.localScale; _sizeBaseSet = true; } }
+
+        void ShowStatPopup(string label, Color col)
+            => DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, label, col, 2.2f);
+
+        // 永続（ギミック）。後勝ちで倍率を置き換え即反映。一時効果は打ち消す。
+        public void ApplyPermanentSpeed(float mult)
+        {
+            EnsureSpeedBase(); PermSpeedMult = mult;
+            if (_speedTempCo != null) { StopCoroutine(_speedTempCo); _speedTempCo = null; }
+            moveSpeed = _moveSpeedBase * mult; airMoveSpeed = _airMoveSpeedBase * mult;
+            _speedBoostTimer = mult > 1f ? 99999f : 0f;
+            ShowStatPopup(mult >= 1f ? "SPEED UP!" : "SPEED DOWN!", mult >= 1f ? SpeedBoostColor : SlowColor);
+        }
+        public void ApplyPermanentJump(float mult)
+        {
+            EnsureJumpBase(); PermJumpMult = mult;
+            if (_jumpTempCo != null) { StopCoroutine(_jumpTempCo); _jumpTempCo = null; }
+            jumpForce = _jumpForceBase * mult;
+            _jumpBoostTimer = mult > 1f ? 99999f : 0f;
+            ShowStatPopup(mult >= 1f ? "JUMP UP!" : "JUMP DOWN!", mult >= 1f ? JumpBoostColor : SlowColor);
+        }
+        public void ApplyPermanentDamage(float mult)
+        {
+            PermDamageMult = mult;
+            if (_damageTempCo != null) { StopCoroutine(_damageTempCo); _damageTempCo = null; }
+            DamageMultiplier = mult;
+            ShowStatPopup(mult >= 1f ? "POWER UP!" : "POWER DOWN!", mult >= 1f ? DamageBoostColor : SlowColor);
+        }
+        public void ApplyPermanentGravity(float mult)
+        {
+            PermGravityMult = mult;
+            if (!_dodgeGravitySuppressed) _rb.gravityScale = _defaultGravityScale * mult;
+            ShowStatPopup(mult > 1f ? "HEAVY!" : "FLOAT!", mult > 1f ? new Color(0.6f, 0.4f, 1f) : new Color(0.5f, 1f, 0.9f));
+        }
+        public void ApplyPermanentSize(float mult)
+        {
+            EnsureSizeBase(); if (_visualRoot == null) return; PermSizeMult = mult;
+            _visualRoot.localScale = new Vector3(_visualBaseScale.x * mult, _visualBaseScale.y * mult, _visualBaseScale.z);
+            ShowStatPopup(mult > 1f ? "BIG!" : "SMALL!", new Color(1f, 0.85f, 0.2f));
+        }
+
+        // 永続倍率を再適用（ResetForBattleからラウンド開始時に呼び、ラウンドをまたいで保持する）
+        public void ReapplyPermanentStats()
+        {
+            if (_speedBaseSet) { moveSpeed = _moveSpeedBase * PermSpeedMult; airMoveSpeed = _airMoveSpeedBase * PermSpeedMult; }
+            if (_jumpBaseSet)  jumpForce = _jumpForceBase * PermJumpMult;
+            DamageMultiplier = PermDamageMult;
+            if (!_dodgeGravitySuppressed) _rb.gravityScale = _defaultGravityScale * PermGravityMult;
+            if (_sizeBaseSet && _visualRoot != null)
+                _visualRoot.localScale = new Vector3(_visualBaseScale.x * PermSizeMult, _visualBaseScale.y * PermSizeMult, _visualBaseScale.z);
+            if (PermSpeedMult > 1f) _speedBoostTimer = 99999f;
+            if (PermJumpMult  > 1f) _jumpBoostTimer  = 99999f;
+        }
+
+        // 一時（スキル）。永続倍率の上に乗算し、終了後は永続倍率値へ戻す。後勝ち（前の一時効果は打ち消す）。
         public void StartTemporarySpeedChange(float multiplier, float duration)
-            => StartCoroutine(TemporarySpeedChange(multiplier, duration));
-
+        {
+            EnsureSpeedBase();
+            if (_speedTempCo != null) StopCoroutine(_speedTempCo);
+            _speedTempCo = StartCoroutine(TemporarySpeedChange(multiplier, duration));
+        }
         public void StartTemporaryJumpChange(float multiplier, float duration)
-            => StartCoroutine(TemporaryJumpChange(multiplier, duration));
-
+        {
+            EnsureJumpBase();
+            if (_jumpTempCo != null) StopCoroutine(_jumpTempCo);
+            _jumpTempCo = StartCoroutine(TemporaryJumpChange(multiplier, duration));
+        }
         public void StartTemporaryDamageBoost(float multiplier, float duration)
-            => StartCoroutine(TemporaryDamageBoost(multiplier, duration));
+        {
+            if (_damageTempCo != null) StopCoroutine(_damageTempCo);
+            _damageTempCo = StartCoroutine(TemporaryDamageBoost(multiplier, duration));
+        }
 
         public void StartTemporaryInvincible(float duration)
             => StartCoroutine(TemporaryInvincible(duration));
 
         public void StartTemporaryChaos(float duration)
             => StartCoroutine(TemporaryChaos(duration));
-
-        public void StartTemporaryGravityChange(float multiplier, float duration)
-            => StartCoroutine(TemporaryGravityChange(multiplier, duration));
-
-        public void StartTemporarySizeChange(float multiplier, float duration)
-            => StartCoroutine(TemporarySizeChange(multiplier, duration));
 
         public void StartTemporaryReflect(float duration)
         {
@@ -114,61 +188,33 @@ namespace PromptFighters.Battle
 
         System.Collections.IEnumerator TemporarySpeedChange(float multiplier, float duration)
         {
-            float origGround = moveSpeed;
-            float origAir    = airMoveSpeed;
             _speedBoostTimer = duration;
-            moveSpeed    = origGround * multiplier;
-            airMoveSpeed = origAir * multiplier;
-            string label = multiplier >= 1f ? "SPEED UP!" : "SPEED DOWN!";
-            Color  col   = multiplier >= 1f ? SpeedBoostColor : SlowColor;
-            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, label, col, 2.2f);
+            moveSpeed    = _moveSpeedBase * PermSpeedMult * multiplier;
+            airMoveSpeed = _airMoveSpeedBase * PermSpeedMult * multiplier;
+            ShowStatPopup(multiplier >= 1f ? "SPEED UP!" : "SPEED DOWN!", multiplier >= 1f ? SpeedBoostColor : SlowColor);
             yield return new WaitForSeconds(duration);
-            moveSpeed    = origGround;
-            airMoveSpeed = origAir;
+            moveSpeed    = _moveSpeedBase * PermSpeedMult;
+            airMoveSpeed = _airMoveSpeedBase * PermSpeedMult;
+            _speedTempCo = null;
         }
 
         System.Collections.IEnumerator TemporaryJumpChange(float multiplier, float duration)
         {
-            float orig = jumpForce;
             if (multiplier >= 1f) _jumpBoostTimer = duration;
-            jumpForce = orig * multiplier;
-            string jumpLabel = multiplier >= 1f ? "JUMP UP!" : "JUMP DOWN!";
-            Color  jumpCol   = multiplier >= 1f ? JumpBoostColor : SlowColor;
-            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, jumpLabel, jumpCol, 2.2f);
+            jumpForce = _jumpForceBase * PermJumpMult * multiplier;
+            ShowStatPopup(multiplier >= 1f ? "JUMP UP!" : "JUMP DOWN!", multiplier >= 1f ? JumpBoostColor : SlowColor);
             yield return new WaitForSeconds(duration);
-            jumpForce = orig;
+            jumpForce = _jumpForceBase * PermJumpMult;
+            _jumpTempCo = null;
         }
 
         System.Collections.IEnumerator TemporaryDamageBoost(float multiplier, float duration)
         {
-            DamageMultiplier = multiplier;
-            string dmgLabel = multiplier >= 1f ? "POWER UP!" : "POWER DOWN!";
-            Color  dmgCol   = multiplier >= 1f ? DamageBoostColor : SlowColor;
-            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, dmgLabel, dmgCol, 2.2f);
+            DamageMultiplier = PermDamageMult * multiplier;
+            ShowStatPopup(multiplier >= 1f ? "POWER UP!" : "POWER DOWN!", multiplier >= 1f ? DamageBoostColor : SlowColor);
             yield return new WaitForSeconds(duration);
-            DamageMultiplier = 1f;
-        }
-
-        System.Collections.IEnumerator TemporaryGravityChange(float multiplier, float duration)
-        {
-            _rb.gravityScale = _defaultGravityScale * multiplier;
-            string gravLabel = multiplier > 1f ? "HEAVY!" : "FLOAT!";
-            Color  gravCol   = multiplier > 1f ? new Color(0.6f, 0.4f, 1f) : new Color(0.5f, 1f, 0.9f);
-            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, gravLabel, gravCol, 2.2f);
-            yield return new WaitForSeconds(duration);
-            if (!_dodgeGravitySuppressed) _rb.gravityScale = _defaultGravityScale;
-        }
-
-        System.Collections.IEnumerator TemporarySizeChange(float multiplier, float duration)
-        {
-            EnsureVisualRenderer();
-            if (_visualRoot == null) yield break;
-            Vector3 orig = _visualRoot.localScale;
-            _visualRoot.localScale = new Vector3(orig.x * multiplier, orig.y * multiplier, orig.z);
-            string sizeLabel = multiplier > 1f ? "BIG!" : "SMALL!";
-            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, sizeLabel, new Color(1f, 0.85f, 0.2f), 2.2f);
-            yield return new WaitForSeconds(duration);
-            if (_visualRoot != null) _visualRoot.localScale = orig;
+            DamageMultiplier = PermDamageMult;
+            _damageTempCo = null;
         }
 
         System.Collections.IEnumerator TemporaryInvincible(float duration)

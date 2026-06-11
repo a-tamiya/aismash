@@ -8,9 +8,10 @@ namespace PromptFighters.Battle
     // 音声アイテムのギミックを Fighter に適用する（旧・天使ギミック）。
     public class AngelGimmickApplier : MonoBehaviour
     {
-        // ステータス系のバフ・デバフ（速度/ジャンプ/与ダメ/重力/サイズ）は試合終了まで永続。
-        // 無敵・反射・カウンター・状態異常など「過度／一時的」な効果は各caseの効果時間を維持する。
-        const float Permanent = 99999f;
+        // ステータス系のバフ・デバフ（速度/ジャンプ/与ダメ/重力/サイズ）は Fighter 側で永続適用
+        // （ApplyPermanentX、ラウンドをまたいで保持・後勝ち上書き）。
+        // 効果時間系（無敵・反射・カウンター・状態異常・障害物など）の継続時間はこの倍率で一括延長する。
+        const float DurationScale = 2f;
 
         public void Apply(GimmickData data, Fighter p1, Fighter p2)
         {
@@ -57,34 +58,34 @@ namespace PromptFighters.Battle
                     GameAudioManager.Instance?.PlayGimmickHeal();
                     break;
                 case "speed_boost":
-                    target1?.StartTemporarySpeedChange(value, Permanent);
-                    target2?.StartTemporarySpeedChange(value, Permanent);
+                    target1?.ApplyPermanentSpeed(value);
+                    target2?.ApplyPermanentSpeed(value);
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "speed_down":
-                    target1?.StartTemporarySpeedChange(value, Permanent);
-                    target2?.StartTemporarySpeedChange(value, Permanent);
+                    target1?.ApplyPermanentSpeed(value);
+                    target2?.ApplyPermanentSpeed(value);
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "jump_boost":
-                    target1?.StartTemporaryJumpChange(value, Permanent);
-                    target2?.StartTemporaryJumpChange(value, Permanent);
+                    target1?.ApplyPermanentJump(value);
+                    target2?.ApplyPermanentJump(value);
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "damage_boost":
-                    target1?.StartTemporaryDamageBoost(value, Permanent);
-                    target2?.StartTemporaryDamageBoost(value, Permanent);
+                    target1?.ApplyPermanentDamage(value);
+                    target2?.ApplyPermanentDamage(value);
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "transparent":
                 case "invincible":
-                    target1?.StartTemporaryInvincible(Mathf.Max(duration, 3f));
-                    target2?.StartTemporaryInvincible(Mathf.Max(duration, 3f));
+                    target1?.StartTemporaryInvincible(Mathf.Max(duration, 3f) * DurationScale);
+                    target2?.StartTemporaryInvincible(Mathf.Max(duration, 3f) * DurationScale);
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "chaos":
-                    target1?.StartTemporaryChaos(Mathf.Max(duration, 4f));
-                    target2?.StartTemporaryChaos(Mathf.Max(duration, 4f));
+                    target1?.StartTemporaryChaos(Mathf.Max(duration, 4f) * DurationScale);
+                    target2?.StartTemporaryChaos(Mathf.Max(duration, 4f) * DurationScale);
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
 
@@ -100,69 +101,69 @@ namespace PromptFighters.Battle
                     GameAudioManager.Instance?.PlayGimmickHeal();
                     break;
                 case "damage_down":
-                    target1?.StartTemporaryDamageBoost(Mathf.Clamp(value, 0.1f, 0.99f), Permanent);
-                    target2?.StartTemporaryDamageBoost(Mathf.Clamp(value, 0.1f, 0.99f), Permanent);
+                    target1?.ApplyPermanentDamage(Mathf.Clamp(value, 0.1f, 0.99f));
+                    target2?.ApplyPermanentDamage(Mathf.Clamp(value, 0.1f, 0.99f));
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "jump_down":
-                    target1?.StartTemporaryJumpChange(Mathf.Clamp(value, 0.1f, 0.99f), Permanent);
-                    target2?.StartTemporaryJumpChange(Mathf.Clamp(value, 0.1f, 0.99f), Permanent);
+                    target1?.ApplyPermanentJump(Mathf.Clamp(value, 0.1f, 0.99f));
+                    target2?.ApplyPermanentJump(Mathf.Clamp(value, 0.1f, 0.99f));
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "gravity_up":
-                    target1?.StartTemporaryGravityChange(Mathf.Max(value, 1.5f), Permanent);
-                    target2?.StartTemporaryGravityChange(Mathf.Max(value, 1.5f), Permanent);
+                    target1?.ApplyPermanentGravity(Mathf.Max(value, 1.5f));
+                    target2?.ApplyPermanentGravity(Mathf.Max(value, 1.5f));
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "gravity_down":
-                    target1?.StartTemporaryGravityChange(Mathf.Clamp(value, 0.05f, 0.8f), Permanent);
-                    target2?.StartTemporaryGravityChange(Mathf.Clamp(value, 0.05f, 0.8f), Permanent);
+                    target1?.ApplyPermanentGravity(Mathf.Clamp(value, 0.05f, 0.8f));
+                    target2?.ApplyPermanentGravity(Mathf.Clamp(value, 0.05f, 0.8f));
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "size_up":
-                    target1?.StartTemporarySizeChange(Mathf.Max(value, 1.2f), Permanent);
-                    target2?.StartTemporarySizeChange(Mathf.Max(value, 1.2f), Permanent);
+                    target1?.ApplyPermanentSize(Mathf.Max(value, 1.2f));
+                    target2?.ApplyPermanentSize(Mathf.Max(value, 1.2f));
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "size_down":
-                    target1?.StartTemporarySizeChange(Mathf.Clamp(value, 0.2f, 0.9f), Permanent);
-                    target2?.StartTemporarySizeChange(Mathf.Clamp(value, 0.2f, 0.9f), Permanent);
+                    target1?.ApplyPermanentSize(Mathf.Clamp(value, 0.2f, 0.9f));
+                    target2?.ApplyPermanentSize(Mathf.Clamp(value, 0.2f, 0.9f));
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "freeze":
-                    target1?.ApplyStatus(StatusType.Stun, Mathf.Clamp(duration, 1f, 5f));
-                    target2?.ApplyStatus(StatusType.Stun, Mathf.Clamp(duration, 1f, 5f));
+                    target1?.ApplyStatus(StatusType.Stun, Mathf.Clamp(duration, 1f, 5f) * DurationScale);
+                    target2?.ApplyStatus(StatusType.Stun, Mathf.Clamp(duration, 1f, 5f) * DurationScale);
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "burn":
-                    target1?.ApplyStatus(StatusType.Burn, Mathf.Max(duration, 4f));
-                    target2?.ApplyStatus(StatusType.Burn, Mathf.Max(duration, 4f));
+                    target1?.ApplyStatus(StatusType.Burn, Mathf.Max(duration, 4f) * DurationScale);
+                    target2?.ApplyStatus(StatusType.Burn, Mathf.Max(duration, 4f) * DurationScale);
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "guard_break":
-                    target1?.ApplyStatus(StatusType.GuardBreak, Mathf.Max(duration, 3f));
-                    target2?.ApplyStatus(StatusType.GuardBreak, Mathf.Max(duration, 3f));
+                    target1?.ApplyStatus(StatusType.GuardBreak, Mathf.Max(duration, 3f) * DurationScale);
+                    target2?.ApplyStatus(StatusType.GuardBreak, Mathf.Max(duration, 3f) * DurationScale);
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "obstacle":
                 case "obstacle_platform":
-                    SpawnPlatform(Mathf.Max(value, 1f), Mathf.Max(duration, 5f), targetKey, p1, p2);
+                    SpawnPlatform(Mathf.Max(value, 1f), Mathf.Max(duration, 5f) * DurationScale, targetKey, p1, p2);
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "obstacle_wall":
-                    SpawnWall(Mathf.Max(value, 1f), Mathf.Max(duration, 5f), targetKey, p1, p2);
+                    SpawnWall(Mathf.Max(value, 1f), Mathf.Max(duration, 5f) * DurationScale, targetKey, p1, p2);
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "obstacle_bounce":
-                    SpawnBouncePad(Mathf.Max(duration, 6f), targetKey, p1, p2);
+                    SpawnBouncePad(Mathf.Max(duration, 6f) * DurationScale, targetKey, p1, p2);
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "obstacle_rain":
-                    SpawnRain(Mathf.Max((int)value, 2), Mathf.Max(duration, 8f));
+                    SpawnRain(Mathf.Max((int)value, 2), Mathf.Max(duration, 8f) * DurationScale);
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "obstacle_tilt":
-                    SpawnTiltedPlatform(Mathf.Max(value, 1f), Mathf.Max(duration, 5f), targetKey, p1, p2);
+                    SpawnTiltedPlatform(Mathf.Max(value, 1f), Mathf.Max(duration, 5f) * DurationScale, targetKey, p1, p2);
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
 
@@ -188,13 +189,13 @@ namespace PromptFighters.Battle
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "slow":
-                    target1?.ApplyStatus(StatusType.Slow, Mathf.Max(duration, 5f));
-                    target2?.ApplyStatus(StatusType.Slow, Mathf.Max(duration, 5f));
+                    target1?.ApplyStatus(StatusType.Slow, Mathf.Max(duration, 5f) * DurationScale);
+                    target2?.ApplyStatus(StatusType.Slow, Mathf.Max(duration, 5f) * DurationScale);
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "reflect":
-                    target1?.StartTemporaryReflect(Mathf.Max(duration, 4f));
-                    target2?.StartTemporaryReflect(Mathf.Max(duration, 4f));
+                    target1?.StartTemporaryReflect(Mathf.Max(duration, 4f) * DurationScale);
+                    target2?.StartTemporaryReflect(Mathf.Max(duration, 4f) * DurationScale);
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "hp_set":
@@ -221,8 +222,8 @@ namespace PromptFighters.Battle
                     break;
                 case "counter_gimmick":
                     float ctDmg = Mathf.Max(value * 30f, 30f);
-                    target1?.StartCounter(Mathf.Max(duration, 3f), ctDmg, 8f, new Vector2(1f, 0.3f), 0.4f);
-                    target2?.StartCounter(Mathf.Max(duration, 3f), ctDmg, 8f, new Vector2(1f, 0.3f), 0.4f);
+                    target1?.StartCounter(Mathf.Max(duration, 3f) * DurationScale, ctDmg, 8f, new Vector2(1f, 0.3f), 0.4f);
+                    target2?.StartCounter(Mathf.Max(duration, 3f) * DurationScale, ctDmg, 8f, new Vector2(1f, 0.3f), 0.4f);
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "ground_bounce":
@@ -233,40 +234,40 @@ namespace PromptFighters.Battle
                     break;
                 case "wind":
                     float windF = value != 0f ? Mathf.Clamp(value * 5f, 1f, 15f) : 4f;
-                    target1?.StartTemporaryWind(windF, Mathf.Max(duration, 4f));
-                    target2?.StartTemporaryWind(windF, Mathf.Max(duration, 4f));
+                    target1?.StartTemporaryWind(windF, Mathf.Max(duration, 4f) * DurationScale);
+                    target2?.StartTemporaryWind(windF, Mathf.Max(duration, 4f) * DurationScale);
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "floor_lava":
-                    target1?.StartTemporaryFloorLava(Mathf.Clamp(value > 0f ? value : 0.1f, 0.05f, 0.5f), Mathf.Max(duration, 5f));
-                    target2?.StartTemporaryFloorLava(Mathf.Clamp(value > 0f ? value : 0.1f, 0.05f, 0.5f), Mathf.Max(duration, 5f));
+                    target1?.StartTemporaryFloorLava(Mathf.Clamp(value > 0f ? value : 0.1f, 0.05f, 0.5f), Mathf.Max(duration, 5f) * DurationScale);
+                    target2?.StartTemporaryFloorLava(Mathf.Clamp(value > 0f ? value : 0.1f, 0.05f, 0.5f), Mathf.Max(duration, 5f) * DurationScale);
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "guard_disable":
-                    target1?.StartTemporaryGuardDisable(Mathf.Max(duration, 4f));
-                    target2?.StartTemporaryGuardDisable(Mathf.Max(duration, 4f));
+                    target1?.StartTemporaryGuardDisable(Mathf.Max(duration, 4f) * DurationScale);
+                    target2?.StartTemporaryGuardDisable(Mathf.Max(duration, 4f) * DurationScale);
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "skill_seal":
                     int sealSlot = value > 0f ? Mathf.Clamp((int)value - 1, 0, 3) : Random.Range(0, 4);
-                    target1?.StartTemporarySkillSeal(sealSlot, Mathf.Max(duration, 5f));
-                    target2?.StartTemporarySkillSeal(sealSlot, Mathf.Max(duration, 5f));
+                    target1?.StartTemporarySkillSeal(sealSlot, Mathf.Max(duration, 5f) * DurationScale);
+                    target2?.StartTemporarySkillSeal(sealSlot, Mathf.Max(duration, 5f) * DurationScale);
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "super_knockback":
-                    target1?.StartTemporarySuperKnockback(Mathf.Max(duration, 5f));
-                    target2?.StartTemporarySuperKnockback(Mathf.Max(duration, 5f));
+                    target1?.StartTemporarySuperKnockback(Mathf.Max(duration, 5f) * DurationScale);
+                    target2?.StartTemporarySuperKnockback(Mathf.Max(duration, 5f) * DurationScale);
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "obstacle_moving":
-                    SpawnMovingPlatform(Mathf.Max(value, 1f), Mathf.Max(duration, 8f));
+                    SpawnMovingPlatform(Mathf.Max(value, 1f), Mathf.Max(duration, 8f) * DurationScale);
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "hp_share":
                     if (p1 != null && p2 != null && target1 != null &&
                         p1.State != FighterState.Dead && p2.State != FighterState.Dead)
                     {
-                        float shareDur = Mathf.Max(duration, 6f);
+                        float shareDur = Mathf.Max(duration, 6f) * DurationScale;
                         Fighter shareOther = (target1 == p1) ? p2 : p1;
                         target1.StartHPShare(shareOther, shareDur);
                         shareOther.StartHPShare(target1, shareDur);
