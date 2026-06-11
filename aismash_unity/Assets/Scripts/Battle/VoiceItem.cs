@@ -8,7 +8,7 @@ namespace PromptFighters.Battle
     // 空中をふわふわ漂い、攻撃で耐久(MaxHP)を削られる。耐久を0にした
     // 「最後の攻撃者」が取得者となり、onBroken で通知する。
     // Hitbox / Projectile から TakeHit(dmg, attacker) を呼ばれる（陣営問わず誰でも殴れる中立物）。
-    [RequireComponent(typeof(BoxCollider2D))]
+    // ※当たり判定はトリガーのみ（物理的に乗れない）。攻撃トリガー検出のため Rigidbody2D を持つ。
     public class VoiceItem : MonoBehaviour
     {
         public const float MaxHP = 30f;
@@ -19,6 +19,8 @@ namespace PromptFighters.Battle
         System.Action<Fighter> _onBroken;
 
         SpriteRenderer _outer, _inner;
+        Transform   _visual;   // 脈動・回転はここに適用（ルートのRigidbody2Dと干渉させない）
+        Rigidbody2D _rb;       // 移動は MovePosition で行い、攻撃トリガーを確実に発火させる
         Vector3 _basePos;
         float   _seed;
         float   _driftDir = 1f;
@@ -31,16 +33,35 @@ namespace PromptFighters.Battle
             var go = new GameObject("VoiceItem");
             go.transform.position = pos;
 
+            // ファイターと同じレイヤーに置く（接地判定 groundLayer から除外され「乗れない」）。
+            var f = BattleManager.Instance?.fighter1;
+            if (f != null) go.layer = f.gameObject.layer;
+
+            // 攻撃（Hitbox/Projectileのトリガー）を検出させるため Rigidbody2D が必要。
+            // 物理で動かないよう重力ゼロ＋回転固定。位置は Update で transform 制御する。
+            var rb = go.AddComponent<Rigidbody2D>();
+            rb.gravityScale = 0f;
+            rb.bodyType     = RigidbodyType2D.Dynamic;
+            rb.constraints  = RigidbodyConstraints2D.FreezeRotation;
+            rb.sleepMode    = RigidbodySleepMode2D.NeverSleep;
+            rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+
             var item = go.AddComponent<VoiceItem>();
+            item._rb = rb;
             item._onBroken   = onBroken;
             item._basePos    = pos;
             item._seed       = Random.value * 10f;
             item._driftDir   = Random.value < 0.5f ? -1f : 1f;
             item._halfRangeX = Mathf.Max(1f, halfRangeX);
 
-            // 外側の大きなグロー（子オブジェクト。ルートは脈動・回転のみ担当）
+            // 見た目コンテナ（脈動・回転はここに適用。ルートは物理＋位置のみ）
+            var visualGo = new GameObject("Visual");
+            visualGo.transform.SetParent(go.transform, false);
+            item._visual = visualGo.transform;
+
+            // 外側の大きなグロー
             var outerGo = new GameObject("Glow");
-            outerGo.transform.SetParent(go.transform, false);
+            outerGo.transform.SetParent(visualGo.transform, false);
             item._outer = outerGo.AddComponent<SpriteRenderer>();
             item._outer.sprite = RuntimeSprite.Glow();
             item._outer.color  = GoldGlow;
@@ -49,7 +70,7 @@ namespace PromptFighters.Battle
 
             // 内側の明るいコア
             var innerGo = new GameObject("Core");
-            innerGo.transform.SetParent(go.transform, false);
+            innerGo.transform.SetParent(visualGo.transform, false);
             item._inner = innerGo.AddComponent<SpriteRenderer>();
             item._inner.sprite = RuntimeSprite.Glow();
             item._inner.color  = new Color(1f, 0.98f, 0.85f, 1f);
@@ -69,21 +90,29 @@ namespace PromptFighters.Battle
             sr.transform.localScale = Vector3.one * (worldDiameter / s);
         }
 
+        // 移動は物理ステップで MovePosition（コライダが正しくスイープし攻撃トリガーが発火する）
+        void FixedUpdate()
+        {
+            if (_rb == null) return;
+            // ゆっくり横ドリフト（ステージ内で反復）＋ふわふわ上下
+            _basePos.x += _driftDir * 0.7f * Time.fixedDeltaTime;
+            if (_basePos.x >  _halfRangeX) { _basePos.x =  _halfRangeX; _driftDir = -1f; }
+            if (_basePos.x < -_halfRangeX) { _basePos.x = -_halfRangeX; _driftDir =  1f; }
+            float bob = Mathf.Sin((Time.time + _seed) * 1.6f) * 0.5f;
+            _rb.MovePosition(new Vector2(_basePos.x, _basePos.y + bob));
+        }
+
         void Update()
         {
             float t = Time.time + _seed;
 
-            // ふわふわ上下＋ゆっくり横ドリフト（ステージ内で反復）
-            float bob = Mathf.Sin(t * 1.6f) * 0.5f;
-            _basePos.x += _driftDir * 0.7f * Time.deltaTime;
-            if (_basePos.x >  _halfRangeX) { _basePos.x =  _halfRangeX; _driftDir = -1f; }
-            if (_basePos.x < -_halfRangeX) { _basePos.x = -_halfRangeX; _driftDir =  1f; }
-            transform.position = new Vector3(_basePos.x, _basePos.y + bob, 0f);
-
-            // 脈動＋回転で目立たせる
-            float pulse = 1f + 0.12f * Mathf.Sin(t * 6f);
-            transform.localScale = Vector3.one * pulse;
-            transform.Rotate(0f, 0f, 60f * Time.deltaTime);
+            // 脈動＋回転で目立たせる（見た目コンテナのみ。ルートの物理と干渉しない）
+            if (_visual != null)
+            {
+                float pulse = 1f + 0.12f * Mathf.Sin(t * 6f);
+                _visual.localScale = Vector3.one * pulse;
+                _visual.Rotate(0f, 0f, 60f * Time.deltaTime);
+            }
 
             // 残り耐久が減るほど内側コアを明るく＝割れる直前感
             float dmgRatio = 1f - Mathf.Clamp01(_hp / MaxHP);
