@@ -5,9 +5,13 @@ using PromptFighters.Battle.Skills;
 
 namespace PromptFighters.Battle
 {
-    // 天使ギミックを Fighter に適用する
+    // 音声アイテムのギミックを Fighter に適用する（旧・天使ギミック）。
     public class AngelGimmickApplier : MonoBehaviour
     {
+        // ステータス系のバフ・デバフ（速度/ジャンプ/与ダメ/重力/サイズ）は試合終了まで永続。
+        // 無敵・反射・カウンター・状態異常など「過度／一時的」な効果は各caseの効果時間を維持する。
+        const float Permanent = 99999f;
+
         public void Apply(GimmickData data, Fighter p1, Fighter p2)
         {
             if (data == null) return;
@@ -53,23 +57,23 @@ namespace PromptFighters.Battle
                     GameAudioManager.Instance?.PlayGimmickHeal();
                     break;
                 case "speed_boost":
-                    target1?.StartTemporarySpeedChange(value, duration);
-                    target2?.StartTemporarySpeedChange(value, duration);
+                    target1?.StartTemporarySpeedChange(value, Permanent);
+                    target2?.StartTemporarySpeedChange(value, Permanent);
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "speed_down":
-                    target1?.StartTemporarySpeedChange(value, duration);
-                    target2?.StartTemporarySpeedChange(value, duration);
+                    target1?.StartTemporarySpeedChange(value, Permanent);
+                    target2?.StartTemporarySpeedChange(value, Permanent);
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "jump_boost":
-                    target1?.StartTemporaryJumpChange(value, duration);
-                    target2?.StartTemporaryJumpChange(value, duration);
+                    target1?.StartTemporaryJumpChange(value, Permanent);
+                    target2?.StartTemporaryJumpChange(value, Permanent);
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "damage_boost":
-                    target1?.StartTemporaryDamageBoost(value, duration);
-                    target2?.StartTemporaryDamageBoost(value, duration);
+                    target1?.StartTemporaryDamageBoost(value, Permanent);
+                    target2?.StartTemporaryDamageBoost(value, Permanent);
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "transparent":
@@ -96,33 +100,33 @@ namespace PromptFighters.Battle
                     GameAudioManager.Instance?.PlayGimmickHeal();
                     break;
                 case "damage_down":
-                    target1?.StartTemporaryDamageBoost(Mathf.Clamp(value, 0.1f, 0.99f), Mathf.Max(duration, 5f));
-                    target2?.StartTemporaryDamageBoost(Mathf.Clamp(value, 0.1f, 0.99f), Mathf.Max(duration, 5f));
+                    target1?.StartTemporaryDamageBoost(Mathf.Clamp(value, 0.1f, 0.99f), Permanent);
+                    target2?.StartTemporaryDamageBoost(Mathf.Clamp(value, 0.1f, 0.99f), Permanent);
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "jump_down":
-                    target1?.StartTemporaryJumpChange(Mathf.Clamp(value, 0.1f, 0.99f), Mathf.Max(duration, 5f));
-                    target2?.StartTemporaryJumpChange(Mathf.Clamp(value, 0.1f, 0.99f), Mathf.Max(duration, 5f));
+                    target1?.StartTemporaryJumpChange(Mathf.Clamp(value, 0.1f, 0.99f), Permanent);
+                    target2?.StartTemporaryJumpChange(Mathf.Clamp(value, 0.1f, 0.99f), Permanent);
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "gravity_up":
-                    target1?.StartTemporaryGravityChange(Mathf.Max(value, 1.5f), Mathf.Max(duration, 5f));
-                    target2?.StartTemporaryGravityChange(Mathf.Max(value, 1.5f), Mathf.Max(duration, 5f));
+                    target1?.StartTemporaryGravityChange(Mathf.Max(value, 1.5f), Permanent);
+                    target2?.StartTemporaryGravityChange(Mathf.Max(value, 1.5f), Permanent);
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "gravity_down":
-                    target1?.StartTemporaryGravityChange(Mathf.Clamp(value, 0.05f, 0.8f), Mathf.Max(duration, 5f));
-                    target2?.StartTemporaryGravityChange(Mathf.Clamp(value, 0.05f, 0.8f), Mathf.Max(duration, 5f));
+                    target1?.StartTemporaryGravityChange(Mathf.Clamp(value, 0.05f, 0.8f), Permanent);
+                    target2?.StartTemporaryGravityChange(Mathf.Clamp(value, 0.05f, 0.8f), Permanent);
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "size_up":
-                    target1?.StartTemporarySizeChange(Mathf.Max(value, 1.2f), Mathf.Max(duration, 5f));
-                    target2?.StartTemporarySizeChange(Mathf.Max(value, 1.2f), Mathf.Max(duration, 5f));
+                    target1?.StartTemporarySizeChange(Mathf.Max(value, 1.2f), Permanent);
+                    target2?.StartTemporarySizeChange(Mathf.Max(value, 1.2f), Permanent);
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "size_down":
-                    target1?.StartTemporarySizeChange(Mathf.Clamp(value, 0.2f, 0.9f), Mathf.Max(duration, 5f));
-                    target2?.StartTemporarySizeChange(Mathf.Clamp(value, 0.2f, 0.9f), Mathf.Max(duration, 5f));
+                    target1?.StartTemporarySizeChange(Mathf.Clamp(value, 0.2f, 0.9f), Permanent);
+                    target2?.StartTemporarySizeChange(Mathf.Clamp(value, 0.2f, 0.9f), Permanent);
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "freeze":

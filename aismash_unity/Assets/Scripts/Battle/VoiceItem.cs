@@ -22,9 +22,14 @@ namespace PromptFighters.Battle
         Transform   _visual;   // 脈動・回転はここに適用（ルートのRigidbody2Dと干渉させない）
         Rigidbody2D _rb;       // 移動は MovePosition で行い、攻撃トリガーを確実に発火させる
         Vector3 _basePos;
+        Vector2 _knockVel;     // 被弾ノックバック速度（位置へ積分し減衰）
         float   _seed;
         float   _driftDir = 1f;
         float   _halfRangeX;
+
+        const float KnockDamping = 3.2f;  // ノックバックの減衰（大きいほど早く止まる）
+        const float MinY = -1.5f;         // 浮遊できる縦範囲
+        const float MaxY =  3.8f;
 
         static readonly Color GoldGlow = new Color(1f, 0.82f, 0.18f, 0.9f);
 
@@ -94,10 +99,21 @@ namespace PromptFighters.Battle
         void FixedUpdate()
         {
             if (_rb == null) return;
-            // ゆっくり横ドリフト（ステージ内で反復）＋ふわふわ上下
-            _basePos.x += _driftDir * 0.7f * Time.fixedDeltaTime;
+            float dt = Time.fixedDeltaTime;
+
+            // ゆっくり横ドリフト（ステージ内で反復）
+            _basePos.x += _driftDir * 0.7f * dt;
             if (_basePos.x >  _halfRangeX) { _basePos.x =  _halfRangeX; _driftDir = -1f; }
             if (_basePos.x < -_halfRangeX) { _basePos.x = -_halfRangeX; _driftDir =  1f; }
+
+            // 被弾ノックバック：速度を位置へ積分しつつ減衰。端で軽く跳ね返る。
+            _basePos += (Vector3)(_knockVel * dt);
+            _knockVel *= Mathf.Exp(-KnockDamping * dt);
+            if (_basePos.x >  _halfRangeX) { _basePos.x =  _halfRangeX; _knockVel.x = -Mathf.Abs(_knockVel.x) * 0.4f; }
+            if (_basePos.x < -_halfRangeX) { _basePos.x = -_halfRangeX; _knockVel.x =  Mathf.Abs(_knockVel.x) * 0.4f; }
+            _basePos.y = Mathf.Clamp(_basePos.y, MinY, MaxY);
+
+            // ふわふわ上下
             float bob = Mathf.Sin((Time.time + _seed) * 1.6f) * 0.5f;
             _rb.MovePosition(new Vector2(_basePos.x, _basePos.y + bob));
         }
@@ -125,6 +141,16 @@ namespace PromptFighters.Battle
             if (_broken || dmg <= 0f) return;
             if (attacker != null) _lastAttacker = attacker;
             _hp -= dmg;
+
+            // ノックバック：攻撃者から離れる向きへ、ダメージに応じて吹き飛ぶ（横メイン＋少し上）
+            if (attacker != null)
+            {
+                float dirX = transform.position.x - attacker.transform.position.x;
+                float sign = !Mathf.Approximately(dirX, 0f) ? Mathf.Sign(dirX)
+                           : (attacker.FacingRight ? 1f : -1f);
+                float kb = Mathf.Clamp(dmg * 0.5f, 2.5f, 9f);
+                _knockVel += new Vector2(sign * kb, kb * 0.35f);
+            }
 
             DamagePopup.SpawnText(transform.position + Vector3.up * 0.7f,
                 Mathf.RoundToInt(dmg).ToString(), new Color(1f, 0.8f, 0.2f), 1.0f);
