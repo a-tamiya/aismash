@@ -33,7 +33,6 @@ namespace PromptFighters.UI
         // スロー演出オーバーレイ
         CanvasGroup     _slowGroup;
         UnityEngine.UI.Image _slowTint;
-        TextMeshProUGUI _slowLabel;
 
         // 上部バナー
         CanvasGroup     _bannerGroup;
@@ -257,12 +256,6 @@ namespace PromptFighters.UI
             float p = (Mathf.Sin(Time.unscaledTime * 4f) + 1f) * 0.5f;
             if (_slowTint != null)
                 _slowTint.color = new Color(0.25f, 0.6f, 1f, Mathf.Lerp(0.08f, 0.16f, p));
-            if (_slowLabel != null)
-            {
-                _slowLabel.color = new Color(0.7f, 0.92f, 1f, Mathf.Lerp(0.65f, 1f, p));
-                float s = Mathf.Lerp(0.97f, 1.04f, p);
-                _slowLabel.rectTransform.localScale = new Vector3(s, s, 1f);
-            }
         }
 
         // フォールバック：味方有利のランダムな良効果を取得者に付与
@@ -610,21 +603,6 @@ namespace PromptFighters.UI
             _slowTint = go.AddComponent<UnityEngine.UI.Image>();
             _slowTint.color = new Color(0.25f, 0.6f, 1f, 0.12f);
             _slowTint.raycastTarget = false;
-
-            // 中央の "SLOW MOTION" ラベル（HUDの無い画面中央〜やや上に表示）
-            var labGo = new GameObject("SlowLabel");
-            labGo.transform.SetParent(go.transform, false);
-            var lrt = labGo.AddComponent<RectTransform>();
-            lrt.anchorMin = new Vector2(0f, 0.5f); lrt.anchorMax = new Vector2(1f, 0.5f);
-            lrt.pivot = new Vector2(0.5f, 0.5f);
-            lrt.anchoredPosition = new Vector2(0f, 210f);
-            lrt.sizeDelta = new Vector2(0f, 96f);
-            _slowLabel = labGo.AddComponent<TextMeshProUGUI>();
-            UITheme.Apply(_slowLabel, 64f, FontStyles.Bold | FontStyles.Italic);
-            _slowLabel.text = "◢◣ SLOW MOTION ◢◣";
-            _slowLabel.color = new Color(0.7f, 0.92f, 1f, 1f);
-            _slowLabel.alignment = TextAlignmentOptions.Center;
-            _slowLabel.raycastTarget = false;
         }
     }
 }
