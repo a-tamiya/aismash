@@ -11,6 +11,9 @@ namespace PromptFighters.Battle
     // ※当たり判定はトリガーのみ（物理的に乗れない）。攻撃トリガー検出のため Rigidbody2D を持つ。
     public class VoiceItem : MonoBehaviour
     {
+        // 現在ステージに存在するアイテム（CPUの標的探索用）。同時に1個まで。
+        public static VoiceItem Active { get; private set; }
+
         public const float MaxHP = 30f;
 
         float   _hp = MaxHP;
@@ -86,7 +89,13 @@ namespace PromptFighters.Battle
             col.isTrigger = true;
             col.size = new Vector2(1.7f, 1.7f);
 
+            Active = item;
             return item;
+        }
+
+        void OnDestroy()
+        {
+            if (Active == this) Active = null;
         }
 
         static void FitSprite(SpriteRenderer sr, float worldDiameter)

@@ -69,6 +69,20 @@ namespace PromptFighters.UI
         TextMeshProUGUI  _bossHpNum;
         static readonly Color BossCol = new Color(1f, 0.3f, 0.3f);
 
+        // 画面下端のバフ・デバフ表示（プレイヤーごと）
+        RectTransform _buffRoot1, _buffRoot2;
+        readonly System.Collections.Generic.List<BuffChip> _chips1 = new System.Collections.Generic.List<BuffChip>();
+        readonly System.Collections.Generic.List<BuffChip> _chips2 = new System.Collections.Generic.List<BuffChip>();
+        readonly System.Collections.Generic.List<StatusChip> _chipBuf = new System.Collections.Generic.List<StatusChip>();
+        const float ChipW = 116f, ChipH = 30f, ChipGap = 6f, ChipMaxSec = 12f;
+        static readonly Color BuffCol   = new Color(0.20f, 0.85f, 0.42f);
+        static readonly Color DebuffCol = new Color(0.95f, 0.38f, 0.32f);
+        class BuffChip
+        {
+            public GameObject Root; public RectTransform Rt, FillRt;
+            public Image Fill; public TextMeshProUGUI Label;
+        }
+
         // ── Init ───────────────────────────────────────────────────────
         void Start()
         {
@@ -112,6 +126,7 @@ namespace PromptFighters.UI
         {
             TickTrail(ref _trail1, _hpT1, _hp1TrailRect, true);
             TickTrail(ref _trail2, _hpT2, _hp2TrailRect, false);
+            RefreshBuffChips();
         }
 
         static void TickTrail(ref float trail, float target, RectTransform rect, bool isP1)
@@ -198,6 +213,86 @@ namespace PromptFighters.UI
             FillParent(_hudRoot);
             BuildTopBar();
             BuildBossBar();
+            BuildBuffBars();
+        }
+
+        // 画面下端にプレイヤーごとのバフ・デバフ枠を用意（実況バーの上）。
+        void BuildBuffBars()
+        {
+            _buffRoot1 = MakeBuffRoot("BuffRow1P", true);
+            _buffRoot2 = MakeBuffRoot("BuffRow2P", false);
+        }
+
+        RectTransform MakeBuffRoot(string name, bool isP1)
+        {
+            var go = MakeUI(name, _hudRoot.transform);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(isP1 ? 0f : 1f, 0f);
+            rt.anchorMax = new Vector2(isP1 ? 0f : 1f, 0f);
+            rt.pivot     = new Vector2(isP1 ? 0f : 1f, 0f);
+            rt.anchoredPosition = new Vector2(isP1 ? 18f : -18f, 110f); // 実況バー(100px)の上
+            rt.sizeDelta = new Vector2(0f, ChipH);
+            return rt;
+        }
+
+        BuffChip CreateChip(RectTransform root, bool isP1)
+        {
+            var go = MakeUI("Chip", root);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = new Vector2(isP1 ? 0f : 1f, 0f);
+            rt.pivot = new Vector2(isP1 ? 0f : 1f, 0f);
+            rt.sizeDelta = new Vector2(ChipW, ChipH);
+            go.AddComponent<Image>().color = new Color(0.04f, 0.05f, 0.08f, 0.92f);
+
+            // 残り時間で減るフィル
+            var fillGo = MakeUI("Fill", go.transform);
+            var frt = fillGo.GetComponent<RectTransform>();
+            frt.anchorMin = Vector2.zero; frt.anchorMax = Vector2.one;
+            frt.offsetMin = frt.offsetMax = Vector2.zero;
+            var fill = fillGo.AddComponent<Image>();
+            fill.raycastTarget = false;
+
+            var labGo = MakeUI("Lbl", go.transform);
+            FillParent(labGo);
+            var lab = labGo.AddComponent<TextMeshProUGUI>();
+            lab.fontSize = 15f; lab.fontStyle = FontStyles.Bold;
+            lab.alignment = TextAlignmentOptions.Center; lab.color = Color.white;
+            lab.textWrappingMode = TextWrappingModes.NoWrap; lab.raycastTarget = false;
+            UITheme.Apply(lab);
+
+            return new BuffChip { Root = go, Rt = rt, FillRt = frt, Fill = fill, Label = lab };
+        }
+
+        void RefreshBuffChips()
+        {
+            RefreshBuffSide(_f1, _buffRoot1, _chips1, true);
+            RefreshBuffSide(_f2, _buffRoot2, _chips2, false);
+        }
+
+        void RefreshBuffSide(Fighter f, RectTransform root, System.Collections.Generic.List<BuffChip> pool, bool isP1)
+        {
+            if (root == null) return;
+            _chipBuf.Clear();
+            if (f != null && f.State != FighterState.Dead) f.CollectStatusChips(_chipBuf);
+
+            for (int i = 0; i < _chipBuf.Count; i++)
+            {
+                if (i >= pool.Count) pool.Add(CreateChip(root, isP1));
+                var chip = pool[i];
+                chip.Root.SetActive(true);
+                var sc = _chipBuf[i];
+                chip.Rt.anchoredPosition = new Vector2((isP1 ? 1f : -1f) * i * (ChipW + ChipGap), 0f);
+
+                bool perm = sc.Remaining < 0f;
+                float frac = perm ? 1f : Mathf.Clamp01(sc.Remaining / ChipMaxSec);
+                chip.FillRt.anchorMax = new Vector2(frac, 1f);
+                chip.FillRt.offsetMax = Vector2.zero;
+                Color c = sc.IsBuff ? BuffCol : DebuffCol;
+                chip.Fill.color = new Color(c.r, c.g, c.b, perm ? 0.6f : 0.5f);
+                chip.Label.text = perm ? $"{sc.Label} ∞" : $"{sc.Label} {sc.Remaining:0.0}";
+            }
+            for (int i = _chipBuf.Count; i < pool.Count; i++)
+                if (pool[i].Root.activeSelf) pool[i].Root.SetActive(false);
         }
 
         // 協力モードのボスHPバー（画面上部中央、トップバーの下）。Versusでは非表示。

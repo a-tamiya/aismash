@@ -79,6 +79,10 @@ namespace PromptFighters.Battle
             if (bm != null && bm.Mode == BattleMode.CoopVsBoss && TryAssistDownedAlly(bm))
                 return;
 
+            // スマッシュボール（音声アイテム）が出ていれば優先的に狙って破壊を試みる
+            if (TryGoForBall())
+                return;
+
             var opp = _fighter.Opponent;
             if (opp == null || opp.State == FighterState.Dead)
             {
@@ -163,6 +167,47 @@ namespace PromptFighters.Battle
                     _moveDir = Random.value < 0.5f ? sign : -sign; // 軽く間合い調整
                 }
             }
+        }
+
+        // スマッシュボールが存在する間、ボールへ接近して攻撃で破壊を狙う。
+        // ボールは中立物なので陣営問わず誰でも削れる（最後の一撃を入れた側が取得）。
+        bool TryGoForBall()
+        {
+            if (!PromptFighters.UI.AngelController.Enabled) return false;
+            var ball = VoiceItem.Active;
+            if (ball == null) return false;
+            if (_fighter.IsHoldingOpponent || _fighter.IsGrabbed) return false;
+
+            if (_actionCooldown > 0f) _actionCooldown -= Time.deltaTime;
+
+            Vector3 bp = ball.transform.position;
+            float dx   = bp.x - transform.position.x;
+            float dy   = bp.y - transform.position.y;
+            float dist = Mathf.Abs(dx);
+            int   sign = dx >= 0f ? 1 : -1;
+
+            _guardHold = false;
+            _fighter.SetGuard(false);
+
+            if (dist > AttackRange)
+            {
+                _moveDir = sign;
+                _fighter.Move(_moveDir);
+                if (_fighter.IsGrounded && dy > 0.8f) _fighter.Jump(); // 高所のボールへ跳ぶ
+            }
+            else
+            {
+                _moveDir = 0f;
+                _fighter.Move(0f);
+                if (_fighter.IsGrounded && dy > 1.0f) _fighter.Jump();
+                if (_actionCooldown <= 0f && _skills != null && !_skills.IsExecuting && _fighter.CanAct)
+                {
+                    _fighter.FaceTowardInput(sign);
+                    if (_skills.TryUseSkill(PickSlot()))
+                        _actionCooldown = Random.Range(0.3f, 0.6f);
+                }
+            }
+            return true;
         }
 
         void Attack(int sign, bool preferRanged)

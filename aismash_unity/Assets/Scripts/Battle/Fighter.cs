@@ -1181,6 +1181,7 @@ namespace PromptFighters.Battle
             _hpShareTimer       = 0f;
             _guardDisabled      = false;
             _guardDisabledTimer = 0f;
+            _chaosTimer         = 0f;
             _sealedSlot         = -1;
             _sealedSlotTimer    = 0f;
             if (_superKnockbackOrigWeight >= 0f) { weight = _superKnockbackOrigWeight; _superKnockbackOrigWeight = -1f; }

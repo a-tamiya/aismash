@@ -3,10 +3,43 @@ using PromptFighters.UI;
 
 namespace PromptFighters.Battle
 {
+    // 画面下端のバフ表示用：1つの効果（ラベル＋残り秒＋バフ/デバフ区別）。
+    public struct StatusChip
+    {
+        public string Label;
+        public float  Remaining; // 残り秒。永続は負値（<0）
+        public bool   IsBuff;    // true=有利(緑系) / false=不利(赤系)
+        public StatusChip(string label, float remaining, bool isBuff)
+        { Label = label; Remaining = remaining; IsBuff = isBuff; }
+    }
+
     // Fighterの一時的バフ/デバフ・ギミック系状態異常をまとめた部分クラス。
     // コア戦闘ロジック(Fighter.cs)と分離して見通しを良くするための分割。
     public partial class Fighter
     {
+        float _chaosTimer; // 混乱(操作反転)の残り（表示用）
+
+        // 現在有効なバフ・デバフを収集する（画面下端の表示に使用）。
+        public void CollectStatusChips(System.Collections.Generic.List<StatusChip> outList)
+        {
+            if (PermSpeedMult   != 1f) outList.Add(new StatusChip(PermSpeedMult   > 1f ? "速度↑" : "速度↓", -1f, PermSpeedMult   > 1f));
+            if (PermJumpMult    != 1f) outList.Add(new StatusChip(PermJumpMult    > 1f ? "跳躍↑" : "跳躍↓", -1f, PermJumpMult    > 1f));
+            if (PermDamageMult  != 1f) outList.Add(new StatusChip(PermDamageMult  > 1f ? "攻撃↑" : "攻撃↓", -1f, PermDamageMult  > 1f));
+            if (PermGravityMult != 1f) outList.Add(new StatusChip(PermGravityMult > 1f ? "重力↑" : "浮遊",   -1f, PermGravityMult < 1f));
+            if (PermSizeMult    != 1f) outList.Add(new StatusChip(PermSizeMult    > 1f ? "巨大化" : "縮小化", -1f, PermSizeMult    > 1f));
+
+            if (_transparencyTimer  > 0f) outList.Add(new StatusChip("無敵",     _transparencyTimer,  true));
+            if (_reflectTimer       > 0f) outList.Add(new StatusChip("反射",     _reflectTimer,       true));
+            if (_counterTimer       > 0f) outList.Add(new StatusChip("反撃",     _counterTimer,       true));
+            if (_burnTimer          > 0f) outList.Add(new StatusChip("炎",       _burnTimer,          false));
+            if (_slowTimer          > 0f) outList.Add(new StatusChip("鈍足",     _slowTimer,          false));
+            if (_stunTimer          > 0f) outList.Add(new StatusChip("気絶",     _stunTimer,          false));
+            if (_guardBreakTimer    > 0f) outList.Add(new StatusChip("ガード崩", _guardBreakTimer,    false));
+            if (_guardDisabledTimer > 0f) outList.Add(new StatusChip("ガード封", _guardDisabledTimer, false));
+            if (_sealedSlotTimer    > 0f) outList.Add(new StatusChip("技封印",   _sealedSlotTimer,    false));
+            if (_chaosTimer         > 0f) outList.Add(new StatusChip("混乱",     _chaosTimer,         false));
+        }
+
         // バリアで吸収できる残りダメージ量（TakeDamage/TakeThrowで消費）。
         float _barrierHP;
 
@@ -229,8 +262,9 @@ namespace PromptFighters.Battle
         System.Collections.IEnumerator TemporaryChaos(float duration)
         {
             InputReversed = true;
+            _chaosTimer = duration;
             DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "CHAOS!", ChaosColor, 2.2f);
-            yield return new WaitForSeconds(duration);
+            while (_chaosTimer > 0f) { _chaosTimer -= Time.deltaTime; yield return null; }
             InputReversed = false;
         }
 
