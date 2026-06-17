@@ -12,6 +12,8 @@ namespace PromptFighters.Battle
         // （ApplyPermanentX、ラウンドをまたいで保持・後勝ち上書き）。
         // 効果時間系（無敵・反射・カウンター・状態異常・障害物など）の継続時間はこの倍率で一括延長する。
         const float DurationScale = 2f;
+        static Sprite _rainBlockSprite;
+        static bool _rainBlockTried;
 
         public void Apply(GimmickData data, Fighter p1, Fighter p2)
         {
@@ -317,6 +319,39 @@ namespace PromptFighters.Battle
             return go;
         }
 
+        static Sprite RainBlockSprite()
+        {
+            if (!_rainBlockTried)
+            {
+                _rainBlockSprite = Resources.Load<Sprite>("Stage/obstacle");
+                _rainBlockTried = true;
+            }
+            return _rainBlockSprite;
+        }
+
+        static void ApplyRainBlockVisual(GameObject go)
+        {
+            var sprite = RainBlockSprite();
+            if (sprite == null)
+            {
+                var fallback = go.AddComponent<SpriteRenderer>();
+                fallback.sprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0, 0, 1, 1), new Vector2(0.5f, 0.5f), 1f);
+                fallback.color = new Color(Random.Range(0.7f, 1f), Random.Range(0.2f, 0.8f), Random.Range(0.1f, 0.5f), 0.9f);
+                fallback.sortingOrder = 8;
+                return;
+            }
+
+            var visual = new GameObject("AngelRainVisual");
+            visual.transform.SetParent(go.transform, false);
+            float fit = 1f / Mathf.Max(sprite.bounds.size.x, sprite.bounds.size.y, 0.01f);
+            visual.transform.localScale = new Vector3(fit, fit, 1f);
+
+            var sr = visual.AddComponent<SpriteRenderer>();
+            sr.sprite = sprite;
+            sr.color = Color.white;
+            sr.sortingOrder = 8;
+        }
+
         void SpawnPlatform(float widthScale, float duration, string posHint, Fighter p1, Fighter p2)
         {
             float w = Mathf.Clamp(widthScale * 1.8f, 1f, 9f);
@@ -362,13 +397,12 @@ namespace PromptFighters.Battle
                 float sz = Random.Range(0.5f, 1.3f);
                 var go = new GameObject("AngelRain");
                 go.transform.position = new Vector3(x, Random.Range(7f, 11f), 0f);
+                go.transform.rotation = Quaternion.Euler(0f, 0f, Random.Range(-12f, 12f));
                 go.transform.localScale = new Vector3(sz, sz, 1f);
                 var rb = go.AddComponent<Rigidbody2D>();
                 rb.gravityScale = Random.Range(1.8f, 3.5f);
                 go.AddComponent<BoxCollider2D>().size = Vector2.one;
-                var sr = go.AddComponent<SpriteRenderer>();
-                sr.sprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0,0,1,1), new Vector2(0.5f,0.5f), 1f);
-                sr.color = new Color(Random.Range(0.7f,1f), Random.Range(0.2f,0.8f), Random.Range(0.1f,0.5f), 0.9f);
+                ApplyRainBlockVisual(go);
                 StartCoroutine(DestroyAfter(go, duration));
             }
         }
