@@ -425,12 +425,12 @@ namespace PromptFighters.Battle
 
         Vector3 GroundFxPosition()
         {
+            if (groundCheck != null) return groundCheck.position;
             if (_bodyCollider != null)
             {
                 var b = _bodyCollider.bounds;
                 return new Vector3(b.center.x, b.min.y + 0.02f, transform.position.z);
             }
-            if (groundCheck != null) return groundCheck.position;
             return transform.position;
         }
 

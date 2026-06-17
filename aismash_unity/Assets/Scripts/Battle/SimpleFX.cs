@@ -20,7 +20,7 @@ namespace PromptFighters.Battle
         {
             var s = DustSprite();
             if (s == null) { GlowFallback(feetPos, Mathf.Max(count, 3), scale); return; }
-            Spawn(s, feetPos + Vector3.up * 0.10f, 1.6f * scale, 0.55f, 1.3f, 0.45f,
+            Spawn(s, feetPos + Vector3.up * 0.25f, 1.6f * scale, 0.55f, 1.3f, 0.45f,
                   new Color(1f, 1f, 1f, 0.95f), 9, 0.32f);
         }
 
@@ -29,7 +29,7 @@ namespace PromptFighters.Battle
         {
             var s = JumpGSprite();
             if (s == null) { Dust(feetPos, 3, 0.9f); return; }
-            Spawn(s, feetPos + Vector3.up * 0.14f, 2.8f, 0.7f, 1.12f, 0.34f,
+            Spawn(s, feetPos + Vector3.up * 0.25f, 2.8f, 0.7f, 1.12f, 0.34f,
                   new Color(1f, 1f, 1f, 0.95f), 9, 0.12f);
         }
 

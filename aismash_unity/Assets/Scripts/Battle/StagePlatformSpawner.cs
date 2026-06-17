@@ -57,6 +57,7 @@ namespace PromptFighters.Battle
         static GameObject Build(Vector2 center, float width)
         {
             const float ColliderH = 0.30f;
+            const float PlatformOpaqueTopFromPivotPixels = 176f;
 
             var go = new GameObject("StagePlatform");
             go.transform.position = center;
@@ -87,10 +88,10 @@ namespace PromptFighters.Battle
                 float targetW = width * 1.12f;                       // 端を少しかぶせる
                 float scale   = targetW / Mathf.Max(0.01f, sprite.bounds.size.x);
                 vis.transform.localScale = new Vector3(scale, scale, 1f);
-                // 画像上端（スラブ上面）をコライダ上面に合わせ、結晶部は下へ垂らす
-                float spriteH    = sprite.bounds.size.y * scale;
+                // 透明余白ではなく、台画像の不透明上端をコライダ上面に合わせる。
+                float opaqueTop = PlatformOpaqueTopFromPivotPixels / sprite.pixelsPerUnit * scale;
                 float colliderTop = ColliderH * 0.5f;
-                vis.transform.localPosition = new Vector3(0f, colliderTop - spriteH * 0.5f, 0f);
+                vis.transform.localPosition = new Vector3(0f, colliderTop - opaqueTop, 0f);
             }
             else
             {
