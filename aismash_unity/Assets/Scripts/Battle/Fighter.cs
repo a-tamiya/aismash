@@ -131,6 +131,10 @@ namespace PromptFighters.Battle
         Collider2D _bodyCollider;
         Collider2D _ignoredOpponentCollider;
         readonly ContactPoint2D[] _contactBuf = new ContactPoint2D[8];
+        const float DashDustInterval = 0.075f;
+        const float DashDustMinSpeed = 3.2f;
+        const float DashDustScale = 0.58f;
+        float _dashDustTimer;
 
         float _reflectTimer;
         float _counterTimer;
@@ -266,7 +270,7 @@ namespace PromptFighters.Battle
             if (!wasGrounded && IsGrounded && BattleManager.Instance != null && BattleManager.Instance.IsFighting)
             {
                 OnLanded?.Invoke();
-                SimpleFX.Dust(transform.position);
+                SimpleFX.Dust(GroundFxPosition());
                 if (_groundBounceForce > 0f)
                 {
                     _rb.linearVelocity = new Vector2(_rb.linearVelocity.x, _groundBounceForce);
@@ -321,6 +325,7 @@ namespace PromptFighters.Battle
             TickGuard();
             TickGrab();
             TickDodge();
+            TickDashDust();
 
             UpdateState();
             UpdateVisual();
@@ -374,6 +379,78 @@ namespace PromptFighters.Battle
                 BattleLogger.Instance?.LogDamage(Opponent != null ? Opponent.PlayerIndex : PlayerIndex, _burnDamagePerTick);
                 if (CurrentHP <= 0f) KillOrDown();
             }
+        }
+
+        void TickDashDust()
+        {
+            if (_dashDustTimer > 0f) _dashDustTimer -= Time.deltaTime;
+            if (!CanEmitDashDust())
+            {
+                _dashDustTimer = 0f;
+                return;
+            }
+
+            float vx = _rb.linearVelocity.x;
+            float speedThreshold = Mathf.Max(DashDustMinSpeed, moveSpeed * 0.65f);
+            bool hasDashInput = Mathf.Abs(LastMoveInputX) >= dashInputThreshold;
+            bool fastGroundMove = Mathf.Abs(vx) >= speedThreshold;
+            if (!hasDashInput && !fastGroundMove)
+            {
+                _dashDustTimer = 0f;
+                return;
+            }
+
+            if (_dashDustTimer <= 0f)
+                TriggerDashDust(vx);
+        }
+
+        public void TriggerDashDust(float moveSign = 0f)
+        {
+            if (!CanEmitDashDust()) return;
+            SimpleFX.Dust(RearGroundFxPosition(moveSign), 1, DashDustScale);
+            _dashDustTimer = DashDustInterval;
+        }
+
+        bool CanEmitDashDust()
+        {
+            var bm = BattleManager.Instance;
+            return bm != null &&
+                   bm.IsFighting &&
+                   IsGrounded &&
+                   !IsDowned &&
+                   State != FighterState.Dead &&
+                   State != FighterState.Stunned &&
+                   State != FighterState.Grabbed;
+        }
+
+        Vector3 GroundFxPosition()
+        {
+            if (_bodyCollider != null)
+            {
+                var b = _bodyCollider.bounds;
+                return new Vector3(b.center.x, b.min.y + 0.02f, transform.position.z);
+            }
+            if (groundCheck != null) return groundCheck.position;
+            return transform.position;
+        }
+
+        Vector3 RearGroundFxPosition(float moveSign)
+        {
+            Vector3 pos = GroundFxPosition();
+            float sign = 0f;
+            if (Mathf.Abs(moveSign) > 0.01f)
+                sign = Mathf.Sign(moveSign);
+            else if (_rb != null && Mathf.Abs(_rb.linearVelocity.x) > 0.01f)
+                sign = Mathf.Sign(_rb.linearVelocity.x);
+
+            if (sign != 0f)
+            {
+                float behind = _bodyCollider != null
+                    ? Mathf.Max(0.28f, _bodyCollider.bounds.extents.x * 0.85f)
+                    : 0.35f;
+                pos.x -= sign * behind;
+            }
+            return pos;
         }
 
         void UpdateState()
@@ -557,6 +634,7 @@ namespace PromptFighters.Battle
         public void Jump(float forceMultiplier = 1f)
         {
             if (!CanAct) return;
+            bool fromGround = IsGrounded;
             float force = jumpForce * Mathf.Clamp(forceMultiplier, 0.45f, 1f);
             if (!IsGrounded)
             {
@@ -564,7 +642,8 @@ namespace PromptFighters.Battle
                 _airJumpsRemaining--;
                 force = jumpForce * Mathf.Sqrt(Mathf.Clamp(airJumpHeightMultiplier, 0.3f, 0.6f));
             }
-            SimpleFX.Dust(transform.position, 3, 0.8f);
+            if (fromGround) SimpleFX.JumpGround(GroundFxPosition());
+            else            SimpleFX.JumpAir(transform.position);
             _rb.linearVelocity = new Vector2(_rb.linearVelocity.x, force);
             _airTime = 0f;
             _fastFallUsed = false;
@@ -1173,6 +1252,7 @@ namespace PromptFighters.Battle
             _isAirDodgeActive   = false;
             _fastFallUsed       = false;
             _airTime            = 0f;
+            _dashDustTimer      = 0f;
             _reflectTimer       = 0f;
             _counterTimer       = 0f;
             _groundBounceForce  = 0f;

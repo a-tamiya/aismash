@@ -680,6 +680,7 @@ namespace PromptFighters.Battle.Skills
             float power = a.power > 0f ? a.power : 5f;
             float up = a.knockback_y;
             _fighter.ApplyImpulse(new Vector2(dirSign * power, up));
+            _fighter.TriggerDashDust(dirSign);
         }
 
         void DoTeleport(SkillAction a)
