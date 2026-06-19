@@ -343,8 +343,9 @@ namespace PromptFighters.Battle
 
             var visual = new GameObject("AngelRainVisual");
             visual.transform.SetParent(go.transform, false);
-            float fit = 1f / Mathf.Max(sprite.bounds.size.x, sprite.bounds.size.y, 0.01f);
-            visual.transform.localScale = new Vector3(fit, fit, 1f);
+            float fitX = 1f / Mathf.Max(sprite.bounds.size.x, 0.01f);
+            float fitY = 1f / Mathf.Max(sprite.bounds.size.y, 0.01f);
+            visual.transform.localScale = new Vector3(fitX, fitY, 1f);
 
             var sr = visual.AddComponent<SpriteRenderer>();
             sr.sprite = sprite;
