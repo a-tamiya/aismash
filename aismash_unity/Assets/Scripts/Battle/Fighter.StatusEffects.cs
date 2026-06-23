@@ -117,12 +117,10 @@ namespace PromptFighters.Battle
         [System.NonSerialized] public float PermSizeMult    = 1f;
         float _moveSpeedBase, _airMoveSpeedBase; bool _speedBaseSet;
         float _jumpForceBase; bool _jumpBaseSet;
-        Vector3 _visualBaseScale; bool _sizeBaseSet;
         Coroutine _speedTempCo, _jumpTempCo, _damageTempCo;
 
         void EnsureSpeedBase() { if (!_speedBaseSet) { _moveSpeedBase = moveSpeed; _airMoveSpeedBase = airMoveSpeed; _speedBaseSet = true; } }
         void EnsureJumpBase()  { if (!_jumpBaseSet)  { _jumpForceBase = jumpForce; _jumpBaseSet = true; } }
-        void EnsureSizeBase()  { EnsureVisualRenderer(); if (!_sizeBaseSet && _visualRoot != null) { _visualBaseScale = _visualRoot.localScale; _sizeBaseSet = true; } }
 
         void ShowStatPopup(string label, Color col)
             => DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, label, col, 2.2f);
@@ -159,9 +157,26 @@ namespace PromptFighters.Battle
         }
         public void ApplyPermanentSize(float mult)
         {
-            EnsureSizeBase(); if (_visualRoot == null) return; PermSizeMult = mult;
-            _visualRoot.localScale = new Vector3(_visualBaseScale.x * mult, _visualBaseScale.y * mult, _visualBaseScale.z);
+            PermSizeMult = mult;
+            // 見た目・当たり判定を実効サイズで更新（技の判定/見た目は SkillExecutor が PermSizeMult を乗算）。
+            ApplyVisualScaleCorrection();
+            ApplyColliderScaleCorrection();
             ShowStatPopup(mult > 1f ? "BIG!" : "SMALL!", new Color(1f, 0.85f, 0.2f));
+        }
+
+        // ギミックの永続倍率を初期化する。新しいマッチ開始時に呼ぶ（ラウンドまたぎでは呼ばない）。
+        // 倍率を1へ戻し、速度/ジャンプの基準値はマッチのキャラ設定で取り直せるようフラグもクリアする。
+        public void ResetGimmickStats()
+        {
+            if (_speedTempCo  != null) { StopCoroutine(_speedTempCo);  _speedTempCo  = null; }
+            if (_jumpTempCo   != null) { StopCoroutine(_jumpTempCo);   _jumpTempCo   = null; }
+            if (_damageTempCo != null) { StopCoroutine(_damageTempCo); _damageTempCo = null; }
+            PermSpeedMult = PermJumpMult = PermDamageMult = PermGravityMult = PermSizeMult = 1f;
+            _speedBaseSet = false;  // 次のマッチのキャラ基準速度で取り直す
+            _jumpBaseSet  = false;  // 同上（ジャンプ）
+            _speedBoostTimer = 0f;
+            _jumpBoostTimer  = 0f;
+            DamageMultiplier = 1f;
         }
 
         // 永続倍率を再適用（ResetForBattleからラウンド開始時に呼び、ラウンドをまたいで保持する）
@@ -171,8 +186,7 @@ namespace PromptFighters.Battle
             if (_jumpBaseSet)  jumpForce = _jumpForceBase * PermJumpMult;
             DamageMultiplier = PermDamageMult;
             if (!_dodgeGravitySuppressed) _rb.gravityScale = _defaultGravityScale * PermGravityMult;
-            if (_sizeBaseSet && _visualRoot != null)
-                _visualRoot.localScale = new Vector3(_visualBaseScale.x * PermSizeMult, _visualBaseScale.y * PermSizeMult, _visualBaseScale.z);
+            if (PermSizeMult != 1f) { ApplyVisualScaleCorrection(); ApplyColliderScaleCorrection(); }
             if (PermSpeedMult > 1f) _speedBoostTimer = 99999f;
             if (PermJumpMult  > 1f) _jumpBoostTimer  = 99999f;
         }

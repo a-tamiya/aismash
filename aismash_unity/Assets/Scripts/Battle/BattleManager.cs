@@ -79,6 +79,7 @@ namespace PromptFighters.Battle
         public float       Countdown     { get; private set; }
         public float       StageMinX     => -stageHalfWidth;
         public float       StageMaxX     =>  stageHalfWidth;
+        public float       StageGroundY  =>  fighter1SpawnPos.y; // 影の落下先となる地面の基準Y
 
         public int P1RoundWins  { get; private set; }
         public int P2RoundWins  { get; private set; }
@@ -590,6 +591,10 @@ namespace PromptFighters.Battle
             Character1 = data1;
             Character2 = data2;
 
+            // 新しいマッチではギミックの永続倍率（巨大化・速度等）を初期化してから基準値を適用する。
+            fighter1?.ResetGimmickStats();
+            fighter2?.ResetGimmickStats();
+
             fighter1?.GetComponent<SkillExecutor>()?.LoadCharacter(data1);
             fighter2?.GetComponent<SkillExecutor>()?.LoadCharacter(data2);
             fighter1?.ApplyCharacterStats(data1?.stats);
@@ -614,6 +619,7 @@ namespace PromptFighters.Battle
             EnsureBossSpriteSet(data);
             BossCharacter = data;
 
+            boss.ResetGimmickStats();
             boss.GetComponent<SkillExecutor>()?.LoadCharacter(data);
             boss.ApplyCharacterStats(data.stats);
             boss.SetGrabThrowParameters(data.grabParameters, data.throwParameters);
@@ -744,6 +750,10 @@ namespace PromptFighters.Battle
             P1RoundWins  = 0;
             P2RoundWins  = 0;
             CurrentRound = 1;
+            // 前マッチのギミック倍率（巨大化・速度等）を持ち越さない。
+            fighter1?.ResetGimmickStats();
+            fighter2?.ResetGimmickStats();
+            boss?.ResetGimmickStats();
             fighter1?.ResetForBattle(fighter1SpawnPos, faceRight: true);
             fighter2?.ResetForBattle(fighter2SpawnPos, faceRight: false);
             ResetCameraZoom();

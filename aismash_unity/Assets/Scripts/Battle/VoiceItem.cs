@@ -21,8 +21,12 @@ namespace PromptFighters.Battle
         bool    _broken;
         System.Action<Fighter> _onBroken;
 
-        SpriteRenderer _outer, _inner;
-        Transform   _visual;   // 脈動・回転はここに適用（ルートのRigidbody2Dと干渉させない）
+        SpriteRenderer _ballSr;
+        Color          _ballBaseColor = Color.white;
+        Sprite[]       _stages;        // 耐久に応じた3段階テクスチャ（[0]無傷→[2]破損寸前）
+        int            _curStage = -1;
+        static Sprite[] _ballStages; static bool _ballStagesTried;
+        Transform   _visual;   // 脈動はここに適用（ルートのRigidbody2Dと干渉させない）
         Rigidbody2D _rb;       // 移動は MovePosition で行い、攻撃トリガーを確実に発火させる
         Vector3 _basePos;
         Vector2 _knockVel;     // 被弾ノックバック速度（位置へ積分し減衰）
@@ -62,32 +66,51 @@ namespace PromptFighters.Battle
             item._driftDir   = Random.value < 0.5f ? -1f : 1f;
             item._halfRangeX = Mathf.Max(1f, halfRangeX);
 
-            // 見た目コンテナ（脈動・回転はここに適用。ルートは物理＋位置のみ）
+            // 見た目コンテナ（脈動はここに適用。ルートは物理＋位置のみ）
             var visualGo = new GameObject("Visual");
             visualGo.transform.SetParent(go.transform, false);
             item._visual = visualGo.transform;
 
-            // 外側の大きなグロー
-            var outerGo = new GameObject("Glow");
-            outerGo.transform.SetParent(visualGo.transform, false);
-            item._outer = outerGo.AddComponent<SpriteRenderer>();
-            item._outer.sprite = RuntimeSprite.Glow();
-            item._outer.color  = GoldGlow;
-            item._outer.sortingOrder = 9;
-            FitSprite(item._outer, 2.6f);
+            var stages = BallStages();
+            if (stages[0] != null)
+            {
+                // 生成画像（金/シアンのエネルギー球＋マイク紋章）。マイクが正立するよう回転はしない。
+                var ballGo = new GameObject("Ball");
+                ballGo.transform.SetParent(visualGo.transform, false);
+                item._ballSr = ballGo.AddComponent<SpriteRenderer>();
+                item._ballSr.sortingOrder = 9;
+                item._ballBaseColor = Color.white;
+                item._stages = stages;
+                item.UpdateBallStage();    // 初期段階（無傷）を設定
+            }
+            else
+            {
+                // フォールバック：従来のグロー二層
+                var outerGo = new GameObject("Glow");
+                outerGo.transform.SetParent(visualGo.transform, false);
+                item._ballSr = outerGo.AddComponent<SpriteRenderer>();
+                item._ballSr.sprite = RuntimeSprite.Glow();
+                item._ballSr.color  = GoldGlow;
+                item._ballBaseColor = GoldGlow;
+                item._ballSr.sortingOrder = 9;
+                FitSprite(item._ballSr, 2.6f);
 
-            // 内側の明るいコア
-            var innerGo = new GameObject("Core");
-            innerGo.transform.SetParent(visualGo.transform, false);
-            item._inner = innerGo.AddComponent<SpriteRenderer>();
-            item._inner.sprite = RuntimeSprite.Glow();
-            item._inner.color  = new Color(1f, 0.98f, 0.85f, 1f);
-            item._inner.sortingOrder = 10;
-            FitSprite(item._inner, 1.2f);
+                var innerGo = new GameObject("Core");
+                innerGo.transform.SetParent(visualGo.transform, false);
+                var inner = innerGo.AddComponent<SpriteRenderer>();
+                inner.sprite = RuntimeSprite.Glow();
+                inner.color  = new Color(1f, 0.98f, 0.85f, 1f);
+                inner.sortingOrder = 10;
+                FitSprite(inner, 1.2f);
+            }
 
             var col = go.AddComponent<BoxCollider2D>();
             col.isTrigger = true;
             col.size = new Vector2(1.7f, 1.7f);
+
+            // 地面に落ちる影（高く浮くほど小さく薄く）。
+            float groundY = BattleManager.Instance != null ? BattleManager.Instance.StageGroundY : -1.8f;
+            BlobShadow.Spawn(go.transform, groundY, 1.25f, sortingOrder: -2);
 
             Active = item;
             return item;
@@ -96,6 +119,36 @@ namespace PromptFighters.Battle
         void OnDestroy()
         {
             if (Active == this) Active = null;
+        }
+
+        // 耐久3段階のテクスチャ。[0]無傷 / [1]ひび / [2]破損寸前。
+        // 画像が無い段階は手前の段階で代用する（最低でも ball が無いとフォールバック描画）。
+        static Sprite[] BallStages()
+        {
+            if (!_ballStagesTried)
+            {
+                _ballStages = new Sprite[3];
+                _ballStages[0] = Resources.Load<Sprite>("Effects/ball");
+                _ballStages[1] = Resources.Load<Sprite>("Effects/ball_crack1");
+                _ballStages[2] = Resources.Load<Sprite>("Effects/ball_crack2");
+                _ballStagesTried = true;
+            }
+            return _ballStages;
+        }
+
+        // 現在の耐久からテクスチャ段階を決めて切り替える。
+        void UpdateBallStage()
+        {
+            if (_ballSr == null || _stages == null) return;
+            float ratio = Mathf.Clamp01(_hp / MaxHP);
+            int stage = ratio > 0.66f ? 0 : (ratio > 0.33f ? 1 : 2);
+            if (stage == _curStage) return;
+            // 欠けている段階は近い段階で代用
+            var s = _stages[stage] ?? _stages[Mathf.Max(0, stage - 1)] ?? _stages[0];
+            if (s == null) return;
+            _ballSr.sprite = s;
+            FitSprite(_ballSr, 2.9f);
+            _curStage = stage;
         }
 
         static void FitSprite(SpriteRenderer sr, float worldDiameter)
@@ -131,18 +184,25 @@ namespace PromptFighters.Battle
         {
             float t = Time.time + _seed;
 
-            // 脈動＋回転で目立たせる（見た目コンテナのみ。ルートの物理と干渉しない）
+            // 脈動で目立たせる。均一スケール（拡大縮小）は奥行き(Z)移動に見えてしまうため、
+            // 横伸び⇔縦伸びのスクワッシュ＆ストレッチ（面積ほぼ一定の2D変形）＋明滅で表現する。
+            // 残り耐久が減るほど脈動・明滅を強め、割れる直前感を出す。
             if (_visual != null)
             {
-                float pulse = 1f + 0.12f * Mathf.Sin(t * 6f);
-                _visual.localScale = Vector3.one * pulse;
-                _visual.Rotate(0f, 0f, 60f * Time.deltaTime);
-            }
+                float dmgRatio = 1f - Mathf.Clamp01(_hp / MaxHP);
+                float amp   = 0.06f + 0.06f * dmgRatio;
+                float speed = 6f + 6f * dmgRatio;
+                float wob   = amp * Mathf.Sin(t * speed);
+                _visual.localScale = new Vector3(1f + wob, 1f - wob, 1f);
 
-            // 残り耐久が減るほど内側コアを明るく＝割れる直前感
-            float dmgRatio = 1f - Mathf.Clamp01(_hp / MaxHP);
-            if (_inner != null)
-                _inner.color = Color.Lerp(new Color(1f, 0.98f, 0.85f, 1f), Color.white, dmgRatio);
+                if (_ballSr != null)
+                {
+                    float bright = 1f + (0.15f + 0.25f * dmgRatio) * (0.5f + 0.5f * Mathf.Sin(t * speed));
+                    _ballSr.color = new Color(
+                        _ballBaseColor.r * bright, _ballBaseColor.g * bright,
+                        _ballBaseColor.b * bright, _ballBaseColor.a);
+                }
+            }
         }
 
         public void TakeHit(float dmg, Fighter attacker)
@@ -150,6 +210,7 @@ namespace PromptFighters.Battle
             if (_broken || dmg <= 0f) return;
             if (attacker != null) _lastAttacker = attacker;
             _hp -= dmg;
+            UpdateBallStage(); // 耐久に応じてテクスチャを切り替え（ひび→破損寸前）
 
             // ノックバック：攻撃者から離れる向きへ、ダメージに応じて吹き飛ぶ（横メイン＋少し上）
             if (attacker != null)

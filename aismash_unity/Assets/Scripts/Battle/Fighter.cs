@@ -214,6 +214,7 @@ namespace PromptFighters.Battle
             _skillRecoveryTimer <= 0f;
 
         public SpriteRenderer VisualRenderer => _sprite;
+        public float CurrentSizeScale => _charSizeScale * PermSizeMult; // 影など外部表示の追従用
         public Vector3 ReviveAnchorPosition =>
             IsDowned && _sprite != null ? _sprite.bounds.center : transform.position;
         public Vector3 ReviveGaugePosition =>
@@ -241,6 +242,7 @@ namespace PromptFighters.Battle
             EnsureVisualRenderer();
             ApplyColliderScaleCorrection();
             CreateHurtboxDebugVisual();
+            CreateShadow();
             _skillExecutor  = GetComponent<SkillExecutor>();
             CurrentHP       = maxHP;
             CurrentGuardDurability = maxGuardDurability;
@@ -254,15 +256,17 @@ namespace PromptFighters.Battle
             bool onPlatform = false;
             if (!onGroundLayer)
             {
-                var spawner = BattleManager.Instance?.PlatformSpawner;
-                if (spawner != null)
+                // 台（ステージ固定）に加え、生成した足場（PlatformEffector2D=ワンウェイ）にも乗れるよう
+                // 上向き接触かつエフェクター利用コライダ全般を接地として扱う。
+                var platCols = BattleManager.Instance?.PlatformSpawner?.GetColliders();
+                int cnt = _rb.GetContacts(_contactBuf);
+                for (int i = 0; i < cnt && !onPlatform; i++)
                 {
-                    var platCols = spawner.GetColliders();
-                    int cnt = _rb.GetContacts(_contactBuf);
-                    for (int i = 0; i < cnt && !onPlatform; i++)
-                        if (_contactBuf[i].normal.y > 0.5f &&
-                            platCols.Contains(_contactBuf[i].collider))
-                            onPlatform = true;
+                    if (_contactBuf[i].normal.y <= 0.5f) continue;
+                    var c = _contactBuf[i].collider;
+                    if (c == null) continue;
+                    if (c.usedByEffector || (platCols != null && platCols.Contains(c)))
+                        onPlatform = true;
                 }
             }
             IsGrounded = (onGroundLayer || onPlatform) &&
@@ -759,12 +763,14 @@ namespace PromptFighters.Battle
             if (willDie) KillOrDown();
         }
 
-        public void ApplyStatus(StatusType type, float duration)
+        // maxStun: スタン上限秒。通常の技は短時間（0.7秒）に制限するが、
+        // ギミックの「行動不能」など長時間止めたい場合は呼び出し側で上限を上げる。
+        public void ApplyStatus(StatusType type, float duration, float maxStun = 0.7f)
         {
             switch (type)
             {
                 case StatusType.Stun:
-                    _stunTimer = Mathf.Max(_stunTimer, Mathf.Clamp(duration, 0.4f, 0.7f));
+                    _stunTimer = Mathf.Max(_stunTimer, Mathf.Clamp(duration, 0.4f, maxStun));
                     DamagePopup.SpawnText(transform.position, "STUN", StunColor, 1.8f);
                     BattleLogger.Instance?.LogEvent($"{PlayerLabel()}がスタン");
                     break;
@@ -1447,6 +1453,18 @@ namespace PromptFighters.Battle
             ApplyVisualScaleCorrection();
         }
 
+        BlobShadow _shadow;
+
+        // 足元の地面に落ちるブロブ影を生成（ジャンプで小さく薄くなる）。
+        void CreateShadow()
+        {
+            if (_shadow != null) return;
+            float groundY = BattleManager.Instance != null ? BattleManager.Instance.StageGroundY : -1.8f;
+            // 影はキャラの足元の少し下に置く（上に見えないように）。
+            _shadow = BlobShadow.Spawn(transform, groundY, 1.15f, sortingOrder: -2,
+                sizeProvider: () => CurrentSizeScale, yOffset: -0.35f);
+        }
+
         void EnsureVisualRenderer()
         {
             if (_sprite != null) return;
@@ -1489,17 +1507,20 @@ namespace PromptFighters.Battle
                 return;
             }
 
+            // 実効サイズ＝キャラ基準サイズ × ギミック巨大化/縮小化倍率。
+            float eff = _charSizeScale * PermSizeMult;
             _visualRoot.localPosition = Vector3.zero;
             _visualRoot.localRotation = Quaternion.identity;
-            _visualRoot.localScale = new Vector3(y / x * _charSizeScale, _charSizeScale, 1f);
+            _visualRoot.localScale = new Vector3(y / x * eff, eff, 1f);
         }
 
         void ApplyColliderScaleCorrection()
         {
             var col = GetComponent<BoxCollider2D>();
             if (col == null) return;
-            col.size   = new Vector2(0.78f * _charSizeScale, 1.75f * _charSizeScale);
-            col.offset = new Vector2(0f,                     0.82f * _charSizeScale);
+            float eff = _charSizeScale * PermSizeMult;
+            col.size   = new Vector2(0.78f * eff, 1.75f * eff);
+            col.offset = new Vector2(0f,           0.82f * eff);
         }
 
         public bool TryDropThrough()

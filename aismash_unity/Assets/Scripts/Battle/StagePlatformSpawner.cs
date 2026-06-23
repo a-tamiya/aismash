@@ -62,6 +62,16 @@ namespace PromptFighters.Battle
             var go = new GameObject("StagePlatform");
             go.transform.position = center;
 
+            // 台の立体感を出すドロップシャドウ（台の真下に柔らかい暗い楕円）。
+            var shadowGo = new GameObject("PlatShadow");
+            shadowGo.transform.SetParent(go.transform, false);
+            shadowGo.transform.localPosition = new Vector3(0f, -0.18f, 0f);
+            shadowGo.transform.localScale    = new Vector3(width, 0.34f, 1f);
+            var shadowSr = shadowGo.AddComponent<SpriteRenderer>();
+            shadowSr.sprite       = RuntimeSprite.Circle();
+            shadowSr.color        = new Color(0f, 0f, 0f, 0.28f);
+            shadowSr.sortingOrder = -6; // 台ビジュアル(-5)より奥、背景(-10)より手前
+
             var rb = go.AddComponent<Rigidbody2D>();
             rb.bodyType = RigidbodyType2D.Static;
 

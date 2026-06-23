@@ -18,7 +18,10 @@ namespace PromptFighters.Battle.Skills
         const float FollowUpDamageMultiplier = SkillConstants.FollowUpDamageMultiplier;
 
         Fighter _fighter;
-        float _sizeScale = 1f;
+        // キャラ固有の基準サイズ（プリセット/ボス）。技生成時の実効サイズはギミックの巨大化/縮小化も乗算する。
+        float _baseSizeScale = 1f;
+        float _sizeScale => Mathf.Clamp(
+            _baseSizeScale * (_fighter != null ? _fighter.PermSizeMult : 1f), 0.3f, 2.5f);
         bool _isExecuting;
         bool _currentSkillHit;
         int _skillSerial;
@@ -67,7 +70,7 @@ namespace PromptFighters.Battle.Skills
             int n = data.skills != null ? data.skills.Length : 0;
             for (int i = 0; i < skills.Length; i++)
                 skills[i] = i < n ? data.skills[i] : null;
-            _sizeScale = Mathf.Clamp(data.sizeScale > 0f ? data.sizeScale : 1f, 0.5f, 2f);
+            _baseSizeScale = Mathf.Clamp(data.sizeScale > 0f ? data.sizeScale : 1f, 0.5f, 2f);
             ResetSkillState();
             Debug.Log($"[SkillExecutor] キャラクター「{data.characterName}」の技をロードしました。(sizeScale={_sizeScale:F2})");
         }

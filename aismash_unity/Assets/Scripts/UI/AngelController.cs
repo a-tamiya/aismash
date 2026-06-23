@@ -22,6 +22,7 @@ namespace PromptFighters.UI
         public float slowScale      = 0.4f; // 録音中のスローモーション倍率
 
         bool          _busy;
+        bool          _firstItemShown; // マッチで最初のアイテム出現時に導入バナーを出す
         BattleManager _bm;
         AngelGimmickApplier _applier;
         Coroutine     _spawnRoutine;
@@ -94,6 +95,9 @@ namespace PromptFighters.UI
         void OnBattleStart()
         {
             if (!Enabled) return;
+            // OnBattleStart はラウンドごと（カウントダウン明け）に発火する。障害物は BO3 を通して
+            // 残したいので、マッチ最初のラウンド(=1)でのみ前マッチの残骸を一掃する。
+            if (_bm == null || _bm.CurrentRound <= 1) { _applier?.ClearObstacles(); _firstItemShown = false; }
             if (_spawnRoutine != null) StopCoroutine(_spawnRoutine);
             _spawnRoutine = StartCoroutine(SpawnLoop());
         }
@@ -102,6 +106,8 @@ namespace PromptFighters.UI
         {
             if (_spawnRoutine != null) { StopCoroutine(_spawnRoutine); _spawnRoutine = null; }
             if (_activeItem != null) { Destroy(_activeItem.gameObject); _activeItem = null; }
+            // BO3（マッチ）終了。地形・障害物はここまで残し、ここで破棄する。
+            _applier?.ClearObstacles();
             RestoreTimeScale();
             ShowSlowOverlay(false);
             _busy = false; _listening = false;
@@ -128,8 +134,17 @@ namespace PromptFighters.UI
             float x = Random.Range(-halfW, halfW);
             float y = Random.Range(-0.4f, 2.6f); // 空中
             _activeItem = VoiceItem.Spawn(new Vector2(x, y), halfW, OnItemBroken);
-            ShowBanner("[ アイテム出現！ ]", "攻撃して破壊すると…願いが叶う！");
-            if (_busy == false) StartCoroutine(HideBannerAfter(2.4f));
+            if (!_firstItemShown)
+            {
+                _firstItemShown = true;
+                ShowBanner("[ AIスマッシュボール出現！ ]", "壊してAIを味方につけろ！");
+                if (_busy == false) StartCoroutine(HideBannerAfter(3.2f));
+            }
+            else
+            {
+                ShowBanner("[ アイテム出現！ ]", "攻撃して破壊すると…願いが叶う！");
+                if (_busy == false) StartCoroutine(HideBannerAfter(2.4f));
+            }
         }
 
         IEnumerator HideBannerAfter(float sec)
@@ -150,10 +165,29 @@ namespace PromptFighters.UI
         {
             _busy = true;
 
-            string acquirerSlot = breaker != null && breaker == _bm?.fighter2 ? "player2" : "player1";
-            string acquirerName = acquirerSlot == "player2"
-                ? (_bm?.Character2?.characterName ?? "2P")
-                : (_bm?.Character1?.characterName ?? "1P");
+            // ギミックの適用対象。通常(Versus)は p1=fighter1 / p2=fighter2。
+            // 協力(対ボス)では取得者の「相手」はボスなので、p1=取得者 / p2=ボス として、
+            // acquirerSlot=player1 固定で「自分=取得者 / 相手=ボス」を解決させる。
+            bool coop = _bm != null && _bm.Mode == BattleMode.CoopVsBoss;
+            Fighter applyP1, applyP2;
+            string  acquirerSlot;
+            if (coop)
+            {
+                applyP1 = breaker;
+                applyP2 = _bm.boss;
+                acquirerSlot = "player1";
+            }
+            else
+            {
+                applyP1 = _bm?.fighter1;
+                applyP2 = _bm?.fighter2;
+                acquirerSlot = breaker != null && breaker == _bm?.fighter2 ? "player2" : "player1";
+            }
+            string acquirerName = breaker != null
+                ? (breaker == _bm?.fighter2
+                    ? (_bm?.Character2?.characterName ?? "2P")
+                    : (_bm?.Character1?.characterName ?? "1P"))
+                : "1P";
 
             // 1. スローモーション開始（KO演出中は触らない）
             bool slowed = false;
@@ -202,27 +236,32 @@ namespace PromptFighters.UI
             // 3. スロー解除（解析・適用は通常速度で）
             if (slowed) { RestoreTimeScale(); ShowSlowOverlay(false); }
 
-            // 4. ギミック決定（取得者を文脈に渡す）
-            ShowBanner("[ アイテム効果 ]", "願いを解析中...");
-            var battleState = BuildBattleState();
+            // 4. ギミック決定
             GimmickData gimmick = null;
-            bool        decided = false;
             bool        hadVoice = !string.IsNullOrEmpty(transcribed);
-            AIAngelClient.DecideGimmick(this, transcribed ?? "", battleState,
-                data => { gimmick = data; decided = true; },
-                err  => { Debug.LogWarning("[VoiceItem] " + err); decided = true; },
-                acquirerSlot: acquirerSlot);
-            float timeout = 18f;
-            while (!decided && timeout > 0f) { timeout -= Time.unscaledDeltaTime; yield return null; }
 
-            // 5. 音声が取れなかった/失敗時は味方有利のランダム良効果でフォールバック
-            if (gimmick == null || !hadVoice)
-                gimmick = RandomGoodGimmick(acquirerSlot, acquirerName);
+            if (hadVoice)
+            {
+                // 願いが取れた → LLM が言葉を解釈して忠実に叶える（取得者を文脈に渡す）
+                ShowBanner("[ アイテム効果 ]", "願いを解析中...");
+                var battleState = BuildBattleState();
+                bool decided = false;
+                AIAngelClient.DecideGimmick(this, transcribed, battleState,
+                    data => { gimmick = data; decided = true; },
+                    err  => { Debug.LogWarning("[VoiceItem] " + err); decided = true; },
+                    acquirerSlot: acquirerSlot);
+                float timeout = 18f;
+                while (!decided && timeout > 0f) { timeout -= Time.unscaledDeltaTime; yield return null; }
+            }
+
+            // 5. 音声なし/解析失敗時は、毎回ばらける完全ランダムなギミック（APIは呼ばない）
+            if (gimmick == null)
+                gimmick = RandomGimmick(acquirerSlot, acquirerName);
 
             // 6. 適用 + 表示 + TTS
             ShowBanner("[ アイテム効果 ]", gimmick.message);
             ShowSubtitle(gimmick.message);
-            _applier.Apply(gimmick, _bm?.fighter1, _bm?.fighter2);
+            _applier.Apply(gimmick, applyP1, applyP2);
             ShowEffectCenter(BuildEffectText(gimmick));
             AITTSClient.Speak(this, gimmick.message, _audioSource,
                 onError: e => Debug.LogWarning("[VoiceItemTTS] " + e),
@@ -258,27 +297,60 @@ namespace PromptFighters.UI
                 _slowTint.color = new Color(0.25f, 0.6f, 1f, Mathf.Lerp(0.08f, 0.16f, p));
         }
 
-        // フォールバック：味方有利のランダムな良効果を取得者に付与
-        static GimmickData RandomGoodGimmick(string acquirerSlot, string acquirerName)
+        // 音声なし時の完全ランダムギミック。バフ・デバフ・特殊・地形を幅広く、
+        // ターゲットも様々（取得者/相手/両者/弱い方 等）に散らして、毎回違う展開にする。
+        // who: "self"=取得者 / "opp"=相手 / それ以外はそのまま target に入れる。
+        static GimmickData RandomGimmick(string acquirerSlot, string acquirerName)
         {
-            (string g, float v, float d, string msg)[] picks =
+            string oppSlot = acquirerSlot == "player2" ? "player1" : "player2";
+
+            (string g, float v, float d, string who, string msg)[] picks =
             {
-                ("hp_recover",   0.30f, 0f, "HPが回復した！"),
-                ("speed_boost",  1.40f, 8f, "スピードアップ！"),
-                ("jump_boost",   1.40f, 8f, "ジャンプ強化！"),
-                ("damage_boost", 1.50f, 8f, "パワーアップ！"),
-                ("invincible",   0f,    4f, "無敵化！"),
-                ("guard_fill",   0f,    0f, "ガード全回復！"),
-                ("gravity_down", 0.50f, 8f, "ふわふわ浮遊！"),
+                // 取得者バフ
+                ("hp_recover",   0.30f, 0f, "self", "HPが回復した！"),
+                ("speed_boost",  1.40f, 8f, "self", "スピードアップ！"),
+                ("jump_boost",   1.40f, 8f, "self", "ジャンプ強化！"),
+                ("damage_boost", 1.50f, 8f, "self", "パワーアップ！"),
+                ("invincible",   0f,    4f, "self", "無敵化！"),
+                ("guard_fill",   0f,    0f, "self", "ガード全回復！"),
+                ("gravity_down", 0.45f, 8f, "self", "ふわふわ浮遊！"),
+                ("reflect",      0f,    6f, "self", "ダメージ反射！"),
+                ("size_up",      1.40f, 8f, "self", "巨大化！"),
+                // 相手デバフ
+                ("speed_down",   0.60f, 8f, "opp",  "相手が鈍足に！"),
+                ("damage_down",  0.60f, 8f, "opp",  "相手のパワーダウン！"),
+                ("freeze",       0f,    2f, "opp",  "相手が氷漬け！"),
+                ("burn",         0f,    6f, "opp",  "相手に火がついた！"),
+                ("chaos",        0f,    6f, "opp",  "相手の操作が混乱！"),
+                ("guard_break",  0f,    0f, "opp",  "相手のガード破壊！"),
+                ("launch",       3.0f,  0f, "opp",  "相手を吹き飛ばし！"),
+                ("gravity_up",   3.0f,  8f, "opp",  "相手が重力に潰される！"),
+                ("size_down",    0.65f, 8f, "opp",  "相手が縮小！"),
+                ("hp_drain",     0.20f, 0f, "opp",  "相手のHPを削った！"),
+                // カオス・特殊・地形（誰に転ぶか分からない）
+                ("hp_swap",      0f,    0f, "both", "HPを入れ替え！"),
+                ("position_swap",0f,    0f, "both", "位置を入れ替え！"),
+                ("teleport",     0f,    0f, "random", "ランダムワープ！"),
+                ("slow",         0.5f,  6f, "random", "スロー発生！"),
+                ("obstacle_rain",6f,    0f, "both", "障害物の雨！"),
+                ("obstacle_bounce",0f,  0f, "both", "バウンスパッド出現！"),
+                ("obstacle_platform",3f,0f, "both", "足場が出現！"),
+                ("obstacle_tilt",3f,    0f, "both", "斜め足場が出現！"),
             };
             var p = picks[Random.Range(0, picks.Length)];
+            string target = p.who switch
+            {
+                "self" => acquirerSlot,
+                "opp"  => oppSlot,
+                _      => p.who, // both / random / weaker / stronger 等
+            };
             return new GimmickData
             {
                 gimmick  = p.g,
-                target   = acquirerSlot,
+                target   = target,
                 value    = p.v,
                 duration = p.d,
-                message  = $"{acquirerName}に{p.msg}",
+                message  = p.msg,
             };
         }
 
@@ -335,6 +407,17 @@ namespace PromptFighters.UI
             "reflect"        => "ダメージ反射 ✦",
             "hp_set"         => "HP強制変更 ！",
             "guard_fill"     => "ガード全回復",
+            "wind"           => "強風 〜〜",
+            "floor_lava"     => "床が溶岩 ！",
+            "guard_disable"  => "ガード不可 ！",
+            "skill_seal"     => "技封印 ！",
+            "super_knockback" => "ふっとび増 ！",
+            "hp_equal"       => "HP平均化 ！",
+            "hp_share"       => "HP共有 ！",
+            "counter_gimmick" => "カウンター ✦",
+            "ground_bounce"  => "跳ねる床 ！",
+            "obstacle_moving" => "動く足場 ！",
+            "clear_obstacles" => "障害物消去 ！",
             _                => g,
         };
 

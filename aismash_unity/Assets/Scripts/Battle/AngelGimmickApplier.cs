@@ -14,6 +14,28 @@ namespace PromptFighters.Battle
         const float DurationScale = 2f;
         static Sprite _rainBlockSprite;
         static bool _rainBlockTried;
+        static Sprite _wallSprite;
+        static Sprite _platformSprite;
+        // 台画像の不透明上端のピボットからのピクセル（StagePlatformSpawnerと同じ基準）。
+        const float PlatformOpaqueTopPixels = 176f;
+
+        // 生成した地形・障害物は時間で消さず、BO3（マッチ）が終わるまで残す。
+        // AngelController が試合開始/終了時に ClearObstacles() でまとめて破棄する。
+        readonly System.Collections.Generic.List<GameObject> _persistentObstacles =
+            new System.Collections.Generic.List<GameObject>();
+
+        void RegisterObstacle(GameObject go)
+        {
+            if (go != null) _persistentObstacles.Add(go);
+        }
+
+        // マッチ（BO3）境界で全障害物を破棄。
+        public void ClearObstacles()
+        {
+            for (int i = 0; i < _persistentObstacles.Count; i++)
+                if (_persistentObstacles[i] != null) Destroy(_persistentObstacles[i]);
+            _persistentObstacles.Clear();
+        }
 
         public void Apply(GimmickData data, Fighter p1, Fighter p2)
         {
@@ -133,8 +155,10 @@ namespace PromptFighters.Battle
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "freeze":
-                    target1?.ApplyStatus(StatusType.Stun, Mathf.Clamp(duration, 1f, 5f) * DurationScale);
-                    target2?.ApplyStatus(StatusType.Stun, Mathf.Clamp(duration, 1f, 5f) * DurationScale);
+                    // 行動不能はしっかり止める（通常技の0.7秒上限を解除し、2.5〜4秒固定する）。
+                    float freezeDur = Mathf.Clamp(duration > 0f ? duration : 3f, 2.5f, 4f);
+                    target1?.ApplyStatus(StatusType.Stun, freezeDur, freezeDur);
+                    target2?.ApplyStatus(StatusType.Stun, freezeDur, freezeDur);
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "burn":
@@ -166,6 +190,11 @@ namespace PromptFighters.Battle
                     break;
                 case "obstacle_tilt":
                     SpawnTiltedPlatform(Mathf.Max(value, 1f), Mathf.Max(duration, 5f) * DurationScale, targetKey, p1, p2);
+                    GameAudioManager.Instance?.PlayGimmickBuff();
+                    break;
+                case "clear_obstacles":
+                    // 願いで地形・障害物を全消去する（更地に戻す）。
+                    ClearObstacles();
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
 
@@ -241,8 +270,20 @@ namespace PromptFighters.Battle
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "floor_lava":
-                    target1?.StartTemporaryFloorLava(Mathf.Clamp(value > 0f ? value : 0.1f, 0.05f, 0.5f), Mathf.Max(duration, 5f) * DurationScale);
-                    target2?.StartTemporaryFloorLava(Mathf.Clamp(value > 0f ? value : 0.1f, 0.05f, 0.5f), Mathf.Max(duration, 5f) * DurationScale);
+                    // 床の溶岩化は「床」の効果なので target に関係なく全員に適用。ダメージは従来の半分。
+                    float lavaRatio = Mathf.Clamp(value > 0f ? value : 0.1f, 0.05f, 0.5f) * 0.5f;
+                    float lavaDur   = Mathf.Max(duration, 5f) * DurationScale;
+                    var fighters = BattleManager.Instance?.Fighters;
+                    if (fighters != null && fighters.Count > 0)
+                    {
+                        for (int i = 0; i < fighters.Count; i++)
+                            fighters[i]?.StartTemporaryFloorLava(lavaRatio, lavaDur);
+                    }
+                    else
+                    {
+                        p1?.StartTemporaryFloorLava(lavaRatio, lavaDur);
+                        p2?.StartTemporaryFloorLava(lavaRatio, lavaDur);
+                    }
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "guard_disable":
@@ -329,6 +370,65 @@ namespace PromptFighters.Battle
             return _rainBlockSprite;
         }
 
+        static Sprite WallSprite()
+        {
+            // null をキャッシュしてしまわないよう、取得できるまで毎回試みる（Resources側で内部キャッシュ）。
+            if (_wallSprite == null) _wallSprite = Resources.Load<Sprite>("Stage/wall");
+            return _wallSprite;
+        }
+
+        static Sprite PlatformSprite()
+        {
+            if (_platformSprite == null) _platformSprite = Resources.Load<Sprite>("Stage/platform");
+            return _platformSprite;
+        }
+
+        // 横足場の本体を生成（テクスチャがあれば台画像、無ければ単色バー）。
+        // 当たり判定は (w, hCol)。テクスチャは横幅に合わせてアスペクト維持で乗せ、
+        // 立てる面（不透明上端）が当たり判定の上面に合うよう配置する。
+        GameObject BuildHorizontalPlatform(string name, Vector3 pos, float w, float hCol, Color fallbackCol, bool kinematic)
+        {
+            var go = new GameObject(name);
+            go.transform.position = pos;
+            var rb = go.AddComponent<Rigidbody2D>();
+            rb.bodyType = kinematic ? RigidbodyType2D.Kinematic : RigidbodyType2D.Static;
+            if (kinematic) rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+            var col = go.AddComponent<BoxCollider2D>();
+
+            // 台と同じワンウェイ仕様（上には乗れる／下からはすり抜ける）。
+            col.usedByEffector = true;
+            var eff = go.AddComponent<PlatformEffector2D>();
+            eff.useOneWay         = true;
+            eff.useOneWayGrouping = false;
+            eff.surfaceArc        = 170f;
+            eff.rotationalOffset  = 0f;
+
+            var tex = PlatformSprite();
+            if (tex != null)
+            {
+                col.size = new Vector2(w, hCol);
+                var vis = new GameObject("TexVisual");
+                vis.transform.SetParent(go.transform, false);
+                float scale = (w * 1.12f) / Mathf.Max(0.01f, tex.bounds.size.x); // アスペクト維持
+                vis.transform.localScale = new Vector3(scale, scale, 1f);
+                float opaqueTop = PlatformOpaqueTopPixels / tex.pixelsPerUnit * scale;
+                vis.transform.localPosition = new Vector3(0f, hCol * 0.5f - opaqueTop, 0f);
+                var sr = vis.AddComponent<SpriteRenderer>();
+                sr.sprite       = tex;
+                sr.color        = Color.white;
+                sr.sortingOrder = 6;
+            }
+            else
+            {
+                col.size = Vector2.one;
+                go.transform.localScale = new Vector3(w, hCol, 1f);
+                var sr = go.AddComponent<SpriteRenderer>();
+                sr.sprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0, 0, 1, 1), new Vector2(0.5f, 0.5f), 1f);
+                sr.color  = fallbackCol;
+            }
+            return go;
+        }
+
         static void ApplyRainBlockVisual(GameObject go)
         {
             var sprite = RainBlockSprite();
@@ -357,22 +457,76 @@ namespace PromptFighters.Battle
         {
             float w = Mathf.Clamp(widthScale * 1.8f, 1f, 9f);
             float h = 0.4f;
-            var go = MakeStaticObstacle("AngelPlatform",
+            var go = BuildHorizontalPlatform("AngelPlatform",
                 ObstaclePos(posHint, p1, p2, Random.Range(1.5f, 3.5f)),
-                new Vector3(w, h, 1f),
-                new Color(1f, 0.85f, 0.1f, 0.93f));
-            StartCoroutine(DestroyAfter(go, duration));
+                w, h, new Color(1f, 0.85f, 0.1f, 0.93f), kinematic: false);
+            RegisterObstacle(go);
         }
 
         void SpawnWall(float heightScale, float duration, string posHint, Fighter p1, Fighter p2)
         {
-            float h = Mathf.Clamp(heightScale * 1.6f, 1f, 7f);
-            float w = 0.45f;
-            var go = MakeStaticObstacle("AngelWall",
-                ObstaclePos(posHint, p1, p2, h * 0.5f),
-                new Vector3(w, h, 1f),
-                new Color(0.4f, 0.65f, 1f, 0.93f));
-            StartCoroutine(DestroyAfter(go, duration));
+            var bm = BattleManager.Instance;
+            float minX = bm?.StageMinX ?? -5f;
+            float maxX = bm?.StageMaxX ??  5f;
+            float groundY = bm != null ? bm.StageGroundY : -1.8f;
+
+            // 高さ・厚みをランダムに振って形に変化を出す。
+            float h    = Mathf.Clamp(heightScale * Random.Range(1.2f, 2.4f), 1f, 7f);
+            float wCol = Random.Range(0.5f, 1.1f);
+
+            // X位置：プレイヤー指定があればその付近、無ければステージ全幅からランダム（中央寄りの偏りを解消）。
+            float x;
+            if      (posHint == "player1" && p1 != null) x = p1.transform.position.x + Random.Range(-1.2f, 1.2f);
+            else if (posHint == "player2" && p2 != null) x = p2.transform.position.x + Random.Range(-1.2f, 1.2f);
+            else                                         x = Random.Range(minX + 0.8f, maxX - 0.8f);
+            x = Mathf.Clamp(x, minX + 0.6f, maxX - 0.6f);
+
+            // Y位置：基本は接地、たまに浮遊する壁にする。
+            float bottomY = groundY;
+            if (Random.value < 0.30f) bottomY += Random.Range(0.8f, 2.5f);
+            Vector3 pos = new Vector3(x, bottomY + h * 0.5f, 0f);
+
+            var go = new GameObject("AngelWall");
+            go.transform.position = pos;
+            var rb = go.AddComponent<Rigidbody2D>();
+            rb.bodyType = RigidbodyType2D.Static;
+            var col = go.AddComponent<BoxCollider2D>();
+
+            var sprite = WallSprite();
+            if (sprite != null)
+            {
+                col.size = new Vector2(wCol, h);
+                // 見た目はテクスチャの縦横比を保った幅で描く（当たり判定の細さに潰されないように）。
+                float aspect = sprite.bounds.size.x / Mathf.Max(0.01f, sprite.bounds.size.y);
+                float wVis   = Mathf.Clamp(h * aspect, 1.0f, 2.4f);
+                var vis = new GameObject("TexVisual");
+                vis.transform.SetParent(go.transform, false);
+                vis.transform.localScale = new Vector3(
+                    wVis / sprite.bounds.size.x, h / sprite.bounds.size.y, 1f);
+                var sr = vis.AddComponent<SpriteRenderer>();
+                sr.sprite       = sprite;
+                sr.color        = Color.white;
+                sr.sortingOrder = 7;
+            }
+            else
+            {
+                // フォールバック：従来の青い単色バー
+                col.size = Vector2.one;
+                go.transform.localScale = new Vector3(wCol, h, 1f);
+                var sr = go.AddComponent<SpriteRenderer>();
+                sr.sprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0, 0, 1, 1), new Vector2(0.5f, 0.5f), 1f);
+                sr.color  = new Color(0.4f, 0.65f, 1f, 0.93f);
+            }
+
+            // たまに少し傾けて形に変化を出す。
+            if (Random.value < 0.25f)
+                go.transform.rotation = Quaternion.Euler(0f, 0f, Random.Range(-14f, 14f));
+
+            // 壁は回避（空中回避・横回避）中のファイターをすり抜けさせる。
+            go.AddComponent<AngelWallPassable>();
+            // 攻撃で破壊できる（耐久70）。
+            go.AddComponent<DestructibleObstacle>().Init(70f);
+            RegisterObstacle(go);
         }
 
         void SpawnBouncePad(float duration, string posHint, Fighter p1, Fighter p2)
@@ -382,7 +536,7 @@ namespace PromptFighters.Battle
                 new Vector3(2f, 0.3f, 1f),
                 new Color(0.15f, 1f, 0.45f, 0.95f));
             go.AddComponent<AngelBouncePad>();
-            StartCoroutine(DestroyAfter(go, duration));
+            RegisterObstacle(go);
         }
 
         void SpawnRain(int count, float duration)
@@ -404,7 +558,7 @@ namespace PromptFighters.Battle
                 rb.gravityScale = Random.Range(1.8f, 3.5f);
                 go.AddComponent<BoxCollider2D>().size = Vector2.one;
                 ApplyRainBlockVisual(go);
-                StartCoroutine(DestroyAfter(go, duration));
+                RegisterObstacle(go);
             }
         }
 
@@ -412,12 +566,11 @@ namespace PromptFighters.Battle
         {
             float w = Mathf.Clamp(widthScale * 1.8f, 1f, 7f);
             float angle = Random.Range(15f, 40f) * (Random.value > 0.5f ? 1f : -1f);
-            var go = MakeStaticObstacle("AngelTilt",
+            var go = BuildHorizontalPlatform("AngelTilt",
                 ObstaclePos(posHint, p1, p2, Random.Range(1.5f, 3f)),
-                new Vector3(w, 0.4f, 1f),
-                new Color(1f, 0.5f, 0.15f, 0.93f));
+                w, 0.4f, new Color(1f, 0.5f, 0.15f, 0.93f), kinematic: false);
             go.transform.rotation = Quaternion.Euler(0f, 0f, angle);
-            StartCoroutine(DestroyAfter(go, duration));
+            RegisterObstacle(go);
         }
 
         void SpawnMovingPlatform(float widthScale, float duration)
@@ -426,25 +579,12 @@ namespace PromptFighters.Battle
             float minX = bm?.StageMinX ?? -5f;
             float maxX = bm?.StageMaxX ??  5f;
             float w  = Mathf.Clamp(widthScale * 1.8f, 1f, 7f);
-            var go   = new GameObject("AngelMovingPlatform");
-            go.transform.position   = new Vector3(0f, Random.Range(1.5f, 3.5f), 0f);
-            go.transform.localScale = new Vector3(w, 0.35f, 1f);
-            var rb = go.AddComponent<Rigidbody2D>();
-            rb.bodyType = RigidbodyType2D.Kinematic;
-            rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
-            go.AddComponent<BoxCollider2D>().size = Vector2.one;
-            var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite       = Sprite.Create(Texture2D.whiteTexture, new Rect(0,0,1,1), new Vector2(0.5f,0.5f), 1f);
-            sr.color        = new Color(0.3f, 1f, 0.8f, 0.93f);
-            sr.sortingOrder = 6;
-            go.AddComponent<AngelMovingPlatform>().Init(minX + 1f, maxX - 1f, duration);
-            StartCoroutine(DestroyAfter(go, duration));
-        }
-
-        System.Collections.IEnumerator DestroyAfter(GameObject go, float duration)
-        {
-            yield return new WaitForSeconds(duration);
-            if (go != null) Destroy(go);
+            var go = BuildHorizontalPlatform("AngelMovingPlatform",
+                new Vector3(0f, Random.Range(1.5f, 3.5f), 0f),
+                w, 0.35f, new Color(0.3f, 1f, 0.8f, 0.93f), kinematic: true);
+            // 移動ペースは固定の基準秒で決める（BO3終了まで残り続けても一定速度で往復）。
+            go.AddComponent<AngelMovingPlatform>().Init(minX + 1f, maxX - 1f, 8f);
+            RegisterObstacle(go);
         }
 
         static void HealIfAlive(Fighter f, float ratio)
@@ -498,6 +638,73 @@ namespace PromptFighters.Battle
             if (nx >= _maxX) { nx = _maxX; _dir = -1; }
             if (nx <= _minX) { nx = _minX; _dir =  1; }
             _rb.MovePosition(new Vector2(nx, _rb.position.y));
+        }
+    }
+
+    // 壁の障害物：回避（空中回避・横回避）中のファイターとの当たり判定を無効化してすり抜けさせる。
+    public class AngelWallPassable : MonoBehaviour
+    {
+        Collider2D _wallCol;
+
+        void Awake() { _wallCol = GetComponent<Collider2D>(); }
+
+        void FixedUpdate()
+        {
+            if (_wallCol == null) return;
+            var fighters = BattleManager.Instance?.Fighters;
+            if (fighters == null) return;
+            for (int i = 0; i < fighters.Count; i++)
+            {
+                var f = fighters[i];
+                if (f == null) continue;
+                var fc = f.GetComponent<Collider2D>();
+                if (fc == null) continue;
+                // 回避中はすり抜け（衝突無視）、通常時は衝突を戻す。
+                Physics2D.IgnoreCollision(_wallCol, fc, f.IsDodging);
+            }
+        }
+    }
+
+    // 攻撃で破壊できる障害物（壁など）。Hitbox/Projectile から TakeHit(dmg, attacker) が呼ばれる中立物。
+    public class DestructibleObstacle : MonoBehaviour
+    {
+        float _hp = 70f;
+        float _maxHp = 70f;
+        SpriteRenderer _sr;
+        Color _baseColor = Color.white;
+
+        public void Init(float hp)
+        {
+            _hp = _maxHp = Mathf.Max(1f, hp);
+            _sr = GetComponentInChildren<SpriteRenderer>();
+            if (_sr != null) _baseColor = _sr.color;
+        }
+
+        public void TakeHit(float dmg, Fighter attacker)
+        {
+            if (dmg <= 0f) return;
+            _hp -= dmg;
+
+            PromptFighters.UI.DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f,
+                Mathf.RoundToInt(dmg).ToString(), new Color(0.7f, 0.85f, 1f), 0.9f);
+            CameraShake.Shake(0.05f, 0.08f);
+
+            // 残り耐久に応じて暗く＆赤みを増し、壊れそうな見た目に。
+            if (_sr != null)
+            {
+                float r = Mathf.Clamp01(_hp / _maxHp);
+                _sr.color = new Color(_baseColor.r, _baseColor.g * (0.4f + 0.6f * r),
+                    _baseColor.b * (0.4f + 0.6f * r), _baseColor.a);
+            }
+
+            if (_hp <= 0f)
+            {
+                PromptFighters.UI.DamagePopup.SpawnText(transform.position + Vector3.up * 0.7f,
+                    "BREAK!", new Color(1f, 0.7f, 0.3f), 1.4f);
+                CameraShake.Shake(0.15f, 0.15f);
+                GameAudioManager.Instance?.PlayGimmickDebuff();
+                Destroy(gameObject);
+            }
         }
     }
 

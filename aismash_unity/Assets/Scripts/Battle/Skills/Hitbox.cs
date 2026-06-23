@@ -36,6 +36,7 @@ namespace PromptFighters.Battle.Skills
         readonly Dictionary<Fighter, float> _nextHitTimes = new Dictionary<Fighter, float>();
         readonly HashSet<Battle.SummonEntity> _hitSummons = new HashSet<Battle.SummonEntity>();
         readonly HashSet<Battle.VoiceItem> _hitVoiceItems = new HashSet<Battle.VoiceItem>();
+        readonly HashSet<Battle.DestructibleObstacle> _hitDestructibles = new HashSet<Battle.DestructibleObstacle>();
         int _hitsLanded;
 
         // デバッグオーバーレイ（col.boundsに毎フレーム追従する独立オブジェクト。プール対象と一緒に再利用）
@@ -152,6 +153,7 @@ namespace PromptFighters.Battle.Skills
             _nextHitTimes.Clear();
             _hitSummons.Clear();
             _hitVoiceItems.Clear();
+            _hitDestructibles.Clear();
             _hitsLanded = 0;
 
             Owner = null;
