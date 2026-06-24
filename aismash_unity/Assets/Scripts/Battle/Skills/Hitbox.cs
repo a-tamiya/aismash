@@ -123,6 +123,12 @@ namespace PromptFighters.Battle.Skills
                 col = b;
             }
 
+            // 静的な障害物（壁など）はStatic判定なので、無RBのトリガー同士では
+            // トリガーイベントが発火しない。Kinematic RBを持たせて検出できるようにする。
+            var rb = go.AddComponent<Rigidbody2D>();
+            rb.bodyType    = RigidbodyType2D.Kinematic;
+            rb.gravityScale = 0f;
+
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sprite       = RuntimeSprite.Square();
             sr.sortingOrder = 10;
@@ -328,6 +334,18 @@ namespace PromptFighters.Battle.Skills
             {
                 _hitSummons.Add(summon);
                 summon.TakeHit(Damage);
+                _hitsLanded++;
+                if (_hitsLanded >= MaxHits && _col != null)
+                    _col.enabled = false;
+                return;
+            }
+
+            // 破壊可能な障害物（壁など）へのヒット（陣営問わず誰でも殴れる中立物）
+            var destructible = other.GetComponentInParent<Battle.DestructibleObstacle>();
+            if (destructible != null && !_hitDestructibles.Contains(destructible))
+            {
+                _hitDestructibles.Add(destructible);
+                destructible.TakeHit(Damage, Owner);
                 _hitsLanded++;
                 if (_hitsLanded >= MaxHits && _col != null)
                     _col.enabled = false;

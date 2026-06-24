@@ -1525,27 +1525,32 @@ namespace PromptFighters.Battle
 
         public bool TryDropThrough()
         {
-            var spawner = BattleManager.Instance?.PlatformSpawner;
-            if (spawner == null) return false;
-            var cols = spawner.GetColliders();
-            if (cols.Count == 0) return false;
-
             var myCol = GetComponent<BoxCollider2D>();
             if (myCol == null) return false;
 
-            // 足元に台があるか確認（少し上方向にマージンを持たせる）
-            float myBottom = myCol.bounds.min.y;
-            bool onPlatform = false;
-            foreach (var c in cols)
+            // 足元付近にあるワンウェイ足場（PlatformEffector2D）を検出してすり抜ける。
+            // ステージ固定台・エンジェル生成足場の両方を対象にする（壁・地面は対象外）。
+            var b = myCol.bounds;
+            Vector2 boxCenter = new Vector2(b.center.x, b.min.y);
+            Vector2 boxSize   = new Vector2(b.size.x * 0.9f, 0.5f);
+            var hits = Physics2D.OverlapBoxAll(boxCenter, boxSize, 0f);
+
+            float myBottom = b.min.y;
+            var platformCols = new List<Collider2D>();
+            foreach (var c in hits)
             {
-                if (c == null) continue;
+                if (c == null || c == myCol) continue;
+                if (!c.usedByEffector) continue;
+                var eff = c.GetComponent<PlatformEffector2D>();
+                if (eff == null || !eff.useOneWay) continue;
+                // 足元に乗っている台のみ（下から潜り込んでいる台は対象外）
                 float platTop = c.bounds.max.y;
                 if (platTop > myBottom - 0.15f && platTop < myBottom + 0.35f)
-                { onPlatform = true; break; }
+                    platformCols.Add(c);
             }
-            if (!onPlatform) return false;
+            if (platformCols.Count == 0) return false;
 
-            StartCoroutine(DropThroughRoutine(cols, myCol));
+            StartCoroutine(DropThroughRoutine(platformCols, myCol));
             return true;
         }
 

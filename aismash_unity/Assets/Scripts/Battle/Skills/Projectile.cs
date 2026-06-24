@@ -338,6 +338,15 @@ namespace PromptFighters.Battle.Skills
                 return;
             }
 
+            // 破壊可能な障害物（壁など）へのヒット
+            var destructible = other.GetComponentInParent<Battle.DestructibleObstacle>();
+            if (destructible != null)
+            {
+                destructible.TakeHit(Damage, Owner);
+                if (!IsBoomerang) Release();
+                return;
+            }
+
             var target = other.GetComponentInParent<Fighter>();
             if (target == null)
             {
