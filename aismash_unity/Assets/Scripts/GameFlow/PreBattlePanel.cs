@@ -88,6 +88,13 @@ namespace PromptFighters.GameFlow
         bool _generationTrainingActive;
         TextMeshProUGUI _debugSkipImageLabel;
 
+        // 生成進捗オーバーレイ（生成中も自由にプレイできるよう、生成画面に移行せず常時表示する）。
+        GameObject        _genOverlay;
+        TextMeshProUGUI[] _genOverlayLines = new TextMeshProUGUI[2];
+        readonly string[] _genName    = new string[2];
+        readonly int[]    _genPercent  = new int[2];
+        readonly bool[]   _genActive   = new bool[2];
+
         Image _titleTopGlow;
         Image _titleBottomGlow;
         RectTransform _titleMainRect;
@@ -151,6 +158,7 @@ namespace PromptFighters.GameFlow
             BuildDeleteConfirmPanel();
             BuildControlsPanel();
             EnsureVirtualCursor();
+            BuildGenProgressOverlay();
             UITheme.ApplyAllInScene();
             // ApplyAllInScene が全TMPの自動縮小・折り返しを既定へ戻すため、長いキャラ名が
             // はみ出さないよう選択名ラベルだけ設定を再適用する
@@ -331,6 +339,117 @@ namespace PromptFighters.GameFlow
             ExecuteEvents.Execute(handler, ped, ExecuteEvents.pointerClickHandler);
         }
 
+        // ── 生成進捗オーバーレイ（常時表示。生成中も自由にプレイできる） ──
+        void BuildGenProgressOverlay()
+        {
+            var canvasGo = new GameObject("GenProgressCanvas");
+            DontDestroyOnLoad(canvasGo);
+            var canvas = canvasGo.AddComponent<Canvas>();
+            canvas.renderMode  = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 70; // 最前面寄り（HUD/バナーより手前）
+            var scaler = canvasGo.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode        = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.matchWidthOrHeight  = 0.5f;
+
+            _genOverlay = new GameObject("GenProgressPanel");
+            _genOverlay.transform.SetParent(canvasGo.transform, false);
+            var rt = _genOverlay.AddComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f); // 左上
+            rt.pivot     = new Vector2(0f, 1f);
+            rt.anchoredPosition = new Vector2(24f, -24f);
+            rt.sizeDelta = new Vector2(460f, 132f);
+
+            var bg = _genOverlay.AddComponent<Image>();
+            bg.color = new Color(0.02f, 0.025f, 0.04f, 0.78f);
+            bg.raycastTarget = false;
+
+            var edge = new GameObject("Edge");
+            edge.transform.SetParent(_genOverlay.transform, false);
+            var eRt = edge.AddComponent<RectTransform>();
+            eRt.anchorMin = new Vector2(0f, 1f); eRt.anchorMax = new Vector2(1f, 1f);
+            eRt.pivot = new Vector2(0.5f, 1f); eRt.sizeDelta = new Vector2(0f, 5f);
+            eRt.anchoredPosition = Vector2.zero;
+            var eImg = edge.AddComponent<Image>();
+            eImg.color = PromptFighters.UI.UITheme.Gold; eImg.raycastTarget = false;
+
+            var title = MakeOverlayLabel(_genOverlay.transform, "Title",
+                new Vector2(14f, -8f), new Vector2(432f, 34f), 24f, PromptFighters.UI.UITheme.Gold);
+            title.text = "● 生成中…";
+            title.fontStyle = FontStyles.Bold | FontStyles.Italic;
+
+            _genOverlayLines[0] = MakeOverlayLabel(_genOverlay.transform, "Line0",
+                new Vector2(14f, -48f), new Vector2(432f, 32f), 22f, PromptFighters.UI.UITheme.P1Neon);
+            _genOverlayLines[1] = MakeOverlayLabel(_genOverlay.transform, "Line1",
+                new Vector2(14f, -84f), new Vector2(432f, 32f), 22f, PromptFighters.UI.UITheme.P2Neon);
+
+            _genOverlay.SetActive(false);
+        }
+
+        TextMeshProUGUI MakeOverlayLabel(Transform parent, string name,
+            Vector2 topLeftPos, Vector2 size, float fontSize, Color color)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            var rt = go.AddComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
+            rt.pivot = new Vector2(0f, 1f);
+            rt.anchoredPosition = topLeftPos;
+            rt.sizeDelta = size;
+            var t = go.AddComponent<TextMeshProUGUI>();
+            PromptFighters.UI.UITheme.Apply(t, fontSize);
+            t.color = color;
+            t.alignment = TextAlignmentOptions.MidlineLeft;
+            t.textWrappingMode = TextWrappingModes.NoWrap;
+            t.raycastTarget = false;
+            return t;
+        }
+
+        void ShowGenOverlay(bool on)
+        {
+            if (_genOverlay != null) _genOverlay.SetActive(on);
+        }
+
+        void SetGenProgress(int slot, int percent)
+        {
+            if (slot < 0 || slot > 1) return;
+            _genPercent[slot] = Mathf.Clamp(percent, 0, 100);
+            RefreshGenOverlay();
+        }
+
+        void RefreshGenOverlay()
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                if (_genOverlayLines[i] == null) continue;
+                if (_genActive[i])
+                {
+                    string nm = string.IsNullOrWhiteSpace(_genName[i]) ? (i == 0 ? "1P" : "2P") : _genName[i];
+                    _genOverlayLines[i].text = _genPercent[i] >= 100
+                        ? $"{nm}：完了 ✓"
+                        : $"{nm}：進行度 {_genPercent[i]}%";
+                    _genOverlayLines[i].gameObject.SetActive(true);
+                }
+                else _genOverlayLines[i].gameObject.SetActive(false);
+            }
+        }
+
+        // 画像生成の進捗メッセージから完了枚数(0..15)を取り出す。取れなければ -1。
+        static int ParseImagesDone(string msg)
+        {
+            if (string.IsNullOrEmpty(msg)) return -1;
+            if (msg.Contains("ベース画像"))   return 0;
+            if (msg.Contains("バリエーション")) return 1;
+            var m = System.Text.RegularExpressions.Regex.Match(msg, @"残り\s*(\d+)\s*枚");
+            if (m.Success && int.TryParse(m.Groups[1].Value, out int rem))
+                return Mathf.Clamp(15 - rem, 0, 15);
+            return -1;
+        }
+
+        // 画像完了枚数 → 全体進行度%（テキスト生成完了の10%＋画像で最大98%まで）。
+        static int ImagePercent(int done)
+            => done < 0 ? -1 : Mathf.Clamp(10 + Mathf.RoundToInt(done / 15f * 88f), 10, 98);
+
         void Update()
         {
             UpdateGamepadCursor();
@@ -381,10 +500,8 @@ namespace PromptFighters.GameFlow
                 var kb = UnityEngine.InputSystem.Keyboard.current;
                 if (WasKeyboardCancelPressed())
                 {
-                    if (_generationTrainingActive && _generationCoroutine != null)
-                        ReturnToGeneratingFromTraining();
-                    else
-                        BattleManager.Instance?.ReturnToSetup();
+                    // 生成中でもメニューへ戻る（生成はバックグラウンド継続、進捗はオーバーレイで表示）。
+                    BattleManager.Instance?.ReturnToSetup();
                 }
                 if (WasResetPressed())
                 {
@@ -2090,8 +2207,10 @@ namespace PromptFighters.GameFlow
             EnsureSpriteSet(preset1);
             EnsureSpriteSet(preset2);
             _generationSetupPanel?.SetActive(false);
-            ShowGeneratingPanel();
+            // 生成画面には移行しない。生成はバックグラウンドで進めつつ、進捗を常時オーバーレイ表示し、
+            // その間プレイヤーは自由にプレイ（トレーニング）できるようにする。
             _generationCoroutine = StartCoroutine(GenerateBothChars(preset1, preset2, hasP1Input, hasP2Input));
+            StartTrainingDuringGeneration();
         }
 
         // 生成キャラ確認後はロスターに保存済みなので、バトルへ進まずキャラ選択画面へ戻る。
@@ -2116,6 +2235,7 @@ namespace PromptFighters.GameFlow
             }
             _generationTrainingActive = false;
             _generatingPanel?.SetActive(false);
+            ShowGenOverlay(false);
             ShowPanel();
         }
 
@@ -2128,9 +2248,19 @@ namespace PromptFighters.GameFlow
             bool aiOk1 = false;
             bool aiOk2 = false;
 
+            // 進捗オーバーレイ初期化（生成する側だけ表示）
+            _genActive[0] = genP1; _genActive[1] = genP2;
+            _genName[0] = string.IsNullOrWhiteSpace(_p1NameInput?.text) ? "1P" : _p1NameInput.text.Trim();
+            _genName[1] = string.IsNullOrWhiteSpace(_p2NameInput?.text) ? "2P" : _p2NameInput.text.Trim();
+            _genPercent[0] = genP1 ? 3 : 0;
+            _genPercent[1] = genP2 ? 3 : 0;
+            ShowGenOverlay(genP1 || genP2);
+            RefreshGenOverlay();
+
             if (genP1)
             {
                 UpdateGeneratingStatus("1P キャラクターを生成中...");
+                SetGenProgress(0, 5);
                 string name1 = _p1NameInput?.text ?? "";
                 string feat1 = _p1FeatureInput?.text ?? "";
                 bool done = false;
@@ -2143,6 +2273,8 @@ namespace PromptFighters.GameFlow
                         // 即座にプリセットリストへ追加し選択状態にする
                         if (!_presets.Contains(data)) _presets.Add(data);
                         _p1PresetIdx = _presets.Count - 1;
+                        if (!string.IsNullOrWhiteSpace(data.characterName)) _genName[0] = data.characterName;
+                        SetGenProgress(0, 10);
                         done = true;
                     },
                     err  => { errorMsg = err; done = true; });
@@ -2153,6 +2285,7 @@ namespace PromptFighters.GameFlow
             if (genP2)
             {
                 UpdateGeneratingStatus("2P キャラクターを生成中...");
+                SetGenProgress(1, 5);
                 string name2 = _p2NameInput?.text ?? "";
                 string feat2 = _p2FeatureInput?.text ?? "";
                 bool done = false;
@@ -2164,6 +2297,8 @@ namespace PromptFighters.GameFlow
                         CharacterSaveManager.Save(data);
                         if (!_presets.Contains(data)) _presets.Add(data);
                         _p2PresetIdx = _presets.Count - 1;
+                        if (!string.IsNullOrWhiteSpace(data.characterName)) _genName[1] = data.characterName;
+                        SetGenProgress(1, 10);
                         done = true;
                     },
                     err  => { if (errorMsg == null) errorMsg = err; done = true; });
@@ -2209,12 +2344,16 @@ namespace PromptFighters.GameFlow
 
             _generatingPanel?.SetActive(false);
             _generationCoroutine = null;
-            if (_generationTrainingActive)
-            {
-                BattleManager.Instance?.ReturnToSetup();
-                _generationTrainingActive = false;
-            }
-            ShowSkillConfirmPanel();
+
+            // 生成完了。生成画面へは移行せず、プレイ中の画面はそのままに、
+            // オーバーレイを「完了」にして少し見せてから消す（プレイを中断しない）。
+            if (genP1) SetGenProgress(0, 100);
+            if (genP2) SetGenProgress(1, 100);
+            RefreshGenOverlay();
+            // 生成キャラはロスターに保存済み。メニューに戻れば選んで使える。
+            _generationTrainingActive = false;
+            yield return new WaitForSecondsRealtime(3f);
+            ShowGenOverlay(false);
         }
 
         IEnumerator GenerateImages(CharacterData data1, CharacterData data2, bool generateP1, bool generateP2)
@@ -2224,11 +2363,17 @@ namespace PromptFighters.GameFlow
             {
                 bool img1Done = false;
                 AIImageClient.GenerateSpriteSet(this, data1,
-                    msg => UpdateGeneratingStatus("1P " + FormatImageProgress(msg)),
+                    msg =>
+                    {
+                        UpdateGeneratingStatus("1P " + FormatImageProgress(msg));
+                        int p = ImagePercent(ParseImagesDone(msg));
+                        if (p >= 0) SetGenProgress(0, p);
+                    },
                     sprites =>
                     {
                         data1.spriteSet = sprites;
                         data1.characterSprite = sprites.Get(CharacterSpriteId.Idle1);
+                        SetGenProgress(0, 100);
                         img1Done = true;
                     },
                     err => { Debug.LogWarning("[AIImage] 1P: " + err); img1Done = true; },
@@ -2240,11 +2385,17 @@ namespace PromptFighters.GameFlow
             {
                 bool img2Done = false;
                 AIImageClient.GenerateSpriteSet(this, data2,
-                    msg => UpdateGeneratingStatus("2P " + FormatImageProgress(msg)),
+                    msg =>
+                    {
+                        UpdateGeneratingStatus("2P " + FormatImageProgress(msg));
+                        int p = ImagePercent(ParseImagesDone(msg));
+                        if (p >= 0) SetGenProgress(1, p);
+                    },
                     sprites =>
                     {
                         data2.spriteSet = sprites;
                         data2.characterSprite = sprites.Get(CharacterSpriteId.Idle1);
+                        SetGenProgress(1, 100);
                         img2Done = true;
                     },
                     err => { Debug.LogWarning("[AIImage] 2P: " + err); img2Done = true; },
