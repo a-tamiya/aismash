@@ -224,6 +224,12 @@ namespace PromptFighters.GameFlow
             SetGamepadCursorVisible(idx, false);
         }
 
+        // 全カーソルを即時非表示にする（試合開始時など、Updateを待たず確実に消すため）。
+        void HideGamepadCursors()
+        {
+            for (int i = 0; i < CursorCount; i++) SetGamepadCursorVisible(i, false);
+        }
+
         void SetGamepadCursorVisible(int idx, bool visible)
         {
             var go = _gamepadCursor[idx];
@@ -236,10 +242,13 @@ namespace PromptFighters.GameFlow
         // 各プレイヤーの左スティックで自分のカーソルを移動＋表示、A押下でクリック、物理マウス操作で非表示。
         void UpdateGamepadCursor()
         {
-            // カーソルはタイトル/選択画面のUI操作専用。戦闘中など両パネルが
-            // 閉じている間は左スティック（＝移動入力）で出てこないよう抑止する。
-            bool uiActive = (_panel != null && _panel.activeSelf)
-                || (_titlePanel != null && _titlePanel.activeSelf);
+            // カーソルはタイトル/選択画面のUI操作専用。試合（カウントダウン/対戦/トレーニング）中は
+            // 左スティックが移動入力になるため、カーソルを出さない。両パネルが閉じている間も同様。
+            var bm = BattleManager.Instance;
+            bool inMatch = bm != null && bm.Phase != BattlePhase.Setup;
+            bool uiActive = !inMatch
+                && ((_panel != null && _panel.activeSelf)
+                    || (_titlePanel != null && _titlePanel.activeSelf));
             if (!uiActive)
             {
                 for (int i = 0; i < CursorCount; i++) SetGamepadCursorVisible(i, false);
@@ -2056,6 +2065,7 @@ namespace PromptFighters.GameFlow
             EnsureSpriteSet(data1);
             EnsureSpriteSet(data2);
             _panel.SetActive(false);
+            HideGamepadCursors();
             BattleManager.Instance.StartCountdown(data1, data2);
         }
 
@@ -2312,6 +2322,7 @@ namespace PromptFighters.GameFlow
             EnsureSpriteSet(data2);
 
             _panel.SetActive(false);
+            HideGamepadCursors();
             BattleManager.Instance.StartTraining(data1, data2);
         }
 
@@ -2321,6 +2332,7 @@ namespace PromptFighters.GameFlow
             if (BattleManager.Instance == null || _presets == null || _presets.Count == 0) return;
             _generationTrainingActive = true;
             _generatingPanel?.SetActive(false);
+            HideGamepadCursors();
 
             int p2Idx = _presets.Count > 1 ? _p2PresetIdx : _p1PresetIdx;
             var data1 = PromptCharacterFactory.Clone(GetPreset(true));
