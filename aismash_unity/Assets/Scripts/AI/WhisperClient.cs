@@ -13,9 +13,9 @@ namespace PromptFighters.AI
 
         // 録音中に部分認識を送る間隔（秒）。短いほど反応が速いがAPI呼び出しが増える。
         const float PartialInterval = 1.2f;
-        // これ未満の音量（RMS）は「無音」とみなす。無音をWhisperに送ると
-        // 「ご視聴ありがとうございました」等のハルシネーションが返るため送らない。
-        const float SilenceRmsThreshold = 0.012f;
+        // これ未満の音量（RMS）は「ほぼ無音」とみなし、録音中の部分認識（途中表示）には送らない。
+        // ※実際の音声まで無音扱いにしないよう低めに設定する。最終確定の認識は音量に関わらず必ず行う。
+        const float SilenceRmsThreshold = 0.005f;
 
         // マイクで recordSeconds 秒録音し、Whisper API で文字起こしする。
         // onPartial を渡すと、録音中に「ここまでの音声」を逐次認識して途中経過を返す（リアルタイム表示用）。
@@ -72,7 +72,7 @@ namespace PromptFighters.AI
                         {
                             partialBusy = true;
                             runner.StartCoroutine(TranscribeOnce(chunk, key,
-                                t => { if (!string.IsNullOrEmpty(t)) onPartial(t); partialBusy = false; },
+                                t => { if (!IsHallucination(t)) onPartial(t); partialBusy = false; },
                                 _ => { partialBusy = false; }));
                         }
                     }
@@ -81,18 +81,14 @@ namespace PromptFighters.AI
             }
             Microphone.End(null);
 
-            // 録音全体が無音なら「声なし」として扱う（APIに送らず、呼び出し側でフォールバック）。
-            if (!HasVoice(clip, Mathf.CeilToInt(recordSeconds * sampleRate)))
-            {
-                onSuccess?.Invoke("");
-                yield break;
-            }
-
             byte[] wav = AudioClipToWav(clip, sampleRate, recordSeconds);
             if (wav == null) { onError?.Invoke("WAVエンコード失敗"); yield break; }
 
-            // 最終確定の文字起こし（録音全体）。
-            yield return TranscribeOnce(wav, key, onSuccess, onError);
+            // 最終確定の文字起こしは音量に関わらず必ず行う（声を取りこぼさない）。
+            // 無音時のハルシネーション定型句だけは「声なし」に変換してフォールバックへ回す。
+            yield return TranscribeOnce(wav, key,
+                t => onSuccess?.Invoke(IsHallucination(t) ? "" : t),
+                onError);
         }
 
         // WAVバイト列を Whisper に1回送って文字起こしする。
@@ -127,6 +123,23 @@ namespace PromptFighters.AI
             {
                 onErr?.Invoke("解析失敗: " + e.Message);
             }
+        }
+
+        // 無音をWhisperに送ったときに返りがちな定型ハルシネーション（幻聴）。これらは「声なし」とみなす。
+        static readonly string[] HallucinationPhrases =
+        {
+            "ご視聴ありがとうございました", "ご視聴ありがとうございます",
+            "ご清聴ありがとうございました", "最後までご視聴",
+            "チャンネル登録", "高評価", "次回の動画", "また次の動画で",
+        };
+
+        static bool IsHallucination(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return true;
+            string t = text.Trim();
+            for (int i = 0; i < HallucinationPhrases.Length; i++)
+                if (t.Contains(HallucinationPhrases[i])) return true;
+            return false;
         }
 
         // 先頭 sampleCount サンプルの音量（RMS）がしきい値以上か（＝声が入っているか）を判定する。
