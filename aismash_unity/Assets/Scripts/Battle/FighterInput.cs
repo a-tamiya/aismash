@@ -19,6 +19,7 @@ namespace PromptFighters.Battle
         readonly float[] _lastSkillPressTime = { -10f, -10f, -10f, -10f };
         float _lastSmashFlickTime = -10f;
         float _previousSmashAxis;
+        float _prevRightStickX;
         Vector2 _previousDodgeInput;
         bool _previousGuardHeld;
         bool _wasHoldingOpponent;
@@ -638,10 +639,20 @@ namespace PromptFighters.Battle
                 rightButtonPressed |= gp.buttonEast.isPressed;
             }
 
+            // 右スティックでもスマッシュを出せる（はじき＋右ボタンは維持）。
+            // 左右へ深く倒した「瞬間」にチャージ開始、倒し続けでチャージ、戻すと発動。
+            // しきい値を跨いだ瞬間だけを契機にするので、倒しっぱなしでの連射は起きない。
+            float rightStickX = gp != null ? gp.rightStick.x.ReadValue() : 0f;
+            bool rightStickActive  = Mathf.Abs(rightStickX) >= 0.7f;
+            bool rightStickFlicked = rightStickActive && Mathf.Abs(_prevRightStickX) < 0.7f;
+            _prevRightStickX = rightStickX;
+            if (rightStickActive)
+                _fighter.FaceTowardInput(_fighter.InputReversed ? -rightStickX : rightStickX);
+
             bool canStartSmash = Time.time - _lastSmashFlickTime <= SmashFlickWindow;
             bool charging = _smashHeld
-                ? rightButtonPressed
-                : rightButtonPressed && canStartSmash;
+                ? (rightButtonPressed || rightStickActive)
+                : ((rightButtonPressed && canStartSmash) || rightStickFlicked);
 
             if (charging)
             {

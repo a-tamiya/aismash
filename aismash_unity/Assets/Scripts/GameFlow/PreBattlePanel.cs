@@ -101,7 +101,7 @@ namespace PromptFighters.GameFlow
         RectTransform _cursorCanvasRect;
         bool _gamepadCursorVisible;
         Vector2 _cursorScreenPos;
-        const float CursorSpeed = 1500f; // スクリーンpx/秒
+        const float CursorSpeed = 1.25f; // 画面高さ/秒（解像度に依存しない速度）
 
         // AI機能・ステージトグル
         Image _commentaryToggleBg;
@@ -230,14 +230,29 @@ namespace PromptFighters.GameFlow
                 || (_titlePanel != null && _titlePanel.activeSelf);
             if (!uiActive) { SetGamepadCursorVisible(false); return; }
 
-            var gp = UnityEngine.InputSystem.Gamepad.current;
-            if (gp == null) { SetGamepadCursorVisible(false); return; }
+            var pads = UnityEngine.InputSystem.Gamepad.all;
+            if (pads.Count == 0) { SetGamepadCursorVisible(false); return; }
 
-            Vector2 stick = gp.leftStick.ReadValue();
-            if (stick.sqrMagnitude > 0.04f)
+            // 最も深く倒れているパッドの左スティックを採用する。
+            // （Gamepad.current だと2台目を触った瞬間に主導権が移ってカーソルが飛ぶため）
+            Vector2 stick = Vector2.zero;
+            float bestMag = 0f;
+            for (int i = 0; i < pads.Count; i++)
+            {
+                Vector2 s = pads[i].leftStick.ReadValue();
+                float m = s.magnitude;
+                if (m > bestMag) { bestMag = m; stick = s; }
+            }
+
+            // 明確なデッドゾーン（中央付近の微小入力＝ドリフトでは動かさない）。
+            // デッドゾーンを超えた分を 0→1 に正規化して比例移動させ、素直な追従にする。
+            const float deadZone = 0.2f;
+            if (bestMag > deadZone)
             {
                 SetGamepadCursorVisible(true);
-                _cursorScreenPos += stick * (CursorSpeed * Time.unscaledDeltaTime);
+                Vector2 dir = stick.normalized * ((bestMag - deadZone) / (1f - deadZone));
+                float speedPx = CursorSpeed * Screen.height; // 解像度非依存
+                _cursorScreenPos += dir * (speedPx * Time.unscaledDeltaTime);
                 _cursorScreenPos.x = Mathf.Clamp(_cursorScreenPos.x, 0f, Screen.width);
                 _cursorScreenPos.y = Mathf.Clamp(_cursorScreenPos.y, 0f, Screen.height);
                 ApplyCursorPosition();
@@ -247,8 +262,11 @@ namespace PromptFighters.GameFlow
             if (mouse != null && mouse.delta.ReadValue().sqrMagnitude > 1f)
                 SetGamepadCursorVisible(false);
 
-            if (_gamepadCursorVisible && gp.buttonSouth.wasPressedThisFrame)
-                DoGamepadCursorClick();
+            if (_gamepadCursorVisible)
+            {
+                for (int i = 0; i < pads.Count; i++)
+                    if (pads[i].buttonSouth.wasPressedThisFrame) { DoGamepadCursorClick(); break; }
+            }
         }
 
         // スクリーン座標をCanvasローカル座標へ変換してカーソルを配置（CanvasScaler対応）。
@@ -1617,7 +1635,8 @@ namespace PromptFighters.GameFlow
                 new Vector2(lx + 110f, 210f), new Vector2(240f, 168f), 12f, new Color(0.9f, 0.95f, 1f));
             _confirmP1Stats.alignment = TextAlignmentOptions.TopLeft;
 
-            string[] slotLabels = { "基本技A", "基本技B", "基本技C", "スマッシュ" };
+            // 表示は実機の物理ボタンに合わせる（attack_a=B / attack_b=A / attack_c=X、ヘルプ文の「B A X 技」と整合）
+            string[] slotLabels = { "B", "A", "X", "スマッシュ" };
             float[] skillY      = { 70f, -28f, -126f, -224f };
 
             for (int i = 0; i < 4; i++)
@@ -1900,7 +1919,8 @@ namespace PromptFighters.GameFlow
                 {
                     var skill = data.skills[i];
                     if (skill == null) continue;
-                    string slot = i switch { 0 => "A", 1 => "B", 2 => "C", 3 => "S", _ => "?" };
+                    // 実機ボタン表記（attack_a=B / attack_b=A / attack_c=X / スマッシュ）
+                    string slot = i switch { 0 => "B", 1 => "A", 2 => "X", 3 => "スマッシュ", _ => "?" };
                     sb.AppendLine($"<color=#FFC72E>{slot}</color> {skill.skill_name}");
                 }
             if (!string.IsNullOrWhiteSpace(data.inputFeatures))
