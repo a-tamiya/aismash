@@ -95,6 +95,10 @@ namespace PromptFighters.GameFlow
         readonly int[]    _genPercent  = new int[2];
         readonly bool[]   _genActive   = new bool[2];
 
+        // このセッションで新しく生成したキャラ名。ロスターで枠を光らせて見分けやすくする。
+        readonly System.Collections.Generic.HashSet<string> _newCharNames =
+            new System.Collections.Generic.HashSet<string>();
+
         Image _titleTopGlow;
         Image _titleBottomGlow;
         RectTransform _titleMainRect;
@@ -1317,6 +1321,26 @@ namespace PromptFighters.GameFlow
             nm.overflowMode = TextOverflowModes.Ellipsis;
             nm.raycastTarget = false;
 
+            // 新しく生成したキャラは枠を光らせて見分けやすくする。
+            if (data != null && !string.IsNullOrEmpty(data.characterName)
+                && _newCharNames.Contains(data.characterName))
+            {
+                var glowGo = CreateUIObject("NewGlow", cell.transform);
+                var gRt = glowGo.GetComponent<RectTransform>();
+                gRt.anchorMin = Vector2.zero; gRt.anchorMax = Vector2.one;
+                gRt.offsetMin = Vector2.zero; gRt.offsetMax = Vector2.zero;
+                var gImg = glowGo.AddComponent<Image>();
+                gImg.color = new Color(PromptFighters.UI.UITheme.Gold.r, PromptFighters.UI.UITheme.Gold.g,
+                    PromptFighters.UI.UITheme.Gold.b, 0.22f);
+                gImg.raycastTarget = false;
+                glowGo.AddComponent<RosterNewGlow>();
+
+                var badge = MakeOverlayLabel(cell.transform, "NewBadge",
+                    new Vector2(4f, -2f), new Vector2(70f, 22f), 16f, PromptFighters.UI.UITheme.Gold);
+                badge.text = "NEW";
+                badge.fontStyle = FontStyles.Bold | FontStyles.Italic;
+            }
+
             AddRosterClickZone(cell.transform, true, idx);   // 左半分 → 1P
             AddRosterClickZone(cell.transform, false, idx);  // 右半分 → 2P
         }
@@ -2273,7 +2297,11 @@ namespace PromptFighters.GameFlow
                         // 即座にプリセットリストへ追加し選択状態にする
                         if (!_presets.Contains(data)) _presets.Add(data);
                         _p1PresetIdx = _presets.Count - 1;
-                        if (!string.IsNullOrWhiteSpace(data.characterName)) _genName[0] = data.characterName;
+                        if (!string.IsNullOrWhiteSpace(data.characterName))
+                        {
+                            _genName[0] = data.characterName;
+                            _newCharNames.Add(data.characterName);
+                        }
                         SetGenProgress(0, 10);
                         done = true;
                     },
@@ -2297,7 +2325,11 @@ namespace PromptFighters.GameFlow
                         CharacterSaveManager.Save(data);
                         if (!_presets.Contains(data)) _presets.Add(data);
                         _p2PresetIdx = _presets.Count - 1;
-                        if (!string.IsNullOrWhiteSpace(data.characterName)) _genName[1] = data.characterName;
+                        if (!string.IsNullOrWhiteSpace(data.characterName))
+                        {
+                            _genName[1] = data.characterName;
+                            _newCharNames.Add(data.characterName);
+                        }
                         SetGenProgress(1, 10);
                         done = true;
                     },

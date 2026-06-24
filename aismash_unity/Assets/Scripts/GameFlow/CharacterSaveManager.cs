@@ -83,7 +83,11 @@ namespace PromptFighters.GameFlow
             var results = new List<CharacterData>();
             if (!Directory.Exists(SaveDir)) return results;
 
-            foreach (var path in Directory.GetFiles(SaveDir, "*.json"))
+            // 作成順（古い→新しい）に並べる。保存IDの末尾 "_<unixSeconds>" を作成順キーに使う。
+            var files = new List<string>(Directory.GetFiles(SaveDir, "*.json"));
+            files.Sort((a, b) => CreationOrderKey(a).CompareTo(CreationOrderKey(b)));
+
+            foreach (var path in files)
             {
                 try
                 {
@@ -108,6 +112,17 @@ namespace PromptFighters.GameFlow
                 }
             }
             return results;
+        }
+
+        // 保存IDの末尾 "_<unixSeconds>" を作成順の並べ替えキーとして取り出す。
+        // 取れない場合はファイルの作成時刻にフォールバックする。
+        static long CreationOrderKey(string path)
+        {
+            string id = Path.GetFileNameWithoutExtension(path);
+            int us = id.LastIndexOf('_');
+            if (us >= 0 && us < id.Length - 1 && long.TryParse(id.Substring(us + 1), out long unix))
+                return unix;
+            try { return File.GetCreationTimeUtc(path).Ticks; } catch { return 0L; }
         }
 
         public static bool Delete(CharacterData data)

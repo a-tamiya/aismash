@@ -355,6 +355,21 @@ namespace PromptFighters.GameFlow
         public int index;
     }
 
+    // 新しく生成したキャラのロスターセルにアタッチ。金色オーバーレイのアルファを脈動させて目立たせる。
+    public class RosterNewGlow : MonoBehaviour
+    {
+        Image _img;
+        void Awake() { _img = GetComponent<Image>(); }
+        void Update()
+        {
+            if (_img == null) return;
+            float t = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 4f);
+            var c = _img.color;
+            c.a = Mathf.Lerp(0.06f, 0.34f, t);
+            _img.color = c;
+        }
+    }
+
     // 仮想カーソルにアタッチ。試合（カウントダウン/対戦/トレーニング）中は、
     // 自分のレティクル表示を強制的に消す。PreBattlePanel.Update の状態に依存せず
     // カーソル自身（ルートCanvas配下で常時アクティブ）の Update で確実に隠す。
