@@ -225,8 +225,11 @@ namespace PromptFighters.UI
                 {
                     _listening = true;
                     _recordEndRealtime = Time.unscaledTime + recordSeconds;
+                    // 声が入るまでは認識結果を出さず「認識中…」とだけ表示する
+                    // （無音をWhisperに送るとハルシネーションが出るため）。
+                    ShowSubtitle("認識中…");
                 },
-                // 録音中に認識途中経過をリアルタイム表示する（確定前のプレビュー）。
+                // 録音中、実際に声が入った分だけ認識途中経過をリアルタイム表示する（確定前のプレビュー）。
                 onPartial: t => ShowSubtitle($"認識中: 「{t}」"));
 
             while (!recordDone)

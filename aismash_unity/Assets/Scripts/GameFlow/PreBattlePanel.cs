@@ -298,6 +298,15 @@ namespace PromptFighters.GameFlow
             if (results.Count == 0) return;
 
             var target = results[0].gameObject;
+
+            // ゲームパッド2台接続時：ロスターセルのクリックは左右半分ではなく、
+            // 「クリックしたカーソルのプレイヤー」へ割り当てる（idx 0=1P / 1=2P）。
+            if (UnityEngine.InputSystem.Gamepad.all.Count >= 2)
+            {
+                var cellRef = target.GetComponentInParent<RosterCellRef>();
+                if (cellRef != null) { SelectPreset(idx == 0, cellRef.index); return; }
+            }
+
             var handler = ExecuteEvents.GetEventHandler<IPointerClickHandler>(target);
             if (handler == null) return;
             ped.pointerPressRaycast = ped.pointerCurrentRaycast = results[0];
@@ -1127,7 +1136,7 @@ namespace PromptFighters.GameFlow
 
             // 選択方法のヒント（セルの左半分=1P / 右半分=2P は分かりにくいため明示）
             var hint = MakeLabel(frame.transform, "RosterHint",
-                "<color=#4FC3F7>セル左クリック=1P</color>   <color=#FF6B6B>右クリック=2P</color>",
+                "<color=#4FC3F7>マウス左=1P</color> <color=#FF6B6B>右=2P</color> / パッドは各自のカーソルで選択",
                 new Vector2(636f, 112f), new Vector2(360f, 26f), 15f, PromptFighters.UI.UITheme.InkDim);
             hint.fontStyle = FontStyles.Bold;
             hint.alignment = TextAlignmentOptions.Right;
@@ -1152,6 +1161,7 @@ namespace PromptFighters.GameFlow
             bool selP2 = idx == _p2PresetIdx;
 
             var cell = CreateUIObject($"Cell_{idx}", parent);
+            cell.AddComponent<RosterCellRef>().index = idx; // カーソルのプレイヤー判定用
             var bg = cell.AddComponent<Image>();
             bg.color = RosterCellColor(selP1, selP2);
             bg.raycastTarget = false;

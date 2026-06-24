@@ -13,6 +13,9 @@ namespace PromptFighters.AI
 
         // 録音中に部分認識を送る間隔（秒）。短いほど反応が速いがAPI呼び出しが増える。
         const float PartialInterval = 1.2f;
+        // これ未満の音量（RMS）は「無音」とみなす。無音をWhisperに送ると
+        // 「ご視聴ありがとうございました」等のハルシネーションが返るため送らない。
+        const float SilenceRmsThreshold = 0.012f;
 
         // マイクで recordSeconds 秒録音し、Whisper API で文字起こしする。
         // onPartial を渡すと、録音中に「ここまでの音声」を逐次認識して途中経過を返す（リアルタイム表示用）。
@@ -60,7 +63,9 @@ namespace PromptFighters.AI
                 {
                     nextPartial += PartialInterval;
                     int micPos = Microphone.GetPosition(null);
-                    if (micPos > sampleRate / 2) // 0.5秒以上たまってから
+                    // 0.5秒以上たまり、かつ十分な音量（無音でない）のときだけ部分認識する。
+                    // 無音チャンクを送るとハルシネーションが出るので、その間は「認識中…」のまま。
+                    if (micPos > sampleRate / 2 && HasVoice(clip, micPos))
                     {
                         byte[] chunk = AudioClipToWavSamples(clip, sampleRate, micPos);
                         if (chunk != null)
@@ -75,6 +80,13 @@ namespace PromptFighters.AI
                 yield return null;
             }
             Microphone.End(null);
+
+            // 録音全体が無音なら「声なし」として扱う（APIに送らず、呼び出し側でフォールバック）。
+            if (!HasVoice(clip, Mathf.CeilToInt(recordSeconds * sampleRate)))
+            {
+                onSuccess?.Invoke("");
+                yield break;
+            }
 
             byte[] wav = AudioClipToWav(clip, sampleRate, recordSeconds);
             if (wav == null) { onError?.Invoke("WAVエンコード失敗"); yield break; }
@@ -115,6 +127,20 @@ namespace PromptFighters.AI
             {
                 onErr?.Invoke("解析失敗: " + e.Message);
             }
+        }
+
+        // 先頭 sampleCount サンプルの音量（RMS）がしきい値以上か（＝声が入っているか）を判定する。
+        static bool HasVoice(AudioClip clip, int sampleCount)
+        {
+            if (clip == null) return false;
+            sampleCount = Mathf.Clamp(sampleCount, 0, clip.samples);
+            if (sampleCount <= 0) return false;
+            float[] buf = new float[sampleCount];
+            clip.GetData(buf, 0);
+            double sum = 0.0;
+            for (int i = 0; i < sampleCount; i++) sum += (double)buf[i] * buf[i];
+            float rms = (float)System.Math.Sqrt(sum / sampleCount);
+            return rms >= SilenceRmsThreshold;
         }
 
         // AudioClip → モノラル PCM16 WAV バイト列（指定秒数ぶん）
