@@ -169,17 +169,26 @@ namespace PromptFighters.UI
         {
             _busy = true;
 
-            // ギミックの適用対象。通常(Versus)は p1=fighter1 / p2=fighter2。
-            // 協力(対ボス)では取得者の「相手」はボスなので、p1=取得者 / p2=ボス として、
-            // acquirerSlot=player1 固定で「自分=取得者 / 相手=ボス」を解決させる。
+            // ギミックの適用対象を「取得者=自分 / 相手」で割り当てる。
+            // 取得者は常に applyP1（acquirerSlot=player1=自分）、相手は applyP2（player2）。
+            //  ・Versus: 相手は対戦相手のファイター。
+            //  ・協力(対ボス、P1/P2 vs BOSS): プレイヤーが取得なら相手=ボス、ボスが取得なら相手=プレイヤー側。
             bool coop = _bm != null && _bm.Mode == BattleMode.CoopVsBoss;
+            bool breakerIsBoss = coop && breaker != null && breaker == _bm.boss;
             Fighter applyP1, applyP2;
-            string  acquirerSlot;
+            string  acquirerSlot = "player1";
             if (coop)
             {
-                applyP1 = breaker;
-                applyP2 = _bm.boss;
-                acquirerSlot = "player1";
+                if (breakerIsBoss)
+                {
+                    applyP1 = _bm.boss;            // 自分=ボス
+                    applyP2 = OpponentPlayerForBoss(); // 相手=プレイヤー側
+                }
+                else
+                {
+                    applyP1 = breaker;            // 自分=取得プレイヤー
+                    applyP2 = _bm.boss;           // 相手=ボス
+                }
             }
             else
             {
@@ -187,15 +196,41 @@ namespace PromptFighters.UI
                 applyP2 = _bm?.fighter2;
                 acquirerSlot = breaker != null && breaker == _bm?.fighter2 ? "player2" : "player1";
             }
-            string acquirerName = breaker != null
-                ? (breaker == _bm?.fighter2
-                    ? (_bm?.Character2?.characterName ?? "2P")
-                    : (_bm?.Character1?.characterName ?? "1P"))
-                : "1P";
+
+            string acquirerName;
+            if (breakerIsBoss) acquirerName = "BOSS";
+            else if (breaker != null && breaker == _bm?.fighter2) acquirerName = _bm?.Character2?.characterName ?? "2P";
+            else acquirerName = _bm?.Character1?.characterName ?? "1P";
 
             // 取得者の色・タグを決定（1P=青 / 2P=赤 / ボス=黒）
             _acquirerTag   = VoiceItem.AcquirerTag(breaker);
             _acquirerColor = VoiceItem.AcquirerColor(breaker);
+
+            // CPU（AI操作・ボス含む）が取得した場合は音声入力を待たず、
+            // 取得者にメリットのあるギミックを即決定して適用する。
+            if (IsCpu(breaker))
+            {
+                ShowBanner($"[ {_acquirerTag}：{acquirerName} がアイテム獲得！ ]", "AIが力を得た！");
+                _titleLabel.color = _acquirerColor;
+                GameAudioManager.Instance?.PlayGimmickBuff();
+                yield return new WaitForSecondsRealtime(1.2f);
+
+                var cg = BeneficialGimmick(acquirerSlot);
+                ShowBanner("[ アイテム効果 ]", cg.message);
+                ShowSubtitle(cg.message);
+                _applier.Acquirer = breaker;
+                _applier.Apply(cg, applyP1, applyP2);
+                ShowEffectCenter(BuildEffectText(cg));
+                AITTSClient.Speak(this, cg.message, _audioSource,
+                    onError: e => Debug.LogWarning("[VoiceItemTTS] " + e),
+                    voice: AITTSClient.AngelVoice, volume: 2.0f);
+
+                yield return new WaitForSecondsRealtime(3f);
+                HideBanner();
+                HideSubtitle();
+                _busy = false;
+                yield break;
+            }
 
             // 1. スローモーション開始（KO演出中は触らない）
             bool slowed = false;
@@ -329,6 +364,60 @@ namespace PromptFighters.UI
         // 音声なし時の完全ランダムギミック。バフ・デバフ・特殊・地形を幅広く、
         // ターゲットも様々（取得者/相手/両者/弱い方 等）に散らして、毎回違う展開にする。
         // who: "self"=取得者 / "opp"=相手 / それ以外はそのまま target に入れる。
+        // 取得者がCPU（AI操作・ボス含む）か。FighterAIが有効なら人間ではない。
+        static bool IsCpu(Fighter f)
+        {
+            if (f == null) return false;
+            var ai = f.GetComponent<FighterAI>();
+            return ai != null && ai.enabled;
+        }
+
+        // 協力モードでボスが取得した時の「相手」プレイヤー。生存中の強い方を代表に選ぶ。
+        Fighter OpponentPlayerForBoss()
+        {
+            var f1 = _bm?.fighter1;
+            var f2 = _bm?.fighter2;
+            bool f1ok = f1 != null && f1.State != FighterState.Dead && !f1.IsDowned;
+            bool f2ok = f2 != null && f2.State != FighterState.Dead && !f2.IsDowned;
+            if (f1ok && f2ok) return f1.CurrentHP >= f2.CurrentHP ? f1 : f2;
+            if (f1ok) return f1;
+            if (f2ok) return f2;
+            return f1 ?? f2;
+        }
+
+        // CPU取得時に使う「取得者にメリットのある」ギミック（自分強化 or 相手弱体のみ）。
+        static GimmickData BeneficialGimmick(string acquirerSlot)
+        {
+            string oppSlot = acquirerSlot == "player2" ? "player1" : "player2";
+            (string g, float v, float d, string who, string msg)[] picks =
+            {
+                ("hp_recover",  0.30f, 0f, "self", "HPが回復した！"),
+                ("speed_boost", 1.40f, 8f, "self", "スピードアップ！"),
+                ("jump_boost",  1.40f, 8f, "self", "ジャンプ強化！"),
+                ("damage_boost",1.50f, 8f, "self", "パワーアップ！"),
+                ("invincible",  0f,    4f, "self", "無敵化！"),
+                ("guard_fill",  0f,    0f, "self", "ガード全回復！"),
+                ("reflect",     0f,    6f, "self", "ダメージ反射！"),
+                ("size_up",     1.35f, 8f, "self", "巨大化！"),
+                ("speed_down",  0.60f, 8f, "opp",  "相手が鈍足に！"),
+                ("damage_down", 0.60f, 8f, "opp",  "相手のパワーダウン！"),
+                ("freeze",      0f,    2f, "opp",  "相手を氷漬け！"),
+                ("burn",        0f,    6f, "opp",  "相手に火がついた！"),
+                ("guard_break", 0f,    0f, "opp",  "相手のガード破壊！"),
+                ("launch",      3.0f,  0f, "opp",  "相手を吹き飛ばし！"),
+                ("hp_drain",    0.20f, 0f, "opp",  "相手のHPを削った！"),
+            };
+            var p = picks[Random.Range(0, picks.Length)];
+            return new GimmickData
+            {
+                gimmick  = p.g,
+                target   = p.who == "self" ? acquirerSlot : oppSlot,
+                value    = p.v,
+                duration = p.d,
+                message  = p.msg,
+            };
+        }
+
         static GimmickData RandomGimmick(string acquirerSlot, string acquirerName)
         {
             string oppSlot = acquirerSlot == "player2" ? "player1" : "player2";
