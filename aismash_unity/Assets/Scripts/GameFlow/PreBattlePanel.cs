@@ -1494,16 +1494,12 @@ namespace PromptFighters.GameFlow
             var statusLabel  = isP1 ? _p1ConceptStatus : _p2ConceptStatus;
             var button       = isP1 ? _p1ConceptButton : _p2ConceptButton;
 
-            // 既存の入力があればヒントとして渡し、AIに膨らませてもらう
+            // 名前・特徴の入力状況で生成方向が変わる（双方向）。片方だけ入力ならもう片方を補完する。
             string nameHint = nameInput?.text;
             string featHint = featureInput?.text;
-            string hint;
-            if (!string.IsNullOrWhiteSpace(nameHint) && !string.IsNullOrWhiteSpace(featHint))
-                hint = nameHint + " / " + featHint;
-            else if (!string.IsNullOrWhiteSpace(nameHint))
-                hint = nameHint;
-            else
-                hint = featHint ?? "";
+            bool hadName = !string.IsNullOrWhiteSpace(nameHint);
+            bool hadFeat = !string.IsNullOrWhiteSpace(featHint);
+            bool oneSided = hadName ^ hadFeat; // 片方だけ入力 → 入力済みの側は尊重して上書きしない
 
             if (isP1) _p1ConceptBusy = true; else _p2ConceptBusy = true;
             if (button != null) button.interactable = false;
@@ -1513,12 +1509,15 @@ namespace PromptFighters.GameFlow
                 statusLabel.text = "AIが考え中...";
             }
 
-            AICharacterClient.GenerateConcept(this, hint,
+            AICharacterClient.GenerateConcept(this, nameHint, featHint,
                 concept =>
                 {
-                    if (nameInput != null && !string.IsNullOrWhiteSpace(concept.character_name))
+                    // 片方だけ入力していた場合、その入力済みの側は尊重して上書きしない（補完のみ）。
+                    if (nameInput != null && !string.IsNullOrWhiteSpace(concept.character_name)
+                        && !(oneSided && hadName))
                         nameInput.text = concept.character_name;
-                    if (featureInput != null && !string.IsNullOrWhiteSpace(concept.features))
+                    if (featureInput != null && !string.IsNullOrWhiteSpace(concept.features)
+                        && !(oneSided && hadFeat))
                         featureInput.text = concept.features;
                     if (statusLabel != null)
                     {

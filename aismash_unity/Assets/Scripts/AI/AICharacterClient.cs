@@ -99,13 +99,18 @@ namespace PromptFighters.AI
             public string features;
         }
 
-        public static Coroutine GenerateConcept(MonoBehaviour runner, string hint,
+        // name / features の入力状況で生成方向を切り替える（双方向対応）:
+        //  ・両方空 → 完全新規（ランダム種）
+        //  ・名前のみ → その名前から features を発案（名前は尊重）
+        //  ・特徴のみ → その特徴に合う character_name を発案（特徴は尊重）
+        //  ・両方あり → 両方を素材に整える
+        public static Coroutine GenerateConcept(MonoBehaviour runner, string name, string features,
             Action<CharacterConcept> onSuccess, Action<string> onError)
         {
-            return runner.StartCoroutine(GenerateConceptCoroutine(hint, onSuccess, onError));
+            return runner.StartCoroutine(GenerateConceptCoroutine(name, features, onSuccess, onError));
         }
 
-        static IEnumerator GenerateConceptCoroutine(string hint,
+        static IEnumerator GenerateConceptCoroutine(string name, string features,
             Action<CharacterConcept> onSuccess, Action<string> onError)
         {
             string key = ApiKey;
@@ -116,7 +121,7 @@ namespace PromptFighters.AI
             }
 
             string systemPrompt = BuildConceptSystemPrompt();
-            string userPrompt   = BuildConceptUserPrompt(hint);
+            string userPrompt   = BuildConceptUserPrompt(name, features);
             string body         = OpenAIRequest.BuildChatBody(Model, systemPrompt, userPrompt, jsonMode: true);
             string lastError = null;
 
@@ -199,22 +204,57 @@ namespace PromptFighters.AI
         static readonly System.Random ConceptRng = new System.Random();
         static string Pick(string[] arr) => arr[ConceptRng.Next(arr.Length)];
 
-        static string BuildConceptUserPrompt(string hint)
+        static string BuildConceptUserPrompt(string name, string features)
         {
+            string n = (name ?? "").Trim();
+            string f = (features ?? "").Trim();
+            bool hasN = n.Length > 0;
+            bool hasF = f.Length > 0;
+            int nonce = ConceptRng.Next(100000, 999999);
+
+            // 名前のみ → 名前から特徴を発案（名前は変えずにそのまま使う）
+            if (hasN && !hasF)
+            {
+                return
+$@"キャラクター名「{n}」だけが与えられています。
+この名前から連想される、見た目・性格・ステータス傾向・戦い方・どんな技を使うかを想像し、features を作ってください。
+- character_name は「{n}」を**そのまま**使う（変更しない）。
+- features は名前の語感・イメージに無理なく合う、自然で読みやすい紹介文にする。
+バリエーション種: {nonce}";
+            }
+
+            // 特徴のみ → 特徴に合う名前を発案（特徴は意味を変えず自然に整える）
+            if (!hasN && hasF)
+            {
+                return
+$@"次のキャラクター特徴だけが与えられています:
+「{f}」
+この特徴にぴったり合う、ありきたりでない固有のキャラクター名（二つ名・異名を含んでよい）を character_name として考えてください。
+- features はこの内容を尊重し、意味を大きく変えずに自然で読みやすい文章へ整えて返す。
+バリエーション種: {nonce}";
+            }
+
+            // 両方あり → 素材として尊重しつつ、技生成に使いやすい魅力的な原案へ整える
+            if (hasN && hasF)
+            {
+                return
+$@"プレイヤーが次の素材を入力しました。これを最優先で尊重し、より魅力的で技生成に使いやすい原案へ整えてください。
+- 名前: {n}
+- 特徴: {f}
+名前の意図は保ちつつ、features を自然で読みやすい紹介文に磨いてください。
+バリエーション種: {nonce}";
+            }
+
+            // 両方空 → 完全新規。ランダムなテーマ種で多様性を確保する。
             string motif     = Pick(ConceptMotifs);
             string motif2    = Pick(ConceptMotifs);
             string archetype = Pick(ConceptArchetypes);
             string tone      = Pick(ConceptTones);
             string style     = Pick(ConceptStyles);
-            int nonce        = ConceptRng.Next(100000, 999999);
-
-            string hintLine = string.IsNullOrWhiteSpace(hint)
-                ? ""
-                : $"プレイヤーの要望（最優先で取り入れること）: {hint.Trim()}\n";
 
             return
 $@"個性的な2D格闘ゲームのキャラクターを1体、新しく考案してください。
-{hintLine}発想のテーマ種（必ずしも全部使わなくてよいが、ありきたりにせず意外性のある組み合わせにする）:
+発想のテーマ種（必ずしも全部使わなくてよいが、ありきたりにせず意外性のある組み合わせにする）:
 - モチーフ: {motif} / {motif2}
 - 役割: {archetype}
 - 性格・口調: {tone}
@@ -230,10 +270,14 @@ $@"あなたは2D格闘ゲームのキャラクター原案を生み出す、発
 {{ ""character_name"": ""..."", ""features"": ""..."" }}
 
 - character_name: 日本語。ありきたりでない、二つ名や異名を含む固有名にする。全体で8〜18字程度。
-- features: そのキャラの『見た目・外見』『性格・特徴』『ステータスの傾向』『戦い方・間合い』『技の内容（どんな攻撃をするか）』を、そのキャラ自身の言葉で自然に描いた日本語の文章（90〜160字）。後でこの文章を素材に技を自動生成するため、見た目・体格・武器・戦法・各技がどんな効果を持つかが伝わるように書く。
+- features: そのキャラを紹介する、自然で読みやすい日本語の文章（90〜160字）。見た目・体格・武器、性格、ステータスの傾向、戦い方や間合い、どんな攻撃をするかが伝わるように書く。後でこの文章を素材に技を自動生成する。
+- features の文章作法（重要・不自然な文を避ける）:
+  ・『見た目：』『性格：』のようなラベル列挙や箇条書きにしない。読み物として自然な紹介文（2〜4文）にする。
+  ・同じ語尾（『〜だ。〜だ。』等）の繰り返しや、項目を機械的に並べただけの文にしない。文をなめらかにつなぐ。
+  ・このシステム指示や入力に出てくる語（戦法名・ステータス表現・テーマ種など）をそのまま貼り付けない。キャラ固有の自然な言い回しに置き換える。
+  ・日本語として破綻のない、意味の通る滑らかな文にする。翻訳調・箇条書き調を避ける。
 - 技名（固有の必殺技名）は出力しない。技は名前ではなく『どんな技か』を内容で説明する。
 - 毎回まったく異なるタイプのキャラにする。定番に寄せず、唯一無二の個性・意外な組み合わせを作る。
-- この指示文に出てくる例示語（戦法名・ステータスを表す語など）をそのまま転記しないこと。各キャラに固有の自然な表現で描写する。
 - 実在のゲーム・アニメ・漫画・映画の版権キャラクター名や作品名は絶対に使わない。";
 
         // OpenAI Chat Completions レスポンスから content を取り出す
