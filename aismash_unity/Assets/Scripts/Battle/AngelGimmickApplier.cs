@@ -12,6 +12,11 @@ namespace PromptFighters.Battle
         // （ApplyPermanentX、ラウンドをまたいで保持・後勝ち上書き）。
         // 効果時間系（無敵・反射・カウンター・状態異常・障害物など）の継続時間はこの倍率で一括延長する。
         const float DurationScale = 2f;
+
+        // 発動者（音声アイテム取得者）。hp_set など「発動者自身に跳ね返る」ギミックで使う。
+        // AngelController が Apply 直前にセットする。
+        public Fighter Acquirer;
+
         static Sprite _rainBlockSprite;
         static bool _rainBlockTried;
         static Sprite _wallSprite;
@@ -230,9 +235,30 @@ namespace PromptFighters.Battle
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "hp_set":
-                    if (target1 != null) target1.DebugSetCurrentHP(target1.maxHP * Mathf.Clamp01(value));
-                    if (target2 != null) target2.DebugSetCurrentHP(target2.maxHP * Mathf.Clamp01(value));
-                    GameAudioManager.Instance?.PlayGimmickHeal();
+                    // 一発逆転ギミック：成功率10%でのみ発動し、対象HPを大きく削る。
+                    // 失敗時(90%)は発動者(取得者)自身にランダムなデバフが跳ね返る。
+                    if (Random.value < 0.10f)
+                    {
+                        float setRatio = Mathf.Clamp01(value > 0f ? value : 0.15f);
+                        if (target1 != null) target1.DebugSetCurrentHP(target1.maxHP * setRatio);
+                        if (target2 != null) target2.DebugSetCurrentHP(target2.maxHP * setRatio);
+                        GameAudioManager.Instance?.PlayGimmickHeal();
+                        var hit = target1 ?? target2;
+                        if (hit != null)
+                            PromptFighters.UI.DamagePopup.SpawnText(
+                                hit.transform.position + Vector3.up * 1.2f, "大成功！",
+                                new Color(1f, 0.85f, 0.15f), 1.8f);
+                    }
+                    else
+                    {
+                        Fighter caster = Acquirer ?? target1;
+                        ApplyRandomSelfDebuff(caster);
+                        GameAudioManager.Instance?.PlayGimmickDebuff();
+                        if (caster != null)
+                            PromptFighters.UI.DamagePopup.SpawnText(
+                                caster.transform.position + Vector3.up * 1.2f, "失敗…自分にデバフ！",
+                                new Color(1f, 0.4f, 0.3f), 1.6f);
+                    }
                     break;
                 case "guard_fill":
                     target1?.FillGuard();
@@ -317,6 +343,22 @@ namespace PromptFighters.Battle
                         GameAudioManager.Instance?.PlayGimmickBuff();
                     }
                     break;
+            }
+        }
+
+        // hp_set 失敗時のペナルティ：発動者にランダムなデバフを与える。
+        void ApplyRandomSelfDebuff(Fighter f)
+        {
+            if (f == null || f.State == FighterState.Dead) return;
+            switch (Random.Range(0, 7))
+            {
+                case 0: f.ApplyPermanentSpeed(0.65f);  break; // 鈍足
+                case 1: f.ApplyPermanentJump(0.70f);   break; // ジャンプ低下
+                case 2: f.ApplyPermanentDamage(0.65f); break; // 火力低下
+                case 3: f.ApplyPermanentGravity(1.8f); break; // 重力増（落下加速・低ジャンプ）
+                case 4: f.ApplyPermanentSize(0.70f);   break; // 縮小
+                case 5: f.ApplyStatus(StatusType.Slow, 6f * DurationScale); break;
+                case 6: f.ApplyStatus(StatusType.Burn, 5f * DurationScale); break;
             }
         }
 

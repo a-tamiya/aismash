@@ -14,7 +14,7 @@ namespace PromptFighters.Battle
         // 現在ステージに存在するアイテム（CPUの標的探索用）。同時に1個まで。
         public static VoiceItem Active { get; private set; }
 
-        public const float MaxHP = 30f;
+        public const float MaxHP = 20f;
 
         float   _hp = MaxHP;
         Fighter _lastAttacker;
@@ -205,6 +205,24 @@ namespace PromptFighters.Battle
             }
         }
 
+        // 取得者（最後に削ったファイター）の識別タグ。1P / 2P / BOSS。
+        public static string AcquirerTag(Fighter f)
+        {
+            var bm = BattleManager.Instance;
+            if (bm != null && f != null && f == bm.boss)     return "BOSS";
+            if (bm != null && f != null && f == bm.fighter2)  return "2P";
+            return "1P";
+        }
+
+        // 取得者カラー。1P=青 / 2P=赤 / ボス=黒。
+        public static Color AcquirerColor(Fighter f)
+        {
+            var bm = BattleManager.Instance;
+            if (bm != null && f != null && f == bm.boss)     return Color.black;
+            if (bm != null && f != null && f == bm.fighter2)  return UITheme.P2Neon;
+            return UITheme.P1Neon;
+        }
+
         public void TakeHit(float dmg, Fighter attacker)
         {
             if (_broken || dmg <= 0f) return;
@@ -229,8 +247,11 @@ namespace PromptFighters.Battle
             if (_hp <= 0f)
             {
                 _broken = true;
+                // 取得者を一目で分かるよう、取得者カラーで「{タグ} GET!!」を表示（1P=青/2P=赤/ボス=黒）
+                string tag = AcquirerTag(_lastAttacker);
+                Color  col = AcquirerColor(_lastAttacker);
                 DamagePopup.SpawnText(transform.position + Vector3.up * 1.0f,
-                    "GET!!", new Color(1f, 0.85f, 0.15f), 2.0f);
+                    $"{tag} GET!!", col, 2.2f);
                 CameraShake.Shake(0.3f, 0.25f);
                 _onBroken?.Invoke(_lastAttacker);
                 Destroy(gameObject);

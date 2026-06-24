@@ -31,6 +31,10 @@ namespace PromptFighters.UI
         bool          _listening;
         float         _baseFixedDelta;
 
+        // 取得者の識別（1P=青/2P=赤/ボス=黒）。バナー・字幕の色分けに使う。
+        Color  _acquirerColor = Color.white;
+        string _acquirerTag   = "1P";
+
         // スロー演出オーバーレイ
         CanvasGroup     _slowGroup;
         UnityEngine.UI.Image _slowTint;
@@ -189,6 +193,10 @@ namespace PromptFighters.UI
                     : (_bm?.Character1?.characterName ?? "1P"))
                 : "1P";
 
+            // 取得者の色・タグを決定（1P=青 / 2P=赤 / ボス=黒）
+            _acquirerTag   = VoiceItem.AcquirerTag(breaker);
+            _acquirerColor = VoiceItem.AcquirerColor(breaker);
+
             // 1. スローモーション開始（KO演出中は触らない）
             bool slowed = false;
             if (_bm == null || !_bm.IsKoSlowActive)
@@ -201,7 +209,8 @@ namespace PromptFighters.UI
                 ShowSlowOverlay(true);
             }
 
-            ShowBanner($"[ {acquirerName} がアイテム獲得！ ]", "願いを話して！（マイクに向かって）");
+            ShowBanner($"[ {_acquirerTag}：{acquirerName} がアイテム獲得！ ]", "願いを話して！（マイクに向かって）");
+            _titleLabel.color = _acquirerColor;
             GameAudioManager.Instance?.PlayGimmickBuff();
 
             // 2. 5秒録音（実時間。スローでも尺は変わらない）
@@ -240,6 +249,20 @@ namespace PromptFighters.UI
             GimmickData gimmick = null;
             bool        hadVoice = !string.IsNullOrEmpty(transcribed);
 
+            // 音声が何と認識されたかを画面に表示する（プレイヤーが認識結果を文字で確認できる）
+            if (hadVoice)
+            {
+                ShowBanner($"[ {_acquirerTag} の声 ]", $"「{transcribed}」");
+                _titleLabel.color = _acquirerColor;
+                ShowSubtitle($"認識結果: 「{transcribed}」");
+                yield return new WaitForSecondsRealtime(1.4f);
+            }
+            else
+            {
+                ShowSubtitle("うまく聞き取れなかった…ランダム効果！");
+                yield return new WaitForSecondsRealtime(1.0f);
+            }
+
             if (hadVoice)
             {
                 // 願いが取れた → LLM が言葉を解釈して忠実に叶える（取得者を文脈に渡す）
@@ -261,6 +284,7 @@ namespace PromptFighters.UI
             // 6. 適用 + 表示 + TTS
             ShowBanner("[ アイテム効果 ]", gimmick.message);
             ShowSubtitle(gimmick.message);
+            _applier.Acquirer = breaker; // hp_set 等「発動者に跳ね返る」ギミック用
             _applier.Apply(gimmick, applyP1, applyP2);
             ShowEffectCenter(BuildEffectText(gimmick));
             AITTSClient.Speak(this, gimmick.message, _audioSource,
@@ -476,7 +500,7 @@ namespace PromptFighters.UI
 
         void ShowListeningBanner(float remaining)
         {
-            _titleLabel.text = "[ 音声入力受付中 ]";
+            _titleLabel.text = $"[ {_acquirerTag} 音声入力受付中 ]";
             _statusLabel.text = $"録音中: 願いを話してね！ 残り {remaining:0.0}秒";
 
             float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 8f);
