@@ -354,4 +354,23 @@ namespace PromptFighters.GameFlow
     {
         public int index;
     }
+
+    // 仮想カーソルにアタッチ。試合（カウントダウン/対戦/トレーニング）中は、
+    // 自分のレティクル表示を強制的に消す。PreBattlePanel.Update の状態に依存せず
+    // カーソル自身（ルートCanvas配下で常時アクティブ）の Update で確実に隠す。
+    public class GamepadCursorAutoHide : MonoBehaviour
+    {
+        Graphic[] _graphics;
+
+        void Awake() { _graphics = GetComponentsInChildren<Graphic>(true); }
+
+        void Update()
+        {
+            var bm = PromptFighters.Battle.BattleManager.Instance;
+            bool inMatch = bm != null && bm.Phase != PromptFighters.Battle.BattlePhase.Setup;
+            if (!inMatch || _graphics == null) return;
+            for (int i = 0; i < _graphics.Length; i++)
+                if (_graphics[i] != null && _graphics[i].enabled) _graphics[i].enabled = false;
+        }
+    }
 }

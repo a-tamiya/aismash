@@ -98,6 +98,7 @@ namespace PromptFighters.GameFlow
         const int CursorCount = 2; // 0=1P, 1=2P
         readonly GameObject[]    _gamepadCursor        = new GameObject[CursorCount];
         readonly RectTransform[] _gamepadCursorRect    = new RectTransform[CursorCount];
+        readonly Graphic[][]     _cursorGraphics       = new Graphic[CursorCount][];
         readonly bool[]          _gamepadCursorVisible = new bool[CursorCount];
         readonly Vector2[]       _cursorScreenPos      = new Vector2[CursorCount];
         Canvas _cursorCanvas;
@@ -185,6 +186,7 @@ namespace PromptFighters.GameFlow
         void BuildOneCursor(int idx, string name, Color outerColor, Transform canvasT)
         {
             var go = CreateUIObject(name, canvasT);
+            go.AddComponent<GamepadCursorAutoHide>(); // 試合中は自分で表示を消す（保険）
             var rt = go.GetComponent<RectTransform>();
             _gamepadCursor[idx]     = go;
             _gamepadCursorRect[idx] = rt;
@@ -217,6 +219,8 @@ namespace PromptFighters.GameFlow
             dotImg.color = Color.white;
             dotImg.raycastTarget = false;
 
+            _cursorGraphics[idx] = go.GetComponentsInChildren<Graphic>(true);
+
             // 初期位置は左右に少しずらして重ならないようにする。
             _cursorScreenPos[idx] = new Vector2(
                 Screen.width * (idx == 0 ? 0.42f : 0.58f), Screen.height * 0.5f);
@@ -232,11 +236,14 @@ namespace PromptFighters.GameFlow
 
         void SetGamepadCursorVisible(int idx, bool visible)
         {
-            var go = _gamepadCursor[idx];
-            if (go == null || _gamepadCursorVisible[idx] == visible) return;
+            if (_gamepadCursor[idx] == null) return;
             _gamepadCursorVisible[idx] = visible;
-            foreach (var g in go.GetComponentsInChildren<UnityEngine.UI.Graphic>(true))
-                g.enabled = visible;
+            // キャッシュ済みのGraphicに毎回適用する（early-returnしない）。
+            // 自動非表示(GamepadCursorAutoHide)で消した後でも、メニュー復帰時に確実に再表示できるようにする。
+            var gs = _cursorGraphics[idx];
+            if (gs == null) return;
+            for (int i = 0; i < gs.Length; i++)
+                if (gs[i] != null) gs[i].enabled = visible;
         }
 
         // 各プレイヤーの左スティックで自分のカーソルを移動＋表示、A押下でクリック、物理マウス操作で非表示。
