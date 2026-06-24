@@ -95,8 +95,16 @@ namespace PromptFighters.GameFlow
                 Destroy(standalone);
             }
 
-            if (go.GetComponent<InputSystemUIInputModule>() == null)
-                go.AddComponent<InputSystemUIInputModule>();
+            var module = go.GetComponent<InputSystemUIInputModule>();
+            if (module == null) module = go.AddComponent<InputSystemUIInputModule>();
+
+            // ゲームパッドのUI操作は自前の仮想カーソル（クリック）で完結させる。
+            // UIモジュール側のナビゲーション(move)・決定(submit)・キャンセル(cancel)を無効化し、
+            // Aボタンで「カーソル下のクリック」と「選択中の別ボタンへのSubmit」が二重発火して
+            // 押していない所が押される不具合を防ぐ（マウスの point/leftClick は残す）。
+            module.move   = null;
+            module.submit = null;
+            module.cancel = null;
         }
 
         // ── UIヘルパー ────────────────────────────────────────────

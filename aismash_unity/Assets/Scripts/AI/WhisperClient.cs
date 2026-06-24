@@ -11,19 +11,24 @@ namespace PromptFighters.AI
     {
         const string Endpoint = "https://api.openai.com/v1/audio/transcriptions";
 
-        // マイクで recordSeconds 秒録音し、Whisper API で文字起こしする
+        // 録音中に部分認識を送る間隔（秒）。短いほど反応が速いがAPI呼び出しが増える。
+        const float PartialInterval = 1.2f;
+
+        // マイクで recordSeconds 秒録音し、Whisper API で文字起こしする。
+        // onPartial を渡すと、録音中に「ここまでの音声」を逐次認識して途中経過を返す（リアルタイム表示用）。
         public static Coroutine RecordAndTranscribe(MonoBehaviour runner,
             float recordSeconds,
             Action<string> onSuccess,
             Action<string> onError = null,
-            Action onRecordingStart = null)
+            Action onRecordingStart = null,
+            Action<string> onPartial = null)
         {
             return runner.StartCoroutine(
-                RecordCoroutine(recordSeconds, onSuccess, onError, onRecordingStart));
+                RecordCoroutine(runner, recordSeconds, onSuccess, onError, onRecordingStart, onPartial));
         }
 
-        static IEnumerator RecordCoroutine(float recordSeconds,
-            Action<string> onSuccess, Action<string> onError, Action onRecordingStart)
+        static IEnumerator RecordCoroutine(MonoBehaviour runner, float recordSeconds,
+            Action<string> onSuccess, Action<string> onError, Action onRecordingStart, Action<string> onPartial)
         {
             string key = AIImageClient.ApiKey;
             if (!AIImageClient.IsConfiguredApiKey(key))
@@ -44,13 +49,44 @@ namespace PromptFighters.AI
             onRecordingStart?.Invoke();
 
             // 録音はスローモーション（Time.timeScale変更）の影響を受けない実時間で行う。
-            // マイクは実時間で録音されるため、ここをスケール時間にすると尺がズレる。
-            yield return new WaitForSecondsRealtime(recordSeconds);
+            // 録音しながら一定間隔で「ここまでの音声」を部分認識し、途中経過を onPartial で返す。
+            float elapsed     = 0f;
+            float nextPartial = PartialInterval;
+            bool  partialBusy = false;
+            while (elapsed < recordSeconds)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                if (onPartial != null && !partialBusy && elapsed >= nextPartial)
+                {
+                    nextPartial += PartialInterval;
+                    int micPos = Microphone.GetPosition(null);
+                    if (micPos > sampleRate / 2) // 0.5秒以上たまってから
+                    {
+                        byte[] chunk = AudioClipToWavSamples(clip, sampleRate, micPos);
+                        if (chunk != null)
+                        {
+                            partialBusy = true;
+                            runner.StartCoroutine(TranscribeOnce(chunk, key,
+                                t => { if (!string.IsNullOrEmpty(t)) onPartial(t); partialBusy = false; },
+                                _ => { partialBusy = false; }));
+                        }
+                    }
+                }
+                yield return null;
+            }
             Microphone.End(null);
 
             byte[] wav = AudioClipToWav(clip, sampleRate, recordSeconds);
             if (wav == null) { onError?.Invoke("WAVエンコード失敗"); yield break; }
 
+            // 最終確定の文字起こし（録音全体）。
+            yield return TranscribeOnce(wav, key, onSuccess, onError);
+        }
+
+        // WAVバイト列を Whisper に1回送って文字起こしする。
+        static IEnumerator TranscribeOnce(byte[] wav, string key,
+            Action<string> onText, Action<string> onErr)
+        {
             var form = new List<IMultipartFormSection>
             {
                 new MultipartFormDataSection("model",    "whisper-1"),
@@ -66,27 +102,32 @@ namespace PromptFighters.AI
 
             if (req.result != UnityWebRequest.Result.Success)
             {
-                onError?.Invoke($"{req.error}: {req.downloadHandler?.text}");
+                onErr?.Invoke($"{req.error}: {req.downloadHandler?.text}");
                 yield break;
             }
 
             try
             {
                 var resp = JsonUtility.FromJson<WhisperResponse>(req.downloadHandler.text);
-                onSuccess?.Invoke(resp?.text ?? "");
+                onText?.Invoke(resp?.text ?? "");
             }
             catch (Exception e)
             {
-                onError?.Invoke("解析失敗: " + e.Message);
+                onErr?.Invoke("解析失敗: " + e.Message);
             }
         }
 
-        // AudioClip → モノラル PCM16 WAV バイト列
+        // AudioClip → モノラル PCM16 WAV バイト列（指定秒数ぶん）
         static byte[] AudioClipToWav(AudioClip clip, int sampleRate, float duration)
+            => AudioClipToWavSamples(clip, sampleRate, Mathf.CeilToInt(duration * sampleRate));
+
+        // AudioClip → モノラル PCM16 WAV バイト列（先頭 wantSamples サンプルぶん。部分認識用）
+        static byte[] AudioClipToWavSamples(AudioClip clip, int sampleRate, int wantSamples)
         {
             if (clip == null) return null;
 
-            int sampleCount = Mathf.Min(clip.samples, Mathf.CeilToInt(duration * sampleRate));
+            int sampleCount = Mathf.Clamp(wantSamples, 0, clip.samples);
+            if (sampleCount <= 0) return null;
             float[] samples = new float[sampleCount];
             clip.GetData(samples, 0);
 

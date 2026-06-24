@@ -225,7 +225,9 @@ namespace PromptFighters.UI
                 {
                     _listening = true;
                     _recordEndRealtime = Time.unscaledTime + recordSeconds;
-                });
+                },
+                // 録音中に認識途中経過をリアルタイム表示する（確定前のプレビュー）。
+                onPartial: t => ShowSubtitle($"認識中: 「{t}」"));
 
             while (!recordDone)
             {
@@ -503,9 +505,11 @@ namespace PromptFighters.UI
             _titleLabel.text = $"[ {_acquirerTag} 音声入力受付中 ]";
             _statusLabel.text = $"録音中: 願いを話してね！ 残り {remaining:0.0}秒";
 
+            // 受付中の段階から取得者カラー（1P青/2P赤/ボス黒）で色分けする。
+            // 「録音中」が分かるよう白方向へ軽くシマーさせるが、基本色は取得者カラーを保つ。
             float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 8f);
-            _titleLabel.color = Color.Lerp(new Color(1f, 0.9f, 0.2f), new Color(1f, 0.35f, 0.25f), pulse);
-            _statusLabel.color = Color.Lerp(Color.white, new Color(1f, 0.55f, 0.45f), pulse);
+            _titleLabel.color  = Color.Lerp(_acquirerColor, Color.white, 0.15f + 0.2f * pulse);
+            _statusLabel.color = Color.Lerp(Color.white, _acquirerColor, 0.3f);
             _bannerGroup.alpha = 1f;
         }
 

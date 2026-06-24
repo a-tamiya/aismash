@@ -94,13 +94,14 @@ namespace PromptFighters.GameFlow
         RectTransform _startButtonRect;
         bool _waitForMenuInputRelease;
 
-        // ゲームパッド左スティック駆動の自前カーソル
-        GameObject _gamepadCursor;
-        RectTransform _gamepadCursorRect;
+        // ゲームパッド左スティック駆動の自前カーソル（1P/2P 専用に2つ）
+        const int CursorCount = 2; // 0=1P, 1=2P
+        readonly GameObject[]    _gamepadCursor        = new GameObject[CursorCount];
+        readonly RectTransform[] _gamepadCursorRect    = new RectTransform[CursorCount];
+        readonly bool[]          _gamepadCursorVisible = new bool[CursorCount];
+        readonly Vector2[]       _cursorScreenPos      = new Vector2[CursorCount];
         Canvas _cursorCanvas;
         RectTransform _cursorCanvasRect;
-        bool _gamepadCursorVisible;
-        Vector2 _cursorScreenPos;
         const float CursorSpeed = 1.25f; // 画面高さ/秒（解像度に依存しない速度）
 
         // AI機能・ステージトグル
@@ -176,22 +177,30 @@ namespace PromptFighters.GameFlow
             Transform canvasT = _cursorCanvas != null ? _cursorCanvas.transform : transform;
             _cursorCanvasRect = canvasT as RectTransform;
 
-            _gamepadCursor = CreateUIObject("GamepadCursor", canvasT);
-            var rt = _gamepadCursor.GetComponent<RectTransform>();
-            _gamepadCursorRect = rt;
+            // 1P=青 / 2P=赤 の専用カーソルを2つ作る。
+            BuildOneCursor(0, "GamepadCursorP1", PromptFighters.UI.UITheme.P1Neon, canvasT);
+            BuildOneCursor(1, "GamepadCursorP2", PromptFighters.UI.UITheme.P2Neon, canvasT);
+        }
+
+        void BuildOneCursor(int idx, string name, Color outerColor, Transform canvasT)
+        {
+            var go = CreateUIObject(name, canvasT);
+            var rt = go.GetComponent<RectTransform>();
+            _gamepadCursor[idx]     = go;
+            _gamepadCursorRect[idx] = rt;
             rt.sizeDelta = new Vector2(30f, 30f);
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.anchoredPosition = Vector2.zero;
 
-            // 菱形レティクル（外:ゴールド / 内:ダーク / 中心:白ドット）
-            var outer = _gamepadCursor.AddComponent<Image>();
+            // 菱形レティクル（外:プレイヤー色 / 内:ダーク / 中心:白ドット）
+            var outer = go.AddComponent<Image>();
             outer.sprite = PromptFighters.UI.UITheme.VGradient; outer.type = Image.Type.Simple;
-            outer.color = PromptFighters.UI.UITheme.Gold;
+            outer.color = outerColor;
             outer.raycastTarget = false;
             rt.localRotation = Quaternion.Euler(0f, 0f, 45f);
 
-            var inner = CreateUIObject("CursorInner", _gamepadCursor.transform);
+            var inner = CreateUIObject("CursorInner", go.transform);
             var iRt = inner.GetComponent<RectTransform>();
             iRt.anchorMin = Vector2.zero; iRt.anchorMax = Vector2.one;
             iRt.offsetMin = new Vector2(5f, 5f); iRt.offsetMax = new Vector2(-5f, -5f);
@@ -199,7 +208,7 @@ namespace PromptFighters.GameFlow
             innerImg.color = new Color(0.04f, 0.05f, 0.08f, 0.95f);
             innerImg.raycastTarget = false;
 
-            var dot = CreateUIObject("CursorDot", _gamepadCursor.transform);
+            var dot = CreateUIObject("CursorDot", go.transform);
             var dRt = dot.GetComponent<RectTransform>();
             dRt.anchorMin = dRt.anchorMax = new Vector2(0.5f, 0.5f);
             dRt.sizeDelta = new Vector2(8f, 8f);
@@ -208,83 +217,82 @@ namespace PromptFighters.GameFlow
             dotImg.color = Color.white;
             dotImg.raycastTarget = false;
 
-            _cursorScreenPos = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
-            ApplyCursorPosition();
-            SetGamepadCursorVisible(false);
+            // 初期位置は左右に少しずらして重ならないようにする。
+            _cursorScreenPos[idx] = new Vector2(
+                Screen.width * (idx == 0 ? 0.42f : 0.58f), Screen.height * 0.5f);
+            ApplyCursorPosition(idx);
+            SetGamepadCursorVisible(idx, false);
         }
 
-        void SetGamepadCursorVisible(bool visible)
+        void SetGamepadCursorVisible(int idx, bool visible)
         {
-            if (_gamepadCursor == null || _gamepadCursorVisible == visible) return;
-            _gamepadCursorVisible = visible;
-            foreach (var g in _gamepadCursor.GetComponentsInChildren<UnityEngine.UI.Graphic>(true))
+            var go = _gamepadCursor[idx];
+            if (go == null || _gamepadCursorVisible[idx] == visible) return;
+            _gamepadCursorVisible[idx] = visible;
+            foreach (var g in go.GetComponentsInChildren<UnityEngine.UI.Graphic>(true))
                 g.enabled = visible;
         }
 
-        // 左スティックでカーソル移動＋表示、A押下でクリック、物理マウス操作で非表示。
+        // 各プレイヤーの左スティックで自分のカーソルを移動＋表示、A押下でクリック、物理マウス操作で非表示。
         void UpdateGamepadCursor()
         {
             // カーソルはタイトル/選択画面のUI操作専用。戦闘中など両パネルが
             // 閉じている間は左スティック（＝移動入力）で出てこないよう抑止する。
             bool uiActive = (_panel != null && _panel.activeSelf)
                 || (_titlePanel != null && _titlePanel.activeSelf);
-            if (!uiActive) { SetGamepadCursorVisible(false); return; }
+            if (!uiActive)
+            {
+                for (int i = 0; i < CursorCount; i++) SetGamepadCursorVisible(i, false);
+                return;
+            }
 
             var pads = UnityEngine.InputSystem.Gamepad.all;
-            if (pads.Count == 0) { SetGamepadCursorVisible(false); return; }
-
-            // 最も深く倒れているパッドの左スティックを採用する。
-            // （Gamepad.current だと2台目を触った瞬間に主導権が移ってカーソルが飛ぶため）
-            Vector2 stick = Vector2.zero;
-            float bestMag = 0f;
-            for (int i = 0; i < pads.Count; i++)
-            {
-                Vector2 s = pads[i].leftStick.ReadValue();
-                float m = s.magnitude;
-                if (m > bestMag) { bestMag = m; stick = s; }
-            }
-
-            // 明確なデッドゾーン（中央付近の微小入力＝ドリフトでは動かさない）。
-            // デッドゾーンを超えた分を 0→1 に正規化して比例移動させ、素直な追従にする。
-            const float deadZone = 0.2f;
-            if (bestMag > deadZone)
-            {
-                SetGamepadCursorVisible(true);
-                Vector2 dir = stick.normalized * ((bestMag - deadZone) / (1f - deadZone));
-                float speedPx = CursorSpeed * Screen.height; // 解像度非依存
-                _cursorScreenPos += dir * (speedPx * Time.unscaledDeltaTime);
-                _cursorScreenPos.x = Mathf.Clamp(_cursorScreenPos.x, 0f, Screen.width);
-                _cursorScreenPos.y = Mathf.Clamp(_cursorScreenPos.y, 0f, Screen.height);
-                ApplyCursorPosition();
-            }
-
             var mouse = UnityEngine.InputSystem.Mouse.current;
-            if (mouse != null && mouse.delta.ReadValue().sqrMagnitude > 1f)
-                SetGamepadCursorVisible(false);
+            bool mouseMoved = mouse != null && mouse.delta.ReadValue().sqrMagnitude > 1f;
 
-            if (_gamepadCursorVisible)
+            const float deadZone = 0.2f;
+            for (int i = 0; i < CursorCount; i++)
             {
-                for (int i = 0; i < pads.Count; i++)
-                    if (pads[i].buttonSouth.wasPressedThisFrame) { DoGamepadCursorClick(); break; }
+                if (i >= pads.Count) { SetGamepadCursorVisible(i, false); continue; }
+                var gp = pads[i];
+
+                Vector2 stick = gp.leftStick.ReadValue();
+                float mag = stick.magnitude;
+                if (mag > deadZone)
+                {
+                    SetGamepadCursorVisible(i, true);
+                    // デッドゾーン超過分を 0→1 に正規化して比例移動（素直な追従・ドリフトで動かない）。
+                    Vector2 dir = stick.normalized * ((mag - deadZone) / (1f - deadZone));
+                    float speedPx = CursorSpeed * Screen.height; // 解像度非依存
+                    _cursorScreenPos[i] += dir * (speedPx * Time.unscaledDeltaTime);
+                    _cursorScreenPos[i].x = Mathf.Clamp(_cursorScreenPos[i].x, 0f, Screen.width);
+                    _cursorScreenPos[i].y = Mathf.Clamp(_cursorScreenPos[i].y, 0f, Screen.height);
+                    ApplyCursorPosition(i);
+                }
+
+                if (mouseMoved) SetGamepadCursorVisible(i, false);
+
+                if (_gamepadCursorVisible[i] && gp.buttonSouth.wasPressedThisFrame)
+                    DoGamepadCursorClick(i);
             }
         }
 
         // スクリーン座標をCanvasローカル座標へ変換してカーソルを配置（CanvasScaler対応）。
-        void ApplyCursorPosition()
+        void ApplyCursorPosition(int idx)
         {
-            if (_gamepadCursorRect == null || _cursorCanvasRect == null) return;
+            if (_gamepadCursorRect[idx] == null || _cursorCanvasRect == null) return;
             var cam = (_cursorCanvas != null && _cursorCanvas.renderMode != RenderMode.ScreenSpaceOverlay)
                 ? _cursorCanvas.worldCamera : null;
-            if (RectTransformUtility.ScreenPointToLocalPointInRectangle(_cursorCanvasRect, _cursorScreenPos, cam, out var local))
-                _gamepadCursorRect.anchoredPosition = local;
+            if (RectTransformUtility.ScreenPointToLocalPointInRectangle(_cursorCanvasRect, _cursorScreenPos[idx], cam, out var local))
+                _gamepadCursorRect[idx].anchoredPosition = local;
         }
 
         // カーソル位置でUIをレイキャストし、ヒットした要素にクリックを送る。
-        void DoGamepadCursorClick()
+        void DoGamepadCursorClick(int idx)
         {
             var es = EventSystem.current;
             if (es == null) return;
-            var ped = new PointerEventData(es) { position = _cursorScreenPos, button = PointerEventData.InputButton.Left };
+            var ped = new PointerEventData(es) { position = _cursorScreenPos[idx], button = PointerEventData.InputButton.Left };
             var results = new List<RaycastResult>();
             es.RaycastAll(ped, results);
             if (results.Count == 0) return;
