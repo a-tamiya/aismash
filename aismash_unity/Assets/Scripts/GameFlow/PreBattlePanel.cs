@@ -2207,10 +2207,10 @@ namespace PromptFighters.GameFlow
             EnsureSpriteSet(preset1);
             EnsureSpriteSet(preset2);
             _generationSetupPanel?.SetActive(false);
-            // 生成画面には移行しない。生成はバックグラウンドで進めつつ、進捗を常時オーバーレイ表示し、
-            // その間プレイヤーは自由にプレイ（トレーニング）できるようにする。
+            // 生成画面には移行しない。生成はバックグラウンドで進めつつ進捗を常時オーバーレイ表示し、
+            // プレイヤーはキャラ選択画面へ戻す（トレーニングや対戦はそこから自由に選べる）。
             _generationCoroutine = StartCoroutine(GenerateBothChars(preset1, preset2, hasP1Input, hasP2Input));
-            StartTrainingDuringGeneration();
+            ShowPanel();
         }
 
         // 生成キャラ確認後はロスターに保存済みなので、バトルへ進まずキャラ選択画面へ戻る。
@@ -2350,8 +2350,12 @@ namespace PromptFighters.GameFlow
             if (genP1) SetGenProgress(0, 100);
             if (genP2) SetGenProgress(1, 100);
             RefreshGenOverlay();
-            // 生成キャラはロスターに保存済み。メニューに戻れば選んで使える。
             _generationTrainingActive = false;
+
+            // 生成キャラはロスターに保存済み。キャラ選択画面を開いていれば、
+            // 一覧を更新して新キャラがすぐ選べるようにする（プレイ中の画面は中断しない）。
+            if (_panel != null && _panel.activeSelf) RefreshPresets();
+
             yield return new WaitForSecondsRealtime(3f);
             ShowGenOverlay(false);
         }
