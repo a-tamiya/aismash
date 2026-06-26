@@ -15,6 +15,76 @@ namespace PromptFighters.Battle
         static Sprite JumpGSprite()  { if (!_jgTried)   { _jumpGround = Resources.Load<Sprite>("Effects/jump_ground"); _jgTried = true; } return _jumpGround; }
         static Sprite JumpASprite()  { if (!_jaTried)   { _jumpAir = Resources.Load<Sprite>("Effects/jump_air");   _jaTried = true; } return _jumpAir; }
 
+        // 汎用エフェクト（Resources/Effects/*）。無ければ何も出さない。
+        static readonly System.Collections.Generic.Dictionary<string, Sprite> _cache =
+            new System.Collections.Generic.Dictionary<string, Sprite>();
+        static Sprite Fx(string name)
+        {
+            if (_cache.TryGetValue(name, out var s)) return s;
+            s = Resources.Load<Sprite>("Effects/" + name);
+            _cache[name] = s;
+            return s;
+        }
+
+        // ヒット火花。命中位置に一瞬パッと出る。
+        public static void HitSpark(Vector3 pos, float scale = 1f)
+        {
+            var s = Fx("hit_spark"); if (s == null) return;
+            Spawn(s, pos, 1.7f * scale, 0.6f, 1.6f, 0.28f, Color.white, 12, 0f);
+        }
+
+        // ガードブレイク。盾が砕ける。
+        public static void GuardBreak(Vector3 pos)
+        {
+            var s = Fx("guard_break"); if (s == null) return;
+            Spawn(s, pos, 2.8f, 0.5f, 1.7f, 0.5f, Color.white, 12, 0.3f);
+        }
+
+        // 着地・重撃の衝撃波。
+        public static void Shockwave(Vector3 feetPos, float scale = 1f)
+        {
+            var s = Fx("shockwave"); if (s == null) { Dust(feetPos, 3, scale); return; }
+            Spawn(s, feetPos + Vector3.up * 0.12f, 3.0f * scale, 0.4f, 1.7f, 0.4f, Color.white, 8, 0f);
+        }
+
+        // 強化（上昇）・弱体（下降）オーラの一瞬の演出。
+        public static void Buff(Vector3 pos)
+        {
+            var s = Fx("buff_up"); if (s == null) return;
+            Spawn(s, pos, 2.2f, 0.7f, 1.15f, 0.7f, Color.white, 12, 1.0f);
+        }
+        public static void Debuff(Vector3 pos)
+        {
+            var s = Fx("debuff_down"); if (s == null) return;
+            Spawn(s, pos, 2.2f, 0.7f, 1.15f, 0.7f, Color.white, 12, -0.6f);
+        }
+
+        // スタン（星）を頭上に。
+        public static void StunStars(Vector3 headPos)
+        {
+            var s = Fx("aura_stun"); if (s == null) return;
+            Spawn(s, headPos, 1.8f, 0.6f, 1.05f, 0.7f, Color.white, 13, 0.1f);
+        }
+
+        // カウンター成功・反射の閃光。
+        public static void CounterFlash(Vector3 pos)
+        {
+            var s = Fx("counter"); if (s == null) return;
+            Spawn(s, pos, 2.2f, 0.5f, 1.5f, 0.32f, Color.white, 13, 0f);
+        }
+        public static void ReflectFlash(Vector3 pos)
+        {
+            var s = Fx("reflect"); if (s == null) return;
+            Spawn(s, pos, 2.6f, 0.6f, 1.3f, 0.45f, Color.white, 12, 0f);
+        }
+
+        // スマッシュの溜め/発動の閃光。
+        public static void SmashFlash(Vector3 pos)
+        {
+            var s = Fx("smash_charge"); if (s == null) return;
+            Spawn(s, pos, 2.6f, 0.6f, 1.4f, 0.4f, Color.white, 12, 0f);
+        }
+
         // 着地などの砂煙。
         public static void Dust(Vector3 feetPos, int count = 1, float scale = 1f)
         {

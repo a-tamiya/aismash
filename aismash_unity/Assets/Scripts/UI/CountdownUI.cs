@@ -12,14 +12,14 @@ namespace PromptFighters.UI
         Image           _numberImage;   // 3/2/1/GO の生成画像（あれば優先表示）
         RectTransform   _display;        // テキスト＋画像の共通アニメ対象
         Image           _flash;
+        KoBanner        _koBanner;       // KO演出（独立オーバーレイ。WIN表示に潰されない）
 
-        // number → (text color, flash color)
         static readonly Color Col3      = UITheme.P1Neon;
         static readonly Color Col2      = UITheme.Gold;
         static readonly Color Col1      = UITheme.Urgent;
         static readonly Color ColFight  = UITheme.Gold;
 
-        static Sprite _c3, _c2, _c1, _cgo, _ko; static bool _spritesTried;
+        static Sprite _c3, _c2, _c1, _cgo; static bool _spritesTried;
         static void EnsureSprites()
         {
             if (_spritesTried) return;
@@ -28,7 +28,6 @@ namespace PromptFighters.UI
             _c2  = Resources.Load<Sprite>("Effects/count_2");
             _c1  = Resources.Load<Sprite>("Effects/count_1");
             _cgo = Resources.Load<Sprite>("Effects/count_go");
-            _ko  = Resources.Load<Sprite>("Effects/ko");
         }
 
         void Start()
@@ -97,6 +96,13 @@ namespace PromptFighters.UI
             _text.alignment = TextAlignmentOptions.Center;
             _text.color = Color.white;
             UITheme.Apply(_text, 128f, FontStyles.Bold | FontStyles.Italic);
+
+            // KO演出オーバーレイ（最後に作って最前面）
+            var koGo = new GameObject("KoBanner");
+            koGo.layer = gameObject.layer;
+            koGo.transform.SetParent(root, false);
+            _koBanner = koGo.AddComponent<KoBanner>();
+            _koBanner.Build();
         }
 
         // 画像を表示（テキストは隠す）
@@ -133,15 +139,28 @@ namespace PromptFighters.UI
             StartCoroutine(Flash(flashCol, 0.28f, 0.45f));
         }
 
+        void OnKnockout()
+        {
+            if (_koBanner != null) _koBanner.Trigger();
+        }
+
         void OnRoundEnd(int winnerIdx, int p1wins, int p2wins)
         {
             if (_display == null) return;
+            // KO演出中はそれが終わってから勝敗バナーを出す（KOが即上書きされないように）。
+            float delay = (_koBanner != null && _koBanner.Active) ? 1.9f : 0f;
+            StopAllCoroutines();
+            StartCoroutine(RoundWinRoutine(winnerIdx, delay));
+        }
+
+        IEnumerator RoundWinRoutine(int winnerIdx, float delay)
+        {
+            if (delay > 0f) yield return new WaitForSecondsRealtime(delay);
             string label = winnerIdx == 0 ? "1P WIN!" : winnerIdx == 1 ? "2P WIN!" : "DRAW";
             Color col    = winnerIdx == 0 ? UITheme.P1Neon
                          : winnerIdx == 1 ? UITheme.P2Neon
                          :                  UITheme.Gold;
             ShowText(label, 96f, col);
-            StopAllCoroutines();
             StartCoroutine(Punch(1.4f, 1.0f, 0.20f));
             StartCoroutine(Flash(new Color(col.r, col.g, col.b, 0f), 0.30f, 0.40f));
             StartCoroutine(HideAfter(1.8f));
@@ -155,18 +174,6 @@ namespace PromptFighters.UI
             StartCoroutine(Punch(1.5f, 1.0f, 0.22f));
             StartCoroutine(Flash(new Color(0.5f, 0.5f, 1f, 0f), 0.28f, 0.45f));
             StartCoroutine(HideAfter(1.0f));
-        }
-
-        void OnKnockout()
-        {
-            if (_display == null) return;
-            EnsureSprites();
-            if (_ko != null) ShowImage(_ko);
-            else ShowText("K.O.", 120f, UITheme.Gold);
-            StopAllCoroutines();
-            StartCoroutine(Punch(1.8f, 1.0f, 0.35f));
-            StartCoroutine(Flash(new Color(1f, 0.25f, 0.12f, 0f), 0.5f, 0.7f));
-            StartCoroutine(HideAfter(2.4f));
         }
 
         void OnFight()
@@ -227,6 +234,99 @@ namespace PromptFighters.UI
         {
             if (_display != null) { _display.localScale = Vector3.one; _display.gameObject.SetActive(false); }
             if (_flash != null) _flash.color = new Color(0, 0, 0, 0);
+        }
+    }
+
+    // KO演出。カウントダウンの共通表示とは独立したオーバーレイなので、
+    // 勝敗バナー等で即上書きされない。実時間で表示するためスローモーション中でも崩れない。
+    public class KoBanner : MonoBehaviour
+    {
+        Image _img;
+        RectTransform _imgRt;
+        Image _flash;
+        public bool Active { get; private set; }
+
+        public void Build()
+        {
+            var rt = gameObject.GetComponent<RectTransform>() ?? gameObject.AddComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = rt.offsetMax = Vector2.zero;
+
+            var fGo = new GameObject("KoFlash");
+            fGo.transform.SetParent(transform, false);
+            var fRt = fGo.AddComponent<RectTransform>();
+            fRt.anchorMin = Vector2.zero; fRt.anchorMax = Vector2.one;
+            fRt.offsetMin = fRt.offsetMax = Vector2.zero;
+            _flash = fGo.AddComponent<Image>();
+            _flash.color = new Color(0, 0, 0, 0);
+            _flash.raycastTarget = false;
+
+            var iGo = new GameObject("KoImage");
+            iGo.transform.SetParent(transform, false);
+            _imgRt = iGo.AddComponent<RectTransform>();
+            _imgRt.anchorMin = _imgRt.anchorMax = new Vector2(0.5f, 0.5f);
+            _imgRt.sizeDelta = new Vector2(1120f, 640f);
+            _imgRt.anchoredPosition = new Vector2(0f, 40f);
+            _img = iGo.AddComponent<Image>();
+            _img.preserveAspect = true;
+            _img.raycastTarget = false;
+            _img.enabled = false;
+            _img.sprite = Resources.Load<Sprite>("Effects/ko");
+        }
+
+        public void Trigger()
+        {
+            if (_img == null || _img.sprite == null) return; // 画像が無ければ何もしない
+            StopAllCoroutines();
+            StartCoroutine(Run());
+        }
+
+        IEnumerator Run()
+        {
+            Active = true;
+            _img.enabled = true;
+            _img.color = Color.white;
+
+            // パンチイン（実時間）
+            float t = 0f; const float dur = 0.32f;
+            while (t < dur)
+            {
+                t += Time.unscaledDeltaTime;
+                _imgRt.localScale = Vector3.one * Mathf.Lerp(1.8f, 1f, t / dur);
+                yield return null;
+            }
+            _imgRt.localScale = Vector3.one;
+
+            // 赤フラッシュ
+            StartCoroutine(FlashFade(new Color(1f, 0.25f, 0.12f, 0.55f), 0.6f));
+
+            // ホールド後フェードアウト
+            yield return new WaitForSecondsRealtime(1.7f);
+            float f = 0f; const float fd = 0.5f; Color c = Color.white;
+            while (f < fd)
+            {
+                f += Time.unscaledDeltaTime;
+                c.a = 1f - f / fd;
+                _img.color = c;
+                yield return null;
+            }
+            _img.enabled = false;
+            Active = false;
+        }
+
+        IEnumerator FlashFade(Color peak, float dur)
+        {
+            if (_flash == null) yield break;
+            _flash.color = peak;
+            float t = 0f;
+            while (t < dur)
+            {
+                t += Time.unscaledDeltaTime;
+                Color c = peak; c.a = Mathf.Lerp(peak.a, 0f, t / dur);
+                _flash.color = c;
+                yield return null;
+            }
+            _flash.color = new Color(0, 0, 0, 0);
         }
     }
 }

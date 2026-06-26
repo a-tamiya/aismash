@@ -279,7 +279,9 @@ namespace PromptFighters.Battle
             if (!wasGrounded && IsGrounded && BattleManager.Instance != null && BattleManager.Instance.IsFighting)
             {
                 OnLanded?.Invoke();
-                SimpleFX.Dust(GroundFxPosition());
+                // 強い落下の着地は衝撃波、通常の着地は砂埃。
+                if (_rb.linearVelocity.y < -7f) SimpleFX.Shockwave(GroundFxPosition(), 0.85f);
+                else                            SimpleFX.Dust(GroundFxPosition());
                 if (_groundBounceForce > 0f)
                 {
                     _rb.linearVelocity = new Vector2(_rb.linearVelocity.x, _groundBounceForce);
@@ -712,6 +714,7 @@ namespace PromptFighters.Battle
                 float facingDir = FacingRight ? 1f : -1f;
                 Vector2 kbVec = new Vector2(facingDir * _counterKbDir.x, _counterKbDir.y);
                 DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "COUNTER!", CounterColor, 2f);
+                SimpleFX.CounterFlash(transform.position + Vector3.up * (0.9f * CurrentSizeScale));
                 BattleLogger.Instance?.LogEvent($"{PlayerLabel()}がカウンター発動");
                 Opponent.TakeDamage(_counterDamage, _counterKnockback, kbVec, _counterStun, _counterDamage * 0.3f, false);
                 return;
@@ -751,14 +754,21 @@ namespace PromptFighters.Battle
             }
 
             if (!blocking && stunDuration > 0f)
+            {
                 _stunTimer = Mathf.Min(stunDuration, 1.5f);
+                SimpleFX.StunStars(transform.position + Vector3.up * (1.7f * CurrentSizeScale));
+            }
 
             OnDamageReceived?.Invoke(actual, blocking);
             if (!blocking && Opponent != null)
                 BattleLogger.Instance?.LogDamage(Opponent.PlayerIndex, actual);
             if (blocking) DamagePopup.SpawnText(transform.position, "GUARD", GuardColor, 1.6f);
             else          DamagePopup.Spawn(transform.position, actual, false);
-            if (!blocking) _hitFlashTimer = 0.08f;
+            if (!blocking)
+            {
+                _hitFlashTimer = 0.08f;
+                SimpleFX.HitSpark(transform.position + Vector3.up * (0.9f * CurrentSizeScale));
+            }
             // ダメージ量に応じたカメラ揺れ（小ヒットはごく僅か、大ダメージほど強く）
             if (!blocking && actual > 0f)
                 CameraShake.Shake(Mathf.Lerp(0.03f, 0.22f, Mathf.InverseLerp(4f, 30f, actual)), 0.16f);
@@ -1436,6 +1446,7 @@ namespace PromptFighters.Battle
             BattleLogger.Instance?.LogEvent($"{PlayerLabel()}のガードが割れた");
             if (Opponent != null) BattleLogger.Instance?.LogGuardBreak(Opponent.PlayerIndex);
             DamagePopup.SpawnText(transform.position, "GUARD BREAK", GuardBreakColor, 3.2f);
+            SimpleFX.GuardBreak(transform.position + Vector3.up * (0.9f * CurrentSizeScale));
             CameraShake.Shake(0.3f, 0.3f);
         }
 
