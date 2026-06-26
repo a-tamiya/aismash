@@ -233,7 +233,8 @@ namespace PromptFighters.Battle
             throwGrabCooldown = Mathf.Clamp(throwGrabCooldown, 0.25f, 0.6f);
             throwKnockbackScale = Mathf.Max(throwKnockbackScale, 1.1f);
             maxGuardDurability *= 2f;
-            guardTimeDrainPerSecond *= 0.5f;
+            // ガード展開中の自然減少速度を2倍にする（以前は基準の0.5倍に抑えていたので、等倍＝基準値に戻す）。
+            guardTimeDrainPerSecond *= 1.0f;
             guardRecoveryDelay = 0f;
             guardRecoveryPerSecond = 8f;
             guardHitDamageRatio = Mathf.Min(guardHitDamageRatio, 0.25f);
