@@ -102,6 +102,7 @@ namespace PromptFighters.Battle
         public event System.Action<int,int,int>  OnRoundEnd;         // winnerIdx, p1wins, p2wins
         public event System.Action<int>          OnRoundStart;       // round number
         public event System.Action               OnReturnedToSetup;  // リトライ時にSetupフェーズへ戻ったとき
+        public event System.Action               OnKnockout;         // KO演出開始（全画面KO表示用）
 
         Coroutine _trainingResetRoutine;
 
@@ -811,10 +812,9 @@ namespace PromptFighters.Battle
             _koSlowActive  = true;
             _hitStopActive = true; // HitStopが上書きしないようにロック
 
-            // KO演出: 大きな揺れ＋「K.O.!!」表示
+            // KO演出: 大きな揺れ＋全画面KO表示（ko.png）
             CameraShake.Shake(0.5f, 0.5f);
-            DamagePopup.SpawnText(koPosition + Vector3.up * 1.2f, "K.O.!!",
-                new Color(1f, 0.82f, 0.1f), 7f);
+            OnKnockout?.Invoke();
 
             float slowDuration = 2.5f;
             float zoomDuration = 0.25f;

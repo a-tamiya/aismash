@@ -170,6 +170,9 @@ namespace PromptFighters.Battle
         bool  _guardDisabled;
         float _guardDisabledTimer;
         int   _sealedSlot = -1;
+        // ガードバリア表示（耐久値に比例して full/mid/low を切替）
+        SpriteRenderer _guardBarrier;
+        static Sprite _gbFull, _gbMid, _gbLow; static bool _gbTried;
         float _sealedSlotTimer;
         float _superKnockbackOrigWeight = -1f;
 
@@ -241,6 +244,7 @@ namespace PromptFighters.Battle
             _rootSprite     = GetComponent<SpriteRenderer>();
             _bodyCollider   = GetComponent<Collider2D>();
             EnsureVisualRenderer();
+            CreateGuardBarrier();
             ApplyColliderScaleCorrection();
             CreateHurtboxDebugVisual();
             CreateShadow();
@@ -328,6 +332,7 @@ namespace PromptFighters.Battle
             }
             TickBurn();
             TickGuard();
+            UpdateGuardBarrier();
             TickGrab();
             TickDodge();
             TickDashDust();
@@ -1366,6 +1371,58 @@ namespace PromptFighters.Battle
             OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
             if (CurrentGuardDurability <= 0f)
                 BreakGuard(guardBreakLockDuration);
+        }
+
+        static void EnsureGuardBarrierSprites()
+        {
+            if (_gbTried) return;
+            _gbTried = true;
+            _gbFull = Resources.Load<Sprite>("Effects/guard_barrier_full");
+            _gbMid  = Resources.Load<Sprite>("Effects/guard_barrier_mid");
+            _gbLow  = Resources.Load<Sprite>("Effects/guard_barrier_low");
+        }
+
+        void CreateGuardBarrier()
+        {
+            EnsureGuardBarrierSprites();
+            if (_gbFull == null && _gbMid == null && _gbLow == null) return; // 画像が無ければ生成しない
+            var go = new GameObject("GuardBarrier");
+            go.transform.SetParent(transform, false);
+            _guardBarrier = go.AddComponent<SpriteRenderer>();
+            if (_sprite != null)
+            {
+                _guardBarrier.sortingLayerID = _sprite.sortingLayerID;
+                _guardBarrier.sortingOrder   = _sprite.sortingOrder + 2; // キャラより手前
+            }
+            _guardBarrier.enabled = false;
+        }
+
+        // ガード中、耐久値に比例したバリア画像（full/mid/low）を表示する。
+        void UpdateGuardBarrier()
+        {
+            if (_guardBarrier == null) return;
+
+            bool show = State == FighterState.Guarding && _guardBreakTimer <= 0f && CurrentGuardDurability > 0f;
+            if (!show) { if (_guardBarrier.enabled) _guardBarrier.enabled = false; return; }
+
+            float ratio = maxGuardDurability > 0f ? CurrentGuardDurability / maxGuardDurability : 0f;
+            Sprite s = ratio > 0.66f ? (_gbFull ?? _gbMid ?? _gbLow)
+                     : ratio > 0.33f ? (_gbMid ?? _gbFull ?? _gbLow)
+                     :                  (_gbLow ?? _gbMid ?? _gbFull);
+            if (s == null) { _guardBarrier.enabled = false; return; }
+
+            _guardBarrier.sprite = s;
+            float eff = _charSizeScale * PermSizeMult;
+            float sc  = (2.5f * eff) / Mathf.Max(0.01f, s.bounds.size.y);
+            _guardBarrier.transform.localScale    = new Vector3(sc, sc, 1f);
+            _guardBarrier.transform.localPosition = new Vector3(0f, 0.9f * eff, 0f);
+            _guardBarrier.enabled = true;
+
+            // プレイヤー色の淡い着色＋わずかな脈動。
+            Color tint  = PlayerIndex == 1 ? PromptFighters.UI.UITheme.P2Neon : PromptFighters.UI.UITheme.P1Neon;
+            Color baseC = Color.Lerp(Color.white, tint, 0.25f);
+            baseC.a = 0.82f + 0.18f * Mathf.Sin(Time.time * 8f);
+            _guardBarrier.color = baseC;
         }
 
         void BreakGuard(float duration)
