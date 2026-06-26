@@ -98,12 +98,21 @@ namespace PromptFighters.UI
             _text.color = Color.white;
             UITheme.Apply(_text, 128f, FontStyles.Bold | FontStyles.Italic);
 
-            // KO演出オーバーレイ（最後に作って最前面）
-            var koGo = new GameObject("KoBanner");
-            koGo.layer = gameObject.layer;
-            koGo.transform.SetParent(root, false);
-            _koBanner = koGo.AddComponent<KoBanner>();
-            _koBanner.Build();
+            // KO演出オーバーレイ（最後に作って最前面）。
+            // 失敗してもカウントダウン等が止まらないよう隔離する。
+            try
+            {
+                var koGo = new GameObject("KoBanner", typeof(RectTransform));
+                koGo.layer = gameObject.layer;
+                koGo.transform.SetParent(root, false);
+                _koBanner = koGo.AddComponent<KoBanner>();
+                _koBanner.Build();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[CountdownUI] KoBanner初期化失敗: " + e.Message);
+                _koBanner = null;
+            }
         }
 
         // 画像を表示（テキストは隠す）
@@ -275,7 +284,8 @@ namespace PromptFighters.UI
 
         public void Build()
         {
-            var rt = gameObject.GetComponent<RectTransform>() ?? gameObject.AddComponent<RectTransform>();
+            var rt = GetComponent<RectTransform>();
+            if (rt == null) rt = gameObject.AddComponent<RectTransform>();
             rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
             rt.offsetMin = rt.offsetMax = Vector2.zero;
 

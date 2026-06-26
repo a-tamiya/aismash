@@ -754,10 +754,7 @@ namespace PromptFighters.Battle
             }
 
             if (!blocking && stunDuration > 0f)
-            {
                 _stunTimer = Mathf.Min(stunDuration, 1.5f);
-                SimpleFX.StunStars(transform.position + Vector3.up * (1.7f * CurrentSizeScale));
-            }
 
             OnDamageReceived?.Invoke(actual, blocking);
             if (!blocking && Opponent != null)
@@ -788,6 +785,7 @@ namespace PromptFighters.Battle
                 case StatusType.Stun:
                     _stunTimer = Mathf.Max(_stunTimer, Mathf.Clamp(duration, 0.4f, maxStun));
                     DamagePopup.SpawnText(transform.position, "STUN", StunColor, 1.8f);
+                    SimpleFX.StunStars(transform.position + Vector3.up * (1.7f * CurrentSizeScale));
                     BattleLogger.Instance?.LogEvent($"{PlayerLabel()}がスタン");
                     break;
                 case StatusType.Burn:
