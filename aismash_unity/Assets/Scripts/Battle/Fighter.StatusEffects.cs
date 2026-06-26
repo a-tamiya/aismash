@@ -125,6 +125,13 @@ namespace PromptFighters.Battle
         void ShowStatPopup(string label, Color col)
             => DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, label, col, 2.2f);
 
+        // バフ（上昇）／デバフ（下降）の一瞬のオーラ演出。
+        void SpawnBuffFx(bool up)
+        {
+            Vector3 p = transform.position + Vector3.up * (1.0f * CurrentSizeScale);
+            if (up) SimpleFX.Buff(p); else SimpleFX.Debuff(p);
+        }
+
         // 永続（ギミック）。後勝ちで倍率を置き換え即反映。一時効果は打ち消す。
         public void ApplyPermanentSpeed(float mult)
         {
@@ -133,6 +140,7 @@ namespace PromptFighters.Battle
             moveSpeed = _moveSpeedBase * mult; airMoveSpeed = _airMoveSpeedBase * mult;
             _speedBoostTimer = mult > 1f ? 99999f : 0f;
             ShowStatPopup(mult >= 1f ? "SPEED UP!" : "SPEED DOWN!", mult >= 1f ? SpeedBoostColor : SlowColor);
+            SpawnBuffFx(mult >= 1f);
         }
         public void ApplyPermanentJump(float mult)
         {
@@ -141,6 +149,7 @@ namespace PromptFighters.Battle
             jumpForce = _jumpForceBase * mult;
             _jumpBoostTimer = mult > 1f ? 99999f : 0f;
             ShowStatPopup(mult >= 1f ? "JUMP UP!" : "JUMP DOWN!", mult >= 1f ? JumpBoostColor : SlowColor);
+            SpawnBuffFx(mult >= 1f);
         }
         public void ApplyPermanentDamage(float mult)
         {
@@ -148,12 +157,14 @@ namespace PromptFighters.Battle
             if (_damageTempCo != null) { StopCoroutine(_damageTempCo); _damageTempCo = null; }
             DamageMultiplier = mult;
             ShowStatPopup(mult >= 1f ? "POWER UP!" : "POWER DOWN!", mult >= 1f ? DamageBoostColor : SlowColor);
+            SpawnBuffFx(mult >= 1f);
         }
         public void ApplyPermanentGravity(float mult)
         {
             PermGravityMult = mult;
             if (!_dodgeGravitySuppressed) _rb.gravityScale = _defaultGravityScale * mult;
             ShowStatPopup(mult > 1f ? "HEAVY!" : "FLOAT!", mult > 1f ? new Color(0.6f, 0.4f, 1f) : new Color(0.5f, 1f, 0.9f));
+            SpawnBuffFx(mult < 1f); // 重力減（FLOAT）=有利、重力増（HEAVY）=不利
         }
         public void ApplyPermanentSize(float mult)
         {
@@ -162,6 +173,7 @@ namespace PromptFighters.Battle
             ApplyVisualScaleCorrection();
             ApplyColliderScaleCorrection();
             ShowStatPopup(mult > 1f ? "BIG!" : "SMALL!", new Color(1f, 0.85f, 0.2f));
+            SpawnBuffFx(mult > 1f); // 巨大化=有利、縮小=不利
         }
 
         // ギミックの永続倍率を初期化する。新しいマッチ開始時に呼ぶ（ラウンドまたぎでは呼ばない）。
@@ -211,15 +223,22 @@ namespace PromptFighters.Battle
         }
 
         public void StartTemporaryInvincible(float duration)
-            => StartCoroutine(TemporaryInvincible(duration));
+        {
+            SpawnBuffFx(true);
+            StartCoroutine(TemporaryInvincible(duration));
+        }
 
         public void StartTemporaryChaos(float duration)
-            => StartCoroutine(TemporaryChaos(duration));
+        {
+            SpawnBuffFx(false);
+            StartCoroutine(TemporaryChaos(duration));
+        }
 
         public void StartTemporaryReflect(float duration)
         {
             _reflectTimer = Mathf.Max(_reflectTimer, duration);
             DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "REFLECT!", ReflectColor, 2.2f);
+            SpawnBuffFx(true);
         }
 
         public void StartCounter(float duration, float damage, float knockback, Vector2 kbDir, float stun)
@@ -297,6 +316,7 @@ namespace PromptFighters.Battle
             if (State == FighterState.Guarding) SetGuard(false);
             DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "NO GUARD!", GuardDisableColor, 2.2f);
             BattleLogger.Instance?.LogEvent($"{PlayerLabel()}のガード封印");
+            SpawnBuffFx(false);
         }
 
         public void StartTemporarySkillSeal(int slot, float duration)
@@ -305,10 +325,14 @@ namespace PromptFighters.Battle
             _sealedSlotTimer = Mathf.Max(_sealedSlotTimer, duration);
             DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "SEALED!", SealColor, 2.2f);
             BattleLogger.Instance?.LogEvent($"{PlayerLabel()}のスロット{_sealedSlot}封印");
+            SpawnBuffFx(false);
         }
 
         public void StartTemporarySuperKnockback(float duration)
-            => StartCoroutine(TemporarySuperKnockback(duration));
+        {
+            SpawnBuffFx(false);
+            StartCoroutine(TemporarySuperKnockback(duration));
+        }
 
         System.Collections.IEnumerator TemporaryWind(float force, float duration)
         {

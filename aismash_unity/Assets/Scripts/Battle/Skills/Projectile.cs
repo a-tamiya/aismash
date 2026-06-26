@@ -375,6 +375,7 @@ namespace PromptFighters.Battle.Skills
                 _wasReflected = true;
                 _boomerangHitSet?.Clear();
                 DamagePopup.SpawnText(target.transform.position + Vector3.up * 0.5f, "REFLECT!", new Color(1f, 0.3f, 0.95f), 1.5f);
+                PromptFighters.Battle.SimpleFX.ReflectFlash(transform.position);
                 return;
             }
 

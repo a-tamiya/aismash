@@ -1732,6 +1732,7 @@ namespace PromptFighters.Battle
             CurrentHP = Mathf.Min(maxHP, CurrentHP + amount);
             OnHPChanged?.Invoke(CurrentHP, maxHP);
             DamagePopup.SpawnText(transform.position, $"+{amount:0}", new Color(0.4f, 1f, 0.4f), 1.6f);
+            SpawnBuffFx(true);
         }
 
         public void DrainHP(float ratio)
@@ -1741,6 +1742,7 @@ namespace PromptFighters.Battle
             CurrentHP = Mathf.Max(0f, CurrentHP - dmg);
             OnHPChanged?.Invoke(CurrentHP, maxHP);
             DamagePopup.Spawn(transform.position, dmg, false);
+            SpawnBuffFx(false);
             if (CurrentHP <= 0f) KillOrDown();
         }
 
@@ -1758,6 +1760,7 @@ namespace PromptFighters.Battle
             if (State == FighterState.Stunned && _stunTimer <= 0f) State = FighterState.Idle;
             OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
             DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "GUARD UP!", new Color(0.28f, 0.72f, 1f), 1.8f);
+            SpawnBuffFx(true);
         }
 
         public void StartHPShare(Fighter partner, float duration)

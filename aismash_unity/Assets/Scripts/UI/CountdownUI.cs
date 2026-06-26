@@ -19,7 +19,7 @@ namespace PromptFighters.UI
         static readonly Color Col1      = UITheme.Urgent;
         static readonly Color ColFight  = UITheme.Gold;
 
-        static Sprite _c3, _c2, _c1, _cgo; static bool _spritesTried;
+        static Sprite _c3, _c2, _c1, _cgo, _win; static bool _spritesTried;
         static void EnsureSprites()
         {
             if (_spritesTried) return;
@@ -28,6 +28,7 @@ namespace PromptFighters.UI
             _c2  = Resources.Load<Sprite>("Effects/count_2");
             _c1  = Resources.Load<Sprite>("Effects/count_1");
             _cgo = Resources.Load<Sprite>("Effects/count_go");
+            _win = Resources.Load<Sprite>("Effects/win");
         }
 
         void Start()
@@ -39,7 +40,7 @@ namespace PromptFighters.UI
             {
                 BattleManager.Instance.OnCountdownChanged += OnCountdown;
                 BattleManager.Instance.OnBattleStart      += OnFight;
-                BattleManager.Instance.OnBattleEnd        += _ => Hide();
+                BattleManager.Instance.OnBattleEnd        += OnMatchEnd;
                 BattleManager.Instance.OnRoundStart       += OnRoundStart;
                 BattleManager.Instance.OnRoundEnd         += OnRoundEnd;
                 BattleManager.Instance.OnKnockout         += OnKnockout;
@@ -142,6 +143,32 @@ namespace PromptFighters.UI
         void OnKnockout()
         {
             if (_koBanner != null) _koBanner.Trigger();
+        }
+
+        // マッチ決着。勝者がいる場合は WIN バナーを表示（敗北・引き分けは表示しない）。
+        void OnMatchEnd(int winnerIndex)
+        {
+            bool coop = BattleManager.Instance != null
+                        && BattleManager.Instance.Mode == BattleMode.CoopVsBoss;
+            // 勝利演出を出す条件: 勝者あり。協力モードはプレイヤー勝利(=0)のみ。
+            bool showWin = winnerIndex >= 0 && !(coop && winnerIndex != 0);
+            if (_display == null || !showWin) { Hide(); return; }
+
+            EnsureSprites();
+            if (_win == null) { Hide(); return; } // 画像が無ければ何もしない（リザルト画面に任せる）
+
+            float delay = (_koBanner != null && _koBanner.Active) ? 1.9f : 0f;
+            StopAllCoroutines();
+            StartCoroutine(WinRoutine(delay));
+        }
+
+        IEnumerator WinRoutine(float delay)
+        {
+            if (delay > 0f) yield return new WaitForSecondsRealtime(delay);
+            ShowImage(_win);
+            StartCoroutine(Punch(1.7f, 1.0f, 0.35f));
+            StartCoroutine(Flash(new Color(1f, 0.82f, 0.18f, 0f), 0.35f, 0.5f));
+            StartCoroutine(HideAfter(2.6f));
         }
 
         void OnRoundEnd(int winnerIdx, int p1wins, int p2wins)
