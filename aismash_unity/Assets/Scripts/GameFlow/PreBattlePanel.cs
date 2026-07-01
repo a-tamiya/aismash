@@ -134,9 +134,8 @@ namespace PromptFighters.GameFlow
         TextMeshProUGUI _bossPresetLabel;
 
         // ── ステージ選択パネル ──
-        GameObject    _stageSelectPanel;
-        Image[]       _stageCardHighlights;
-        Image[]       _stageCardImages;
+        GameObject _stageSelectPanel;
+        Image[]    _stageCardImages;
         int _bossPresetIdx = 0;
         // 操作説明オーバーレイ
         GameObject _controlsPanel;
@@ -909,19 +908,20 @@ namespace PromptFighters.GameFlow
             titleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
             var n = PromptFighters.Battle.StageRegistry.All.Length;
-            _stageCardHighlights = new Image[n];
-            _stageCardImages     = new Image[n];
+            _stageCardImages = new Image[n];
 
-            // 2×2 グリッド（横 900 間隔、縦 310 間隔）
+            // 上段3枚・下段2枚の 3+2 レイアウト
+            const float CW = 560f, CH = 240f;
             Vector2[] positions =
             {
-                new Vector2(-460f,  130f),
-                new Vector2( 460f,  130f),
-                new Vector2(-460f, -200f),
-                new Vector2( 460f, -200f),
+                new Vector2(-590f,  130f),
+                new Vector2(   0f,  130f),
+                new Vector2( 590f,  130f),
+                new Vector2(-295f, -155f),
+                new Vector2( 295f, -155f),
             };
             for (int i = 0; i < n && i < positions.Length; i++)
-                BuildStageCard(_stageSelectPanel.transform, i, positions[i]);
+                BuildStageCard(_stageSelectPanel.transform, i, positions[i], CW, CH);
 
             var backBtn = MakeButton(_stageSelectPanel.transform, "StageSelectBack", "◀ 戻る",
                 new Vector2(-820f, -490f), new Vector2(160f, 50f), HideStageSelectPanel,
@@ -932,19 +932,17 @@ namespace PromptFighters.GameFlow
             _stageSelectPanel.SetActive(false);
         }
 
-        void BuildStageCard(Transform parent, int idx, Vector2 pos)
+        void BuildStageCard(Transform parent, int idx, Vector2 pos, float cardW, float cardH)
         {
-            const float CardW = 880f, CardH = 270f;
             var def = PromptFighters.Battle.StageRegistry.All[idx];
 
-            // カード全体がボタン
             int capturedIdx = idx;
             var cardBtn = MakeButton(parent, $"StageCard{idx}", "", pos,
-                new Vector2(CardW, CardH), () => OnStageCardClicked(capturedIdx), Color.clear);
+                new Vector2(cardW, cardH), () => OnStageCardClicked(capturedIdx), Color.clear);
             var btnColors = cardBtn.colors;
             btnColors.normalColor      = new Color(1f, 1f, 1f, 0f);
-            btnColors.highlightedColor = new Color(1f, 1f, 1f, 0.10f);
-            btnColors.pressedColor     = new Color(1f, 1f, 1f, 0.25f);
+            btnColors.highlightedColor = new Color(1f, 1f, 1f, 0.12f);
+            btnColors.pressedColor     = new Color(1f, 1f, 1f, 0.28f);
             cardBtn.colors = btnColors;
 
             // ステージ背景画像（カード全面）
@@ -957,43 +955,32 @@ namespace PromptFighters.GameFlow
             else img.color = new Color(0.08f + idx * 0.04f, 0.06f, 0.14f, 1f);
             _stageCardImages[idx] = img;
 
-            // 下部の暗いグラデーション帯（名前が読みやすくなるよう）
+            // 下部の暗い帯（名前が読みやすくなるよう）
             var strip = MakePanel(cardBtn.transform, $"StageStrip{idx}",
-                new Vector2(0f, -(CardH * 0.5f - 45f)), new Vector2(CardW, 90f),
-                new Color(0f, 0f, 0f, 0.78f));
+                new Vector2(0f, -(cardH * 0.5f - 38f)), new Vector2(cardW, 76f),
+                new Color(0f, 0f, 0f, 0.80f));
             strip.raycastTarget = false;
 
             // ステージ名
             var nameLabel = MakeLabel(cardBtn.transform, $"StageName{idx}", def.displayName,
-                new Vector2(0f, -(CardH * 0.5f - 44f)), new Vector2(CardW - 24f, 56f),
-                24f, Color.white);
-            nameLabel.fontStyle    = FontStyles.Bold | FontStyles.Italic;
+                new Vector2(0f, -(cardH * 0.5f - 37f)), new Vector2(cardW - 16f, 48f),
+                20f, Color.white);
+            nameLabel.fontStyle     = FontStyles.Bold | FontStyles.Italic;
             nameLabel.raycastTarget = false;
 
             // 特徴説明（右寄せ小文字）
             string desc = GetStageDescription(idx);
             var descLabel = MakeLabel(cardBtn.transform, $"StageDesc{idx}", desc,
-                new Vector2(0f, CardH * 0.5f - 18f), new Vector2(CardW - 20f, 26f),
-                13f, new Color(1f, 1f, 1f, 0.7f));
-            descLabel.alignment    = TMPro.TextAlignmentOptions.TopRight;
+                new Vector2(0f, cardH * 0.5f - 14f), new Vector2(cardW - 16f, 22f),
+                11f, new Color(1f, 1f, 1f, 0.7f));
+            descLabel.alignment     = TMPro.TextAlignmentOptions.TopRight;
             descLabel.raycastTarget = false;
-
-            // 選択枠ハイライト（初期は非表示）
-            var hlGo = CreateUIObject($"StageHL{idx}", cardBtn.transform);
-            StretchFull(hlGo.GetComponent<RectTransform>());
-            var hl = hlGo.AddComponent<Image>();
-            hl.color        = new Color(PromptFighters.UI.UITheme.Gold.r,
-                                        PromptFighters.UI.UITheme.Gold.g,
-                                        PromptFighters.UI.UITheme.Gold.b, 0f);
-            hl.raycastTarget = false;
-            _stageCardHighlights[idx] = hl;
         }
 
         void ShowStageSelectPanel(CharacterData d1, CharacterData d2)
         {
             _pendingData1 = d1;
             _pendingData2 = d2;
-            RefreshStageCards();
             if (_stageSelectPanel != null) _stageSelectPanel.SetActive(true);
         }
 
@@ -1010,19 +997,6 @@ namespace PromptFighters.GameFlow
             _panel.SetActive(false);
             HideGamepadCursors();
             BattleManager.Instance.StartCountdown(_pendingData1, _pendingData2);
-        }
-
-        void RefreshStageCards()
-        {
-            if (_stageCardHighlights == null) return;
-            int sel = PromptFighters.Battle.StageRegistry.SelectedIndex;
-            for (int i = 0; i < _stageCardHighlights.Length; i++)
-            {
-                if (_stageCardHighlights[i] == null) continue;
-                var c = _stageCardHighlights[i].color;
-                c.a = (i == sel) ? 0.45f : 0f;
-                _stageCardHighlights[i].color = c;
-            }
         }
 
         static string GetStageDescription(int idx) => idx switch
