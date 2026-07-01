@@ -2069,6 +2069,7 @@ GameObject:
   - component: {fileID: 602783423}
   - component: {fileID: 602783425}
   - component: {fileID: 602783424}
+  - component: {fileID: 602783426}
   m_Layer: 0
   m_Name: Canvas
   m_TagString: Untagged
@@ -2239,6 +2240,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 65091c1c26829ce419b9fa9510d28181, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PromptFighters.UI.BattleHUD
+--- !u!114 &602783426
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 602783413}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 686d59f8c790168409283af242e2f669, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PromptFighters.UI.OffscreenIndicator
 --- !u!28 &682929573
 Texture2D:
   m_ObjectHideFlags: 0
