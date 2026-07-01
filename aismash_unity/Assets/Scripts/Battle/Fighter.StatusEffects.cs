@@ -153,6 +153,7 @@ namespace PromptFighters.Battle
         }
         public void ApplyPermanentDamage(float mult)
         {
+            mult = Mathf.Max(mult, 0.1f); // 攻撃力が0になって試合進行不能になるのを防ぐ
             PermDamageMult = mult;
             if (_damageTempCo != null) { StopCoroutine(_damageTempCo); _damageTempCo = null; }
             DamageMultiplier = mult;

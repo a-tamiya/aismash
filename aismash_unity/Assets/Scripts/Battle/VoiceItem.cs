@@ -35,8 +35,9 @@ namespace PromptFighters.Battle
         float   _halfRangeX;
 
         const float KnockDamping = 3.2f;  // ノックバックの減衰（大きいほど早く止まる）
-        const float MinY = -1.5f;         // 浮遊できる縦範囲
-        const float MaxY =  3.8f;
+        const float MinY = -2.5f;         // 浮遊できる縦範囲（低め）
+        const float MaxY =  2.5f;
+        float _vertDriftDir = 1f;
 
         static readonly Color GoldGlow = new Color(1f, 0.82f, 0.18f, 0.9f);
 
@@ -164,9 +165,15 @@ namespace PromptFighters.Battle
             float dt = Time.fixedDeltaTime;
 
             // ゆっくり横ドリフト（ステージ内で反復）
-            _basePos.x += _driftDir * 0.7f * dt;
+            _basePos.x += _driftDir * 0.6f * dt;
             if (_basePos.x >  _halfRangeX) { _basePos.x =  _halfRangeX; _driftDir = -1f; }
             if (_basePos.x < -_halfRangeX) { _basePos.x = -_halfRangeX; _driftDir =  1f; }
+
+            // 縦ドリフト：ゆっくり上下に漂う（不規則さを出す）
+            _basePos.y += _vertDriftDir * 0.25f * dt;
+            if (_basePos.y > MaxY - 0.3f) { _vertDriftDir = -1f; }
+            if (_basePos.y < MinY + 0.3f) { _vertDriftDir =  1f; }
+            _basePos.y = Mathf.Clamp(_basePos.y, MinY, MaxY);
 
             // 被弾ノックバック：速度を位置へ積分しつつ減衰。端で軽く跳ね返る。
             _basePos += (Vector3)(_knockVel * dt);
@@ -175,8 +182,9 @@ namespace PromptFighters.Battle
             if (_basePos.x < -_halfRangeX) { _basePos.x = -_halfRangeX; _knockVel.x =  Mathf.Abs(_knockVel.x) * 0.4f; }
             _basePos.y = Mathf.Clamp(_basePos.y, MinY, MaxY);
 
-            // ふわふわ上下
-            float bob = Mathf.Sin((Time.time + _seed) * 1.6f) * 0.5f;
+            // ふわふわ上下（2周波重ね合わせで不規則感）
+            float bob = Mathf.Sin((Time.time + _seed) * 1.6f) * 0.35f
+                      + Mathf.Sin((Time.time + _seed * 1.7f) * 2.9f) * 0.18f;
             _rb.MovePosition(new Vector2(_basePos.x, _basePos.y + bob));
         }
 

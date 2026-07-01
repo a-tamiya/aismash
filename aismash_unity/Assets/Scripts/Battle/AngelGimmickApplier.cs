@@ -252,11 +252,12 @@ namespace PromptFighters.Battle
                     else
                     {
                         Fighter caster = Acquirer ?? target1;
-                        ApplyRandomSelfDebuff(caster);
+                        string debuffName = ApplyRandomSelfDebuff(caster);
                         GameAudioManager.Instance?.PlayGimmickDebuff();
                         if (caster != null)
                             PromptFighters.UI.DamagePopup.SpawnText(
-                                caster.transform.position + Vector3.up * 1.2f, "失敗…自分にデバフ！",
+                                caster.transform.position + Vector3.up * 1.2f,
+                                $"失敗…自分に {debuffName}",
                                 new Color(1f, 0.4f, 0.3f), 1.6f);
                     }
                     break;
@@ -346,19 +347,20 @@ namespace PromptFighters.Battle
             }
         }
 
-        // hp_set 失敗時のペナルティ：発動者にランダムなデバフを与える。
-        void ApplyRandomSelfDebuff(Fighter f)
+        // hp_set 失敗時のペナルティ：発動者にランダムなデバフを与え、デバフ名を返す。
+        string ApplyRandomSelfDebuff(Fighter f)
         {
-            if (f == null || f.State == FighterState.Dead) return;
+            if (f == null || f.State == FighterState.Dead) return "デバフ";
             switch (Random.Range(0, 7))
             {
-                case 0: f.ApplyPermanentSpeed(0.65f);  break; // 鈍足
-                case 1: f.ApplyPermanentJump(0.70f);   break; // ジャンプ低下
-                case 2: f.ApplyPermanentDamage(0.65f); break; // 火力低下
-                case 3: f.ApplyPermanentGravity(1.8f); break; // 重力増（落下加速・低ジャンプ）
-                case 4: f.ApplyPermanentSize(0.70f);   break; // 縮小
-                case 5: f.ApplyStatus(StatusType.Slow, 6f * DurationScale); break;
-                case 6: f.ApplyStatus(StatusType.Burn, 5f * DurationScale); break;
+                case 0: f.ApplyPermanentSpeed(0.65f);                       return "スピード DOWN ↓";
+                case 1: f.ApplyPermanentJump(0.70f);                        return "ジャンプ DOWN ↓";
+                case 2: f.ApplyPermanentDamage(0.65f);                      return "パワー DOWN ↓";
+                case 3: f.ApplyPermanentGravity(1.8f);                      return "重力増加 ↓↓";
+                case 4: f.ApplyPermanentSize(0.70f);                        return "縮小化";
+                case 5: f.ApplyStatus(StatusType.Slow, 6f * DurationScale); return "スロー状態";
+                case 6: f.ApplyStatus(StatusType.Burn, 5f * DurationScale); return "バーン状態";
+                default:                                                     return "デバフ";
             }
         }
 

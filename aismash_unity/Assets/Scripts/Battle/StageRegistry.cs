@@ -32,9 +32,9 @@ namespace PromptFighters.Battle
                 stageHalfWidth     = 6.0f,
                 platforms = new[]
                 {
-                    new PlatformDef { x =  0.0f, y =  1.2f, width = 2.5f },
-                    new PlatformDef { x = -4.2f, y = -0.3f, width = 2.2f },
-                    new PlatformDef { x =  4.2f, y = -0.3f, width = 2.2f },
+                    new PlatformDef { x =  0.0f, y =  0.9f, width = 2.5f },
+                    new PlatformDef { x = -4.2f, y = -0.6f, width = 2.2f },
+                    new PlatformDef { x =  4.2f, y = -0.6f, width = 2.2f },
                 },
             },
 
@@ -48,10 +48,10 @@ namespace PromptFighters.Battle
                 stageHalfWidth     = 6.5f,
                 platforms = new[]
                 {
-                    new PlatformDef { x = -3.0f, y = 0.8f, width = 2.8f,
-                        moving = true, moveRange = 2.2f, movePeriod = 4.0f, phaseOffset = 0.0f },
-                    new PlatformDef { x =  3.0f, y = 0.8f, width = 2.8f,
-                        moving = true, moveRange = 2.2f, movePeriod = 4.0f, phaseOffset = 0.5f },
+                    new PlatformDef { x = -3.0f, y = 0.5f, width = 2.8f,
+                        moving = true, moveRange = 1.5f, movePeriod = 6.0f, phaseOffset = 0.0f },
+                    new PlatformDef { x =  3.0f, y = 0.5f, width = 2.8f,
+                        moving = true, moveRange = 1.5f, movePeriod = 6.0f, phaseOffset = 0.5f },
                 },
             },
 
@@ -66,8 +66,8 @@ namespace PromptFighters.Battle
                 stageHalfWidth     = 7.0f,
                 platforms = new[]
                 {
-                    new PlatformDef { x = -5.0f, y = 1.5f, width = 2.5f },
-                    new PlatformDef { x =  5.0f, y = 1.5f, width = 2.5f },
+                    new PlatformDef { x = -5.0f, y = 1.2f, width = 2.5f },
+                    new PlatformDef { x =  5.0f, y = 1.2f, width = 2.5f },
                 },
                 walls = new[]
                 {
