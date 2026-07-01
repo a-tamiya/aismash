@@ -71,7 +71,7 @@ namespace PromptFighters.Battle
                 },
                 walls = new[]
                 {
-                    new WallDef { x = 0f, y = -0.2f, width = 0.8f, height = 3.2f },
+                    new WallDef { x = 0f, y = -1.4f, width = 0.8f, height = 3.2f },
                 },
             },
 

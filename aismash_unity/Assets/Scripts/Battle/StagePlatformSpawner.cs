@@ -63,19 +63,44 @@ namespace PromptFighters.Battle
 
         public List<Collider2D> GetColliders() => _colliders;
 
-        // ── スプライトキャッシュ ────────────────────────────────────────
+        // ── スプライト読み込み ──────────────────────────────────────────
+        // Sprite として import されていない場合でも Texture2D から生成してフォールバックする。
+        static Sprite LoadSprite(string path)
+        {
+            if (path == null) return null;
+            var s = Resources.Load<Sprite>(path);
+            if (s != null) return s;
+            var tex = Resources.Load<Texture2D>(path);
+            if (tex == null) return null;
+            return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+                                 new Vector2(0.5f, 0.5f), 100f);
+        }
+
         static Sprite _defaultPlatSprite; static bool _platTried;
         static Sprite DefaultPlatformSprite()
         {
-            if (!_platTried) { _defaultPlatSprite = Resources.Load<Sprite>("Stage/platform"); _platTried = true; }
+            if (!_platTried) { _defaultPlatSprite = LoadSprite("Stage/platform"); _platTried = true; }
             return _defaultPlatSprite;
         }
 
         static Sprite _defaultWallSprite; static bool _wallTried;
         static Sprite DefaultWallSprite()
         {
-            if (!_wallTried) { _defaultWallSprite = Resources.Load<Sprite>("Stage/wall"); _wallTried = true; }
+            if (!_wallTried) { _defaultWallSprite = LoadSprite("Stage/wall"); _wallTried = true; }
             return _defaultWallSprite;
+        }
+
+        // 壁に張り付き防止のためのフリクションゼロマテリアル
+        static PhysicsMaterial2D _noFriction;
+        static PhysicsMaterial2D NoFriction()
+        {
+            if (_noFriction == null)
+            {
+                _noFriction = new PhysicsMaterial2D("WallNoFriction");
+                _noFriction.friction = 0f;
+                _noFriction.bounciness = 0f;
+            }
+            return _noFriction;
         }
 
         // ── 踏み台プラットフォーム ──────────────────────────────────────
@@ -110,8 +135,7 @@ namespace PromptFighters.Battle
             eff.surfaceArc        = 170f;
             eff.rotationalOffset  = 0f;
 
-            var sprite = (spritePath != null ? Resources.Load<Sprite>(spritePath) : null)
-                         ?? DefaultPlatformSprite();
+            var sprite = LoadSprite(spritePath) ?? DefaultPlatformSprite();
 
             var vis = new GameObject("PlatVisual");
             vis.transform.SetParent(go.transform, false);
@@ -150,9 +174,9 @@ namespace PromptFighters.Battle
 
             var col = go.AddComponent<BoxCollider2D>();
             col.size = new Vector2(width, height);
+            col.sharedMaterial = NoFriction(); // 壁への張り付き防止
 
-            var sprite = (spritePath != null ? Resources.Load<Sprite>(spritePath) : null)
-                         ?? DefaultWallSprite();
+            var sprite = LoadSprite(spritePath) ?? DefaultWallSprite();
 
             var vis = new GameObject("WallVisual");
             vis.transform.SetParent(go.transform, false);
