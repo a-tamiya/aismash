@@ -31,8 +31,16 @@ namespace PromptFighters.UI
 
         void Start()
         {
-            var canvas = GetComponentInParent<Canvas>() ?? FindAnyObjectByType<Canvas>();
-            _canvasRect = canvas != null ? canvas.transform as RectTransform : null;
+            // 専用 Canvas を最前面に生成（sortOrder=999 で他の全 UI より上）
+            var go = new GameObject("OffscreenCanvas");
+            DontDestroyOnLoad(go);
+            var canvas = go.AddComponent<Canvas>();
+            canvas.renderMode   = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 999;
+            go.AddComponent<UnityEngine.UI.CanvasScaler>();
+            go.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+            _canvasRect = go.transform as RectTransform;
+
             _cam = Camera.main;
 
             _markers = new Marker[3];
@@ -178,7 +186,7 @@ namespace PromptFighters.UI
 
             if (!m.go.activeSelf) m.go.SetActive(true);
 
-            // 画面座標→キャンバスローカル座標（Overlayなのでカメラはnull）。
+            // 画面座標→キャンバスローカル座標（Overlay Canvas なのでカメラは null）。
             Vector2 local;
             RectTransformUtility.ScreenPointToLocalPointInRectangle(_canvasRect, edge, null, out local);
             m.rt.anchoredPosition = local;
