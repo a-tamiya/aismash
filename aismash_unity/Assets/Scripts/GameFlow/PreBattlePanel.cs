@@ -131,8 +131,12 @@ namespace PromptFighters.GameFlow
         Image _modeCoopBg;
         TextMeshProUGUI _modeCoopLabel;
         GameObject _bossSelectorRoot;
-        TextMeshProUGUI _stageSelectorLabel;
         TextMeshProUGUI _bossPresetLabel;
+
+        // ── ステージ選択パネル ──
+        GameObject    _stageSelectPanel;
+        Image[]       _stageCardHighlights;
+        Image[]       _stageCardImages;
         int _bossPresetIdx = 0;
         // 操作説明オーバーレイ
         GameObject _controlsPanel;
@@ -885,57 +889,150 @@ namespace PromptFighters.GameFlow
             RefreshToggleVisuals();
         }
 
-        // ── ステージ選択 ──────────────────────────────────────────────
+        // ── ステージ選択パネル（バトル開始後に全画面で表示）────────────
 
-        void BuildStageSelector(Transform parent, float rowY)
+        void BuildStageSelectPanel()
         {
-            var col = new Color(0.55f, 0.85f, 1f);  // 水色系でステージ感
+            _stageSelectPanel = CreateUIObject("StageSelectPanel", transform);
+            StretchFull(_stageSelectPanel.GetComponent<RectTransform>());
+            var bg = _stageSelectPanel.AddComponent<Image>();
+            bg.color = new Color(0f, 0f, 0.02f, 0.92f);
 
-            MakeLabel(parent, "StageHeading", "STAGE",
-                new Vector2(-310f, rowY), new Vector2(110f, 32f), 17f, col)
-                .fontStyle = FontStyles.Bold | FontStyles.Italic;
+            var titleShadow = MakeLabel(_stageSelectPanel.transform, "StageSelectTitleShadow",
+                "STAGE SELECT", new Vector2(4f, -438f), new Vector2(900f, 80f), 52f,
+                new Color(0f, 0f, 0f, 0.6f));
+            titleShadow.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
-            var prevBtn = MakeButton(parent, "StagePrev", "◀",
-                new Vector2(-185f, rowY), new Vector2(50f, 34f), OnStagePrev, col);
-            StyleArcadeButton(prevBtn, col, 8f);
-            SetButtonLabelStyle(prevBtn, 20f, FontStyles.Bold, Color.white);
+            var titleLabel = MakeLabel(_stageSelectPanel.transform, "StageSelectTitle",
+                "STAGE SELECT", new Vector2(0f, -434f), new Vector2(900f, 80f), 52f,
+                PromptFighters.UI.UITheme.Gold);
+            titleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
-            var nameBtn = MakeButton(parent, "StageName", StageDisplayName(),
-                new Vector2(0f, rowY), new Vector2(280f, 36f), OnStageNext, new Color(0.12f, 0.16f, 0.22f));
-            StyleArcadeButton(nameBtn, new Color(0.12f, 0.16f, 0.22f), 8f);
-            _stageSelectorLabel = nameBtn.GetComponentInChildren<TextMeshProUGUI>();
-            _stageSelectorLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
-            _stageSelectorLabel.fontSize  = 17f;
+            var n = PromptFighters.Battle.StageRegistry.All.Length;
+            _stageCardHighlights = new Image[n];
+            _stageCardImages     = new Image[n];
 
-            var nextBtn = MakeButton(parent, "StageNext", "▶",
-                new Vector2(185f, rowY), new Vector2(50f, 34f), OnStageNext, col);
-            StyleArcadeButton(nextBtn, col, 8f);
-            SetButtonLabelStyle(nextBtn, 20f, FontStyles.Bold, Color.white);
+            // 2×2 グリッド（横 900 間隔、縦 310 間隔）
+            Vector2[] positions =
+            {
+                new Vector2(-460f,  130f),
+                new Vector2( 460f,  130f),
+                new Vector2(-460f, -200f),
+                new Vector2( 460f, -200f),
+            };
+            for (int i = 0; i < n && i < positions.Length; i++)
+                BuildStageCard(_stageSelectPanel.transform, i, positions[i]);
+
+            var backBtn = MakeButton(_stageSelectPanel.transform, "StageSelectBack", "◀ 戻る",
+                new Vector2(-820f, -490f), new Vector2(160f, 50f), HideStageSelectPanel,
+                PromptFighters.UI.UITheme.InkDim);
+            StyleArcadeButton(backBtn, PromptFighters.UI.UITheme.InkDim, 10f);
+            SetButtonLabelStyle(backBtn, 18f, FontStyles.Bold | FontStyles.Italic, Color.white);
+
+            _stageSelectPanel.SetActive(false);
         }
 
-        void OnStagePrev()
+        void BuildStageCard(Transform parent, int idx, Vector2 pos)
         {
-            PromptFighters.Battle.StageRegistry.SelectedIndex =
-                (PromptFighters.Battle.StageRegistry.SelectedIndex - 1 +
-                 PromptFighters.Battle.StageRegistry.All.Length) %
-                 PromptFighters.Battle.StageRegistry.All.Length;
-            RefreshToggleVisuals();
+            const float CardW = 880f, CardH = 270f;
+            var def = PromptFighters.Battle.StageRegistry.All[idx];
+
+            // カード全体がボタン
+            int capturedIdx = idx;
+            var cardBtn = MakeButton(parent, $"StageCard{idx}", "", pos,
+                new Vector2(CardW, CardH), () => OnStageCardClicked(capturedIdx), Color.clear);
+            var btnColors = cardBtn.colors;
+            btnColors.normalColor      = new Color(1f, 1f, 1f, 0f);
+            btnColors.highlightedColor = new Color(1f, 1f, 1f, 0.10f);
+            btnColors.pressedColor     = new Color(1f, 1f, 1f, 0.25f);
+            cardBtn.colors = btnColors;
+
+            // ステージ背景画像（カード全面）
+            var imgGo = CreateUIObject($"StageImg{idx}", cardBtn.transform);
+            StretchFull(imgGo.GetComponent<RectTransform>());
+            var img = imgGo.AddComponent<Image>();
+            img.raycastTarget = false;
+            var sprite = Resources.Load<Sprite>(def.backgroundPath);
+            if (sprite != null) { img.sprite = sprite; img.color = Color.white; }
+            else img.color = new Color(0.08f + idx * 0.04f, 0.06f, 0.14f, 1f);
+            _stageCardImages[idx] = img;
+
+            // 下部の暗いグラデーション帯（名前が読みやすくなるよう）
+            var strip = MakePanel(cardBtn.transform, $"StageStrip{idx}",
+                new Vector2(0f, -(CardH * 0.5f - 45f)), new Vector2(CardW, 90f),
+                new Color(0f, 0f, 0f, 0.78f));
+            strip.raycastTarget = false;
+
+            // ステージ名
+            var nameLabel = MakeLabel(cardBtn.transform, $"StageName{idx}", def.displayName,
+                new Vector2(0f, -(CardH * 0.5f - 44f)), new Vector2(CardW - 24f, 56f),
+                24f, Color.white);
+            nameLabel.fontStyle    = FontStyles.Bold | FontStyles.Italic;
+            nameLabel.raycastTarget = false;
+
+            // 特徴説明（右寄せ小文字）
+            string desc = GetStageDescription(idx);
+            var descLabel = MakeLabel(cardBtn.transform, $"StageDesc{idx}", desc,
+                new Vector2(0f, CardH * 0.5f - 18f), new Vector2(CardW - 20f, 26f),
+                13f, new Color(1f, 1f, 1f, 0.7f));
+            descLabel.alignment    = TMPro.TextAlignmentOptions.TopRight;
+            descLabel.raycastTarget = false;
+
+            // 選択枠ハイライト（初期は非表示）
+            var hlGo = CreateUIObject($"StageHL{idx}", cardBtn.transform);
+            StretchFull(hlGo.GetComponent<RectTransform>());
+            var hl = hlGo.AddComponent<Image>();
+            hl.color        = new Color(PromptFighters.UI.UITheme.Gold.r,
+                                        PromptFighters.UI.UITheme.Gold.g,
+                                        PromptFighters.UI.UITheme.Gold.b, 0f);
+            hl.raycastTarget = false;
+            _stageCardHighlights[idx] = hl;
         }
 
-        void OnStageNext()
+        void ShowStageSelectPanel(CharacterData d1, CharacterData d2)
         {
-            PromptFighters.Battle.StageRegistry.SelectedIndex =
-                (PromptFighters.Battle.StageRegistry.SelectedIndex + 1) %
-                 PromptFighters.Battle.StageRegistry.All.Length;
-            RefreshToggleVisuals();
+            _pendingData1 = d1;
+            _pendingData2 = d2;
+            RefreshStageCards();
+            if (_stageSelectPanel != null) _stageSelectPanel.SetActive(true);
         }
 
-        static string StageDisplayName()
+        void HideStageSelectPanel()
         {
-            var all = PromptFighters.Battle.StageRegistry.All;
-            int  idx = PromptFighters.Battle.StageRegistry.SelectedIndex;
-            return $"{idx + 1}/{all.Length}  {all[idx].displayName}";
+            if (_stageSelectPanel != null) _stageSelectPanel.SetActive(false);
         }
+
+        void OnStageCardClicked(int idx)
+        {
+            PromptFighters.Battle.StageRegistry.SelectedIndex = idx;
+            HideStageSelectPanel();
+            if (BattleManager.Instance == null) return;
+            _panel.SetActive(false);
+            HideGamepadCursors();
+            BattleManager.Instance.StartCountdown(_pendingData1, _pendingData2);
+        }
+
+        void RefreshStageCards()
+        {
+            if (_stageCardHighlights == null) return;
+            int sel = PromptFighters.Battle.StageRegistry.SelectedIndex;
+            for (int i = 0; i < _stageCardHighlights.Length; i++)
+            {
+                if (_stageCardHighlights[i] == null) continue;
+                var c = _stageCardHighlights[i].color;
+                c.a = (i == sel) ? 0.45f : 0f;
+                _stageCardHighlights[i].color = c;
+            }
+        }
+
+        static string GetStageDescription(int idx) => idx switch
+        {
+            0 => "台×2  /  スタンダード",
+            1 => "台×3  /  中央高台＋左右低台",
+            2 => "動く台×2  /  逆位相往復",
+            3 => "台×2  /  中央石柱あり",
+            _ => "",
+        };
 
         // バトルモード選択行（1 vs 1 / 協力ボス討伐）をパネル上部に並べて生成する。
         void BuildModeSelector(Transform parent, float rowY)
@@ -994,7 +1091,6 @@ namespace PromptFighters.GameFlow
                 SyncBossCharacter();
                 if (_bossPresetLabel != null) _bossPresetLabel.text = BossPresetText();
             }
-            if (_stageSelectorLabel != null) _stageSelectorLabel.text = StageDisplayName();
         }
 
         void BuildPanel()
@@ -1058,19 +1154,19 @@ namespace PromptFighters.GameFlow
 
             // ── フッター: ボタン ──
             var startBtn = MakeButton(_panel.transform, "StartBtn", "バトル開始",
-                new Vector2(-310, -510), new Vector2(280, 70), OnStartPressed,
+                new Vector2(-310, -460), new Vector2(280, 70), OnStartPressed,
                 PromptFighters.UI.UITheme.Gold);
             StyleArcadeButton(startBtn, PromptFighters.UI.UITheme.Gold, 16f);
             SetButtonLabelStyle(startBtn, 26f, FontStyles.Bold | FontStyles.Italic, new Color(0.12f, 0.08f, 0f));
 
             var trainBtn = MakeButton(_panel.transform, "TrainingBtn", "トレーニング",
-                new Vector2(0, -510), new Vector2(280, 70), OnTrainingPressed,
+                new Vector2(0, -460), new Vector2(280, 70), OnTrainingPressed,
                 PromptFighters.UI.UITheme.P1Neon);
             StyleArcadeButton(trainBtn, PromptFighters.UI.UITheme.P1Neon, 16f);
             SetButtonLabelStyle(trainBtn, 26f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             var genBtn = MakeButton(_panel.transform, "GenerateBtn", "キャラ生成",
-                new Vector2(310, -510), new Vector2(280, 70), ShowGenerationSetupPanel,
+                new Vector2(310, -460), new Vector2(280, 70), ShowGenerationSetupPanel,
                 PromptFighters.UI.UITheme.P2Neon);
             StyleArcadeButton(genBtn, PromptFighters.UI.UITheme.P2Neon, 16f);
             SetButtonLabelStyle(genBtn, 26f, FontStyles.Bold | FontStyles.Italic, Color.white);
@@ -1084,10 +1180,8 @@ namespace PromptFighters.GameFlow
             // ── ロビー設定トグル（実況・天使・CPU） ──
             BuildLobbyToggles(_panel.transform, -372f);
 
-            // ── ステージ選択（◀ ステージ名 ▶） ──
-            BuildStageSelector(_panel.transform, -450f);
-
             BuildTrainingPanel();
+            BuildStageSelectPanel();
         }
 
         void RefreshGamepadLabels()
@@ -2247,9 +2341,7 @@ namespace PromptFighters.GameFlow
             var data2 = PromptCharacterFactory.Clone(GetPreset(false));
             EnsureSpriteSet(data1);
             EnsureSpriteSet(data2);
-            _panel.SetActive(false);
-            HideGamepadCursors();
-            BattleManager.Instance.StartCountdown(data1, data2);
+            ShowStageSelectPanel(data1, data2);
         }
 
         void OnGeneratePressed()
