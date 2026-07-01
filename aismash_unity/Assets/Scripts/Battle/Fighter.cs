@@ -20,6 +20,9 @@ namespace PromptFighters.Battle
         public float moveSpeed = 5f;
         public float airMoveSpeed = 4f;
         public float jumpForce = 12f;
+        // ジャンプの最高到達点を全キャラ一律で0.7倍にする係数。
+        // 到達高さは初速の2乗に比例するため、係数は√0.7 を用いる。
+        public const float JumpForceScale = 0.8366600265f; // Sqrt(0.7)
         public int maxAirJumps = 1;
         [Range(0.45f, 0.85f)] public float shortHopMultiplier = 0.62f;
         public float fastFallSpeed = 7.5f;
@@ -953,7 +956,8 @@ namespace PromptFighters.Battle
             CurrentHP = maxHP;
             moveSpeed = Mathf.Clamp(stats.groundMoveSpeed, 2.5f, 9.5f);
             airMoveSpeed = Mathf.Clamp(stats.airMoveSpeed, 2.0f, 8.5f);
-            jumpForce = Mathf.Clamp(stats.jumpForce, 7f, 19f);
+            // ジャンプの最高到達点を全キャラ一律で0.7倍に抑える（既存キャラ含む）。
+            jumpForce = Mathf.Clamp(stats.jumpForce, 7f, 19f) * JumpForceScale;
             airJumpHeightMultiplier = Mathf.Clamp(stats.airJumpHeightMultiplier, 0.3f, 0.6f);
             walkSpeedRatio = Mathf.Clamp(stats.walkSpeedRatio, 0.2f, 0.5f);
             maxGuardDurability = Mathf.Clamp(stats.guardDurability, 40f, 90f) * 2f;
