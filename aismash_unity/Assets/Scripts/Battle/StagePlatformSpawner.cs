@@ -64,16 +64,45 @@ namespace PromptFighters.Battle
         public List<Collider2D> GetColliders() => _colliders;
 
         // ── スプライト読み込み ──────────────────────────────────────────
-        // Sprite として import されていない場合でも Texture2D から生成してフォールバックする。
+        // Sprite 読み込み → グリーンバック除去（G チャンネルが R・B を大きく上回る画素を透過）。
+        // isReadable が false の場合は除去をスキップし、そのまま返す。
         static Sprite LoadSprite(string path)
         {
             if (path == null) return null;
-            var s = Resources.Load<Sprite>(path);
-            if (s != null) return s;
-            var tex = Resources.Load<Texture2D>(path);
-            if (tex == null) return null;
+            var sprite = Resources.Load<Sprite>(path);
+            Texture2D src = sprite != null ? sprite.texture
+                                           : Resources.Load<Texture2D>(path);
+            if (src == null) return null;
+            return Chromakey(src, 100f);
+        }
+
+        static Sprite Chromakey(Texture2D src, float ppu)
+        {
+            if (!src.isReadable)
+                return Sprite.Create(src, new Rect(0, 0, src.width, src.height),
+                                     new Vector2(0.5f, 0.5f), ppu);
+
+            var pixels = src.GetPixels32();
+            bool modified = false;
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                Color32 p = pixels[i];
+                // G が R・B の両方を 1.4 倍以上上回りかつ一定値以上 → グリーンバック
+                if (p.g > 80 && p.g > p.r * 1.4f && p.g > p.b * 1.4f)
+                {
+                    pixels[i] = new Color32(p.r, p.g, p.b, 0);
+                    modified = true;
+                }
+            }
+            if (!modified)
+                return Sprite.Create(src, new Rect(0, 0, src.width, src.height),
+                                     new Vector2(0.5f, 0.5f), ppu);
+
+            var tex = new Texture2D(src.width, src.height, TextureFormat.RGBA32, false);
+            tex.SetPixels32(pixels);
+            tex.Apply();
             return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
-                                 new Vector2(0.5f, 0.5f), 100f);
+                                 new Vector2(0.5f, 0.5f), ppu);
         }
 
         static Sprite _defaultPlatSprite; static bool _platTried;
