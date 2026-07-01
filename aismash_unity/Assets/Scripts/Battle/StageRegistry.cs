@@ -15,6 +15,7 @@ namespace PromptFighters.Battle
                 displayName    = "天空浮遊アリーナ",
                 backgroundPath = "Art/stage1",
                 stageHalfWidth = 6.5f,
+                spawnY         = -2.3f,
                 platforms = new[]
                 {
                     new PlatformDef { x = -3.2f, y = 0.1f, width = 3.0f },
@@ -30,6 +31,7 @@ namespace PromptFighters.Battle
                 backgroundPath     = "Art/stage2",
                 platformSpritePath = "Stage/stage2_platform",
                 stageHalfWidth     = 6.0f,
+                spawnY             = -2.6f,
                 platforms = new[]
                 {
                     new PlatformDef { x =  0.0f, y =  0.9f, width = 2.5f },
@@ -46,6 +48,7 @@ namespace PromptFighters.Battle
                 backgroundPath     = "Art/stage3",
                 platformSpritePath = "Stage/stage3_platform",
                 stageHalfWidth     = 6.5f,
+                spawnY             = -2.6f,
                 platforms = new[]
                 {
                     new PlatformDef { x = -3.0f, y = 0.5f, width = 2.8f,
@@ -64,6 +67,7 @@ namespace PromptFighters.Battle
                 platformSpritePath = "Stage/stage4_platform",
                 wallSpritePath     = "Stage/stage4_wall",
                 stageHalfWidth     = 7.0f,
+                spawnY             = -2.6f,
                 platforms = new[]
                 {
                     new PlatformDef { x = -5.0f, y = 1.2f, width = 2.5f },
@@ -82,6 +86,7 @@ namespace PromptFighters.Battle
                 displayName    = "決戦の戦場",
                 backgroundPath = "Art/stage5",
                 stageHalfWidth = 7.5f,
+                spawnY         = -2.6f,
                 platforms      = System.Array.Empty<PlatformDef>(),
                 walls          = System.Array.Empty<WallDef>(),
             },

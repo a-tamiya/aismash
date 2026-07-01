@@ -26,6 +26,7 @@ namespace PromptFighters.Battle
         public string platformSpritePath;  // null = デフォルト "Stage/platform"
         public string wallSpritePath;      // null = デフォルト "Stage/wall"
         public float  stageHalfWidth = 6.5f;
+        public float  spawnY        = -2.3f;  // キャラのスポーンY（StageGroundYにも使われる）
         public PlatformDef[] platforms;
         public WallDef[]     walls;
     }

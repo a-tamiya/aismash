@@ -27,6 +27,13 @@ namespace PromptFighters.Battle
             _rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
             _rb.interpolation = RigidbodyInterpolation2D.Interpolate;
             _prevPos = new Vector2(originX, originY);
+
+            // 台の移動が摩擦でキャラに水平速度を与えて待機/ダッシュアニメが
+            // 高速に切り替わるのを防ぐため摩擦ゼロにする
+            var mat = new PhysicsMaterial2D("MovingPlatformNoFriction");
+            mat.friction   = 0f;
+            mat.bounciness = 0f;
+            _col.sharedMaterial = mat;
         }
 
         void FixedUpdate()
