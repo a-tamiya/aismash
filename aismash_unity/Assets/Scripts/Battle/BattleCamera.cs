@@ -108,19 +108,18 @@ namespace PromptFighters.Battle
 
             // 注視中心を背景内にクランプ（黒い空間を映さない）。
             float halfW = needSize * aspect;
-            float halfH = needSize;
             float needCx = (minX + maxX) * 0.5f;
-            float needCy = (minY + maxY) * 0.5f;
+            // 縦位置は既定の高さに固定する（平坦ステージ前提／画面酔い防止／キャラの立ち位置を
+            // 画面の一定の高さに保つ）。上への吹っ飛びは場外インジケータで補う。
+            float needCy = _defaultPos.y;
             if (_hasBounds)
             {
                 needCx = ClampCenter(needCx, halfW, _bgMinX, _bgMaxX, _defaultPos.x);
-                needCy = ClampCenter(needCy, halfH, _bgMinY, _bgMaxY, _defaultPos.y);
             }
             else
             {
                 float maxCamX = Mathf.Max(0f, bm.stageHalfWidth + 1.5f - halfW);
                 needCx = Mathf.Clamp(needCx, -maxCamX, maxCamX);
-                needCy = Mathf.Max(_defaultPos.y, needCy);
             }
             Vector3 needPos = new Vector3(needCx, needCy, _defaultPos.z);
 
