@@ -74,6 +74,17 @@ namespace PromptFighters.Battle
                     new WallDef { x = 0f, y = -0.2f, width = 0.8f, height = 3.2f },
                 },
             },
+
+            // Stage 5: 決戦の戦場 — 設置物なしのフラットステージ
+            new StageDefinition
+            {
+                id             = "stage5",
+                displayName    = "決戦の戦場",
+                backgroundPath = "Art/stage5",
+                stageHalfWidth = 7.5f,
+                platforms      = System.Array.Empty<PlatformDef>(),
+                walls          = System.Array.Empty<WallDef>(),
+            },
         };
     }
 }
