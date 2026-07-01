@@ -180,26 +180,9 @@ namespace PromptFighters.UI
             StartCoroutine(HideAfter(2.6f));
         }
 
+        // ラウンド勝利時の「1P WIN!」テキストは出さない（KO画像＝KoBannerのみで表現する）。
         void OnRoundEnd(int winnerIdx, int p1wins, int p2wins)
         {
-            if (_display == null) return;
-            // KO演出中はそれが終わってから勝敗バナーを出す（KOが即上書きされないように）。
-            float delay = (_koBanner != null && _koBanner.Active) ? 1.9f : 0f;
-            StopAllCoroutines();
-            StartCoroutine(RoundWinRoutine(winnerIdx, delay));
-        }
-
-        IEnumerator RoundWinRoutine(int winnerIdx, float delay)
-        {
-            if (delay > 0f) yield return new WaitForSecondsRealtime(delay);
-            string label = winnerIdx == 0 ? "1P WIN!" : winnerIdx == 1 ? "2P WIN!" : "DRAW";
-            Color col    = winnerIdx == 0 ? UITheme.P1Neon
-                         : winnerIdx == 1 ? UITheme.P2Neon
-                         :                  UITheme.Gold;
-            ShowText(label, 96f, col);
-            StartCoroutine(Punch(1.4f, 1.0f, 0.20f));
-            StartCoroutine(Flash(new Color(col.r, col.g, col.b, 0f), 0.30f, 0.40f));
-            StartCoroutine(HideAfter(1.8f));
         }
 
         void OnRoundStart(int round)
