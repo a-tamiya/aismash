@@ -7,13 +7,11 @@ namespace PromptFighters.Battle
     // 中段プラットフォームを生成・管理する。BattleManager が Awake で自動追加する。
     public class StagePlatformSpawner : MonoBehaviour
     {
-        public static bool PlatformsEnabled = true;
-
         // (x, y, 幅)
         static readonly (float x, float y, float w)[] Defs =
         {
-            (-3.2f, 0.38f, 3.0f),
-            ( 3.2f, 0.38f, 3.0f),
+            (-3.2f, 0.1f, 3.0f),
+            ( 3.2f, 0.1f, 3.0f),
         };
 
         readonly List<GameObject>  _active    = new List<GameObject>();
@@ -28,7 +26,6 @@ namespace PromptFighters.Battle
         public void SpawnPlatforms()
         {
             DespawnAll();
-            if (!PlatformsEnabled) return;
             foreach (var (x, y, w) in Defs)
             {
                 var go  = Build(new Vector2(x, y), w);

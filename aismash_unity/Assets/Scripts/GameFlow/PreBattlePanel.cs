@@ -121,8 +121,6 @@ namespace PromptFighters.GameFlow
         TextMeshProUGUI _commentaryToggleLabel;
         Image _angelToggleBg;
         TextMeshProUGUI _angelToggleLabel;
-        Image _platformToggleBg;
-        TextMeshProUGUI _platformToggleLabel;
         Image _cpuToggleBg;
         TextMeshProUGUI _cpuToggleLabel;
         Image _cpuSideToggleBg;
@@ -735,10 +733,10 @@ namespace PromptFighters.GameFlow
             if (_controlsPanel != null) _controlsPanel.SetActive(false);
         }
 
-        // 実況・天使・台・CPU のロビートグルを1行に並べて生成する。キャラ選択画面で使用。
+        // 実況・天使・CPU のロビートグルを1行に並べて生成する。キャラ選択画面で使用。
         void BuildLobbyToggles(Transform parent, float rowY)
         {
-            float[] xs = { -270f, -90f, 90f, 270f };
+            float[] xs = { -270f, 0f, 270f };
             var toggleSize = new Vector2(168f, 40f);
             const float ToggleFontSize = 17f;
 
@@ -758,16 +756,8 @@ namespace PromptFighters.GameFlow
             _angelToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
             _angelToggleLabel.fontSize = ToggleFontSize;
 
-            var platformBtn = MakeButton(parent, "PlatformToggle", PlatformToggleText(),
-                new Vector2(xs[2], rowY), toggleSize, OnPlatformToggle, ToggleOnColor);
-            StyleArcadeButton(platformBtn, ToggleOnColor, 10f);
-            _platformToggleBg    = platformBtn.GetComponent<Image>();
-            _platformToggleLabel = platformBtn.GetComponentInChildren<TextMeshProUGUI>();
-            _platformToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
-            _platformToggleLabel.fontSize = ToggleFontSize;
-
             var cpuBtn = MakeButton(parent, "CpuToggle", CpuToggleText(),
-                new Vector2(xs[3], rowY), toggleSize, OnCpuToggle, ToggleOnColor);
+                new Vector2(xs[2], rowY), toggleSize, OnCpuToggle, ToggleOnColor);
             StyleArcadeButton(cpuBtn, ToggleOnColor, 10f);
             _cpuToggleBg    = cpuBtn.GetComponent<Image>();
             _cpuToggleLabel = cpuBtn.GetComponentInChildren<TextMeshProUGUI>();
@@ -854,8 +844,6 @@ namespace PromptFighters.GameFlow
             PromptFighters.UI.CommentaryController.Enabled ? "実況 ON" : "実況 OFF";
         static string AngelToggleText() =>
             PromptFighters.UI.AngelController.Enabled ? "アイテム ON" : "アイテム OFF";
-        static string PlatformToggleText() =>
-            PromptFighters.Battle.StagePlatformSpawner.PlatformsEnabled ? "台 ON" : "台 OFF";
         static string CpuToggleText()
         {
             switch (PromptFighters.Battle.FighterAI.Level)
@@ -876,13 +864,6 @@ namespace PromptFighters.GameFlow
         void OnAngelToggle()
         {
             PromptFighters.UI.AngelController.Enabled = !PromptFighters.UI.AngelController.Enabled;
-            RefreshToggleVisuals();
-        }
-
-        void OnPlatformToggle()
-        {
-            PromptFighters.Battle.StagePlatformSpawner.PlatformsEnabled =
-                !PromptFighters.Battle.StagePlatformSpawner.PlatformsEnabled;
             RefreshToggleVisuals();
         }
 
@@ -939,14 +920,11 @@ namespace PromptFighters.GameFlow
         {
             bool ce = PromptFighters.UI.CommentaryController.Enabled;
             bool ae = PromptFighters.UI.AngelController.Enabled;
-            bool pe = PromptFighters.Battle.StagePlatformSpawner.PlatformsEnabled;
             bool cpu = PromptFighters.Battle.FighterAI.Enabled;
             if (_commentaryToggleBg  != null) _commentaryToggleBg.color  = ce ? ToggleOnColor  : ToggleOffColor;
             if (_commentaryToggleLabel != null) _commentaryToggleLabel.text = CommentaryToggleText();
             if (_angelToggleBg       != null) _angelToggleBg.color       = ae ? ToggleOnColor  : ToggleOffColor;
             if (_angelToggleLabel    != null) _angelToggleLabel.text    = AngelToggleText();
-            if (_platformToggleBg    != null) _platformToggleBg.color    = pe ? ToggleOnColor  : ToggleOffColor;
-            if (_platformToggleLabel != null) _platformToggleLabel.text  = PlatformToggleText();
             if (_cpuToggleBg         != null) _cpuToggleBg.color         = cpu ? ToggleOnColor : ToggleOffColor;
             if (_cpuToggleLabel      != null) _cpuToggleLabel.text       = CpuToggleText();
             // CPU側トグルはCPU有効時のみ点灯。OFF時はダミー表示（暗色）。
