@@ -392,6 +392,7 @@ namespace PromptFighters.Battle
             if (Phase != BattlePhase.Setup) return;
 
             ApplyMode();
+            StageManager.Apply(this);
             GetComponent<StagePlatformSpawner>()?.SpawnPlatforms();
             ApplyCharacters(data1, data2);
             if (Mode == BattleMode.CoopVsBoss) ApplyBoss();

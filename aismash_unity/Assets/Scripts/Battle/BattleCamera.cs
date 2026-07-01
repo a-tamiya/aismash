@@ -150,6 +150,9 @@ namespace PromptFighters.Battle
             transform.position = Vector3.Lerp(transform.position, _targetPos, kPos);
         }
 
+        // 背景スプライトが差し替わった後に呼んで境界キャッシュを再計算する。
+        public void RefreshStageBounds() => CacheStageBounds();
+
         // 指定した位置・サイズのカメラ表示範囲が背景スプライト内に収まるようクランプした位置を返す。
         // KOズームなど BattleCamera の追従が止まる演出から呼ぶ用。
         public Vector3 ClampToStageBounds(Vector3 pos, float orthoSize)

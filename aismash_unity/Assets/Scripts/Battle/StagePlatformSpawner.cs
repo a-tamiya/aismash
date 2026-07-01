@@ -4,18 +4,11 @@ using PromptFighters.Battle.Skills;
 
 namespace PromptFighters.Battle
 {
-    // 中段プラットフォームを生成・管理する。BattleManager が Awake で自動追加する。
+    // 選択中の StageDefinition に従って台・壁を生成・管理する。BattleManager が Awake で自動追加する。
     public class StagePlatformSpawner : MonoBehaviour
     {
-        // (x, y, 幅)
-        static readonly (float x, float y, float w)[] Defs =
-        {
-            (-3.2f, 0.1f, 3.0f),
-            ( 3.2f, 0.1f, 3.0f),
-        };
-
-        readonly List<GameObject>  _active    = new List<GameObject>();
-        readonly List<Collider2D>  _colliders = new List<Collider2D>();
+        readonly List<GameObject> _active    = new List<GameObject>();
+        readonly List<Collider2D> _colliders = new List<Collider2D>();
 
         void Start()
         {
@@ -26,12 +19,38 @@ namespace PromptFighters.Battle
         public void SpawnPlatforms()
         {
             DespawnAll();
-            foreach (var (x, y, w) in Defs)
+            var stage = StageRegistry.Current;
+
+            if (stage.platforms != null)
             {
-                var go  = Build(new Vector2(x, y), w);
-                var col = go.GetComponent<Collider2D>();
-                _active.Add(go);
-                if (col != null) _colliders.Add(col);
+                foreach (var p in stage.platforms)
+                {
+                    var go = BuildPlatform(new Vector2(p.x, p.y), p.width, stage.platformSpritePath);
+                    if (p.moving)
+                    {
+                        go.GetComponent<Rigidbody2D>().bodyType = RigidbodyType2D.Kinematic;
+                        var mp = go.AddComponent<MovingPlatform>();
+                        mp.originX     = p.x;
+                        mp.originY     = p.y;
+                        mp.range       = p.moveRange;
+                        mp.period      = p.movePeriod;
+                        mp.phaseOffset = p.phaseOffset;
+                    }
+                    var col = go.GetComponent<Collider2D>();
+                    _active.Add(go);
+                    if (col != null) _colliders.Add(col);
+                }
+            }
+
+            if (stage.walls != null)
+            {
+                foreach (var w in stage.walls)
+                {
+                    var go = BuildWall(new Vector2(w.x, w.y), w.width, w.height, stage.wallSpritePath);
+                    var col = go.GetComponent<Collider2D>();
+                    _active.Add(go);
+                    if (col != null) _colliders.Add(col);
+                }
             }
         }
 
@@ -44,14 +63,23 @@ namespace PromptFighters.Battle
 
         public List<Collider2D> GetColliders() => _colliders;
 
-        static Sprite _platformSprite; static bool _platTried;
-        static Sprite PlatformSprite()
+        // ── スプライトキャッシュ ────────────────────────────────────────
+        static Sprite _defaultPlatSprite; static bool _platTried;
+        static Sprite DefaultPlatformSprite()
         {
-            if (!_platTried) { _platformSprite = Resources.Load<Sprite>("Stage/platform"); _platTried = true; }
-            return _platformSprite;
+            if (!_platTried) { _defaultPlatSprite = Resources.Load<Sprite>("Stage/platform"); _platTried = true; }
+            return _defaultPlatSprite;
         }
 
-        static GameObject Build(Vector2 center, float width)
+        static Sprite _defaultWallSprite; static bool _wallTried;
+        static Sprite DefaultWallSprite()
+        {
+            if (!_wallTried) { _defaultWallSprite = Resources.Load<Sprite>("Stage/wall"); _wallTried = true; }
+            return _defaultWallSprite;
+        }
+
+        // ── 踏み台プラットフォーム ──────────────────────────────────────
+        static GameObject BuildPlatform(Vector2 center, float width, string spritePath)
         {
             const float ColliderH = 0.30f;
             const float PlatformOpaqueTopFromPivotPixels = 176f;
@@ -59,7 +87,7 @@ namespace PromptFighters.Battle
             var go = new GameObject("StagePlatform");
             go.transform.position = center;
 
-            // 台の立体感を出すドロップシャドウ（台の真下に柔らかい暗い楕円）。
+            // ドロップシャドウ
             var shadowGo = new GameObject("PlatShadow");
             shadowGo.transform.SetParent(go.transform, false);
             shadowGo.transform.localPosition = new Vector3(0f, -0.18f, 0f);
@@ -67,13 +95,13 @@ namespace PromptFighters.Battle
             var shadowSr = shadowGo.AddComponent<SpriteRenderer>();
             shadowSr.sprite       = RuntimeSprite.Circle();
             shadowSr.color        = new Color(0f, 0f, 0f, 0.28f);
-            shadowSr.sortingOrder = -6; // 台ビジュアル(-5)より奥、背景(-10)より手前
+            shadowSr.sortingOrder = -6;
 
             var rb = go.AddComponent<Rigidbody2D>();
             rb.bodyType = RigidbodyType2D.Static;
 
             var col = go.AddComponent<BoxCollider2D>();
-            col.size          = new Vector2(width, ColliderH);
+            col.size           = new Vector2(width, ColliderH);
             col.usedByEffector = true;
 
             var eff = go.AddComponent<PlatformEffector2D>();
@@ -82,30 +110,68 @@ namespace PromptFighters.Battle
             eff.surfaceArc        = 170f;
             eff.rotationalOffset  = 0f;
 
-            var sprite = PlatformSprite();
+            var sprite = (spritePath != null ? Resources.Load<Sprite>(spritePath) : null)
+                         ?? DefaultPlatformSprite();
+
             var vis = new GameObject("PlatVisual");
             vis.transform.SetParent(go.transform, false);
             var sr = vis.AddComponent<SpriteRenderer>();
-            sr.sortingOrder = -5; // ファイターより奥（背景-10より手前）に置き、キャラが手前に立って見える
+            sr.sortingOrder = -5;
 
             if (sprite != null)
             {
                 sr.sprite = sprite;
                 sr.color  = Color.white;
-                float targetW = width * 1.12f;                       // 端を少しかぶせる
+                float targetW = width * 1.12f;
                 float scale   = targetW / Mathf.Max(0.01f, sprite.bounds.size.x);
                 vis.transform.localScale = new Vector3(scale, scale, 1f);
-                // 透明余白ではなく、台画像の不透明上端をコライダ上面に合わせる。
-                float opaqueTop = PlatformOpaqueTopFromPivotPixels / sprite.pixelsPerUnit * scale;
+                float opaqueTop   = PlatformOpaqueTopFromPivotPixels / sprite.pixelsPerUnit * scale;
                 float colliderTop = ColliderH * 0.5f;
                 vis.transform.localPosition = new Vector3(0f, colliderTop - opaqueTop, 0f);
             }
             else
             {
-                // フォールバック：従来の青い半透明バー
                 sr.sprite = RuntimeSprite.Square();
                 sr.color  = new Color(0.50f, 0.78f, 1.0f, 0.80f);
                 vis.transform.localScale = new Vector3(width, 0.22f, 1f);
+            }
+
+            return go;
+        }
+
+        // ── 壁型オブスタクル（全方向コライダー）────────────────────────
+        static GameObject BuildWall(Vector2 center, float width, float height, string spritePath)
+        {
+            var go = new GameObject("StageWall");
+            go.transform.position = center;
+
+            var rb = go.AddComponent<Rigidbody2D>();
+            rb.bodyType = RigidbodyType2D.Static;
+
+            var col = go.AddComponent<BoxCollider2D>();
+            col.size = new Vector2(width, height);
+
+            var sprite = (spritePath != null ? Resources.Load<Sprite>(spritePath) : null)
+                         ?? DefaultWallSprite();
+
+            var vis = new GameObject("WallVisual");
+            vis.transform.SetParent(go.transform, false);
+            var sr = vis.AddComponent<SpriteRenderer>();
+            sr.sortingOrder = -5;
+
+            if (sprite != null)
+            {
+                sr.sprite = sprite;
+                sr.color  = Color.white;
+                float sx = width  * 1.05f / Mathf.Max(0.01f, sprite.bounds.size.x);
+                float sy = height * 1.05f / Mathf.Max(0.01f, sprite.bounds.size.y);
+                vis.transform.localScale = new Vector3(sx, sy, 1f);
+            }
+            else
+            {
+                sr.sprite = RuntimeSprite.Square();
+                sr.color  = new Color(0.55f, 0.45f, 0.35f, 0.90f);
+                vis.transform.localScale = new Vector3(width, height, 1f);
             }
 
             return go;
