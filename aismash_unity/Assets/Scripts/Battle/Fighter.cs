@@ -173,6 +173,9 @@ namespace PromptFighters.Battle
         // ガードバリア表示（耐久値に比例して full/mid/low を切替）
         SpriteRenderer _guardBarrier;
         static Sprite _gbFull, _gbMid, _gbLow; static bool _gbTried;
+        // スマッシュ溜め中のオーラ表示（溜め量に比例）
+        SpriteRenderer _smashAura;
+        static Sprite _smashAuraSprite; static bool _smashAuraTried;
         float _sealedSlotTimer;
         float _superKnockbackOrigWeight = -1f;
 
@@ -245,6 +248,7 @@ namespace PromptFighters.Battle
             _bodyCollider   = GetComponent<Collider2D>();
             EnsureVisualRenderer();
             CreateGuardBarrier();
+            CreateSmashAura();
             ApplyColliderScaleCorrection();
             CreateHurtboxDebugVisual();
             CreateShadow();
@@ -335,6 +339,7 @@ namespace PromptFighters.Battle
             TickBurn();
             TickGuard();
             UpdateGuardBarrier();
+            UpdateSmashAura();
             TickGrab();
             TickDodge();
             TickDashDust();
@@ -1431,6 +1436,44 @@ namespace PromptFighters.Battle
             Color baseC = Color.Lerp(Color.white, tint, 0.25f);
             baseC.a = 0.82f + 0.18f * Mathf.Sin(Time.time * 8f);
             _guardBarrier.color = baseC;
+        }
+
+        void CreateSmashAura()
+        {
+            if (!_smashAuraTried) { _smashAuraTried = true; _smashAuraSprite = Resources.Load<Sprite>("Effects/smash_charge"); }
+            if (_smashAuraSprite == null) return; // 画像が無ければ生成しない
+            var go = new GameObject("SmashAura");
+            go.transform.SetParent(transform, false);
+            _smashAura = go.AddComponent<SpriteRenderer>();
+            _smashAura.sprite = _smashAuraSprite;
+            if (_sprite != null)
+            {
+                _smashAura.sortingLayerID = _sprite.sortingLayerID;
+                _smashAura.sortingOrder   = _sprite.sortingOrder + 1; // キャラ手前・バリアより奥
+            }
+            _smashAura.enabled = false;
+        }
+
+        // スマッシュ溜め中、溜め量に比例したオーラを出し続ける（発動時ではなく溜め中に表示）。
+        void UpdateSmashAura()
+        {
+            if (_smashAura == null) return;
+            if (_smashChargeVisualTimer <= 0f) { if (_smashAura.enabled) _smashAura.enabled = false; return; }
+
+            float charge = Mathf.Clamp01(_smashChargeVisual01);
+            float eff = _charSizeScale * PermSizeMult;
+            // 溜めが進むほど大きく（1.6→2.6倍）＋脈動。
+            float grow = Mathf.Lerp(1.6f, 2.6f, charge);
+            float pulse = 1f + 0.08f * Mathf.Sin(Time.time * 26f);
+            float sc = (grow * eff * pulse) / Mathf.Max(0.01f, _smashAuraSprite.bounds.size.y);
+            _smashAura.transform.localScale    = new Vector3(sc, sc, 1f);
+            _smashAura.transform.localPosition = new Vector3(0f, 0.9f * eff, 0f);
+            _smashAura.enabled = true;
+
+            // 黄→橙のチャージ色。溜めが浅いうちは薄く、深いほど濃く。
+            Color chargeColor = Color.Lerp(new Color(1f, 0.85f, 0.15f), new Color(1f, 0.4f, 0.05f), charge);
+            chargeColor.a = Mathf.Lerp(0.45f, 0.95f, charge);
+            _smashAura.color = chargeColor;
         }
 
         void BreakGuard(float duration)

@@ -199,9 +199,7 @@ namespace PromptFighters.Battle.Skills
                 totalDuration = Mathf.Max(totalDuration, firstBeamTime + skill.parameters.active_time + recovery);
             _fighter.BeginSkillRecovery(totalDuration);
             _fighter.ShowSkillSprite(skill.slot, totalDuration);
-            if (skill.slot == SkillSlot.SmashSide)
-                PromptFighters.Battle.SimpleFX.SmashFlash(
-                    _fighter.transform.position + Vector3.up * (1.0f * _fighter.CurrentSizeScale));
+            // スマッシュのオーラは溜め中(Fighter.UpdateSmashAura)で表示するため、発動時には出さない。
             float whiffDelay = WhiffCheckDelay(skill);
             if (whiffDelay > 0f)
                 StartCoroutine(PlayWhiffIfMissed(serial, whiffDelay));

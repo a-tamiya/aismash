@@ -44,7 +44,7 @@ namespace PromptFighters.Battle
         public static void Shockwave(Vector3 feetPos, float scale = 1f)
         {
             var s = Fx("shockwave"); if (s == null) { Dust(feetPos, 3, scale); return; }
-            Spawn(s, feetPos + Vector3.up * 0.12f, 3.0f * scale, 0.4f, 1.7f, 0.4f, Color.white, 8, 0f);
+            Spawn(s, feetPos + Vector3.up * 0.1f, 2.1f * scale, 0.4f, 1.55f, 0.4f, Color.white, 8, 0f);
         }
 
         // 強化（上昇）・弱体（下降）オーラの一瞬の演出。
@@ -90,8 +90,8 @@ namespace PromptFighters.Battle
         {
             var s = DustSprite();
             if (s == null) { GlowFallback(feetPos, Mathf.Max(count, 3), scale); return; }
-            Spawn(s, feetPos + Vector3.up * 0.25f, 1.6f * scale, 0.55f, 1.3f, 0.45f,
-                  new Color(1f, 1f, 1f, 0.95f), 9, 0.32f);
+            Spawn(s, feetPos + Vector3.up * 0.18f, 1.15f * scale, 0.55f, 1.25f, 0.4f,
+                  new Color(1f, 1f, 1f, 0.95f), 9, 0.28f);
         }
 
         // 地上ジャンプ：横に広がる踏み込みの煙。
@@ -99,8 +99,8 @@ namespace PromptFighters.Battle
         {
             var s = JumpGSprite();
             if (s == null) { Dust(feetPos, 3, 0.9f); return; }
-            Spawn(s, feetPos + Vector3.up * 0.25f, 2.8f, 0.7f, 1.12f, 0.34f,
-                  new Color(1f, 1f, 1f, 0.95f), 9, 0.12f);
+            Spawn(s, feetPos + Vector3.up * 0.18f, 1.9f, 0.7f, 1.1f, 0.32f,
+                  new Color(1f, 1f, 1f, 0.95f), 9, 0.1f);
         }
 
         // 空中ジャンプ：エネルギーリング。
@@ -108,7 +108,7 @@ namespace PromptFighters.Battle
         {
             var s = JumpASprite();
             if (s == null) { Dust(feetPos, 3, 0.8f); return; }
-            Spawn(s, feetPos + Vector3.up * 0.45f, 2.1f, 0.5f, 1.5f, 0.4f,
+            Spawn(s, feetPos + Vector3.up * 0.4f, 1.45f, 0.5f, 1.4f, 0.38f,
                   Color.white, 9, 0f);
         }
 
