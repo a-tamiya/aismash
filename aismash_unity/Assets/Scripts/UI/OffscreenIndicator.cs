@@ -173,16 +173,15 @@ namespace PromptFighters.UI
                 return;
             }
 
-            // 画面中心から対象方向へ、内側マージンの矩形境界までクランプ。
-            Vector2 c = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+            // スクリーン座標を端マージン矩形内にクランプ。
+            // レイキャスト方式だと上方向に大きく外れた場合にX位置が中央へ引き寄せられるため、
+            // 単純なクランプで「キャラのいる方向の端」に正確に配置する。
+            Vector2 edge = new Vector2(
+                Mathf.Clamp(sp.x, EdgeMargin, Screen.width  - EdgeMargin),
+                Mathf.Clamp(sp.y, EdgeMargin, Screen.height - EdgeMargin));
+            Vector2 c   = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
             Vector2 dir = new Vector2(sp.x, sp.y) - c;
             if (dir.sqrMagnitude < 0.001f) dir = Vector2.up;
-            float halfW = Screen.width  * 0.5f - EdgeMargin;
-            float halfH = Screen.height * 0.5f - EdgeMargin;
-            float tx = Mathf.Abs(dir.x) > 0.0001f ? halfW / Mathf.Abs(dir.x) : float.MaxValue;
-            float ty = Mathf.Abs(dir.y) > 0.0001f ? halfH / Mathf.Abs(dir.y) : float.MaxValue;
-            float t = Mathf.Min(tx, ty);
-            Vector2 edge = c + dir * t;
 
             if (!m.go.activeSelf) m.go.SetActive(true);
 

@@ -150,6 +150,18 @@ namespace PromptFighters.Battle
             transform.position = Vector3.Lerp(transform.position, _targetPos, kPos);
         }
 
+        // 指定した位置・サイズのカメラ表示範囲が背景スプライト内に収まるようクランプした位置を返す。
+        // KOズームなど BattleCamera の追従が止まる演出から呼ぶ用。
+        public Vector3 ClampToStageBounds(Vector3 pos, float orthoSize)
+        {
+            if (!_hasBounds) return pos;
+            float halfW = orthoSize * Mathf.Max(0.1f, _cam.aspect);
+            float halfH = orthoSize;
+            float cx = ClampCenter(pos.x, halfW, _bgMinX, _bgMaxX, _defaultPos.x);
+            float cy = ClampCenter(pos.y, halfH, _bgMinY, _bgMaxY, _defaultPos.y);
+            return new Vector3(cx, cy, pos.z);
+        }
+
         // 表示半幅 half の枠が [min,max] 内に収まる中心値を返す。
         // 枠が範囲より大きい場合は範囲中心へ寄せる。
         static float ClampCenter(float center, float half, float min, float max, float fallback)

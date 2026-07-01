@@ -825,13 +825,20 @@ namespace PromptFighters.Battle
 
             Time.timeScale = 0.15f;
 
-            // カメラをKO位置へズームイン
+            // カメラをKO位置へズームイン（背景スプライト境界内にクランプして無の空間を映さない）
             if (_mainCam != null)
             {
-                Vector3 targetPos = new Vector3(
-                    Mathf.Clamp(koPosition.x, -stageHalfWidth * 0.6f, stageHalfWidth * 0.6f),
+                var battleCamera = _mainCam.GetComponent<BattleCamera>();
+                Vector3 rawTarget = new Vector3(
+                    koPosition.x,
                     _mainCam.transform.position.y,
                     _mainCam.transform.position.z);
+                Vector3 targetPos = battleCamera != null
+                    ? battleCamera.ClampToStageBounds(rawTarget, zoomInSize)
+                    : new Vector3(
+                        Mathf.Clamp(koPosition.x, -stageHalfWidth * 0.6f, stageHalfWidth * 0.6f),
+                        _mainCam.transform.position.y,
+                        _mainCam.transform.position.z);
                 float elapsed = 0f;
                 Vector3 startPos = _mainCam.transform.position;
                 float startSize  = _mainCam.orthographicSize;
