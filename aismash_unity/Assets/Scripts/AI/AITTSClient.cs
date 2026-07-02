@@ -35,6 +35,11 @@ namespace PromptFighters.AI
         // （毎回失敗リクエストを挟む無駄なレイテンシとログを避ける）。
         static bool _expressiveUnavailable;
 
+        // Realtime API音声合成（最も人間らしい・演技指示対応）の連続失敗回数。
+        // 2回連続で失敗したらこのセッションでは使わない（一時的な通信エラー1回では諦めない）。
+        static int _realtimeTtsFailures;
+        const int RealtimeTtsMaxFailures = 2;
+
         public static Coroutine Speak(MonoBehaviour runner, string text,
             AudioSource audioSource,
             Action onComplete = null,
@@ -56,6 +61,26 @@ namespace PromptFighters.AI
             {
                 onError?.Invoke("APIキー未設定");
                 yield break;
+            }
+
+            // 演技指示がある場合は、まず最も人間らしいRealtime API音声合成を試す。
+            // 失敗したら従来のHTTP TTS（表現付き→tts-1）へフォールバックする。
+            if (!string.IsNullOrEmpty(instructions) && _realtimeTtsFailures < RealtimeTtsMaxFailures)
+            {
+                AudioClip rtClip = null;
+                string rtErr = null;
+                yield return RealtimeAudioClient.Synthesize(text, instructions, key,
+                    c => rtClip = c, e => rtErr = e);
+                if (rtClip != null)
+                {
+                    _realtimeTtsFailures = 0;
+                    yield return PlayClip(rtClip, audioSource, volume);
+                    onComplete?.Invoke();
+                    yield break;
+                }
+                _realtimeTtsFailures++;
+                Debug.LogWarning($"[TTS] Realtime音声合成失敗（{rtErr}）。HTTP TTSへフォールバックします" +
+                    (_realtimeTtsFailures >= RealtimeTtsMaxFailures ? "（以後このセッションではHTTP TTSを使用）" : ""));
             }
 
             string safeText = text
@@ -123,6 +148,13 @@ namespace PromptFighters.AI
             AudioClip clip = WavToAudioClip(wavData, "TTS");
             if (clip == null) { onError?.Invoke("WAV変換失敗"); yield break; }
 
+            yield return PlayClip(clip, audioSource, volume);
+            onComplete?.Invoke();
+        }
+
+        // クリップを再生し、再生完了まで実時間で待って破棄する（発話中フラグも更新）。
+        static IEnumerator PlayClip(AudioClip clip, AudioSource audioSource, float volume)
+        {
             if (audioSource != null)
             {
                 _speechEndTime = Mathf.Max(_speechEndTime, Time.unscaledTime + clip.length);
@@ -133,8 +165,6 @@ namespace PromptFighters.AI
 
             // AudioClip.Createで確保したネイティブリソースはGC対象外。再生完了後に明示破棄してリークを防ぐ。
             UnityEngine.Object.Destroy(clip);
-
-            onComplete?.Invoke();
         }
 
         static UnityWebRequest BuildRequest(string body, string key)

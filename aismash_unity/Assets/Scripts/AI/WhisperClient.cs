@@ -91,38 +91,57 @@ namespace PromptFighters.AI
                 onError);
         }
 
-        // WAVバイト列を Whisper に1回送って文字起こしする。
+        // whisper-1（REST）がAPIキーの権限で使えない場合に記憶し、以後はRealtime APIの文字起こしを使う。
+        static bool _whisperRestUnavailable;
+
+        // WAVバイト列を1回文字起こしする。whisper-1（REST）を優先し、
+        // 権限エラー（403）ならRealtime API（gpt-realtime-whisper）へ自動で切り替える。
         static IEnumerator TranscribeOnce(byte[] wav, string key,
             Action<string> onText, Action<string> onErr)
         {
-            var form = new List<IMultipartFormSection>
+            if (!_whisperRestUnavailable)
             {
-                new MultipartFormDataSection("model",    "whisper-1"),
-                new MultipartFormDataSection("language", "ja"),
-                new MultipartFormFileSection("file", wav, "audio.wav", "audio/wav"),
-            };
+                var form = new List<IMultipartFormSection>
+                {
+                    new MultipartFormDataSection("model",    "whisper-1"),
+                    new MultipartFormDataSection("language", "ja"),
+                    new MultipartFormFileSection("file", wav, "audio.wav", "audio/wav"),
+                };
 
-            using var req = UnityWebRequest.Post(Endpoint, form);
-            req.SetRequestHeader("Authorization", "Bearer " + key);
-            req.timeout = 30;
+                using var req = UnityWebRequest.Post(Endpoint, form);
+                req.SetRequestHeader("Authorization", "Bearer " + key);
+                req.timeout = 30;
 
-            yield return req.SendWebRequest();
+                yield return req.SendWebRequest();
 
-            if (req.result != UnityWebRequest.Result.Success)
-            {
-                onErr?.Invoke($"{req.error}: {req.downloadHandler?.text}");
-                yield break;
+                if (req.result == UnityWebRequest.Result.Success)
+                {
+                    string text = null;
+                    string parseErr = null;
+                    try
+                    {
+                        var resp = JsonUtility.FromJson<WhisperResponse>(req.downloadHandler.text);
+                        text = resp?.text ?? "";
+                    }
+                    catch (Exception e) { parseErr = "解析失敗: " + e.Message; }
+                    if (parseErr != null) onErr?.Invoke(parseErr);
+                    else onText?.Invoke(text);
+                    yield break;
+                }
+
+                bool noAccess = req.responseCode == 403 ||
+                    (req.downloadHandler?.text?.Contains("model_not_found") ?? false);
+                if (!noAccess)
+                {
+                    onErr?.Invoke($"{req.error}: {req.downloadHandler?.text}");
+                    yield break;
+                }
+                _whisperRestUnavailable = true;
+                Debug.LogWarning("[Whisper] whisper-1 がこのAPIキーで使用不可(403)。Realtime API文字起こしへ切り替えます");
             }
 
-            try
-            {
-                var resp = JsonUtility.FromJson<WhisperResponse>(req.downloadHandler.text);
-                onText?.Invoke(resp?.text ?? "");
-            }
-            catch (Exception e)
-            {
-                onErr?.Invoke("解析失敗: " + e.Message);
-            }
+            // Realtime API（gpt-realtime-whisper）による文字起こし
+            yield return RealtimeAudioClient.Transcribe(wav, key, onText, onErr);
         }
 
         // 無音をWhisperに送ったときに返りがちな定型ハルシネーション（幻聴）。これらは「声なし」とみなす。
