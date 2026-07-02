@@ -147,7 +147,7 @@ namespace PromptFighters.GameFlow
         }
 
         static TMP_InputField MakeInputField(Transform parent, string name, string placeholder,
-            Vector2 pos, Vector2 size, bool multiline)
+            Vector2 pos, Vector2 size, bool multiline, float fontSize = 0f)
         {
             var go = CreateUIObject(name, parent);
             var rt = go.GetComponent<RectTransform>();
@@ -168,7 +168,7 @@ namespace PromptFighters.GameFlow
             var textGo = CreateUIObject("Text", viewport.transform);
             StretchFull(textGo.GetComponent<RectTransform>());
             var text = textGo.AddComponent<TextMeshProUGUI>();
-            text.fontSize = multiline ? 15f : 18f;
+            text.fontSize = fontSize > 0f ? fontSize : (multiline ? 15f : 18f);
             text.color = Color.white;
             text.alignment = multiline ? TextAlignmentOptions.TopLeft : TextAlignmentOptions.Left;
             text.textWrappingMode = multiline ? TextWrappingModes.Normal : TextWrappingModes.NoWrap;

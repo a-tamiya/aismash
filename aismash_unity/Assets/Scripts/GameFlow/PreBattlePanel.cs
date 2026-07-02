@@ -1817,48 +1817,49 @@ namespace PromptFighters.GameFlow
 
         void BuildGenerationColumn(Transform parent, bool isP1)
         {
-            float cx = isP1 ? -330f : 330f;
+            float cx = isP1 ? -325f : 325f;
             var pColor = isP1 ? PromptFighters.UI.UITheme.P1Neon : PromptFighters.UI.UITheme.P2Neon;
             var pColorDark = isP1 ? PromptFighters.UI.UITheme.P1NeonDark : PromptFighters.UI.UITheme.P2NeonDark;
             float slant = isP1 ? 16f : -16f;
 
             var genBg = MakePanel(parent, isP1 ? "P1GenBg" : "P2GenBg",
-                new Vector2(cx, 35f), new Vector2(520f, 650f),
+                new Vector2(cx, 15f), new Vector2(610f, 720f),
                 new Color(pColorDark.r, pColorDark.g, pColorDark.b, 0.24f));
             genBg.sprite = PromptFighters.UI.UITheme.VGradient; genBg.type = Image.Type.Simple;
             MakeSlantBar(parent, isP1 ? "P1GenTop" : "P2GenTop",
-                new Vector2(cx, 358f), new Vector2(520f, 5f), pColor, slant);
+                new Vector2(cx, 372f), new Vector2(610f, 5f), pColor, slant);
             MakeSlantBar(parent, isP1 ? "P1GenBadgePlate" : "P2GenBadgePlate",
-                new Vector2(cx, 325f), new Vector2(120f, 46f), pColor, slant);
+                new Vector2(cx, 338f), new Vector2(120f, 46f), pColor, slant);
             MakeLabel(parent, isP1 ? "P1GenBadge" : "P2GenBadge", isP1 ? "1P" : "2P",
-                new Vector2(cx, 325f), new Vector2(120f, 46f), 28f, Color.white)
+                new Vector2(cx, 338f), new Vector2(120f, 46f), 28f, Color.white)
                 .fontStyle = FontStyles.Bold | FontStyles.Italic;
             MakeSlantBar(parent, isP1 ? "P1GenLine" : "P2GenLine",
-                new Vector2(cx, 292f), new Vector2(360f, 3f), pColor, slant);
+                new Vector2(cx, 305f), new Vector2(440f, 3f), pColor, slant);
 
+            // 入力文字が読みやすいよう、欄もフォントも大きめにする
             var nameInput = MakeInputField(parent, isP1 ? "P1GenerateNameInput" : "P2GenerateNameInput",
-                "キャラクター名（空欄なら選択中のキャラを使用）", new Vector2(cx, 220f), new Vector2(430f, 48f), false);
+                "キャラクター名（空欄なら選択中のキャラを使用）", new Vector2(cx, 245f), new Vector2(550f, 58f), false, 24f);
             var featureInput = MakeInputField(parent, isP1 ? "P1GenerateFeatureInput" : "P2GenerateFeatureInput",
                 "特徴・見た目・戦い方\n例: 雷をまとった小柄な剣士。素早く跳び回り、遠距離から雷を飛ばす。",
-                new Vector2(cx, 55f), new Vector2(430f, 210f), true);
+                new Vector2(cx, 25f), new Vector2(550f, 340f), true, 21f);
 
             // AIに名前・特徴を考えてもらうボタン（人間が後で編集・確認できる）
             float btnSlant = isP1 ? 14f : -14f;
             var conceptBtn = MakeButton(parent, isP1 ? "P1ConceptBtn" : "P2ConceptBtn",
-                "AIで名前・特徴を考える", new Vector2(cx - 62f, -135f), new Vector2(300f, 50f),
+                "AIで名前・特徴を考える", new Vector2(cx - 75f, -205f), new Vector2(340f, 56f),
                 () => OnConceptGeneratePressed(isP1), pColor);
             StyleArcadeButton(conceptBtn, pColor, btnSlant);
-            SetButtonLabelStyle(conceptBtn, 17f, FontStyles.Bold | FontStyles.Italic, Color.white);
+            SetButtonLabelStyle(conceptBtn, 19f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             // 名前・特徴をクリアするリセットボタン
             var resetBtn = MakeButton(parent, isP1 ? "P1ResetBtn" : "P2ResetBtn",
-                "リセット", new Vector2(cx + 158f, -135f), new Vector2(108f, 50f),
+                "リセット", new Vector2(cx + 175f, -205f), new Vector2(130f, 56f),
                 () => OnResetConceptPressed(isP1), PromptFighters.UI.UITheme.SteelLight);
             StyleArcadeButton(resetBtn, PromptFighters.UI.UITheme.SteelLight, btnSlant);
-            SetButtonLabelStyle(resetBtn, 16f, FontStyles.Bold | FontStyles.Italic, Color.white);
+            SetButtonLabelStyle(resetBtn, 17f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             var conceptStatus = MakeLabel(parent, isP1 ? "P1ConceptStatus" : "P2ConceptStatus",
-                "", new Vector2(cx, -180f), new Vector2(430f, 26f), 13f, new Color(0.72f, 0.82f, 0.95f));
+                "", new Vector2(cx, -262f), new Vector2(550f, 30f), 15f, new Color(0.72f, 0.82f, 0.95f));
 
             if (isP1)
             {
