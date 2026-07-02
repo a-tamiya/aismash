@@ -124,6 +124,10 @@ namespace PromptFighters.Battle.Skills
                         a.chance = Mathf.Clamp01(a.chance);
                     }
 
+                    // stunのstatus_duration（durationとは別フィールド）も必ず0.4〜0.7秒に収める
+                    if (a.status == "stun" && a.status_duration > 0f)
+                        a.status_duration = Mathf.Clamp(a.status_duration, 0.4f, 0.7f);
+
                     if (a.type == "melee_hitbox" || a.type == "body_hitbox" ||
                         a.type == "area_hitbox" || a.type == "trap_hitbox")
                     {
@@ -247,6 +251,96 @@ namespace PromptFighters.Battle.Skills
                         fa.damage_override = Mathf.Clamp(fa.damage_override, 0f, totalMaxDmg * 0.35f);
                 }
             }
+
+            // ── 一貫性の強制（プロンプト指示をコード側でも保証する）──
+            EnforceExclusiveActions(skill);
+            EnsureSmashDirectAttack(skill);
+            SyncStartupWithActions(skill, si);
+            EnsureMultiHitActiveTime(skill);
+            // attack_a のチャージは横スマッシュ入力（はじき＋A）と競合するため無効化
+            if (skill.slot == SkillSlot.AttackA && skill.chargeable)
+            {
+                skill.chargeable = false;
+                skill.max_charge_time = 0f;
+            }
+        }
+
+        // 直接攻撃としてゲーム内で判定が出るaction種。
+        static readonly HashSet<string> DirectAttackTypes = new HashSet<string>
+        {
+            "melee_hitbox", "body_hitbox", "projectile", "area_hitbox", "trap_hitbox", "beam",
+            "jump_attack", "multi_hit", "dash+melee_hitbox", "shockwave", "lifesteal", "command_throw",
+        };
+
+        // counter / reflector / command_throw は発動後の処理を自前で完結するため、
+        // 他の攻撃判定と混在させない（二重判定・自動処理との競合を防ぐ）。
+        static void EnforceExclusiveActions(SkillData skill)
+        {
+            foreach (string type in new[] { "counter", "reflector", "command_throw" })
+            {
+                if (!HasAction(skill, type)) continue;
+                string t = type;
+                skill.actions.RemoveAll(a => a == null || a.type != t);
+                return;
+            }
+        }
+
+        // smash_side は必ず直接攻撃を持つ（counterやbuffだけのスマッシュを防ぐ）。
+        static void EnsureSmashDirectAttack(SkillData skill)
+        {
+            if (skill.slot != SkillSlot.SmashSide) return;
+            foreach (var a in skill.actions)
+                if (a != null && DirectAttackTypes.Contains(a.type)) return;
+
+            skill.actions.Add(new SkillAction
+            {
+                type = "melee_hitbox",
+                time = skill.parameters.startup,
+                range = 2.2f, spawn_x = 1.3f, spawn_y = 1.0f, size_y = 1.8f,
+                hit_count = 1,
+            });
+        }
+
+        // 見た目（構え時間=startup）と攻撃判定の発生タイミングを一致させる。
+        // AI出力では parameters.startup と actions[].time がずれることが多く、
+        // 「構えている最中に判定が出る」「発生表記より遅く出る」の原因になる。
+        // 最初の攻撃判定がちょうど startup の瞬間に出るよう、攻撃系actionの時刻を平行移動する。
+        static void SyncStartupWithActions(SkillData skill, int si)
+        {
+            var p = skill.parameters;
+            float first = float.MaxValue;
+            foreach (var a in skill.actions)
+                if (a != null && DirectAttackTypes.Contains(a.type))
+                    first = Mathf.Min(first, a.time);
+            if (first == float.MaxValue) return; // 攻撃判定を持たない技（counter等）は対象外
+
+            float minStart = HasAction(skill, "beam") ? BeamStartupSeconds : 0f;
+            float target   = Mathf.Max(Mathf.Clamp(p.startup, 0f, MaxStartup[si]), minStart);
+
+            float delta = target - first;
+            if (Mathf.Abs(delta) >= 0.01f)
+            {
+                foreach (var a in skill.actions)
+                    if (a != null && DirectAttackTypes.Contains(a.type))
+                        a.time = Mathf.Max(0f, a.time + delta);
+            }
+            p.startup = target;
+        }
+
+        // 多段技は再ヒット間隔（寿命/ヒット数、最低0.04秒）の都合で、持続が短いと
+        // 表記ヒット数まで当たり切らない。全段入る最低限の active_time を確保する。
+        static void EnsureMultiHitActiveTime(SkillData skill)
+        {
+            if (HasAction(skill, "trap_hitbox") || HasAction(skill, "summon")) return;
+            bool contact = HasAction(skill, "melee_hitbox") || HasAction(skill, "body_hitbox")
+                        || HasAction(skill, "area_hitbox") || HasAction(skill, "jump_attack")
+                        || HasAction(skill, "lifesteal") || HasAction(skill, "multi_hit");
+            if (!contact) return;
+
+            var p = skill.parameters;
+            int hits = Mathf.Max(p.hit_count, MaxHitCount(skill));
+            if (hits <= 1) return;
+            p.active_time = Mathf.Clamp(Mathf.Max(p.active_time, 0.08f * hits), 0.05f, 0.6f);
         }
 
         static bool HasAction(SkillData skill, string type)

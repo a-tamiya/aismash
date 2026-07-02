@@ -460,6 +460,9 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
 - 格闘型・素手 → body_hitboxを使う。hide_effect=true・follow_owner=true
 - 補助・攪乱タイプ → buff_selfやteleportを使ってよい（status: speed/jump/transparent/damage）
 - 技4枠は同じ構造にしない。最低2枠は action構成・range・startup/recovery の傾向を変える
+- 【役割分担】4枠は役割を分ける: 主力（発生が早く低リスク・回転率で使う）/ 牽制・差し込み（間合いが違う）/ 個性技（そのキャラらしさを最大化する変わり技）/ 決め技(smash_side)。同じ間合い・同じ役割の技を2枠作らない
+- 【発生の一致】最初の攻撃actionのtimeはparameters.startupと同じ値にする（構え→判定発生の順序が見た目と一致する）
+- 【説明と挙動の一致】descriptionは実際のaction構成・数値と矛盾させない（「三連斬り」ならhit_count 3、「引き寄せる」ならpull_enemyやknockback_direction:""toward""を実際に入れる、「上に打ち上げる」ならknockback_direction:""up""）。書いたことは必ず挙動に実装する
 - 属性と状態異常: fire→burn、ice→slow、lightning→stun、dark→pull_enemy/guard_break、wind→push_enemy/dash/jump_attack
 - キャラの個性に応じて積極的に新機能を使うこと: ブーメラン使い→boomerang:true、追尾魔法→homing:true、散弾銃→projectile_count:3、ビーム→beam、スパイクコンボ→knockback_direction:""spike""、ジャグル→knockback_direction:""up""
 - stats範囲: maxHP 250〜350(基準300。耐久型ほど高く、紙耐久・速攻型ほど低く)、groundMoveSpeed 2.5〜9.5、airMoveSpeed 2.0〜8.5、jumpForce 7〜19、airJumpHeightMultiplier 0.3〜0.6、walkSpeedRatio 0.2〜0.5、guardDurability 40〜90、lightness 0.45〜2.0、weight 0.45〜2.0、groundDodgeDistance 1.2〜3.8、airDodgeDistance 0.8〜3.2
