@@ -170,6 +170,8 @@ namespace PromptFighters.GameFlow
             BuildDeleteConfirmPanel();
             BuildControlsPanel();
             BuildSettingsPanel();
+            BuildRevealPanel();
+            BuildTutorialPanel();
             EnsureVirtualCursor();
             BuildGenProgressOverlay();
             UITheme.ApplyAllInScene();
@@ -491,6 +493,12 @@ namespace PromptFighters.GameFlow
             UpdateGamepadCursor();
             UpdateMatchEscape();
 
+            // チュートリアル進行中は専用処理へ（他の入力より優先）
+            if (_tutorialActive) { UpdateTutorial(); return; }
+
+            // 完成披露の演出中／表示待ちの処理（安全な画面のときだけ割り込む）
+            if (UpdateReveal()) return;
+
             // 削除確認モーダルが開いている間は他の入力を遮断
             if (_deleteConfirmPanel != null && _deleteConfirmPanel.activeSelf)
             {
@@ -676,13 +684,20 @@ namespace PromptFighters.GameFlow
             SetButtonLabelStyle(startButton, 28f, FontStyles.Bold | FontStyles.Italic, new Color(0.12f, 0.08f, 0.0f));
             _startButtonRect = startButton.GetComponent<RectTransform>();
 
+            // 初めての人向けチュートリアル（ゲームスタートの下・目立つ位置）
+            var tutorialBtn = MakeButton(_titlePanel.transform, "TitleTutorialBtn", "はじめての方へ（操作練習）",
+                new Vector2(0, -178), new Vector2(400, 52), StartTutorial,
+                PromptFighters.UI.UITheme.P1Neon);
+            StyleArcadeButton(tutorialBtn, PromptFighters.UI.UITheme.P1Neon, 14f);
+            SetButtonLabelStyle(tutorialBtn, 20f, FontStyles.Bold | FontStyles.Italic, Color.white);
+
             // 設定・操作説明（タイトルからいつでも開ける）
             var settingsBtn = MakeButton(_titlePanel.transform, "TitleSettingsBtn", "設定",
-                new Vector2(-120, -240), new Vector2(220, 46), ShowSettingsPanel, ToggleOffColor);
+                new Vector2(-120, -258), new Vector2(220, 46), ShowSettingsPanel, ToggleOffColor);
             StyleArcadeButton(settingsBtn, ToggleOffColor, 12f);
             SetButtonLabelStyle(settingsBtn, 18f, FontStyles.Bold | FontStyles.Italic, PromptFighters.UI.UITheme.Ink);
             var controlsBtn = MakeButton(_titlePanel.transform, "TitleControlsBtn", "操作説明",
-                new Vector2(120, -240), new Vector2(220, 46), ShowControlsPanel, ToggleOffColor);
+                new Vector2(120, -258), new Vector2(220, 46), ShowControlsPanel, ToggleOffColor);
             StyleArcadeButton(controlsBtn, ToggleOffColor, 12f);
             SetButtonLabelStyle(controlsBtn, 18f, FontStyles.Bold | FontStyles.Italic, PromptFighters.UI.UITheme.Ink);
         }
@@ -2674,6 +2689,8 @@ namespace PromptFighters.GameFlow
             else      _p2PresetIdx = _presets.IndexOf(data);
             if (!string.IsNullOrWhiteSpace(data.characterName))
                 _newCharNames.Add(data.characterName);
+            // 完成披露の演出キューへ（安全な画面に戻ったタイミングで再生される）
+            EnqueueReveal(data);
         }
 
         IEnumerator GenerateImages(CharacterData data1, CharacterData data2, bool generateP1, bool generateP2)
@@ -2875,6 +2892,8 @@ namespace PromptFighters.GameFlow
 
         void ShowTrainingPanel()
         {
+            // チュートリアル中は通常のトレーニング説明を出さない（チュートリアルUIに一本化）
+            if (_tutorialActive) { if (_trainingPanel != null) _trainingPanel.SetActive(false); return; }
             if (_trainingControlsText != null)
                 _trainingControlsText.text = BuildTrainingHelpText();
             if (_trainingPanel != null) _trainingPanel.SetActive(true);

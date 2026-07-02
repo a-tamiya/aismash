@@ -41,6 +41,9 @@ namespace PromptFighters.Battle.Skills
         public SkillSlot FollowUpSlot              => _followUpSlot;
         public SkillData GetSkill(SkillSlot s) => skills[(int)s];
 
+        // 技を発動した瞬間に発火（チュートリアルの操作検知用）。派生・デバッグ発動も含む。
+        public event System.Action<SkillSlot> OnSkillExecuted;
+
         void Awake()
         {
             _fighter = GetComponent<Fighter>();
@@ -189,6 +192,7 @@ namespace PromptFighters.Battle.Skills
         IEnumerator ExecuteSkill(SkillData skill, float powerMultiplier)
         {
             _isExecuting = true;
+            OnSkillExecuted?.Invoke(skill.slot);
             int serial = ++_skillSerial;
             _currentSkillHit = false;
             SubscribeCurrentSkillHit();

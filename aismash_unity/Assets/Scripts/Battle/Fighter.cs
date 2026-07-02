@@ -99,6 +99,7 @@ namespace PromptFighters.Battle
         public event System.Action               OnJumped;
         public event System.Action               OnLanded;
         public event System.Action               OnDodged;
+        public event System.Action               OnGrabAttempt; // つかみ入力（成否問わず）。チュートリアル検知用
 
         Rigidbody2D _rb;
         SpriteRenderer _sprite;
@@ -1075,6 +1076,7 @@ namespace PromptFighters.Battle
         {
             if (!CanAct || Opponent == null) return false;
             if (_grabCooldownTimer > 0f) return false;
+            OnGrabAttempt?.Invoke();
             PromptFighters.Audio.GameAudioManager.Instance?.PlayGrab();
             ShowGrabSprite(grabParameters.startup + 0.08f);
             StartCoroutine(ExecuteGrab());
