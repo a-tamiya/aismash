@@ -31,6 +31,10 @@ namespace PromptFighters.AI
         static float _speechEndTime;
         public static bool IsSpeaking => Time.unscaledTime < _speechEndTime;
 
+        // 表現付きモデルがAPIキーの権限で使えない場合、初回失敗を記憶して以後は最初からtts-1を使う
+        // （毎回失敗リクエストを挟む無駄なレイテンシとログを避ける）。
+        static bool _expressiveUnavailable;
+
         public static Coroutine Speak(MonoBehaviour runner, string text,
             AudioSource audioSource,
             Action onComplete = null,
@@ -66,7 +70,7 @@ namespace PromptFighters.AI
 
             // 演技指示がある場合は表現対応モデルを使う（speedは非対応のため指示文で速度を表現する）
             string body = standardBody;
-            bool expressive = !string.IsNullOrEmpty(instructions);
+            bool expressive = !string.IsNullOrEmpty(instructions) && !_expressiveUnavailable;
             if (expressive)
             {
                 string safeInst = instructions
@@ -91,7 +95,16 @@ namespace PromptFighters.AI
                     yield break;
                 }
                 else
-                    Debug.LogWarning($"[TTS] 表現付きTTS失敗（{req.error}）。標準TTSで再試行します");
+                {
+                    // 権限エラー（403/404）はこのセッション中ずっと使えないので記憶し、以後は最初からtts-1を使う
+                    if (req.responseCode == 403 || req.responseCode == 404)
+                    {
+                        _expressiveUnavailable = true;
+                        Debug.LogWarning($"[TTS] 表現付きTTSモデル({ExpressiveModel})はこのAPIキーで使用不可。以後はtts-1を使用します");
+                    }
+                    else
+                        Debug.LogWarning($"[TTS] 表現付きTTS失敗（{req.error}）。標準TTSで再試行します");
+                }
             }
 
             // 表現付きモデルが使えない環境では従来のtts-1へフォールバック

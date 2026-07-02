@@ -13,8 +13,9 @@ namespace PromptFighters.AI
     {
         public static readonly string Endpoint = "https://api.openai.com/v1/chat/completions";
         // 技生成は技名・技説明・全パラメータ・ステータスを1回で出力する重い構造化タスク。
-        // 指示追従と忠実度を優先して高性能モデルを使う。
-        public static readonly string Model    = "gpt-5.4";
+        // 指示追従と忠実度を優先して、使えるモデルの中で最上位を使う。
+        // ※2026-07-02 APIキーの権限変更で gpt-5.4 が使用不可（403）になったため gpt-5.4-mini へ変更。
+        public static readonly string Model    = "gpt-5.4-mini";
         // 実況・ボイスボールなど軽量・低レイテンシ・高頻度の用途はコスト優先で軽量モデルを使う。
         public static readonly string LightModel = "gpt-5.4-nano";
         const int MaxGenerateAttempts = 2;
