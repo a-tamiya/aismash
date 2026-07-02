@@ -36,6 +36,11 @@ namespace PromptFighters.Battle
 
         void LateUpdate()
         {
+            // 対象が非アクティブ（Versus時のボス等）の間はラベルも隠す。
+            // ネームプレートは独立GameObjectのため、これがないと空中に浮いて見える。
+            bool visible = _target != null && _target.gameObject.activeInHierarchy;
+            if (_label != null && _label.enabled != visible) _label.enabled = visible;
+            if (!visible) return;
             ApplyPosition();
         }
 

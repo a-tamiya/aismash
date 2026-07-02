@@ -114,6 +114,14 @@ namespace PromptFighters.UI
         void OnTimer(float t)
         {
             if (!_timerText) return;
+            // トレーニングは時間無制限。「赤い0」が出ると壊れて見えるため∞表示にする
+            if (BattleManager.Instance?.IsTraining == true)
+            {
+                _timerText.text  = "∞";
+                _timerText.color = TextWht;
+                _timerText.transform.localScale = Vector3.one;
+                return;
+            }
             _timerText.text  = Mathf.CeilToInt(t).ToString();
             _timerText.color = t <= 30f ? UrgentCol : TextWht;
             // 残り10秒は鼓動するように拡縮して切迫感を出す
@@ -156,7 +164,7 @@ namespace PromptFighters.UI
             var bm = BattleManager.Instance;
             if (bm?.Character1 != null && _hp1Name) _hp1Name.text = bm.Character1.characterName;
             if (bm?.Character2 != null && _hp2Name) _hp2Name.text = bm.Character2.characterName;
-            if (_timerText) _timerText.text = Mathf.CeilToInt(bm?.TimeRemaining ?? 0f).ToString();
+            if (_timerText) OnTimer(bm?.TimeRemaining ?? 0f);
             bool showDots = bm?.bestOf3 == true;
             if (_roundDots1) { _roundDots1.gameObject.SetActive(showDots); UpdateRoundDots(bm?.P1RoundWins ?? 0, bm?.P2RoundWins ?? 0); }
             if (_roundDots2) _roundDots2.gameObject.SetActive(showDots);

@@ -142,6 +142,9 @@ namespace PromptFighters.GameFlow
         // 設定モーダル（試合前オプションをまとめる）
         GameObject _settingsPanel;
         TextMeshProUGUI _startBtnLabel;
+        // 対戦中のEsc長押し中断用（誤爆防止のため長押し）
+        float _matchEscHold;
+        const float MatchEscHoldSeconds = 1.0f;
 
         static readonly Color ToggleOnColor  = PromptFighters.UI.UITheme.Gold;
         static readonly Color ToggleOffColor = new Color(0.14f, 0.15f, 0.19f, 1f);
@@ -184,6 +187,27 @@ namespace PromptFighters.GameFlow
                 BattleManager.Instance.OnReturnedToSetup += ShowPanel;
                 BattleManager.Instance.OnTrainingStart    += ShowTrainingPanel;
             }
+        }
+
+        // 対戦（カウントダウン・試合中）にEscを長押しすると試合を中断してキャラ選択へ戻る。
+        // 展示で試合を途中で終わらせたい時の脱出手段（誤操作防止のため1秒の長押し）。
+        // トレーニングは従来どおりEsc単押しで戻れるため対象外。
+        void UpdateMatchEscape()
+        {
+            var bm = BattleManager.Instance;
+            bool inMatch = bm != null && !bm.IsTraining &&
+                (bm.Phase == BattlePhase.Fighting || bm.Phase == BattlePhase.Countdown);
+            var kb = UnityEngine.InputSystem.Keyboard.current;
+            if (!inMatch || kb == null || !kb.escapeKey.isPressed)
+            {
+                _matchEscHold = 0f;
+                return;
+            }
+
+            _matchEscHold += Time.unscaledDeltaTime;
+            if (_matchEscHold < MatchEscHoldSeconds) return;
+            _matchEscHold = 0f;
+            bm.ReturnToSetup();
         }
 
         // ゲームパッド左スティックで動く自前カーソルを構築。
@@ -465,6 +489,7 @@ namespace PromptFighters.GameFlow
         void Update()
         {
             UpdateGamepadCursor();
+            UpdateMatchEscape();
 
             // 削除確認モーダルが開いている間は他の入力を遮断
             if (_deleteConfirmPanel != null && _deleteConfirmPanel.activeSelf)
@@ -702,7 +727,7 @@ namespace PromptFighters.GameFlow
                 "掴み　　　　テン0　→ 方向入力で投げ";
             const string padText =
                 "ゲームパッド（1台目=1P / 2台目=2P）　移動: 左スティック・十字キー　ジャンプ: Y/△　" +
-                "ガード: RB・RT　技: B・A・X　掴み: LB・LT　回避: ガード + 方向";
+                "ガード: RB・RT　技: B・A・X　掴み: LB・LT　回避: ガード + 方向　　Esc長押し: 試合を中断";
 
             BuildControlsColumn(t, true,  p1Text);
             BuildControlsColumn(t, false, p2Text);

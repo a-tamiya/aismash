@@ -745,6 +745,9 @@ namespace PromptFighters.Battle
             }
 
             StopAllCoroutines();
+            // 試合を中断して戻る場合も実況・ボイスボールの音声とバナーを止める
+            GetComponent<PromptFighters.UI.CommentaryController>()?.StopVoice();
+            GetComponent<PromptFighters.UI.AngelController>()?.StopVoice();
             _hitStopActive = false;
             _koSlowActive  = false;
             Time.timeScale = 1f;
