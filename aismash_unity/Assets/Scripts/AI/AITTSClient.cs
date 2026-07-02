@@ -12,7 +12,7 @@ namespace PromptFighters.AI
         const string Model    = "tts-1";
         public const string DefaultVoice    = "nova";
         public const string CommentaryVoice = "onyx";    // 男性寄り
-        public const string AngelVoice      = "shimmer"; // 明るく天使っぽい印象
+        public const string AngelVoice      = "shimmer"; // 明るく軽やかな印象（ボイスボール用）
         public const float  CommentarySpeed = 1.15f;     // やや速めで迫力を出す
 
         public static Coroutine Speak(MonoBehaviour runner, string text,

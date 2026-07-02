@@ -15,7 +15,7 @@ namespace PromptFighters.AI
         // 技生成は技名・技説明・全パラメータ・ステータスを1回で出力する重い構造化タスク。
         // 指示追従と忠実度を優先して高性能モデルを使う。
         public static readonly string Model    = "gpt-5.4";
-        // 実況・天使など軽量・低レイテンシ・高頻度の用途はコスト優先で軽量モデルを使う。
+        // 実況・ボイスボールなど軽量・低レイテンシ・高頻度の用途はコスト優先で軽量モデルを使う。
         public static readonly string LightModel = "gpt-5.4-nano";
         const int MaxGenerateAttempts = 2;
 

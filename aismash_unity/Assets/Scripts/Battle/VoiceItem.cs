@@ -4,14 +4,14 @@ using PromptFighters.UI;
 
 namespace PromptFighters.Battle
 {
-    // 音声アイテム（スマッシュボール式）。
+    // ボイスボール（スマッシュボール式の音声アイテム）。
     // 空中をふわふわ漂い、攻撃で耐久(MaxHP)を削られる。耐久を0にした
     // 「最後の攻撃者」が取得者となり、onBroken で通知する。
     // Hitbox / Projectile から TakeHit(dmg, attacker) を呼ばれる（陣営問わず誰でも殴れる中立物）。
     // ※当たり判定はトリガーのみ（物理的に乗れない）。攻撃トリガー検出のため Rigidbody2D を持つ。
     public class VoiceItem : MonoBehaviour
     {
-        // 現在ステージに存在するアイテム（CPUの標的探索用）。同時に1個まで。
+        // 現在ステージに存在するボイスボール（CPUの標的探索用）。同時に1個まで。
         public static VoiceItem Active { get; private set; }
 
         public const float MaxHP = 20f;

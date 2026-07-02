@@ -16,12 +16,16 @@ namespace PromptFighters.UI
         public float commentaryInterval = 17f; // 実況間隔（秒）
 
         CanvasGroup _group;
+        RectTransform _panelRect;
         TextMeshProUGUI _label;
+        Image _livePlate;
         AudioSource _audioSource;
         Coroutine _loopRoutine;
         Coroutine _fadeRoutine;
         bool _isGenerating;
         BattleManager _bm;
+
+        const float PanelH = 96f; // テロップ高さ（バフチップは110pxから積むため下を保つ）
 
         void Awake()
         {
@@ -57,22 +61,30 @@ namespace PromptFighters.UI
             var canvas = canvasGo.AddComponent<Canvas>();
             canvas.renderMode   = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 50;
-            canvasGo.AddComponent<CanvasScaler>();
+            // 他のUIと同じ基準解像度でスケールさせる（未設定だと解像度によって文字サイズが変わる）
+            var scaler = canvasGo.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode         = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.matchWidthOrHeight  = 0.5f;
             canvasGo.AddComponent<GraphicRaycaster>();
 
             var panelGo   = new GameObject("Panel");
             panelGo.transform.SetParent(canvasGo.transform, false);
 
-            var panelRect = panelGo.AddComponent<RectTransform>();
-            panelRect.anchorMin = new Vector2(0f, 0f);
-            panelRect.anchorMax = new Vector2(1f, 0f);
-            panelRect.pivot     = new Vector2(0.5f, 0f);
-            panelRect.anchoredPosition = Vector2.zero;
-            panelRect.sizeDelta = new Vector2(0f, 100f);
+            _panelRect = panelGo.AddComponent<RectTransform>();
+            _panelRect.anchorMin = new Vector2(0f, 0f);
+            _panelRect.anchorMax = new Vector2(1f, 0f);
+            _panelRect.pivot     = new Vector2(0.5f, 0f);
+            _panelRect.anchoredPosition = Vector2.zero;
+            _panelRect.sizeDelta = new Vector2(0f, PanelH);
 
-            panelGo.AddComponent<Image>().color = new Color(0.03f, 0.04f, 0.06f, 0.82f);
+            var bg = panelGo.AddComponent<Image>();
+            bg.sprite = UITheme.VGradient;
+            bg.type   = Image.Type.Simple;
+            bg.color  = new Color(0.02f, 0.025f, 0.045f, 0.92f);
+            bg.raycastTarget = false;
 
-            // 上端ゴールドアクセントライン
+            // 上端ゴールドアクセントライン（斜め）
             var accentGo = new GameObject("Accent");
             accentGo.transform.SetParent(panelGo.transform, false);
             var accRect = accentGo.AddComponent<RectTransform>();
@@ -84,28 +96,68 @@ namespace PromptFighters.UI
             var accImg = accentGo.AddComponent<Image>();
             accImg.color = UITheme.Gold;
             accImg.raycastTarget = false;
+            accentGo.AddComponent<UISkew>().slantPixels = 24f;
 
             _group       = panelGo.AddComponent<CanvasGroup>();
             _group.alpha = 0f;
 
+            // 左の「● LIVE 実況」プレート（放送テロップ風・赤の斜めプレート）
+            var plateGo = new GameObject("LivePlate");
+            plateGo.transform.SetParent(panelGo.transform, false);
+            var plateRect = plateGo.AddComponent<RectTransform>();
+            plateRect.anchorMin = plateRect.anchorMax = new Vector2(0f, 0.5f);
+            plateRect.pivot = new Vector2(0f, 0.5f);
+            plateRect.anchoredPosition = new Vector2(20f, 0f);
+            plateRect.sizeDelta = new Vector2(184f, 50f);
+            _livePlate = plateGo.AddComponent<Image>();
+            _livePlate.sprite = UITheme.VGradient;
+            _livePlate.type = Image.Type.Simple;
+            _livePlate.color = UITheme.Urgent;
+            _livePlate.raycastTarget = false;
+            UITheme.Skew(_livePlate, 12f);
+
+            var plateLabelGo = new GameObject("LiveLabel");
+            plateLabelGo.transform.SetParent(plateGo.transform, false);
+            var plRect = plateLabelGo.AddComponent<RectTransform>();
+            plRect.anchorMin = Vector2.zero;
+            plRect.anchorMax = Vector2.one;
+            plRect.offsetMin = plRect.offsetMax = Vector2.zero;
+            var plateLabel = plateLabelGo.AddComponent<TextMeshProUGUI>();
+            UITheme.Apply(plateLabel, 24f, FontStyles.Bold | FontStyles.Italic);
+            plateLabel.text = "● LIVE 実況";
+            plateLabel.color = Color.white;
+            plateLabel.alignment = TextAlignmentOptions.Center;
+            plateLabel.textWrappingMode = TextWrappingModes.NoWrap;
+            plateLabel.raycastTarget = false;
+
+            // 実況テキスト（プレートの右から左寄せで流す）
             var textGo = new GameObject("Text");
             textGo.transform.SetParent(panelGo.transform, false);
             var textRect = textGo.AddComponent<RectTransform>();
             textRect.anchorMin = Vector2.zero;
             textRect.anchorMax = Vector2.one;
-            textRect.offsetMin = new Vector2(20f, 4f);
-            textRect.offsetMax = new Vector2(-20f, -4f);
+            textRect.offsetMin = new Vector2(228f, 6f);
+            textRect.offsetMax = new Vector2(-24f, -8f);
 
             _label = textGo.AddComponent<TextMeshProUGUI>();
-            UITheme.Apply(_label, 26f, FontStyles.Bold);
+            UITheme.Apply(_label, 29f, FontStyles.Bold);
             _label.color     = Color.white;
-            _label.alignment = TextAlignmentOptions.Center;
+            _label.alignment = TextAlignmentOptions.MidlineLeft;
             _label.textWrappingMode = TextWrappingModes.Normal;
             _label.overflowMode = TextOverflowModes.Truncate;
+            _label.raycastTarget = false;
 
             _audioSource = canvasGo.AddComponent<AudioSource>();
             _audioSource.playOnAwake = false;
             _audioSource.volume = 1f;
+        }
+
+        void Update()
+        {
+            // 表示中はLIVEプレートを脈動させ、生放送感を出す
+            if (_group == null || _group.alpha <= 0f || _livePlate == null) return;
+            float p = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 5f);
+            _livePlate.color = Color.Lerp(new Color(0.68f, 0.10f, 0.08f, 1f), UITheme.Urgent, p);
         }
 
         public void StopVoice()
@@ -114,6 +166,7 @@ namespace PromptFighters.UI
             if (_loopRoutine != null) { StopCoroutine(_loopRoutine); _loopRoutine = null; }
             if (_fadeRoutine != null) { StopCoroutine(_fadeRoutine); _fadeRoutine = null; }
             if (_group != null) _group.alpha = 0f;
+            if (_panelRect != null) _panelRect.anchoredPosition = Vector2.zero; // スライド途中で止まった位置を戻す
         }
 
         void OnDestroy()
@@ -227,9 +280,21 @@ namespace PromptFighters.UI
 
         IEnumerator FadeInAndHold()
         {
+            // 下からのスライドイン＋フェードで登場させる
             float t = 0f;
-            while (t < 0.3f) { t += Time.deltaTime; _group.alpha = t / 0.3f; yield return null; }
+            const float dur = 0.28f;
+            while (t < dur)
+            {
+                t += Time.deltaTime;
+                float k = Mathf.Clamp01(t / dur);
+                float ease = 1f - (1f - k) * (1f - k); // ease-out
+                _group.alpha = k;
+                if (_panelRect != null)
+                    _panelRect.anchoredPosition = new Vector2(0f, Mathf.Lerp(-PanelH * 0.6f, 0f, ease));
+                yield return null;
+            }
             _group.alpha = 1f;
+            if (_panelRect != null) _panelRect.anchoredPosition = Vector2.zero;
         }
 
         IEnumerator FadeOutAfterTTS(System.Func<bool> isDone)
@@ -244,8 +309,18 @@ namespace PromptFighters.UI
         IEnumerator FadeOutOnly()
         {
             float t = 0f;
-            while (t < 0.5f) { t += Time.deltaTime; _group.alpha = 1f - t / 0.5f; yield return null; }
+            const float dur = 0.5f;
+            while (t < dur)
+            {
+                t += Time.deltaTime;
+                float k = Mathf.Clamp01(t / dur);
+                _group.alpha = 1f - k;
+                if (_panelRect != null)
+                    _panelRect.anchoredPosition = new Vector2(0f, -PanelH * 0.6f * k * k);
+                yield return null;
+            }
             _group.alpha = 0f;
+            if (_panelRect != null) _panelRect.anchoredPosition = Vector2.zero;
         }
     }
 }

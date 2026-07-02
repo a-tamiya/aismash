@@ -8,8 +8,8 @@ using PromptFighters.Battle;
 
 namespace PromptFighters.UI
 {
-    // 音声アイテム・コントローラー（旧「気まぐれ天使」を置き換え）。
-    // 一定間隔でスマッシュボール風の VoiceItem を出現させ、耐久を0にして
+    // ボイスボール・コントローラー。
+    // 一定間隔でスマッシュボール風のボイスボール（VoiceItem）を出現させ、耐久を0にして
     // 破壊した（取得した）プレイヤーに、スロー＋5秒の音声入力の権利を与える。
     // 音声内容を LLM が解釈してギミックを決定・適用する（Whisper/AIAngelClient/AngelGimmickApplier を流用）。
     // クラス名は既存参照（BattleManager/GameAudioManager/PreBattlePanel）維持のため踏襲。
@@ -22,7 +22,7 @@ namespace PromptFighters.UI
         public float slowScale      = 0.4f; // 録音中のスローモーション倍率
 
         bool          _busy;
-        bool          _firstItemShown; // マッチで最初のアイテム出現時に導入バナーを出す
+        bool          _firstItemShown; // マッチで最初のボイスボール出現時に導入バナーを出す
         BattleManager _bm;
         AngelGimmickApplier _applier;
         Coroutine     _spawnRoutine;
@@ -141,12 +141,12 @@ namespace PromptFighters.UI
             if (!_firstItemShown)
             {
                 _firstItemShown = true;
-                ShowBanner("[ AIスマッシュボール出現！ ]", "壊してAIを味方につけろ！");
+                ShowBanner("[ ボイスボール出現！ ]", "壊してAIを味方につけろ！");
                 if (_busy == false) StartCoroutine(HideBannerAfter(3.2f));
             }
             else
             {
-                ShowBanner("[ アイテム出現！ ]", "攻撃して破壊すると…願いが叶う！");
+                ShowBanner("[ ボイスボール出現！ ]", "攻撃して破壊すると…願いが叶う！");
                 if (_busy == false) StartCoroutine(HideBannerAfter(2.4f));
             }
         }
@@ -210,13 +210,13 @@ namespace PromptFighters.UI
             // 取得者にメリットのあるギミックを即決定して適用する。
             if (IsCpu(breaker))
             {
-                ShowBanner($"[ {_acquirerTag}：{acquirerName} がアイテム獲得！ ]", "AIが力を得た！");
+                ShowBanner($"[ {_acquirerTag}：{acquirerName} がボイスボール獲得！ ]", "AIが力を得た！");
                 _titleLabel.color = _acquirerColor;
                 GameAudioManager.Instance?.PlayGimmickBuff();
                 yield return new WaitForSecondsRealtime(1.2f);
 
                 var cg = BeneficialGimmick(acquirerSlot);
-                ShowBanner("[ アイテム効果 ]", cg.message);
+                ShowBanner("[ ボイスボールの効果 ]", cg.message);
                 ShowSubtitle(cg.message);
                 _applier.Acquirer = breaker;
                 _applier.Apply(cg, applyP1, applyP2);
@@ -244,7 +244,7 @@ namespace PromptFighters.UI
                 ShowSlowOverlay(true);
             }
 
-            ShowBanner($"[ {_acquirerTag}：{acquirerName} がアイテム獲得！ ]", "願いを話して！（マイクに向かって）");
+            ShowBanner($"[ {_acquirerTag}：{acquirerName} がボイスボール獲得！ ]", "願いを話して！（マイクに向かって）");
             _titleLabel.color = _acquirerColor;
             GameAudioManager.Instance?.PlayGimmickBuff();
 
@@ -276,7 +276,7 @@ namespace PromptFighters.UI
                 }
                 else
                 {
-                    ShowBanner($"[ {acquirerName} がアイテム獲得！ ]", "マイク準備中...");
+                    ShowBanner($"[ {acquirerName} がボイスボール獲得！ ]", "マイク準備中...");
                 }
                 yield return null;
             }
@@ -306,7 +306,7 @@ namespace PromptFighters.UI
             if (hadVoice)
             {
                 // 願いが取れた → LLM が言葉を解釈して忠実に叶える（取得者を文脈に渡す）
-                ShowBanner("[ アイテム効果 ]", "願いを解析中...");
+                ShowBanner("[ ボイスボールの効果 ]", "願いを解析中...");
                 var battleState = BuildBattleState();
                 bool decided = false;
                 AIAngelClient.DecideGimmick(this, transcribed, battleState,
@@ -322,7 +322,7 @@ namespace PromptFighters.UI
                 gimmick = RandomGimmick(acquirerSlot, acquirerName);
 
             // 6. 適用 + 表示 + TTS
-            ShowBanner("[ アイテム効果 ]", gimmick.message);
+            ShowBanner("[ ボイスボールの効果 ]", gimmick.message);
             ShowSubtitle(gimmick.message);
             _applier.Acquirer = breaker; // hp_set 等「発動者に跳ね返る」ギミック用
             _applier.Apply(gimmick, applyP1, applyP2);
@@ -645,18 +645,19 @@ namespace PromptFighters.UI
             var bannerGo = new GameObject("ItemBanner");
             bannerGo.transform.SetParent(canvasGo.transform, false);
 
+            // HUDトップバー(高さ約102px)・協力時のボスHPバー(〜164px)と重ならない位置に置く
             var bannerRect = bannerGo.AddComponent<RectTransform>();
             bannerRect.anchorMin        = new Vector2(0f, 1f);
             bannerRect.anchorMax        = new Vector2(1f, 1f);
             bannerRect.pivot            = new Vector2(0.5f, 1f);
-            bannerRect.anchoredPosition = new Vector2(0f, -90f);
+            bannerRect.anchoredPosition = new Vector2(0f, -172f);
             bannerRect.sizeDelta        = new Vector2(0f, 160f);
 
             _bannerGroup       = bannerGo.AddComponent<CanvasGroup>();
             _bannerGroup.alpha = 0f;
 
             var bannerBg = UITheme.AddImage(bannerGo.transform, "BannerBg",
-                new Color(PromptFighters.UI.UITheme.SteelDark.r, PromptFighters.UI.UITheme.SteelDark.g, PromptFighters.UI.UITheme.SteelDark.b, 0.55f),
+                new Color(PromptFighters.UI.UITheme.SteelDark.r, PromptFighters.UI.UITheme.SteelDark.g, PromptFighters.UI.UITheme.SteelDark.b, 0.66f),
                 UITheme.VGradient);
             bannerBg.type = UnityEngine.UI.Image.Type.Simple;
             var bannerEdgeGo = new GameObject("BannerEdge");

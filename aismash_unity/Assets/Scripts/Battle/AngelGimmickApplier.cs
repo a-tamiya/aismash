@@ -5,7 +5,7 @@ using PromptFighters.Battle.Skills;
 
 namespace PromptFighters.Battle
 {
-    // 音声アイテムのギミックを Fighter に適用する（旧・天使ギミック）。
+    // ボイスボールのギミックを Fighter に適用する。
     public class AngelGimmickApplier : MonoBehaviour
     {
         // ステータス系のバフ・デバフ（速度/ジャンプ/与ダメ/重力/サイズ）は Fighter 側で永続適用

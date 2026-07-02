@@ -29,7 +29,7 @@ namespace PromptFighters.AI
     public static class AIAngelClient
     {
         // acquirerSlot: アイテム取得者（"player1"/"player2"）。指定すると取得者の願いを優先し、
-        // 「自分/相手」を取得者基準で解決させる。null（旧・天使の気まぐれ）も可。
+        // 「自分/相手」を取得者基準で解決させる。nullも可（旧仕様互換）。
         public static Coroutine DecideGimmick(MonoBehaviour runner,
             string voiceText,
             CommentaryBattleState battleState,

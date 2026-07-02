@@ -821,8 +821,8 @@ namespace PromptFighters.GameFlow
             _commentaryToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
             _commentaryToggleLabel.fontSize = ToggleFontSize;
 
-            // ── アイテム（天使） ──
-            MakeSettingHeading(t, "AngelHead", "アイテム", 0f);
+            // ── ボイスボール ──
+            MakeSettingHeading(t, "AngelHead", "ボイスボール", 0f);
             var angelBtn = MakeButton(t, "AngelToggle", AngelToggleText(),
                 new Vector2(30f, 0f), new Vector2(240f, 50f), OnAngelToggle, ToggleOnColor);
             StyleArcadeButton(angelBtn, ToggleOnColor, 10f);
@@ -952,7 +952,7 @@ namespace PromptFighters.GameFlow
         static string CommentaryToggleText() =>
             PromptFighters.UI.CommentaryController.Enabled ? "実況 ON" : "実況 OFF";
         static string AngelToggleText() =>
-            PromptFighters.UI.AngelController.Enabled ? "アイテム ON" : "アイテム OFF";
+            PromptFighters.UI.AngelController.Enabled ? "ボイスボール ON" : "ボイスボール OFF";
         static string CpuToggleText()
         {
             switch (PromptFighters.Battle.FighterAI.Level)

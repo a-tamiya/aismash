@@ -265,7 +265,7 @@ namespace PromptFighters.Audio
         public void PlayGrab()       => PlayOneShot(_grab,       0.62f);
         public void PlayMenu()       => PlayOneShot(_menu,       0.62f);
 
-        // 天使ギミック用
+        // ボイスボールギミック用
         public void PlayGimmickBuff()     => PlayOneShot(_buff,     0.78f);
         public void PlayGimmickHeal()     => PlayOneShot(_heal,     0.78f);
         public void PlayGimmickDebuff()   => PlayOneShot(_debuff,   0.78f);
