@@ -25,6 +25,10 @@ namespace PromptFighters.AI
         public const string CommentaryInstructionsCalm =
             "日本語のスポーツ実況アナウンサー本人として、試合の合間を落ち着いた解説トーンでつなぐ。" +
             "自然な会話の速さと抑揚で、台本読みに聞こえないように。静かな中にも試合への熱を感じさせる声で。";
+        // ボイスボール（効果発表）の演技指示。明るい女性の声で魔法の効果を発表するイメージ。
+        public const string AngelInstructions =
+            "明るく元気な女性の声。魔法の効果を発表するマスコットのように、ワクワク感を込めて。" +
+            "自然な日本語のイントネーションで、台本読みに聞こえない生き生きとした声で短く言い切る。";
 
         // 現在AI音声（実況・ボイスボール等）を再生中か。実況側が声の重なりを避けるために参照する。
         // 再生開始時に終了予定時刻を記録する方式（コルーチンが途中停止されてもフラグが残らない）。
@@ -47,14 +51,15 @@ namespace PromptFighters.AI
             string voice = DefaultVoice,
             float speed = 1f,
             float volume = 1f,
-            string instructions = null)
+            string instructions = null,
+            string realtimeVoice = null)
         {
-            return runner.StartCoroutine(SpeakCoroutine(text, audioSource, onComplete, onError, voice, speed, volume, instructions));
+            return runner.StartCoroutine(SpeakCoroutine(text, audioSource, onComplete, onError, voice, speed, volume, instructions, realtimeVoice));
         }
 
         static IEnumerator SpeakCoroutine(string text, AudioSource audioSource,
             Action onComplete, Action<string> onError, string voice, float speed, float volume,
-            string instructions)
+            string instructions, string realtimeVoice)
         {
             string key = AIImageClient.ApiKey;
             if (!AIImageClient.IsConfiguredApiKey(key))
@@ -70,7 +75,8 @@ namespace PromptFighters.AI
                 AudioClip rtClip = null;
                 string rtErr = null;
                 yield return RealtimeAudioClient.Synthesize(text, instructions, key,
-                    c => rtClip = c, e => rtErr = e);
+                    c => rtClip = c, e => rtErr = e,
+                    realtimeVoice ?? RealtimeAudioClient.MaleVoice);
                 if (rtClip != null)
                 {
                     _realtimeTtsFailures = 0;

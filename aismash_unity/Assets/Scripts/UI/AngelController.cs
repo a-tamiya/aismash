@@ -229,7 +229,9 @@ namespace PromptFighters.UI
                 ShowEffectCenter(BuildEffectText(cg));
                 AITTSClient.Speak(this, cg.message, _audioSource,
                     onError: e => Debug.LogWarning("[VoiceItemTTS] " + e),
-                    voice: AITTSClient.AngelVoice, volume: 2.0f);
+                    voice: AITTSClient.AngelVoice, volume: 2.0f,
+                    instructions: AITTSClient.AngelInstructions,
+                    realtimeVoice: RealtimeAudioClient.FemaleVoice);
 
                 // 実況にもこの瞬間を拾わせる（効果内容つき）
                 BattleLogger.Instance?.LogEvent($"ボイスボール効果発動:{cg.message}");
@@ -342,7 +344,9 @@ namespace PromptFighters.UI
             AITTSClient.Speak(this, gimmick.message, _audioSource,
                 onError: e => Debug.LogWarning("[VoiceItemTTS] " + e),
                 voice: AITTSClient.AngelVoice,
-                volume: 2.0f);
+                volume: 2.0f,
+                instructions: AITTSClient.AngelInstructions,
+                realtimeVoice: RealtimeAudioClient.FemaleVoice);
 
             // 実況にもこの瞬間を拾わせる（願いの内容＋効果つき）
             BattleLogger.Instance?.LogEvent($"ボイスボール効果発動:{gimmick.message}");

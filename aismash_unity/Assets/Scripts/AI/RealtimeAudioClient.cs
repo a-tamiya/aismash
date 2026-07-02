@@ -19,9 +19,11 @@ namespace PromptFighters.AI
         const string WsEndpoint = "wss://api.openai.com/v1/realtime";
         public const string RealtimeModel   = "gpt-realtime-2";
         public const string TranscribeModel = "gpt-realtime-whisper";
-        // 読み上げの声。marin が最も人間らしい。セッション設定で拒否されたら ash へフォールバック。
-        public const string SpeechVoice         = "marin";
-        public const string SpeechVoiceFallback = "ash";
+        // 読み上げの声（Realtime世代で最も人間らしい2声）。
+        //  ・cedar = 男性（実況用） / marin = 女性（ボイスボール用）
+        // セッション設定で拒否された場合は近い性別の旧声へフォールバックする。
+        public const string MaleVoice   = "cedar";
+        public const string FemaleVoice = "marin";
 
         const int InputRate = 24000; // Realtime APIの audio/pcm 入出力レート
 
@@ -116,9 +118,9 @@ namespace PromptFighters.AI
 
         // ── 音声合成（セリフ読み上げ） ─────────────────────────────
         // Realtimeモデルに「このセリフをそのまま読む」よう指示して喋らせ、AudioClipにして返す。
-        // styleInstructions で声の演技（実況調など）を指定できる。
+        // styleInstructions で声の演技（実況調など）、voice で声（cedar=男性/marin=女性）を指定できる。
         public static IEnumerator Synthesize(string text, string styleInstructions, string apiKey,
-            Action<AudioClip> onClip, Action<string> onErr)
+            Action<AudioClip> onClip, Action<string> onErr, string voice = MaleVoice)
         {
             if (string.IsNullOrWhiteSpace(text)) { onErr?.Invoke("テキストが空"); yield break; }
 
@@ -134,8 +136,9 @@ namespace PromptFighters.AI
                 ? "自然な日本語で読み上げる。"
                 : styleInstructions;
 
-            // 声はまず marin、セッション設定で拒否されたら ash で再試行
-            string[] voices = { SpeechVoice, SpeechVoiceFallback };
+            // 指定の声が拒否されたら、近い性別の旧声で再試行する
+            string fallbackVoice = voice == FemaleVoice ? "shimmer" : "ash";
+            string[] voices = { voice, fallbackVoice };
             bool ready = false;
             string err = null;
             for (int v = 0; v < voices.Length && !ready; v++)

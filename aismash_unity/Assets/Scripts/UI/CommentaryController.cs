@@ -379,7 +379,8 @@ namespace PromptFighters.UI
                 volume: 2.2f,
                 instructions: focus != null
                     ? AITTSClient.CommentaryInstructionsExcited
-                    : AITTSClient.CommentaryInstructionsCalm);
+                    : AITTSClient.CommentaryInstructionsCalm,
+                realtimeVoice: RealtimeAudioClient.MaleVoice);
 
             // 読み上げが終わるまで次の実況をブロックする（声の重なり防止）。安全のため上限25秒。
             float waited = 0f;

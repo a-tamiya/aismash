@@ -870,7 +870,9 @@ AI生成のエフェクト画像（EffectA/B/C/EffectSmash）は技の種類に�
 
 **セリフ・声色**: 実況文はテレビ格闘中継の熱血アナウンサー調（1〜2文・60文字以内。絶叫と短い分析を織り交ぜ、キャラ名・技名を積極的に呼ぶ。数値の読み上げはせず状況の言葉に置き換える）。演技指示は**人間らしさを最優先**（台本読みに聞こえない生の声・自然な日本語イントネーション・息継ぎや間・語尾を自然に抜く）とし、熱い瞬間は興奮トーン、つなぎ実況は落ち着いた解説トーンと**2種類の演技を使い分けて緩急**を出す。
 
-**TTSの経路（フォールバック連鎖）**: 演技指示付きの読み上げは、①**Realtime API音声合成**（`RealtimeAudioClient.Synthesize`、`gpt-realtime-2`・voice=marin、拒否時ash。最も人間らしい）→ ②`gpt-4o-mini-tts` → ③`tts-1`（speed 1.15）の順に試す。②③の権限エラー（403）と①の連続失敗（2回）はセッション中記憶し、無駄な失敗リクエストを繰り返さない。
+**TTSの経路（フォールバック連鎖）**: 演技指示付きの読み上げは、①**Realtime API音声合成**（`RealtimeAudioClient.Synthesize`、`gpt-realtime-2`。最も人間らしい）→ ②`gpt-4o-mini-tts` → ③`tts-1`（speed 1.15）の順に試す。②③の権限エラー（403）と①の連続失敗（2回）はセッション中記憶し、無駄な失敗リクエストを繰り返さない。
+
+**声の性別**: **実況＝男性**（Realtime: `cedar`、拒否時ash。tts-1フォールバック時もash）、**ボイスボール＝女性**（Realtime: `marin`、拒否時shimmer。tts-1フォールバック時もshimmer）。ボイスボールの効果読み上げにも演技指示（明るく元気な女性・魔法の効果発表のワクワク感）を付け、実況と同じRealtime音声合成の経路を使う。
 
 **テロップ表示**: 放送テロップ風のデザインとする。画面下端の帯（高さ96px）に、左端の赤い斜めプレート「● LIVE 実況」（表示中は脈動）＋左寄せの実況テキストを載せ、下からのスライドイン／アウトで出し入れする。テロップ用Canvasは他UIと同じ基準解像度（1920×1080・ScaleWithScreenSize）でスケールさせ、解像度によって文字サイズが変わらないようにする。
 
@@ -1756,3 +1758,9 @@ APIキーの権限変更で whisper-1（音声認識）と gpt-4o-mini-tts（表
 - **Transcribe**（whisper-1の代替）: `gpt-realtime-2` の会話セッションに入力音声の自動文字起こし（`gpt-realtime-whisper`・日本語指定）を構成し、録音済みWAV（16kHz→24kHzへリサンプル）をappend→commitして完了イベントから認識テキストを得る。response.createは送らないためLLM応答は生成されない。`WhisperClient.TranscribeOnce` がwhisper-1の403を検知すると自動で切り替える。実測で正しく認識されることを確認済み。
 - **Synthesize**（表現付きTTSの代替）: `gpt-realtime-2`（voice=**marin**、拒否時ash）に「セリフを一言一句そのまま読み上げる」指示＋演技指示を渡して発話させ、音声デルタ（PCM16 24kHz）を集めてAudioClip化する。`AITTSClient.Speak` の演技指示付き呼び出しはこれを最優先で使い、失敗時は gpt-4o-mini-tts → tts-1 の順にフォールバック（連続2回失敗でセッション中は使わない）。実測で音声生成を確認済み。
 - WebSocketは `System.Net.WebSockets.ClientWebSocket`（受信はバックグラウンドTask→キュー→コルーチンでポーリング、送信は直列化）。イベントはGA名と旧名（response.output_audio.delta / response.audio.delta）の両対応。
+
+### 25.18 音声の性別指定・ボイスボール声のRealtime化（実装済み・2026-07-02）
+
+- **実況＝男性**: Realtime音声を `marin` → **`cedar`**（男性・最も自然）へ変更。tts-1フォールバックはash。
+- **ボイスボール＝女性**: 効果読み上げをRealtime音声合成（**`marin`**・女性）＋演技指示（明るく元気・魔法の効果発表のワクワク感）に変更。拒否時・tts-1フォールバックはshimmer。
+- `RealtimeAudioClient.Synthesize` に voice 引数、`AITTSClient.Speak` に realtimeVoice 引数を追加。cedar/marin両声とも実機で音声生成を確認済み。
