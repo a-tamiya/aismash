@@ -7,13 +7,17 @@ using PromptFighters.Battle;
 
 namespace PromptFighters.UI
 {
-    // 試合中に定期的にAI実況テロップ+音声を流す。
+    // 試合中にAI実況テロップ+音声を流す。
+    // 固定間隔ではなくイベント駆動：ガードブレイク・連続ヒット・低HP・逆転・残り時間などの
+    // 「熱い瞬間」を検知して即実況し、静かな時間だけランダム間隔のつなぎ実況を入れる。
     // BattleManager の Awake で AddComponent される。
     public class CommentaryController : MonoBehaviour
     {
         public static bool Enabled = true;
 
-        public float commentaryInterval = 17f; // 実況間隔（秒）
+        public float minGapSeconds  = 8f;  // 実況同士の最短間隔（連発防止）
+        public float idleIntervalMin = 13f; // 何も起きない時のつなぎ実況間隔（ランダム下限）
+        public float idleIntervalMax = 24f; // 同・上限
 
         CanvasGroup _group;
         RectTransform _panelRect;
@@ -26,6 +30,17 @@ namespace PromptFighters.UI
         BattleManager _bm;
 
         const float PanelH = 96f; // テロップ高さ（バフチップは110pxから積むため下を保つ）
+
+        // ── イベント駆動実況の検知状態 ──
+        float _lastCommentaryTime = -999f;
+        float _nextIdleTime;
+        int   _prevGb1, _prevGb2;               // ガードブレイク累計の前回値
+        bool  _low1Announced, _low2Announced;   // 低HP実況を各1回に制限
+        int   _lastStreakAnnounced1, _lastStreakAnnounced2;
+        int   _prevLeader;                      // 0=互角 / 1=P1リード / 2=P2リード
+        bool  _t30Announced, _t10Announced;
+        readonly System.Collections.Generic.Queue<string> _recentLines =
+            new System.Collections.Generic.Queue<string>(); // 直前の実況（繰り返し防止用）
 
         void Awake()
         {
@@ -177,6 +192,7 @@ namespace PromptFighters.UI
         void OnBattleStart()
         {
             if (!Enabled) return;
+            ResetTriggerStates();
             if (_loopRoutine != null) StopCoroutine(_loopRoutine);
             _loopRoutine = StartCoroutine(CommentaryLoop());
         }
@@ -186,24 +202,130 @@ namespace PromptFighters.UI
             if (_loopRoutine != null) { StopCoroutine(_loopRoutine); _loopRoutine = null; }
         }
 
+        void ResetTriggerStates()
+        {
+            _lastCommentaryTime = -999f;
+            _prevGb1 = _prevGb2 = 0;
+            _low1Announced = _low2Announced = false;
+            _lastStreakAnnounced1 = _lastStreakAnnounced2 = 0;
+            _prevLeader = 0;
+            _t30Announced = _t10Announced = false;
+            _recentLines.Clear();
+        }
+
         IEnumerator CommentaryLoop()
         {
-            yield return new WaitForSeconds(8f); // 試合開始直後は少し待つ
+            yield return new WaitForSeconds(5f); // 試合開始直後は少し待つ
+            ScheduleNextIdle();
 
+            // 0.5秒ごとに試合状況を監視し、熱い瞬間が来たら即実況。
+            // 何も起きない時はランダム間隔のつなぎ実況でテンポを保つ。
             while (true)
             {
-                if (!_isGenerating) StartCoroutine(TriggerCommentary());
-                yield return new WaitForSeconds(commentaryInterval + Random.Range(-3f, 3f));
+                if (_bm != null && _bm.Phase == BattlePhase.Fighting && !_isGenerating
+                    && Time.time - _lastCommentaryTime >= minGapSeconds)
+                {
+                    string focus = DetectHotMoment();
+                    bool idleDue = Time.time >= _nextIdleTime;
+                    if (focus != null || idleDue)
+                    {
+                        _lastCommentaryTime = Time.time;
+                        StartCoroutine(TriggerCommentary(focus));
+                        ScheduleNextIdle();
+                    }
+                }
+                yield return new WaitForSeconds(0.5f);
             }
         }
 
-        IEnumerator TriggerCommentary()
+        void ScheduleNextIdle()
+        {
+            _nextIdleTime = Time.time + Random.Range(idleIntervalMin, idleIntervalMax);
+        }
+
+        // 「今まさに実況すべき瞬間」を検知する。検知したら焦点の説明文を返す（消費式）。
+        string DetectHotMoment()
+        {
+            var lg = BattleLogger.Instance;
+            var f1 = _bm?.fighter1;
+            var f2 = _bm?.fighter2;
+            if (lg == null || f1 == null || f2 == null) return null;
+            string n1 = _bm.Character1?.characterName ?? "1P";
+            string n2 = _bm.Character2?.characterName ?? "2P";
+
+            // ガードブレイクの瞬間
+            if (lg.P1.guardBreaksDealt > _prevGb1)
+            {
+                _prevGb1 = lg.P1.guardBreaksDealt;
+                return $"{n1}が{n2}のガードを叩き割った（ガードブレイク発生）";
+            }
+            if (lg.P2.guardBreaksDealt > _prevGb2)
+            {
+                _prevGb2 = lg.P2.guardBreaksDealt;
+                return $"{n2}が{n1}のガードを叩き割った（ガードブレイク発生）";
+            }
+
+            // 連続ヒットのラッシュ（4hit以上、更新時のみ）
+            if (lg.P1.hitStreak >= 4 && lg.P1.hitStreak > _lastStreakAnnounced1)
+            {
+                _lastStreakAnnounced1 = lg.P1.hitStreak;
+                return $"{n1}が{lg.P1.hitStreak}連続ヒットの猛ラッシュ中";
+            }
+            if (lg.P2.hitStreak >= 4 && lg.P2.hitStreak > _lastStreakAnnounced2)
+            {
+                _lastStreakAnnounced2 = lg.P2.hitStreak;
+                return $"{n2}が{lg.P2.hitStreak}連続ヒットの猛ラッシュ中";
+            }
+
+            // 低HPの土壇場（各プレイヤー1回だけ）
+            float r1 = f1.maxHP > 0f ? f1.CurrentHP / f1.maxHP : 1f;
+            float r2 = f2.maxHP > 0f ? f2.CurrentHP / f2.maxHP : 1f;
+            if (!_low1Announced && r1 <= 0.25f && f1.State != FighterState.Dead)
+            {
+                _low1Announced = true;
+                return $"{n1}のHPが残りわずか。あと数発で決着の土壇場";
+            }
+            if (!_low2Announced && r2 <= 0.25f && f2.State != FighterState.Dead)
+            {
+                _low2Announced = true;
+                return $"{n2}のHPが残りわずか。あと数発で決着の土壇場";
+            }
+
+            // 形勢逆転（リードの入れ替わり）
+            int leader = r1 - r2 > 0.10f ? 1 : (r2 - r1 > 0.10f ? 2 : 0);
+            if (leader != 0)
+            {
+                bool flipped = _prevLeader != 0 && leader != _prevLeader;
+                _prevLeader = leader;
+                if (flipped)
+                    return $"形勢逆転！{(leader == 1 ? n1 : n2)}がリードを奪い返した";
+            }
+
+            // 残り時間の節目
+            float t = _bm.TimeRemaining;
+            if (!_t30Announced && t <= 30f && t > 0f)
+            {
+                _t30Announced = true;
+                return "残り30秒を切った終盤戦。時間切れならHP残量の多い方が勝つ";
+            }
+            if (!_t10Announced && t <= 10f && t > 0f)
+            {
+                _t10Announced = true;
+                return "残り10秒！ラストスパート";
+            }
+
+            return null;
+        }
+
+        IEnumerator TriggerCommentary(string focus)
         {
             _isGenerating = true;
 
             if (_bm == null || _bm.Phase != BattlePhase.Fighting) { _isGenerating = false; yield break; }
 
             var state = BuildState();
+            state.focusEvent = focus;
+            state.avoidLines = _recentLines.Count > 0 ? string.Join(" / ", _recentLines) : null;
             string result = null;
             bool done = false;
 
@@ -217,6 +339,9 @@ namespace PromptFighters.UI
             if (string.IsNullOrEmpty(result))
                 result = BuildFallbackCommentary(state);
 
+            _recentLines.Enqueue(result);
+            while (_recentLines.Count > 3) _recentLines.Dequeue();
+
             ShowText(result);
             bool ttsDone = false;
             AITTSClient.Speak(this, result, _audioSource,
@@ -224,7 +349,8 @@ namespace PromptFighters.UI
                 onError: err => { Debug.LogWarning("[CommentaryTTS] " + err); ttsDone = true; },
                 voice: AITTSClient.CommentaryVoice,
                 speed: AITTSClient.CommentarySpeed,
-                volume: 2.2f);
+                volume: 2.2f,
+                instructions: AITTSClient.CommentaryInstructions);
 
             _isGenerating = false;
             StartCoroutine(FadeOutAfterTTS(() => ttsDone));
@@ -261,14 +387,31 @@ namespace PromptFighters.UI
 
         static string BuildFallbackCommentary(CommentaryBattleState s)
         {
-            if (!string.IsNullOrEmpty(s.recentEvents))
-                return "試合が動いています！ " + s.recentEvents;
+            // 焦点イベントがあればそれをそのまま叫ぶ（API失敗時でも瞬間を外さない）
+            if (!string.IsNullOrEmpty(s.focusEvent))
+                return s.focusEvent + "！";
 
             float diff = s.player1HpRatio - s.player2HpRatio;
             if (Mathf.Abs(diff) < 0.12f)
-                return "互角の展開です。次の一撃で流れが変わりそうです。";
-            string lead = diff > 0f ? s.player1Name : s.player2Name;
-            return lead + "がリードしています。相手は反撃のきっかけが欲しいところです。";
+            {
+                string[] even =
+                {
+                    "両者一歩も引かない！次の一撃が勝負の分かれ目だ！",
+                    "互角の攻防！会場のボルテージが上がっていく！",
+                    "まだ分からない！この試合、どちらに転ぶか読めません！",
+                };
+                return even[Random.Range(0, even.Length)];
+            }
+
+            string lead  = diff > 0f ? s.player1Name : s.player2Name;
+            string chase = diff > 0f ? s.player2Name : s.player1Name;
+            string[] leadLines =
+            {
+                $"{lead}が試合の主導権を握っている！{chase}は反撃の糸口を掴みたい！",
+                $"{lead}、圧巻の攻めだ！{chase}、ここが踏ん張りどころ！",
+                $"{lead}がリードを広げる！{chase}に残された時間は多くないぞ！",
+            };
+            return leadLines[Random.Range(0, leadLines.Length)];
         }
 
         void ShowText(string text)

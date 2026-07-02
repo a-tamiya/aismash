@@ -27,6 +27,9 @@ namespace PromptFighters.AI
         public int    recentHitsP2;
         public int    guardBreaksP1;    // 累計ガード破壊数
         public int    guardBreaksP2;
+        // イベント駆動実況用
+        public string focusEvent;       // 今まさに起きた注目イベント（最優先で実況させる）
+        public string avoidLines;       // 直前の実況文（言い回しの繰り返し防止）
     }
 
     public static class AICommentaryClient
@@ -78,13 +81,19 @@ namespace PromptFighters.AI
         }
 
         static string BuildSystemPrompt() =>
-            "2D格闘ゲームの試合実況を1〜2文で熱く行ってください（日本語・スポーツ実況風）。" +
-            "直近の出来事があれば必ず拾い、同じ言い回しを避けてください。" +
-            "出力は実況1〜2文のみ・前置き不要。";
+            "あなたはテレビの格闘中継の熱血実況アナウンサー。今この瞬間の試合を日本語で1〜2文・60文字以内で実況する。\n" +
+            "・「決まったァ！」「なんという猛攻だ！」のような勢いのある口語で、絶叫と短い分析を織り交ぜる\n" +
+            "・キャラクター名・技名を積極的に呼ぶ（名前は与えられた表記のまま正確に）\n" +
+            "・「実況の焦点」が指定されていたら、必ずその瞬間を最優先で実況する\n" +
+            "・数値の読み上げ（HP45%等）はせず「残りわずか」「圧倒的リード」など状況の言葉に置き換える\n" +
+            "・直前の実況と同じ言い回し・同じ書き出しを避け、毎回変化を付ける\n" +
+            "・出力は実況本文のみ。前置き・カギ括弧・記号装飾は不要";
 
         static string BuildUserPrompt(CommentaryBattleState s)
         {
             var sb = new System.Text.StringBuilder();
+            if (!string.IsNullOrEmpty(s.focusEvent))
+                sb.Append($"実況の焦点（今まさに起きた。最優先で拾う）: {s.focusEvent}\n");
             sb.Append($"{s.player1Name} HP:{s.player1HpRatio*100f:0}% 与ダメ:{s.totalDamageP1:0}");
             if (s.hitStreakP1 >= 3) sb.Append($" 連続{s.hitStreakP1}hit中!");
             if (s.guardBreaksP1 > 0) sb.Append($" ガード破壊{s.guardBreaksP1}回");
@@ -99,6 +108,8 @@ namespace PromptFighters.AI
                 sb.Append($"\n{s.player2Name}の多用技:{s.mostUsedSkillP2}");
             if (!string.IsNullOrEmpty(s.recentEvents))
                 sb.Append($"\n直近:{s.recentEvents}");
+            if (!string.IsNullOrEmpty(s.avoidLines))
+                sb.Append($"\n直前の実況（同じ言い回し禁止）: {s.avoidLines}");
 
             return $"状況:\n{sb}\n残り{s.timeRemaining:0}秒";
         }

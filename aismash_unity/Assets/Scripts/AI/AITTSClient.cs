@@ -10,10 +10,16 @@ namespace PromptFighters.AI
     {
         const string Endpoint = "https://api.openai.com/v1/audio/speech";
         const string Model    = "tts-1";
+        // 声の演技指示（instructions）に対応した表現力の高いTTSモデル。実況などの感情表現に使う。
+        const string ExpressiveModel = "gpt-4o-mini-tts";
         public const string DefaultVoice    = "nova";
-        public const string CommentaryVoice = "onyx";    // 男性寄り
+        public const string CommentaryVoice = "ash";     // エネルギッシュな男性寄り（gpt-4o-mini-tts対応）
         public const string AngelVoice      = "shimmer"; // 明るく軽やかな印象（ボイスボール用）
-        public const float  CommentarySpeed = 1.15f;     // やや速めで迫力を出す
+        public const float  CommentarySpeed = 1.15f;     // やや速めで迫力を出す（フォールバックのtts-1用）
+        // 実況の声の演技指示。テンション・速度・抑揚をここで作る。
+        public const string CommentaryInstructions =
+            "テレビの格闘中継の熱血実況アナウンサー。テンションは最高潮、かなり早口で、" +
+            "抑揚を強く付けて決め所は絶叫気味に叫ぶ。語尾まで勢いを保ち、興奮が伝わる声で。";
 
         public static Coroutine Speak(MonoBehaviour runner, string text,
             AudioSource audioSource,
@@ -21,13 +27,15 @@ namespace PromptFighters.AI
             Action<string> onError = null,
             string voice = DefaultVoice,
             float speed = 1f,
-            float volume = 1f)
+            float volume = 1f,
+            string instructions = null)
         {
-            return runner.StartCoroutine(SpeakCoroutine(text, audioSource, onComplete, onError, voice, speed, volume));
+            return runner.StartCoroutine(SpeakCoroutine(text, audioSource, onComplete, onError, voice, speed, volume, instructions));
         }
 
         static IEnumerator SpeakCoroutine(string text, AudioSource audioSource,
-            Action onComplete, Action<string> onError, string voice, float speed, float volume)
+            Action onComplete, Action<string> onError, string voice, float speed, float volume,
+            string instructions)
         {
             string key = AIImageClient.ApiKey;
             if (!AIImageClient.IsConfiguredApiKey(key))
@@ -39,29 +47,57 @@ namespace PromptFighters.AI
             string safeText = text
                 .Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", " ");
             float clampedSpeed = Mathf.Clamp(speed, 0.25f, 4f);
-            string body =
+            string standardBody =
                 $"{{\"model\":\"{Model}\"," +
                 $"\"input\":\"{safeText}\"," +
                 $"\"voice\":\"{SanitizeVoice(voice)}\"," +
                 $"\"speed\":{clampedSpeed.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}," +
                 $"\"response_format\":\"wav\"}}";
 
-            using var req = new UnityWebRequest(Endpoint, "POST");
-            req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
-            req.downloadHandler = new DownloadHandlerBuffer();
-            req.SetRequestHeader("Content-Type", "application/json");
-            req.SetRequestHeader("Authorization", "Bearer " + key);
-            req.timeout = 20;
-
-            yield return req.SendWebRequest();
-
-            if (req.result != UnityWebRequest.Result.Success)
+            // 演技指示がある場合は表現対応モデルを使う（speedは非対応のため指示文で速度を表現する）
+            string body = standardBody;
+            bool expressive = !string.IsNullOrEmpty(instructions);
+            if (expressive)
             {
-                onError?.Invoke(req.error);
-                yield break;
+                string safeInst = instructions
+                    .Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", " ");
+                body =
+                    $"{{\"model\":\"{ExpressiveModel}\"," +
+                    $"\"input\":\"{safeText}\"," +
+                    $"\"voice\":\"{SanitizeVoice(voice)}\"," +
+                    $"\"instructions\":\"{safeInst}\"," +
+                    $"\"response_format\":\"wav\"}}";
             }
 
-            AudioClip clip = WavToAudioClip(req.downloadHandler.data, "TTS");
+            byte[] wavData = null;
+            using (var req = BuildRequest(body, key))
+            {
+                yield return req.SendWebRequest();
+                if (req.result == UnityWebRequest.Result.Success)
+                    wavData = req.downloadHandler.data;
+                else if (!expressive)
+                {
+                    onError?.Invoke(req.error);
+                    yield break;
+                }
+                else
+                    Debug.LogWarning($"[TTS] 表現付きTTS失敗（{req.error}）。標準TTSで再試行します");
+            }
+
+            // 表現付きモデルが使えない環境では従来のtts-1へフォールバック
+            if (wavData == null)
+            {
+                using var req2 = BuildRequest(standardBody, key);
+                yield return req2.SendWebRequest();
+                if (req2.result != UnityWebRequest.Result.Success)
+                {
+                    onError?.Invoke(req2.error);
+                    yield break;
+                }
+                wavData = req2.downloadHandler.data;
+            }
+
+            AudioClip clip = WavToAudioClip(wavData, "TTS");
             if (clip == null) { onError?.Invoke("WAV変換失敗"); yield break; }
 
             if (audioSource != null)
@@ -74,6 +110,17 @@ namespace PromptFighters.AI
             UnityEngine.Object.Destroy(clip);
 
             onComplete?.Invoke();
+        }
+
+        static UnityWebRequest BuildRequest(string body, string key)
+        {
+            var req = new UnityWebRequest(Endpoint, "POST");
+            req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
+            req.downloadHandler = new DownloadHandlerBuffer();
+            req.SetRequestHeader("Content-Type", "application/json");
+            req.SetRequestHeader("Authorization", "Bearer " + key);
+            req.timeout = 20;
+            return req;
         }
 
         static string SanitizeVoice(string voice)
