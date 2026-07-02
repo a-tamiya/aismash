@@ -24,12 +24,22 @@ namespace PromptFighters.Battle
         public float   StatusChance = 1f;
 
         public const float MaxHP = 10f;
+        const int MaxPerOwner = 3; // 同一オーナーの同時召喚上限（無限展開の防止）
         float _hp = MaxHP;
 
         Rigidbody2D _rb;
+        SpriteRenderer _sr;
         float _startX;
         float _dir = 1f;
+        float _lifetime = 3f;
+        float _age;
+        float _flashTimer;   // 被弾フラッシュの残り時間
+        Vector3 _baseScale = Vector3.one;
+        Color   _baseColor = Color.white;
         readonly HashSet<Fighter> _recentHits = new HashSet<Fighter>();
+
+        // 生存中の全召喚体（オーナーごとの数の上限管理用）
+        static readonly List<SummonEntity> s_active = new List<SummonEntity>();
 
         public static SummonEntity Spawn(Fighter owner, Vector2 pos, float speed, float lifetime,
                                          float damage, float knockback, Element element,
@@ -74,6 +84,7 @@ namespace PromptFighters.Battle
             s.Damage     = damage;
             s.Knockback  = knockback;
             s.Element    = element;
+            s._lifetime  = Mathf.Max(0.3f, lifetime);
             if (sourceAction != null)
             {
                 s.PlayerControlled   = sourceAction.player_controlled;
@@ -87,20 +98,52 @@ namespace PromptFighters.Battle
                 s.StatusChance       = Mathf.Clamp01(sourceAction.chance);
             }
 
-            Object.Destroy(go, lifetime);
+            // 足元の影（接地感）
+            float groundY = BattleManager.Instance != null ? BattleManager.Instance.StageGroundY : pos.y - 1f;
+            BlobShadow.Spawn(go.transform, groundY, Mathf.Max(0.6f, worldSize.x * 1.1f), sortingOrder: -2);
+
+            // 同一オーナーの召喚は最大数まで。超えたら最も古い個体から静かに消す。
+            s_active.RemoveAll(e => e == null);
+            s_active.Add(s);
+            int owned = 0;
+            for (int i = s_active.Count - 1; i >= 0; i--)
+            {
+                if (s_active[i].Owner != owner) continue;
+                owned++;
+                if (owned > MaxPerOwner) Object.Destroy(s_active[i].gameObject);
+            }
+
             return s;
         }
 
         void Start()
         {
-            _rb     = GetComponent<Rigidbody2D>();
-            _startX = transform.position.x;
-            _dir    = InitialDirection();
+            _rb        = GetComponent<Rigidbody2D>();
+            _sr        = GetComponent<SpriteRenderer>();
+            _startX    = transform.position.x;
+            _dir       = InitialDirection();
+            _baseScale = transform.localScale;
+            if (_sr != null) _baseColor = _sr.color;
             _rb.linearVelocity = new Vector2(_dir * Speed, 0f);
+        }
+
+        void OnDestroy()
+        {
+            s_active.Remove(this);
         }
 
         void Update()
         {
+            // 寿命・演出（出現ポップ／消滅フェード／被弾フラッシュ／低耐久点滅／生き物らしい脈動）
+            _age += Time.deltaTime;
+            if (_flashTimer > 0f) _flashTimer -= Time.deltaTime;
+            UpdateVisual();
+            if (_age >= _lifetime)
+            {
+                Destroy(gameObject);
+                return;
+            }
+
             if (PlayerControlled && Owner != null)
             {
                 float input = Owner.LastMoveInputX;
@@ -141,10 +184,41 @@ namespace PromptFighters.Battle
             }
         }
 
+        // 出現ポップ・消滅フェード・被弾フラッシュ・低耐久点滅・脈動をまとめて適用する。
+        void UpdateVisual()
+        {
+            if (_sr == null) return;
+
+            // 出現ポップ（小さく生まれて弾みながら等倍へ）
+            float popT = Mathf.Clamp01(_age / 0.18f);
+            float pop  = Mathf.Lerp(0.25f, 1f, 1f - (1f - popT) * (1f - popT));
+
+            // 生き物らしいスクワッシュ＆ストレッチ（面積ほぼ一定の2D変形）
+            float wob = 0.04f * Mathf.Sin((_age + GetInstanceID() * 0.13f) * 7f);
+
+            // 寿命間際は縮みながらフェードアウト
+            float outT   = Mathf.Clamp01((_lifetime - _age) / 0.35f);
+            float shrink = Mathf.Lerp(0.6f, 1f, outT);
+
+            float k = pop * shrink;
+            transform.localScale = new Vector3(
+                _baseScale.x * (1f + wob) * k,
+                _baseScale.y * (1f - wob) * k, 1f);
+
+            Color c = _baseColor;
+            if (_flashTimer > 0f)
+                c = Color.Lerp(c, new Color(1f, 0.42f, 0.36f), Mathf.Clamp01(_flashTimer / 0.15f));
+            if (_hp <= MaxHP * 0.3f)
+                c.a *= 0.72f + 0.28f * Mathf.Sin(Time.time * 10f); // 破壊寸前の点滅
+            c.a *= outT;
+            _sr.color = c;
+        }
+
         public void TakeHit(float dmg)
         {
             if (dmg <= 0f) return;
             _hp -= dmg;
+            _flashTimer = 0.15f;
             DamagePopup.SpawnText(transform.position + Vector3.up * 0.6f,
                 Mathf.RoundToInt(dmg).ToString(), new Color(1f, 0.45f, 0.1f), 1.0f);
             if (_hp <= 0f)

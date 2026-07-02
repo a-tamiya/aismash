@@ -31,6 +31,11 @@ namespace PromptFighters.Battle.Skills
         public bool         GroundBounce;     // ヒット時に地面バウンドさせる
         public bool         IsSmashHit;       // 最大チャージスマッシュヒット時のスロー演出用
         public float        LifestealRatio;   // ヒット時に与ダメージ×この割合だけ owner を回復
+        public bool         IsTrap;           // 設置技。アーム時間・待機脈動・触発時の爆発演出を付ける
+        public float        ArmTime;          // 設置からアーム完了（判定有効化）までの秒数
+
+        Vector3 _visualBaseScale = Vector3.one;
+        bool    _exhausted;
 
         readonly HashSet<Fighter> _hitTargets = new HashSet<Fighter>();
         readonly Dictionary<Fighter, float> _nextHitTimes = new Dictionary<Fighter, float>();
@@ -185,6 +190,10 @@ namespace PromptFighters.Battle.Skills
             GroundBounce = false;
             IsSmashHit = false;
             LifestealRatio = 0f;
+            IsTrap = false;
+            ArmTime = 0f;
+            _exhausted = false;
+            _visualBaseScale = Vector3.one;
 
             transform.rotation = Quaternion.identity;
             if (_col != null) _col.enabled = true;
@@ -231,7 +240,20 @@ namespace PromptFighters.Battle.Skills
             }
 
             _activated = true;
-            yield return new WaitForSeconds(Lifetime);
+            _visualBaseScale = transform.localScale;
+
+            // 設置技: アーム時間中は判定を無効化（密着で即当たる置き逃げを防ぎ、「設置した」感を出す）
+            float armed = 0f;
+            if (IsTrap && ArmTime > 0f && _col != null)
+            {
+                _col.enabled = false;
+                armed = Mathf.Min(ArmTime, Lifetime * 0.5f);
+                yield return new WaitForSeconds(armed);
+                if (_released) yield break;
+                if (_col != null && _hitsLanded < MaxHits) _col.enabled = true;
+            }
+
+            yield return new WaitForSeconds(Mathf.Max(0.01f, Lifetime - armed));
             Release();
         }
 
@@ -245,6 +267,16 @@ namespace PromptFighters.Battle.Skills
                 float dirSign = Owner.FacingRight ? 1f : -1f;
                 transform.position = (Vector2)Owner.transform.position +
                     new Vector2(dirSign * OwnerLocalOffset.x, OwnerLocalOffset.y);
+            }
+
+            // 設置技の待機脈動（罠が「そこにある」ことを両プレイヤーに読ませる）
+            if (IsTrap && !_exhausted && !HideVisual && _sr != null && _sr.enabled)
+            {
+                float p = Mathf.Sin(Time.time * 6f) * 0.5f + 0.5f;
+                transform.localScale = _visualBaseScale * (1f + 0.06f * p);
+                var c = _sr.color;
+                c.a = Mathf.Lerp(0.72f, 1f, p);
+                _sr.color = c;
             }
 
             // デバッグオーバーレイをcol.boundsに追従
@@ -324,7 +356,10 @@ namespace PromptFighters.Battle.Skills
                 voiceItem.TakeHit(Damage, Owner);
                 _hitsLanded++;
                 if (_hitsLanded >= MaxHits && _col != null)
+                {
                     _col.enabled = false;
+                    if (IsTrap) TriggerTrapBurst();
+                }
                 return;
             }
 
@@ -336,7 +371,10 @@ namespace PromptFighters.Battle.Skills
                 summon.TakeHit(Damage);
                 _hitsLanded++;
                 if (_hitsLanded >= MaxHits && _col != null)
+                {
                     _col.enabled = false;
+                    if (IsTrap) TriggerTrapBurst();
+                }
                 return;
             }
 
@@ -348,7 +386,10 @@ namespace PromptFighters.Battle.Skills
                 destructible.TakeHit(Damage, Owner);
                 _hitsLanded++;
                 if (_hitsLanded >= MaxHits && _col != null)
+                {
                     _col.enabled = false;
+                    if (IsTrap) TriggerTrapBurst();
+                }
                 return;
             }
 
@@ -371,7 +412,35 @@ namespace PromptFighters.Battle.Skills
             {
                 // コライダーを無効化してビジュアルは lifetime まで表示し続ける
                 _col.enabled = false;
+                // 設置技は「使用済みの罠が残って見える」と紛らわしいので、爆発演出を出して消す
+                if (IsTrap) TriggerTrapBurst();
             }
+        }
+
+        // 設置技の触発演出: 一瞬白く光って膨らみながら消える。
+        void TriggerTrapBurst()
+        {
+            if (_exhausted || _released) return;
+            _exhausted = true;
+            StopAllCoroutines(); // 寿命待ちを打ち切って爆発演出へ
+            StartCoroutine(TrapBurst());
+        }
+
+        IEnumerator TrapBurst()
+        {
+            const float dur = 0.14f;
+            float t = 0f;
+            float baseAlpha = _sr != null ? _sr.color.a : 1f;
+            while (t < dur)
+            {
+                t += Time.deltaTime;
+                float k = Mathf.Clamp01(t / dur);
+                transform.localScale = _visualBaseScale * (1f + 0.5f * k);
+                if (_sr != null && !HideVisual)
+                    _sr.color = new Color(1f, 1f, 1f, Mathf.Lerp(baseAlpha, 0f, k));
+                yield return null;
+            }
+            Release();
         }
 
         void ApplyHit(Fighter target)

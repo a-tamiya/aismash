@@ -540,11 +540,34 @@ namespace PromptFighters.Battle.Skills
             height  *= _sizeScale;
             float lifetime = a.duration > 0f ? a.duration : Mathf.Max(skill.parameters.active_time, 0.35f);
 
-            SpawnConfiguredHitbox(
+            // 設置技は基本的に地面へ置く（空中に浮いた地雷を防ぐ）。
+            // spawn_y が高い場合のみ「空中トラップ」としてAI指定を尊重する。
+            Vector2 pos;
+            if (offsetY >= 1.5f)
+            {
+                pos = (Vector2)_fighter.transform.position + new Vector2(dirSign * offsetX, offsetY);
+            }
+            else
+            {
+                float trapX = _fighter.transform.position.x + dirSign * offsetX;
+                // 設置位置の床をレイキャストで探す（キャラのピボット＝足元。StageGroundYはステージに
+                // よって見た目の床と一致しないため使わない）。見つからなければ使用者の足元の高さ。
+                float groundRef = _fighter.transform.position.y;
+                var hit = Physics2D.Raycast(
+                    new Vector2(trapX, _fighter.transform.position.y + 0.6f),
+                    Vector2.down, 10f, _fighter.groundLayer);
+                if (hit.collider != null) groundRef = hit.point.y;
+                pos = new Vector2(trapX, groundRef + height * HitboxVisualScale * 0.5f);
+            }
+
+            var hb = SpawnConfiguredHitbox(
                 skill, a, powerMultiplier,
-                (Vector2)_fighter.transform.position + new Vector2(dirSign * offsetX, offsetY),
+                pos,
                 new Vector2(width, height),
                 lifetime);
+            // 設置技の性格付け: アーム時間＋待機脈動＋触発時の爆発演出
+            hb.IsTrap  = true;
+            hb.ArmTime = 0.25f;
         }
 
         Hitbox SpawnConfiguredHitbox(SkillData skill, SkillAction a, float powerMultiplier,
@@ -828,6 +851,10 @@ namespace PromptFighters.Battle.Skills
             float spawnX   = a.spawn_x > 0f ? a.spawn_x : 1.5f;
             float spawnY   = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 0f;
             Vector2 pos    = (Vector2)_fighter.transform.position + new Vector2(dirSign * spawnX * _sizeScale, spawnY * _sizeScale);
+            // 壁際で使ってもステージ外に生まれないようにクランプ
+            var bmSummon = PromptFighters.Battle.BattleManager.Instance;
+            if (bmSummon != null)
+                pos.x = Mathf.Clamp(pos.x, bmSummon.StageMinX + 0.6f, bmSummon.StageMaxX - 0.6f);
             float lifetime = a.duration > 0f ? a.duration : 3f;
             float speed    = a.power > 0f ? a.power : 2.5f;
             float dmg      = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage * 0.5f) * powerMultiplier;
