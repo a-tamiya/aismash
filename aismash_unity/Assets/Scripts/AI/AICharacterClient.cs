@@ -42,51 +42,60 @@ namespace PromptFighters.AI
 
             string systemPrompt = BuildSystemPrompt();
             string userPrompt   = BuildUserPrompt(characterName, features);
-            string body         = OpenAIRequest.BuildChatBody(Model, systemPrompt, userPrompt, jsonMode: true);
             string lastError = null;
+            // 主モデルが全滅した場合は軽量モデルでも試す（キャラ生成を失敗で終わらせない）
+            string[] models = { Model, LightModel };
 
-            for (int attempt = 1; attempt <= MaxGenerateAttempts; attempt++)
+            foreach (string model in models)
             {
-                using var req = new UnityWebRequest(Endpoint, "POST");
-                req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
-                req.downloadHandler = new DownloadHandlerBuffer();
-                req.SetRequestHeader("Content-Type", "application/json");
-                req.SetRequestHeader("Authorization", "Bearer " + key);
-                // 非ストリーミングのため生成中はデータが来ない。低速モデルでは1キャラ2分かかる
-                // こともあるので長めに取る（150s×MaxGenerateAttempts回＝最大約5分待つ）。
-                req.timeout = 150;
+                string body = OpenAIRequest.BuildChatBody(model, systemPrompt, userPrompt, jsonMode: true);
 
-                yield return req.SendWebRequest();
-
-                if (req.result != UnityWebRequest.Result.Success)
+                for (int attempt = 1; attempt <= MaxGenerateAttempts; attempt++)
                 {
-                    string responseText = req.downloadHandler?.text;
-                    lastError = $"{req.error}: {responseText}";
-                    Debug.LogWarning($"[AI] 通信エラー({attempt}/{MaxGenerateAttempts}): {lastError}");
-                    if (attempt < MaxGenerateAttempts) yield return new WaitForSeconds(1.0f);
-                    continue;
+                    using var req = new UnityWebRequest(Endpoint, "POST");
+                    req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
+                    req.downloadHandler = new DownloadHandlerBuffer();
+                    req.SetRequestHeader("Content-Type", "application/json");
+                    req.SetRequestHeader("Authorization", "Bearer " + key);
+                    // 非ストリーミングのため生成中はデータが来ない。低速モデルでは1キャラ2分かかる
+                    // こともあるので長めに取る（150s×MaxGenerateAttempts回＝最大約5分待つ）。
+                    req.timeout = 150;
+
+                    yield return req.SendWebRequest();
+
+                    if (req.result != UnityWebRequest.Result.Success)
+                    {
+                        string responseText = req.downloadHandler?.text;
+                        lastError = $"{req.error}: {responseText}";
+                        Debug.LogWarning($"[AI] 通信エラー({model} {attempt}/{MaxGenerateAttempts}): {lastError}");
+                        if (attempt < MaxGenerateAttempts) yield return new WaitForSeconds(1.0f);
+                        continue;
+                    }
+
+                    bool parseFailed = false;
+                    try
+                    {
+                        string content = ParseContent(req.downloadHandler.text);
+                        string json    = ExtractJsonBlock(content);
+                        var data = SkillJsonParser.ParseOrFallback(json, characterName);
+                        if (string.IsNullOrEmpty(data.characterName)) data.characterName = characterName;
+                        if (string.IsNullOrEmpty(data.inputFeatures)) data.inputFeatures = features;
+                        onSuccess?.Invoke(data);
+                        yield break;
+                    }
+                    catch (Exception e)
+                    {
+                        lastError = "AI応答の解析に失敗: " + e.Message;
+                        Debug.LogWarning($"[AI] 解析エラー({model} {attempt}/{MaxGenerateAttempts}): {e.Message}\nレスポンス: {req.downloadHandler.text}");
+                        parseFailed = true;
+                    }
+
+                    if (parseFailed && attempt < MaxGenerateAttempts)
+                        yield return new WaitForSeconds(0.5f);
                 }
 
-                bool parseFailed = false;
-                try
-                {
-                    string content = ParseContent(req.downloadHandler.text);
-                    string json    = ExtractJsonBlock(content);
-                    var data = SkillJsonParser.ParseOrFallback(json, characterName);
-                    if (string.IsNullOrEmpty(data.characterName)) data.characterName = characterName;
-                    if (string.IsNullOrEmpty(data.inputFeatures)) data.inputFeatures = features;
-                    onSuccess?.Invoke(data);
-                    yield break;
-                }
-                catch (Exception e)
-                {
-                    lastError = "AI応答の解析に失敗: " + e.Message;
-                    Debug.LogWarning($"[AI] 解析エラー({attempt}/{MaxGenerateAttempts}): {e.Message}\nレスポンス: {req.downloadHandler.text}");
-                    parseFailed = true;
-                }
-
-                if (parseFailed && attempt < MaxGenerateAttempts)
-                    yield return new WaitForSeconds(0.5f);
+                if (model != models[models.Length - 1])
+                    Debug.LogWarning($"[AI] モデル {model} でキャラ生成に失敗。{LightModel} へフォールバックします");
             }
 
             onError?.Invoke(lastError ?? "AI生成に失敗しました");
@@ -123,50 +132,56 @@ namespace PromptFighters.AI
 
             string systemPrompt = BuildConceptSystemPrompt();
             string userPrompt   = BuildConceptUserPrompt(name, features);
-            string body         = OpenAIRequest.BuildChatBody(Model, systemPrompt, userPrompt, jsonMode: true);
             string lastError = null;
+            // 主モデルが全滅した場合は軽量モデルでも試す
+            string[] models = { Model, LightModel };
 
-            for (int attempt = 1; attempt <= MaxGenerateAttempts; attempt++)
+            foreach (string model in models)
             {
-                using var req = new UnityWebRequest(Endpoint, "POST");
-                req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
-                req.downloadHandler = new DownloadHandlerBuffer();
-                req.SetRequestHeader("Content-Type", "application/json");
-                req.SetRequestHeader("Authorization", "Bearer " + key);
-                req.timeout = 60;
+                string body = OpenAIRequest.BuildChatBody(model, systemPrompt, userPrompt, jsonMode: true);
 
-                yield return req.SendWebRequest();
-
-                if (req.result != UnityWebRequest.Result.Success)
+                for (int attempt = 1; attempt <= MaxGenerateAttempts; attempt++)
                 {
-                    lastError = $"{req.error}: {req.downloadHandler?.text}";
-                    Debug.LogWarning($"[AI] アイデア通信エラー({attempt}/{MaxGenerateAttempts}): {lastError}");
-                    if (attempt < MaxGenerateAttempts) yield return new WaitForSeconds(0.8f);
-                    continue;
-                }
+                    using var req = new UnityWebRequest(Endpoint, "POST");
+                    req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
+                    req.downloadHandler = new DownloadHandlerBuffer();
+                    req.SetRequestHeader("Content-Type", "application/json");
+                    req.SetRequestHeader("Authorization", "Bearer " + key);
+                    req.timeout = 60;
 
-                bool parseFailed = false;
-                try
-                {
-                    string content = ParseContent(req.downloadHandler.text);
-                    string json    = ExtractJsonBlock(content);
-                    var concept = JsonUtility.FromJson<CharacterConcept>(json);
-                    if (concept == null || string.IsNullOrWhiteSpace(concept.features))
-                        throw new Exception("conceptが空です");
-                    concept.character_name = (concept.character_name ?? "").Trim();
-                    concept.features       = (concept.features ?? "").Trim();
-                    onSuccess?.Invoke(concept);
-                    yield break;
-                }
-                catch (Exception e)
-                {
-                    lastError = "AI応答の解析に失敗: " + e.Message;
-                    Debug.LogWarning($"[AI] アイデア解析エラー({attempt}/{MaxGenerateAttempts}): {e.Message}\nレスポンス: {req.downloadHandler.text}");
-                    parseFailed = true;
-                }
+                    yield return req.SendWebRequest();
 
-                if (parseFailed && attempt < MaxGenerateAttempts)
-                    yield return new WaitForSeconds(0.4f);
+                    if (req.result != UnityWebRequest.Result.Success)
+                    {
+                        lastError = $"{req.error}: {req.downloadHandler?.text}";
+                        Debug.LogWarning($"[AI] アイデア通信エラー({model} {attempt}/{MaxGenerateAttempts}): {lastError}");
+                        if (attempt < MaxGenerateAttempts) yield return new WaitForSeconds(0.8f);
+                        continue;
+                    }
+
+                    bool parseFailed = false;
+                    try
+                    {
+                        string content = ParseContent(req.downloadHandler.text);
+                        string json    = ExtractJsonBlock(content);
+                        var concept = JsonUtility.FromJson<CharacterConcept>(json);
+                        if (concept == null || string.IsNullOrWhiteSpace(concept.features))
+                            throw new Exception("conceptが空です");
+                        concept.character_name = (concept.character_name ?? "").Trim();
+                        concept.features       = (concept.features ?? "").Trim();
+                        onSuccess?.Invoke(concept);
+                        yield break;
+                    }
+                    catch (Exception e)
+                    {
+                        lastError = "AI応答の解析に失敗: " + e.Message;
+                        Debug.LogWarning($"[AI] アイデア解析エラー({model} {attempt}/{MaxGenerateAttempts}): {e.Message}\nレスポンス: {req.downloadHandler.text}");
+                        parseFailed = true;
+                    }
+
+                    if (parseFailed && attempt < MaxGenerateAttempts)
+                        yield return new WaitForSeconds(0.4f);
+                }
             }
 
             onError?.Invoke(lastError ?? "アイデア生成に失敗しました");

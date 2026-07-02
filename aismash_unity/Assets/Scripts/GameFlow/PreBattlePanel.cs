@@ -2579,6 +2579,20 @@ namespace PromptFighters.GameFlow
             {
                 UpdateGeneratingStatus("キャラクター画像を生成中...");
                 yield return GenerateImages(_pendingData1, _pendingData2, genImg1, genImg2);
+
+                // 失敗した側は少し待ってもう1周だけ自動リトライ（一時的なAPIエラーで
+                // キャラ生成全体を失敗にしないための保険。クライアント側でもモデル
+                // フォールバック済みなので、ここまで来る失敗はほぼ通信起因）。
+                bool retry1 = genImg1 && _pendingData1?.characterSprite == null;
+                bool retry2 = genImg2 && _pendingData2?.characterSprite == null;
+                if (retry1 || retry2)
+                {
+                    UpdateGeneratingStatus("画像生成をリトライしています...");
+                    if (retry1) SetGenProgress(0, 12);
+                    if (retry2) SetGenProgress(1, 12);
+                    yield return new WaitForSecondsRealtime(5f);
+                    yield return GenerateImages(_pendingData1, _pendingData2, retry1, retry2);
+                }
             }
             else if (DebugSettings.SkipImageGeneration)
             {

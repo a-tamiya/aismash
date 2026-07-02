@@ -17,6 +17,8 @@ namespace PromptFighters.AI
         const string GenerationsEndpoint = "https://api.openai.com/v1/images/generations";
         const string EditsEndpoint = "https://api.openai.com/v1/images/edits";
         const string Model = "gpt-image-2";
+        // 主モデルが全滅した場合のフォールバック（キャラ生成を失敗で終わらせないための保険）
+        const string FallbackModel = "gpt-image-1.5";
         const string CharacterSize = "1024x1536";
         const string EffectSize = "1536x1024";
         const string Quality = "low";
@@ -133,9 +135,10 @@ namespace PromptFighters.AI
             Sprite baseSprite = null;
             byte[] baseRawBytes = null; // 編集リファレンス用オリジナルバイト列
             string baseError = null;
+            string usedModel = Model;   // ベースが成功したモデル（editsも同じモデルを使う）
 
             yield return GenerateBaseCoroutine(baseVisualPrompt, key,
-                (sprite, rawBytes) => { baseSprite = sprite; baseRawBytes = rawBytes; },
+                (sprite, rawBytes, model) => { baseSprite = sprite; baseRawBytes = rawBytes; usedModel = model; },
                 err => baseError = err);
 
             if (baseSprite == null)
@@ -171,7 +174,7 @@ namespace PromptFighters.AI
                 // baseVisualPrompt（外見説明）+ ポーズ指示（CharSuffixを既に含む）
                 string fullPrompt = baseVisualPrompt + ", " + editPrompt;
                 runner.StartCoroutine(GenerateEditCoroutine(
-                    id, filename, fullPrompt, size, baseRawBytes, key, saveDir,
+                    id, filename, fullPrompt, size, baseRawBytes, key, saveDir, usedModel,
                     (spriteId, fname, sprite) =>
                     {
                         set.Set(spriteId, sprite);
@@ -286,108 +289,105 @@ namespace PromptFighters.AI
             return false;
         }
 
-        // /v1/images/generations でベース画像を生成し、(Sprite, rawBytes) を返す
+        // /v1/images/generations でベース画像を生成し、(Sprite, rawBytes, 使用モデル) を返す。
+        // キャラ生成を失敗で終わらせないため、HTTPエラーだけでなく解析・ダウンロード・変換の
+        // 失敗もリトライ対象とし、主モデルが全滅したらフォールバックモデルでも試す。
         static IEnumerator GenerateBaseCoroutine(
             string basePrompt, string key,
-            Action<Sprite, byte[]> onSuccess, Action<string> onError)
+            Action<Sprite, byte[], string> onSuccess, Action<string> onError)
         {
             string safePrompt = OpenAIRequest.EscapeString(
                 basePrompt + $", standing idle, {CharSuffix}");
-            string body =
-                $"{{\"model\":\"{Model}\"," +
-                $"\"prompt\":\"{safePrompt}\"," +
-                $"\"n\":1,\"size\":\"{CharacterSize}\",\"quality\":\"{Quality}\"}}";
+            string lastErr = null;
+            string[] models = { Model, FallbackModel };
 
-            string respText = null;
-            string lastErr  = null;
-            bool   ok       = false;
-            for (int attempt = 1; attempt <= MaxImageAttempts; attempt++)
+            foreach (string model in models)
             {
-                using var req = new UnityWebRequest(GenerationsEndpoint, "POST");
-                req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
-                req.downloadHandler = new DownloadHandlerBuffer();
-                req.SetRequestHeader("Content-Type", "application/json");
-                req.SetRequestHeader("Authorization", "Bearer " + key);
-                req.timeout = 90;
+                string body =
+                    $"{{\"model\":\"{model}\"," +
+                    $"\"prompt\":\"{safePrompt}\"," +
+                    $"\"n\":1,\"size\":\"{CharacterSize}\",\"quality\":\"{Quality}\"}}";
 
-                yield return req.SendWebRequest();
-
-                if (req.result == UnityWebRequest.Result.Success)
+                for (int attempt = 1; attempt <= MaxImageAttempts; attempt++)
                 {
-                    respText = req.downloadHandler.text;
-                    ok = true;
-                    break;
-                }
+                    string respText = null;
+                    using (var req = new UnityWebRequest(GenerationsEndpoint, "POST"))
+                    {
+                        req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
+                        req.downloadHandler = new DownloadHandlerBuffer();
+                        req.SetRequestHeader("Content-Type", "application/json");
+                        req.SetRequestHeader("Authorization", "Bearer " + key);
+                        req.timeout = 90;
 
-                lastErr = $"{req.error}: {req.downloadHandler?.text}";
-                Debug.LogWarning($"[AIImage] ベース生成エラー({attempt}/{MaxImageAttempts}): {lastErr}");
-                if (attempt < MaxImageAttempts) yield return new WaitForSeconds(1.5f);
-            }
+                        yield return req.SendWebRequest();
 
-            if (!ok)
-            {
-                onError?.Invoke(lastErr ?? "ベース画像生成に失敗");
-                yield break;
-            }
+                        if (req.result == UnityWebRequest.Result.Success)
+                            respText = req.downloadHandler.text;
+                        else
+                            lastErr = $"{req.error}: {req.downloadHandler?.text}";
+                    }
+                    if (respText == null)
+                    {
+                        Debug.LogWarning($"[AIImage] ベース生成エラー({model} {attempt}/{MaxImageAttempts}): {lastErr}");
+                        if (attempt < MaxImageAttempts) yield return new WaitForSeconds(2f);
+                        continue;
+                    }
 
-            // try-catch の中に yield return は置けないため、レスポンス解析と URL DL を分離する
-            string imageUrl = null;
-            string imageBase64 = null;
-            try
-            {
-                ParseImageResponse(respText, out imageUrl, out imageBase64);
-            }
-            catch (Exception e)
-            {
-                onError?.Invoke("レスポンス解析失敗: " + e.Message);
-                yield break;
-            }
+                    // try-catch の中に yield return は置けないため、レスポンス解析と URL DL を分離する
+                    string imageUrl = null;
+                    string imageBase64 = null;
+                    bool parseOk = true;
+                    try { ParseImageResponse(respText, out imageUrl, out imageBase64); }
+                    catch (Exception e) { lastErr = "レスポンス解析失敗: " + e.Message; parseOk = false; }
+                    if (!parseOk) continue;
 
-            byte[] rawBytes = null;
+                    byte[] rawBytes = null;
+                    if (!string.IsNullOrEmpty(imageBase64))
+                    {
+                        try { rawBytes = Convert.FromBase64String(imageBase64); }
+                        catch (Exception e) { lastErr = "Base64デコード失敗: " + e.Message; continue; }
+                    }
+                    else if (!string.IsNullOrEmpty(imageUrl))
+                    {
+                        // URL ダウンロードは try-catch の外で yield return する
+                        var imgReq = UnityWebRequestTexture.GetTexture(imageUrl);
+                        imgReq.timeout = 60;
+                        yield return imgReq.SendWebRequest();
+                        if (imgReq.result != UnityWebRequest.Result.Success)
+                        {
+                            lastErr = "URL画像のダウンロード失敗: " + imgReq.error;
+                            imgReq.Dispose();
+                            continue;
+                        }
+                        var urlTex = DownloadHandlerTexture.GetContent(imgReq);
+                        rawBytes = ImageConversion.EncodeToPNG(urlTex);
+                        imgReq.Dispose();
+                    }
+                    else
+                    {
+                        lastErr = "レスポンスにurl/b64_jsonが見つかりません";
+                        continue;
+                    }
 
-            if (!string.IsNullOrEmpty(imageBase64))
-            {
-                try { rawBytes = Convert.FromBase64String(imageBase64); }
-                catch (Exception e) { onError?.Invoke("Base64デコード失敗: " + e.Message); yield break; }
-            }
-            else if (!string.IsNullOrEmpty(imageUrl))
-            {
-                // URL ダウンロードは try-catch の外で yield return する
-                var imgReq = UnityWebRequestTexture.GetTexture(imageUrl);
-                imgReq.timeout = 60;
-                yield return imgReq.SendWebRequest();
-                if (imgReq.result != UnityWebRequest.Result.Success)
-                {
-                    string err = imgReq.error;
-                    imgReq.Dispose();
-                    onError?.Invoke("URL画像のダウンロード失敗: " + err);
+                    Sprite sprite = null;
+                    try { sprite = RawBytesToSprite(rawBytes); }
+                    catch (Exception e) { lastErr = "画像変換失敗: " + e.Message; continue; }
+
+                    onSuccess?.Invoke(sprite, rawBytes, model);
                     yield break;
                 }
-                var urlTex = DownloadHandlerTexture.GetContent(imgReq);
-                rawBytes = ImageConversion.EncodeToPNG(urlTex);
-                imgReq.Dispose();
-            }
-            else
-            {
-                onError?.Invoke("レスポンスにurl/b64_jsonが見つかりません");
-                yield break;
+
+                if (model != models[models.Length - 1])
+                    Debug.LogWarning($"[AIImage] モデル {model} でベース生成に失敗。{FallbackModel} へフォールバックします");
             }
 
-            try
-            {
-                var sprite = RawBytesToSprite(rawBytes);
-                onSuccess?.Invoke(sprite, rawBytes);
-            }
-            catch (Exception e)
-            {
-                onError?.Invoke("画像変換失敗: " + e.Message);
-            }
+            onError?.Invoke(lastErr ?? "ベース画像生成に失敗");
         }
 
         // /v1/images/edits でベース画像を参照してバリエーションを生成する
         static IEnumerator GenerateEditCoroutine(
             CharacterSpriteId id, string filename, string prompt,
-            string size, byte[] basePngBytes, string key, string saveDir,
+            string size, byte[] basePngBytes, string key, string saveDir, string model,
             Action<CharacterSpriteId, string, Sprite> onSuccess,
             Action<CharacterSpriteId, string> onError)
         {
@@ -402,7 +402,7 @@ namespace PromptFighters.AI
                 // multipartはリクエストごとに作り直す必要がある（uploadHandlerが消費されるため）
                 var form = new List<IMultipartFormSection>
                 {
-                    new MultipartFormDataSection("model",   Model),
+                    new MultipartFormDataSection("model",   model),
                     new MultipartFormDataSection("prompt",  prompt),
                     new MultipartFormDataSection("size",    sizeVal),
                     new MultipartFormDataSection("quality", Quality),
