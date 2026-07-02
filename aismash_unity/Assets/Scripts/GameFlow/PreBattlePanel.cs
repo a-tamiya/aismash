@@ -435,9 +435,11 @@ namespace PromptFighters.GameFlow
                 if (_genActive[i])
                 {
                     string nm = string.IsNullOrWhiteSpace(_genName[i]) ? (i == 0 ? "1P" : "2P") : _genName[i];
-                    _genOverlayLines[i].text = _genPercent[i] >= 100
-                        ? $"{nm}：完了 ✓"
-                        : $"{nm}：進行度 {_genPercent[i]}%";
+                    _genOverlayLines[i].text = _genPercent[i] < 0
+                        ? $"{nm}：画像生成に失敗（保存されませんでした）"
+                        : _genPercent[i] >= 100
+                            ? $"{nm}：完了 ✓"
+                            : $"{nm}：進行度 {_genPercent[i]}%";
                     _genOverlayLines[i].gameObject.SetActive(true);
                 }
                 else _genOverlayLines[i].gameObject.SetActive(false);
@@ -2514,15 +2516,12 @@ namespace PromptFighters.GameFlow
                     {
                         _pendingData1 = data;
                         aiOk1 = true;
-                        CharacterSaveManager.Save(data);
-                        // 即座にプリセットリストへ追加し選択状態にする
-                        if (!_presets.Contains(data)) _presets.Add(data);
-                        _p1PresetIdx = _presets.Count - 1;
+                        // 保存・ロスター追加は画像生成が完全に終わってから行う（生成途中のキャラで
+                        // 遊べてしまう／画像なしの白ボックスキャラが並ぶのを防ぐ）。
+                        // 画像の保存先だけ先に確保する（JSON未保存なので一覧には出ない）。
+                        CharacterSaveManager.PrepareDirectory(data);
                         if (!string.IsNullOrWhiteSpace(data.characterName))
-                        {
                             _genName[0] = data.characterName;
-                            _newCharNames.Add(data.characterName);
-                        }
                         SetGenProgress(0, 10);
                         done = true;
                     },
@@ -2543,14 +2542,10 @@ namespace PromptFighters.GameFlow
                     {
                         _pendingData2 = data;
                         aiOk2 = true;
-                        CharacterSaveManager.Save(data);
-                        if (!_presets.Contains(data)) _presets.Add(data);
-                        _p2PresetIdx = _presets.Count - 1;
+                        // 1P側と同じく、保存・ロスター追加は画像完成後（保存先の確保のみ先行）
+                        CharacterSaveManager.PrepareDirectory(data);
                         if (!string.IsNullOrWhiteSpace(data.characterName))
-                        {
                             _genName[1] = data.characterName;
-                            _newCharNames.Add(data.characterName);
-                        }
                         SetGenProgress(1, 10);
                         done = true;
                     },
@@ -2598,19 +2593,48 @@ namespace PromptFighters.GameFlow
             _generatingPanel?.SetActive(false);
             _generationCoroutine = null;
 
+            // 画像まで完成したキャラだけを保存してロスターへ追加する。
+            // 画像生成に失敗したキャラは保存せず破棄（白ボックスのキャラが一覧に並ぶのを防ぐ）。
+            if (genP1 && aiOk1) FinalizeGeneratedCharacter(_pendingData1, true);
+            if (genP2 && aiOk2) FinalizeGeneratedCharacter(_pendingData2, false);
+
             // 生成完了。生成画面へは移行せず、プレイ中の画面はそのままに、
             // オーバーレイを「完了」にして少し見せてから消す（プレイを中断しない）。
-            if (genP1) SetGenProgress(0, 100);
-            if (genP2) SetGenProgress(1, 100);
+            if (genP1 && _genPercent[0] >= 0) SetGenProgress(0, 100);
+            if (genP2 && _genPercent[1] >= 0) SetGenProgress(1, 100);
             RefreshGenOverlay();
             _generationTrainingActive = false;
 
-            // 生成キャラはロスターに保存済み。キャラ選択画面を開いていれば、
-            // 一覧を更新して新キャラがすぐ選べるようにする（プレイ中の画面は中断しない）。
+            // キャラ選択画面を開いていれば、一覧を更新して新キャラがすぐ選べるようにする
+            //（プレイ中の画面は中断しない）。
             if (_panel != null && _panel.activeSelf) RefreshPresets();
 
             yield return new WaitForSecondsRealtime(3f);
             ShowGenOverlay(false);
+        }
+
+        // 生成が完全に成功（テキスト＋画像）したキャラだけを保存し、ロスターへ追加・選択する。
+        // 画像が用意できなかった場合は保存せず破棄する（画像なしの白ボックスキャラを一覧に出さない）。
+        void FinalizeGeneratedCharacter(CharacterData data, bool isP1)
+        {
+            if (data == null) return;
+            int slot = isP1 ? 0 : 1;
+            bool imagesOk = DebugSettings.SkipImageGeneration
+                || (data.spriteSet != null && data.characterSprite != null);
+            if (!imagesOk)
+            {
+                CharacterSaveManager.DiscardPrepared(data);
+                _genPercent[slot] = -1; // オーバーレイに失敗表示
+                Debug.LogWarning($"[PreBattle] 「{data.characterName}」は画像生成に失敗したため保存しませんでした");
+                return;
+            }
+
+            CharacterSaveManager.Save(data);
+            if (!_presets.Contains(data)) _presets.Add(data);
+            if (isP1) _p1PresetIdx = _presets.IndexOf(data);
+            else      _p2PresetIdx = _presets.IndexOf(data);
+            if (!string.IsNullOrWhiteSpace(data.characterName))
+                _newCharNames.Add(data.characterName);
         }
 
         IEnumerator GenerateImages(CharacterData data1, CharacterData data2, bool generateP1, bool generateP2)

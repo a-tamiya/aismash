@@ -35,14 +35,61 @@ namespace PromptFighters.GameFlow
             (CharacterSpriteId.EffectSmash,"effect_smash"),
         };
 
+        // 画像生成の前にスプライト保存先ディレクトリだけを確保する。
+        // character.json はまだ書かないため、ロスター（LoadAll）には現れない。
+        // 生成が完全に成功してから Save() を呼ぶことで、画像のないキャラが一覧に並ぶのを防ぐ。
+        public static void PrepareDirectory(CharacterData data)
+        {
+            if (data == null || string.IsNullOrWhiteSpace(data.characterName)) return;
+            if (!string.IsNullOrEmpty(data.spriteDir)) return; // 確保済み
+            try
+            {
+                string id = SanitizeId(data.characterName) + "_" + DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                data.spriteDir = Path.Combine(SaveDir, id, "sprites");
+                Directory.CreateDirectory(data.spriteDir);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Save] 保存先確保失敗: {e.Message}");
+            }
+        }
+
+        // 生成に失敗したキャラの確保済みディレクトリ（部分的な画像など）を破棄する。
+        public static void DiscardPrepared(CharacterData data)
+        {
+            if (data == null || string.IsNullOrEmpty(data.spriteDir)) return;
+            try
+            {
+                string characterDir = Directory.GetParent(data.spriteDir)?.FullName;
+                if (!string.IsNullOrEmpty(characterDir) && Directory.Exists(characterDir))
+                    Directory.Delete(characterDir, true);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Save] 生成失敗キャラの破棄失敗: {e.Message}");
+            }
+            data.spriteDir = null;
+        }
+
         // JSONを保存し、data.spriteDir を設定する。
+        // PrepareDirectory 済みの場合は同じIDを使う（画像の保存先とJSONを一致させる）。
         public static void Save(CharacterData data)
         {
             if (data == null || string.IsNullOrWhiteSpace(data.characterName)) return;
             try
             {
                 Directory.CreateDirectory(SaveDir);
-                string id   = SanitizeId(data.characterName) + "_" + DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                string id;
+                if (!string.IsNullOrEmpty(data.spriteDir))
+                {
+                    id = Path.GetFileName(Directory.GetParent(data.spriteDir)?.FullName ?? "");
+                    if (string.IsNullOrEmpty(id))
+                        id = SanitizeId(data.characterName) + "_" + DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                }
+                else
+                {
+                    id = SanitizeId(data.characterName) + "_" + DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                }
                 string path = Path.Combine(SaveDir, id + ".json");
                 data.spriteDir = Path.Combine(SaveDir, id, "sprites");
                 string json = Serialize(data);
@@ -308,7 +355,16 @@ namespace PromptFighters.GameFlow
             if (a.projectile_count > 1)               sb.Append($",\"projectile_count\":{a.projectile_count}");
             if (a.spread_angle > 0f)                  sb.Append($",\"spread_angle\":{a.spread_angle}");
             if (!Mathf.Approximately(a.gravity_scale, 0f)) sb.Append($",\"gravity_scale\":{a.gravity_scale}");
+            // 拡張バリエーション（保存しないと再読み込みで跳弾・爆発などの挙動が消える）
+            if (a.explosion_radius > 0f)              sb.Append($",\"explosion_radius\":{a.explosion_radius}");
+            if (a.bounce_count > 0)                   sb.Append($",\"bounce_count\":{a.bounce_count}");
+            if (a.wave_amplitude > 0f)                sb.Append($",\"wave_amplitude\":{a.wave_amplitude}");
+            if (a.pierce)                             sb.Append(",\"pierce\":true");
+            if (a.spawn_at_enemy)                     sb.Append(",\"spawn_at_enemy\":true");
+            if (!string.IsNullOrEmpty(a.shape))       sb.Append($",\"shape\":{Q(a.shape)}");
+            if (a.lifesteal_ratio > 0f)               sb.Append($",\"lifesteal_ratio\":{a.lifesteal_ratio}");
             if (!string.IsNullOrEmpty(a.status))     sb.Append($",\"status\":{Q(a.status)},\"duration\":{a.duration},\"status_duration\":{a.status_duration},\"chance\":{a.chance}");
+            else if (a.duration > 0f)                sb.Append($",\"duration\":{a.duration}"); // trap/summon等の寿命（statusなしでも保持）
             if (a.damage_override >= 0f)             sb.Append($",\"damage_override\":{a.damage_override}");
             sb.Append("}");
         }

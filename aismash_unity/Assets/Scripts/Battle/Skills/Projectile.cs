@@ -446,10 +446,18 @@ namespace PromptFighters.Battle.Skills
             var target = other.GetComponentInParent<Fighter>();
             if (target == null)
             {
-                // 壁・地面に当たった場合: ブーメランは貫通、跳弾は反射、爆発弾は爆発、通常弾は消える
+                // 壁・地面に当たった場合: ブーメランは貫通、跳弾は反射、爆発弾は爆発、通常弾は消える。
+                // 跳弾は「地面レイヤー」ならレイヤー番号に関わらず必ず跳ねる
+                // （ステージによって床がDefaultレイヤーでも取りこぼさない）。
+                bool groundish = Owner != null &&
+                    (Owner.groundLayer.value & (1 << other.gameObject.layer)) != 0;
+                if (!IsBoomerang && BounceCount > 0 && (groundish || other.gameObject.layer != 0))
+                {
+                    DoBounce(other);
+                    return;
+                }
                 if (!IsBoomerang && other.gameObject.layer != 0)
                 {
-                    if (BounceCount > 0) { DoBounce(other); return; }
                     if (ExplosionRadius > 0f) Explode();
                     Release();
                 }
