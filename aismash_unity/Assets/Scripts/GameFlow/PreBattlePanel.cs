@@ -773,7 +773,8 @@ namespace PromptFighters.GameFlow
             var boxImg = box.AddComponent<Image>();
             boxImg.sprite = PromptFighters.UI.UITheme.VGradient;
             boxImg.type = Image.Type.Simple;
-            boxImg.color = new Color(0.05f, 0.055f, 0.08f, 0.99f);
+            // Linearカラースペースではα0.99でも裏の明るいロゴが透けるため完全不透明にする
+            boxImg.color = new Color(0.05f, 0.055f, 0.08f, 1f);
 
             var t = box.transform;
             MakeSlantBar(t, "SetTop", new Vector2(0f, 408f), new Vector2(960f, 6f),
@@ -999,7 +1000,8 @@ namespace PromptFighters.GameFlow
             _stageSelectPanel = CreateUIObject("StageSelectPanel", transform);
             StretchFull(_stageSelectPanel.GetComponent<RectTransform>());
             var bg = _stageSelectPanel.AddComponent<Image>();
-            bg.color = new Color(0f, 0f, 0.02f, 0.92f);
+            // Linearカラースペースではわずかなアルファ漏れでも裏の白文字が強く透けるため不透明にする
+            bg.color = new Color(0.01f, 0.012f, 0.025f, 1f);
 
             var titleShadow = MakeLabel(_stageSelectPanel.transform, "StageSelectTitleShadow",
                 "STAGE SELECT", new Vector2(4f, 446f), new Vector2(900f, 80f), 52f,
