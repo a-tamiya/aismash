@@ -139,6 +139,9 @@ namespace PromptFighters.GameFlow
         int _bossPresetIdx = 0;
         // 操作説明オーバーレイ
         GameObject _controlsPanel;
+        // 設定モーダル（試合前オプションをまとめる）
+        GameObject _settingsPanel;
+        TextMeshProUGUI _startBtnLabel;
 
         static readonly Color ToggleOnColor  = PromptFighters.UI.UITheme.Gold;
         static readonly Color ToggleOffColor = new Color(0.14f, 0.15f, 0.19f, 1f);
@@ -163,6 +166,7 @@ namespace PromptFighters.GameFlow
             BuildSkillConfirmPanel();
             BuildDeleteConfirmPanel();
             BuildControlsPanel();
+            BuildSettingsPanel();
             EnsureVirtualCursor();
             BuildGenProgressOverlay();
             UITheme.ApplyAllInScene();
@@ -468,6 +472,24 @@ namespace PromptFighters.GameFlow
                 return;
             }
 
+            // 設定・操作説明・ステージ選択が開いている間は、裏の画面の入力を遮断する
+            // （スペース/エンターでの誤発進や、二重にパネルが開くのを防ぐ）
+            if (_settingsPanel != null && _settingsPanel.activeSelf)
+            {
+                if (WasCancelPressed()) HideSettingsPanel();
+                return;
+            }
+            if (_controlsPanel != null && _controlsPanel.activeSelf)
+            {
+                if (WasCancelPressed()) HideControlsPanel();
+                return;
+            }
+            if (_stageSelectPanel != null && _stageSelectPanel.activeSelf)
+            {
+                if (WasCancelPressed()) HideStageSelectPanel();
+                return;
+            }
+
             if (_titlePanel != null && _titlePanel.activeSelf)
             {
                 AnimateTitle();
@@ -620,25 +642,20 @@ namespace PromptFighters.GameFlow
                 _titleMainRect = title.rectTransform;
             }
 
-            MakeLabel(_titlePanel.transform, "TitleSub",
-                "プロンプトでファイターを作ろう。API準備中はプリセットで対戦・トレーニングができます。",
-                new Vector2(0, -28), new Vector2(780, 44), 18, PromptFighters.UI.UITheme.Ink);
-            MakeLabel(_titlePanel.transform, "ApiNote",
-                "現在はプリセットキャラ・サンプル技・トレーニングモードでプレイできます。",
-                new Vector2(0, -64), new Vector2(760, 32), 15, PromptFighters.UI.UITheme.InkDim);
-
             var startButton = MakeButton(_titlePanel.transform, "GameStartBtn", "ゲームスタート",
-                new Vector2(0, -132), new Vector2(360, 70), ShowCharacterSelect,
+                new Vector2(0, -110), new Vector2(400, 78), ShowCharacterSelect,
                 PromptFighters.UI.UITheme.Gold);
             StyleArcadeButton(startButton, PromptFighters.UI.UITheme.Gold, 18f);
-            SetButtonLabelStyle(startButton, 26f, FontStyles.Bold | FontStyles.Italic, new Color(0.12f, 0.08f, 0.0f));
+            SetButtonLabelStyle(startButton, 28f, FontStyles.Bold | FontStyles.Italic, new Color(0.12f, 0.08f, 0.0f));
             _startButtonRect = startButton.GetComponent<RectTransform>();
-            MakeLabel(_titlePanel.transform, "StartHelp", "▶ スペース / エンターキー",
-                new Vector2(0, -186), new Vector2(360, 28), 15, PromptFighters.UI.UITheme.InkDim);
 
-            // 操作説明（タイトルからいつでも確認できるように）
+            // 設定・操作説明（タイトルからいつでも開ける）
+            var settingsBtn = MakeButton(_titlePanel.transform, "TitleSettingsBtn", "設定",
+                new Vector2(-120, -240), new Vector2(220, 46), ShowSettingsPanel, ToggleOffColor);
+            StyleArcadeButton(settingsBtn, ToggleOffColor, 12f);
+            SetButtonLabelStyle(settingsBtn, 18f, FontStyles.Bold | FontStyles.Italic, PromptFighters.UI.UITheme.Ink);
             var controlsBtn = MakeButton(_titlePanel.transform, "TitleControlsBtn", "操作説明",
-                new Vector2(0, -240), new Vector2(220, 46), ShowControlsPanel, ToggleOffColor);
+                new Vector2(120, -240), new Vector2(220, 46), ShowControlsPanel, ToggleOffColor);
             StyleArcadeButton(controlsBtn, ToggleOffColor, 12f);
             SetButtonLabelStyle(controlsBtn, 18f, FontStyles.Bold | FontStyles.Italic, PromptFighters.UI.UITheme.Ink);
         }
@@ -697,8 +714,6 @@ namespace PromptFighters.GameFlow
                 PromptFighters.UI.UITheme.Gold);
             StyleArcadeButton(closeBtn, PromptFighters.UI.UITheme.Gold, 14f);
             SetButtonLabelStyle(closeBtn, 22f, FontStyles.Bold | FontStyles.Italic, new Color(0.12f, 0.08f, 0f));
-            MakeLabel(t, "CtrlCloseHelp", "クリックでも閉じられます",
-                new Vector2(0, -470f), new Vector2(400f, 26f), 14, PromptFighters.UI.UITheme.InkDim);
 
             _controlsPanel.SetActive(false);
         }
@@ -737,50 +752,141 @@ namespace PromptFighters.GameFlow
             if (_controlsPanel != null) _controlsPanel.SetActive(false);
         }
 
-        // 実況・天使・CPU のロビートグルを1行に並べて生成する。キャラ選択画面で使用。
-        void BuildLobbyToggles(Transform parent, float rowY)
+        // ── 設定モーダル ─────────────────────────────────────────
+        // 試合前オプション（バトルモード・討伐ボス・実況・アイテム・CPU・デバッグ）を1画面にまとめる。
+        void BuildSettingsPanel()
         {
-            float[] xs = { -270f, 0f, 270f };
-            var toggleSize = new Vector2(168f, 40f);
-            const float ToggleFontSize = 17f;
+            _settingsPanel = CreateUIObject("SettingsOverlay", transform);
+            StretchFull(_settingsPanel.GetComponent<RectTransform>());
+            _settingsPanel.SetActive(false);
 
-            var commentaryBtn = MakeButton(parent, "CommentaryToggle", CommentaryToggleText(),
-                new Vector2(xs[0], rowY), toggleSize, OnCommentaryToggle, ToggleOnColor);
+            var dim = _settingsPanel.AddComponent<Image>();
+            dim.color = new Color(0.01f, 0.012f, 0.03f, 0.94f);
+            var cg = _settingsPanel.AddComponent<CanvasGroup>();
+            cg.interactable = true;
+            cg.blocksRaycasts = true;
+
+            var box = CreateUIObject("SettingsBox", _settingsPanel.transform);
+            var bRt = box.GetComponent<RectTransform>();
+            bRt.anchoredPosition = new Vector2(0f, 10f);
+            bRt.sizeDelta = new Vector2(960f, 820f);
+            var boxImg = box.AddComponent<Image>();
+            boxImg.sprite = PromptFighters.UI.UITheme.VGradient;
+            boxImg.type = Image.Type.Simple;
+            boxImg.color = new Color(0.05f, 0.055f, 0.08f, 0.99f);
+
+            var t = box.transform;
+            MakeSlantBar(t, "SetTop", new Vector2(0f, 408f), new Vector2(960f, 6f),
+                PromptFighters.UI.UITheme.Gold, 20f);
+            MakeSlantBar(t, "SetBottom", new Vector2(0f, -408f), new Vector2(960f, 6f),
+                new Color(PromptFighters.UI.UITheme.Gold.r, PromptFighters.UI.UITheme.Gold.g, PromptFighters.UI.UITheme.Gold.b, 0.55f), -20f);
+
+            MakeSlantBar(t, "SetTitlePlate", new Vector2(0f, 340f), new Vector2(300f, 54f),
+                new Color(PromptFighters.UI.UITheme.GoldDim.r, PromptFighters.UI.UITheme.GoldDim.g, PromptFighters.UI.UITheme.GoldDim.b, 0.30f), 20f);
+            MakeLabel(t, "SetTitle", "設定",
+                new Vector2(0f, 340f), new Vector2(400f, 54f), 34f, PromptFighters.UI.UITheme.Gold)
+                .fontStyle = FontStyles.Bold | FontStyles.Italic;
+
+            const float ToggleFontSize = 19f;
+
+            // ── バトルモード ──
+            MakeSettingHeading(t, "ModeHead", "バトルモード", 250f);
+            var versusBtn = MakeButton(t, "ModeVersusBtn", "1 vs 1 対戦",
+                new Vector2(30f, 250f), new Vector2(240f, 52f), OnSelectVersus, ToggleOnColor);
+            StyleArcadeButton(versusBtn, ToggleOnColor, 11f);
+            _modeVersusBg    = versusBtn.GetComponent<Image>();
+            _modeVersusLabel = versusBtn.GetComponentInChildren<TextMeshProUGUI>();
+            _modeVersusLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
+            _modeVersusLabel.fontSize = ToggleFontSize;
+
+            var coopBtn = MakeButton(t, "ModeCoopBtn", "ボス討伐（協力）",
+                new Vector2(300f, 250f), new Vector2(260f, 52f), OnSelectCoop, ToggleOnColor);
+            StyleArcadeButton(coopBtn, ToggleOnColor, 11f);
+            _modeCoopBg    = coopBtn.GetComponent<Image>();
+            _modeCoopLabel = coopBtn.GetComponentInChildren<TextMeshProUGUI>();
+            _modeCoopLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
+            _modeCoopLabel.fontSize = ToggleFontSize;
+
+            // ── 討伐ボス（協力モード時のみ表示） ──
+            BuildBossSelector(t, 170f);
+
+            // ── AI実況 ──
+            MakeSettingHeading(t, "CommentaryHead", "AI実況", 80f);
+            var commentaryBtn = MakeButton(t, "CommentaryToggle", CommentaryToggleText(),
+                new Vector2(30f, 80f), new Vector2(240f, 50f), OnCommentaryToggle, ToggleOnColor);
             StyleArcadeButton(commentaryBtn, ToggleOnColor, 10f);
             _commentaryToggleBg    = commentaryBtn.GetComponent<Image>();
             _commentaryToggleLabel = commentaryBtn.GetComponentInChildren<TextMeshProUGUI>();
             _commentaryToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
             _commentaryToggleLabel.fontSize = ToggleFontSize;
 
-            var angelBtn = MakeButton(parent, "AngelToggle", AngelToggleText(),
-                new Vector2(xs[1], rowY), toggleSize, OnAngelToggle, ToggleOnColor);
+            // ── アイテム（天使） ──
+            MakeSettingHeading(t, "AngelHead", "アイテム", 0f);
+            var angelBtn = MakeButton(t, "AngelToggle", AngelToggleText(),
+                new Vector2(30f, 0f), new Vector2(240f, 50f), OnAngelToggle, ToggleOnColor);
             StyleArcadeButton(angelBtn, ToggleOnColor, 10f);
             _angelToggleBg    = angelBtn.GetComponent<Image>();
             _angelToggleLabel = angelBtn.GetComponentInChildren<TextMeshProUGUI>();
             _angelToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
             _angelToggleLabel.fontSize = ToggleFontSize;
 
-            var cpuBtn = MakeButton(parent, "CpuToggle", CpuToggleText(),
-                new Vector2(xs[2], rowY), toggleSize, OnCpuToggle, ToggleOnColor);
+            // ── CPU対戦 ──
+            MakeSettingHeading(t, "CpuHead", "CPU対戦", -80f);
+            var cpuBtn = MakeButton(t, "CpuToggle", CpuToggleText(),
+                new Vector2(30f, -80f), new Vector2(240f, 50f), OnCpuToggle, ToggleOnColor);
             StyleArcadeButton(cpuBtn, ToggleOnColor, 10f);
             _cpuToggleBg    = cpuBtn.GetComponent<Image>();
             _cpuToggleLabel = cpuBtn.GetComponentInChildren<TextMeshProUGUI>();
             _cpuToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
             _cpuToggleLabel.fontSize = ToggleFontSize;
 
-            // CPUが操作する側（1P/2P）の選択。CPU ON時のみ意味を持つ。
-            var cpuSideBtn = MakeButton(parent, "CpuSideToggle", CpuSideToggleText(),
-                new Vector2(455f, rowY), new Vector2(158f, 40f), OnCpuSideToggle, ToggleOnColor);
+            var cpuSideBtn = MakeButton(t, "CpuSideToggle", CpuSideToggleText(),
+                new Vector2(300f, -80f), new Vector2(220f, 50f), OnCpuSideToggle, ToggleOnColor);
             StyleArcadeButton(cpuSideBtn, ToggleOnColor, 10f);
             _cpuSideToggleBg    = cpuSideBtn.GetComponent<Image>();
             _cpuSideToggleLabel = cpuSideBtn.GetComponentInChildren<TextMeshProUGUI>();
             _cpuSideToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
             _cpuSideToggleLabel.fontSize = ToggleFontSize;
 
-            // 協力モード時のみ表示するボスキャラ選択（◀ ボス名 ▶）。トグル行とフッターの間に配置。
-            BuildBossSelector(parent, -407f);
+            // ── デバッグ（画像生成スキップ） ──
+            MakeOutline(t, "SetDivider", new Vector2(0f, -160f), new Vector2(860f, 2f),
+                new Color(PromptFighters.UI.UITheme.Gold.r, PromptFighters.UI.UITheme.Gold.g, PromptFighters.UI.UITheme.Gold.b, 0.25f));
+            MakeSettingHeading(t, "DebugHead", "デバッグ", -220f);
+            var debugBtn = MakeButton(t, "DebugSkipImageBtn", "",
+                new Vector2(80f, -220f), new Vector2(340f, 44f),
+                ToggleSkipImageMode, new Color(0.08f, 0.12f, 0.08f, 1f));
+            _debugSkipImageLabel = debugBtn.GetComponentInChildren<TextMeshProUGUI>();
+            RefreshDebugSkipLabel();
+
+            // ── 閉じる ──
+            var closeBtn = MakeButton(t, "SettingsCloseBtn", "閉じる",
+                new Vector2(0f, -330f), new Vector2(260f, 64f), HideSettingsPanel,
+                PromptFighters.UI.UITheme.Gold);
+            StyleArcadeButton(closeBtn, PromptFighters.UI.UITheme.Gold, 14f);
+            SetButtonLabelStyle(closeBtn, 22f, FontStyles.Bold | FontStyles.Italic, new Color(0.12f, 0.08f, 0f));
 
             RefreshToggleVisuals();
+        }
+
+        // 設定行の見出しラベル（左列・右寄せ）
+        TextMeshProUGUI MakeSettingHeading(Transform parent, string name, string text, float y)
+        {
+            var l = MakeLabel(parent, name, text,
+                new Vector2(-290f, y), new Vector2(300f, 40f), 22f, PromptFighters.UI.UITheme.Ink);
+            l.alignment = TextAlignmentOptions.Right;
+            l.fontStyle = FontStyles.Bold | FontStyles.Italic;
+            return l;
+        }
+
+        void ShowSettingsPanel()
+        {
+            RefreshToggleVisuals();
+            if (_settingsPanel != null) _settingsPanel.SetActive(true);
+        }
+
+        void HideSettingsPanel()
+        {
+            if (_settingsPanel != null) _settingsPanel.SetActive(false);
         }
 
         // 討伐ボスを選ぶ ◀ / ▶ 付きの選択行。協力モード時のみ表示。
@@ -793,25 +899,23 @@ namespace PromptFighters.GameFlow
             rt.sizeDelta = Vector2.zero;
             var t = _bossSelectorRoot.transform;
 
-            // 左端ラベル「討伐ボス」
-            MakeLabel(t, "BossSelectHeading", "討伐ボス",
-                new Vector2(-310f, rowY), new Vector2(130f, 32f), 17f, PromptFighters.UI.UITheme.Urgent)
-                .fontStyle = FontStyles.Bold | FontStyles.Italic;
+            var heading = MakeSettingHeading(t, "BossSelectHeading", "討伐ボス", rowY);
+            heading.color = PromptFighters.UI.UITheme.Urgent;
 
             var prevBtn = MakeButton(t, "BossPrev", "◀",
-                new Vector2(-185f, rowY), new Vector2(50f, 34f), OnBossPresetPrev, PromptFighters.UI.UITheme.Urgent);
+                new Vector2(-40f, rowY), new Vector2(50f, 44f), OnBossPresetPrev, PromptFighters.UI.UITheme.Urgent);
             StyleArcadeButton(prevBtn, PromptFighters.UI.UITheme.Urgent, 8f);
             SetButtonLabelStyle(prevBtn, 20f, FontStyles.Bold, Color.white);
 
             var nameBtn = MakeButton(t, "BossName", BossPresetText(),
-                new Vector2(0f, rowY), new Vector2(280f, 36f), OnBossPresetCycle, ToggleOffColor);
+                new Vector2(140f, rowY), new Vector2(290f, 48f), OnBossPresetCycle, ToggleOffColor);
             StyleArcadeButton(nameBtn, ToggleOffColor, 8f);
             _bossPresetLabel = nameBtn.GetComponentInChildren<TextMeshProUGUI>();
             _bossPresetLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
             _bossPresetLabel.fontSize = 17f;
 
             var nextBtn = MakeButton(t, "BossNext", "▶",
-                new Vector2(185f, rowY), new Vector2(50f, 34f), OnBossPresetCycle, PromptFighters.UI.UITheme.Urgent);
+                new Vector2(320f, rowY), new Vector2(50f, 44f), OnBossPresetCycle, PromptFighters.UI.UITheme.Urgent);
             StyleArcadeButton(nextBtn, PromptFighters.UI.UITheme.Urgent, 8f);
             SetButtonLabelStyle(nextBtn, 20f, FontStyles.Bold, Color.white);
         }
@@ -898,30 +1002,32 @@ namespace PromptFighters.GameFlow
             bg.color = new Color(0f, 0f, 0.02f, 0.92f);
 
             var titleShadow = MakeLabel(_stageSelectPanel.transform, "StageSelectTitleShadow",
-                "STAGE SELECT", new Vector2(4f, -438f), new Vector2(900f, 80f), 52f,
+                "STAGE SELECT", new Vector2(4f, 446f), new Vector2(900f, 80f), 52f,
                 new Color(0f, 0f, 0f, 0.6f));
             titleShadow.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
             var titleLabel = MakeLabel(_stageSelectPanel.transform, "StageSelectTitle",
-                "STAGE SELECT", new Vector2(0f, -434f), new Vector2(900f, 80f), 52f,
+                "STAGE SELECT", new Vector2(0f, 450f), new Vector2(900f, 80f), 52f,
                 PromptFighters.UI.UITheme.Gold);
             titleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
             var n = PromptFighters.Battle.StageRegistry.All.Length;
             _stageCardImages = new Image[n];
 
-            // 上段3枚・下段2枚の 3+2 レイアウト
+            // 上段3枚・下段2枚＋おまかせ（ランダム）の 3x2 レイアウト
             const float CW = 560f, CH = 240f;
             Vector2[] positions =
             {
                 new Vector2(-590f,  130f),
                 new Vector2(   0f,  130f),
                 new Vector2( 590f,  130f),
-                new Vector2(-295f, -155f),
-                new Vector2( 295f, -155f),
+                new Vector2(-590f, -155f),
+                new Vector2(   0f, -155f),
             };
             for (int i = 0; i < n && i < positions.Length; i++)
                 BuildStageCard(_stageSelectPanel.transform, i, positions[i], CW, CH);
+
+            BuildRandomStageCard(_stageSelectPanel.transform, new Vector2(590f, -155f), CW, CH);
 
             var backBtn = MakeButton(_stageSelectPanel.transform, "StageSelectBack", "◀ 戻る",
                 new Vector2(-820f, -490f), new Vector2(160f, 50f), HideStageSelectPanel,
@@ -989,8 +1095,46 @@ namespace PromptFighters.GameFlow
             if (_stageSelectPanel != null) _stageSelectPanel.SetActive(false);
         }
 
+        // おまかせ（ランダム）カード。クリックでステージを抽選してそのまま開始する。
+        void BuildRandomStageCard(Transform parent, Vector2 pos, float cardW, float cardH)
+        {
+            var cardBtn = MakeButton(parent, "StageCardRandom", "", pos,
+                new Vector2(cardW, cardH), () => OnStageCardClicked(-1), Color.clear);
+            var btnColors = cardBtn.colors;
+            btnColors.normalColor      = new Color(1f, 1f, 1f, 0f);
+            btnColors.highlightedColor = new Color(1f, 1f, 1f, 0.12f);
+            btnColors.pressedColor     = new Color(1f, 1f, 1f, 0.28f);
+            cardBtn.colors = btnColors;
+
+            // ダークメタル地＋ゴールドの「?」
+            var bgGo = CreateUIObject("RandomBg", cardBtn.transform);
+            StretchFull(bgGo.GetComponent<RectTransform>());
+            var bgImg = bgGo.AddComponent<Image>();
+            bgImg.sprite = PromptFighters.UI.UITheme.VGradient;
+            bgImg.type = Image.Type.Simple;
+            bgImg.color = new Color(0.10f, 0.09f, 0.05f, 1f);
+            bgImg.raycastTarget = false;
+
+            var mark = MakeLabel(cardBtn.transform, "RandomMark", "?",
+                new Vector2(0f, 24f), new Vector2(200f, 140f), 110f, PromptFighters.UI.UITheme.Gold);
+            mark.fontStyle     = FontStyles.Bold | FontStyles.Italic;
+            mark.raycastTarget = false;
+
+            var strip = MakePanel(cardBtn.transform, "RandomStrip",
+                new Vector2(0f, -(cardH * 0.5f - 38f)), new Vector2(cardW, 76f),
+                new Color(0f, 0f, 0f, 0.80f));
+            strip.raycastTarget = false;
+
+            var nameLabel = MakeLabel(cardBtn.transform, "RandomName", "おまかせ",
+                new Vector2(0f, -(cardH * 0.5f - 37f)), new Vector2(cardW - 16f, 48f),
+                20f, PromptFighters.UI.UITheme.Gold);
+            nameLabel.fontStyle     = FontStyles.Bold | FontStyles.Italic;
+            nameLabel.raycastTarget = false;
+        }
+
         void OnStageCardClicked(int idx)
         {
+            if (idx < 0) idx = Random.Range(0, PromptFighters.Battle.StageRegistry.All.Length);
             PromptFighters.Battle.StageRegistry.SelectedIndex = idx;
             HideStageSelectPanel();
             if (BattleManager.Instance == null) return;
@@ -1008,26 +1152,6 @@ namespace PromptFighters.GameFlow
             4 => "台なし  /  フラット・正面勝負",
             _ => "",
         };
-
-        // バトルモード選択行（1 vs 1 / 協力ボス討伐）をパネル上部に並べて生成する。
-        void BuildModeSelector(Transform parent, float rowY)
-        {
-            var versusBtn = MakeButton(parent, "ModeVersusBtn", "1 vs 1 対戦",
-                new Vector2(-155f, rowY), new Vector2(280f, 48f), OnSelectVersus, ToggleOnColor);
-            StyleArcadeButton(versusBtn, ToggleOnColor, 11f);
-            _modeVersusBg    = versusBtn.GetComponent<Image>();
-            _modeVersusLabel = versusBtn.GetComponentInChildren<TextMeshProUGUI>();
-            _modeVersusLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
-            _modeVersusLabel.fontSize = 19f;
-
-            var coopBtn = MakeButton(parent, "ModeCoopBtn", "ボス討伐（協力）",
-                new Vector2(155f, rowY), new Vector2(280f, 48f), OnSelectCoop, ToggleOnColor);
-            StyleArcadeButton(coopBtn, ToggleOnColor, 11f);
-            _modeCoopBg    = coopBtn.GetComponent<Image>();
-            _modeCoopLabel = coopBtn.GetComponentInChildren<TextMeshProUGUI>();
-            _modeCoopLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
-            _modeCoopLabel.fontSize = 19f;
-        }
 
         void OnSelectVersus()
         {
@@ -1066,6 +1190,8 @@ namespace PromptFighters.GameFlow
                 SyncBossCharacter();
                 if (_bossPresetLabel != null) _bossPresetLabel.text = BossPresetText();
             }
+            // 選択中モードがロビーでも分かるよう、開始ボタンの文言を切り替える
+            if (_startBtnLabel != null) _startBtnLabel.text = coop ? "ボス討伐開始" : "バトル開始";
         }
 
         void BuildPanel()
@@ -1115,9 +1241,6 @@ namespace PromptFighters.GameFlow
                 new Vector2(0, 364), new Vector2(160, 120), 76, PromptFighters.UI.UITheme.Gold)
                 .fontStyle = FontStyles.Bold | FontStyles.Italic;
 
-            // ── バトルモード選択（1 vs 1 / 協力ボス討伐） ──
-            BuildModeSelector(_panel.transform, 452f);
-
             // ── 1P エリア（左半分） ──
             BuildPlayerColumn(_panel.transform, true);
 
@@ -1129,31 +1252,34 @@ namespace PromptFighters.GameFlow
 
             // ── フッター: ボタン ──
             var startBtn = MakeButton(_panel.transform, "StartBtn", "バトル開始",
-                new Vector2(-310, -460), new Vector2(280, 70), OnStartPressed,
+                new Vector2(-330, -430), new Vector2(300, 72), OnStartPressed,
                 PromptFighters.UI.UITheme.Gold);
             StyleArcadeButton(startBtn, PromptFighters.UI.UITheme.Gold, 16f);
             SetButtonLabelStyle(startBtn, 26f, FontStyles.Bold | FontStyles.Italic, new Color(0.12f, 0.08f, 0f));
+            _startBtnLabel = startBtn.GetComponentInChildren<TextMeshProUGUI>();
 
             var trainBtn = MakeButton(_panel.transform, "TrainingBtn", "トレーニング",
-                new Vector2(0, -460), new Vector2(280, 70), OnTrainingPressed,
+                new Vector2(0, -430), new Vector2(300, 72), OnTrainingPressed,
                 PromptFighters.UI.UITheme.P1Neon);
             StyleArcadeButton(trainBtn, PromptFighters.UI.UITheme.P1Neon, 16f);
             SetButtonLabelStyle(trainBtn, 26f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             var genBtn = MakeButton(_panel.transform, "GenerateBtn", "キャラ生成",
-                new Vector2(310, -460), new Vector2(280, 70), ShowGenerationSetupPanel,
+                new Vector2(330, -430), new Vector2(300, 72), ShowGenerationSetupPanel,
                 PromptFighters.UI.UITheme.P2Neon);
             StyleArcadeButton(genBtn, PromptFighters.UI.UITheme.P2Neon, 16f);
             SetButtonLabelStyle(genBtn, 26f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
-            // ── 操作説明（ヘッダー右） ──
+            // ── 設定・操作説明（ヘッダー右） ──
+            var settingsBtn = MakeButton(_panel.transform, "SettingsBtn", "設定",
+                new Vector2(615f, 522f), new Vector2(180f, 44f), ShowSettingsPanel, ToggleOffColor);
+            StyleArcadeButton(settingsBtn, ToggleOffColor, 12f);
+            SetButtonLabelStyle(settingsBtn, 18f, FontStyles.Bold | FontStyles.Italic, PromptFighters.UI.UITheme.Ink);
+
             var helpBtn = MakeButton(_panel.transform, "ControlsBtn", "操作説明",
                 new Vector2(820f, 522f), new Vector2(180f, 44f), ShowControlsPanel, ToggleOffColor);
             StyleArcadeButton(helpBtn, ToggleOffColor, 12f);
             SetButtonLabelStyle(helpBtn, 18f, FontStyles.Bold | FontStyles.Italic, PromptFighters.UI.UITheme.Ink);
-
-            // ── ロビー設定トグル（実況・天使・CPU） ──
-            BuildLobbyToggles(_panel.transform, -372f);
 
             BuildTrainingPanel();
             BuildStageSelectPanel();
@@ -1322,11 +1448,17 @@ namespace PromptFighters.GameFlow
             if (isP1) _p1DetailText = detailText;
             else _p2DetailText = detailText;
 
-            // 生成キャラ削除（プレビュー枠の下）
-            var deleteBtn = MakeButton(parent, isP1 ? "P1DeleteGeneratedBtn" : "P2DeleteGeneratedBtn", "生成キャラ削除",
-                new Vector2(cx - 168f, -106f), new Vector2(172f, 32f), () => RequestDeleteCharacter(isP1),
+            // ランダム選択（キャラ名行の右）
+            var randomBtn = MakeButton(parent, isP1 ? "P1RandomBtn" : "P2RandomBtn", "ランダム",
+                new Vector2(cx + 330f, 404f), new Vector2(150f, 44f), () => SelectRandomPreset(isP1), pColorDark);
+            StyleArcadeButton(randomBtn, pColorDark, isP1 ? 12f : -12f);
+            SetButtonLabelStyle(randomBtn, 17f, FontStyles.Bold | FontStyles.Italic, Color.white);
+
+            // 生成キャラ削除（ランダムボタンの下。初期キャラ選択中は非表示）
+            var deleteBtn = MakeButton(parent, isP1 ? "P1DeleteGeneratedBtn" : "P2DeleteGeneratedBtn", "キャラ削除",
+                new Vector2(cx + 330f, 352f), new Vector2(150f, 34f), () => RequestDeleteCharacter(isP1),
                 PromptFighters.UI.UITheme.P2NeonDark);
-            SetButtonLabelStyle(deleteBtn, 15f, FontStyles.Bold, Color.white);
+            SetButtonLabelStyle(deleteBtn, 14f, FontStyles.Bold, Color.white);
             if (isP1) _p1DeleteButton = deleteBtn;
             else _p2DeleteButton = deleteBtn;
 
@@ -1374,13 +1506,6 @@ namespace PromptFighters.GameFlow
             _rosterPageLabel = MakeLabel(frame.transform, "RosterPage", "1 / 1",
                 new Vector2(0f, 112f), new Vector2(120f, 26f), 16f, PromptFighters.UI.UITheme.Ink);
             _rosterPageLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
-
-            // 選択方法のヒント（セルの左半分=1P / 右半分=2P は分かりにくいため明示）
-            var hint = MakeLabel(frame.transform, "RosterHint",
-                "<color=#4FC3F7>マウス左=1P</color> <color=#FF6B6B>右=2P</color> / パッドは各自のカーソルで選択",
-                new Vector2(636f, 112f), new Vector2(360f, 26f), 15f, PromptFighters.UI.UITheme.InkDim);
-            hint.fontStyle = FontStyles.Bold;
-            hint.alignment = TextAlignmentOptions.Right;
 
             // ページ送り（ロスター左右に配置。1ページに収まらない場合のみ機能）
             var prevPage = MakeButton(frame.transform, "RosterPrev", "‹",
@@ -1669,16 +1794,6 @@ namespace PromptFighters.GameFlow
                 PromptFighters.UI.UITheme.SteelLight);
             StyleArcadeButton(back, PromptFighters.UI.UITheme.SteelLight, 16f);
             SetButtonLabelStyle(back, 20f, FontStyles.Bold | FontStyles.Italic, Color.white);
-
-            MakeLabel(_generationSetupPanel.transform, "GenSetupHint",
-                "空欄のプレイヤーは選択中の既存キャラを使用します。生成中はTキーで練習できます。",
-                new Vector2(0f, -470f), new Vector2(840f, 28f), 13f, PromptFighters.UI.UITheme.InkDim);
-
-            var debugBtn = MakeButton(_generationSetupPanel.transform, "DebugSkipImageBtn",
-                "", new Vector2(0f, -370f), new Vector2(420f, 40f),
-                ToggleSkipImageMode, new Color(0.08f, 0.12f, 0.08f, 1f));
-            _debugSkipImageLabel = debugBtn.GetComponentInChildren<TextMeshProUGUI>();
-            RefreshDebugSkipLabel();
         }
 
         void ToggleSkipImageMode()
@@ -1720,13 +1835,10 @@ namespace PromptFighters.GameFlow
                 new Vector2(cx, 292f), new Vector2(360f, 3f), pColor, slant);
 
             var nameInput = MakeInputField(parent, isP1 ? "P1GenerateNameInput" : "P2GenerateNameInput",
-                "キャラクター名", new Vector2(cx, 220f), new Vector2(430f, 48f), false);
+                "キャラクター名（空欄なら選択中のキャラを使用）", new Vector2(cx, 220f), new Vector2(430f, 48f), false);
             var featureInput = MakeInputField(parent, isP1 ? "P1GenerateFeatureInput" : "P2GenerateFeatureInput",
-                "特徴・見た目・戦い方", new Vector2(cx, 55f), new Vector2(430f, 210f), true);
-
-            MakeLabel(parent, isP1 ? "P1GenNote" : "P2GenNote",
-                "例: 雷をまとった小柄な剣士。素早く跳び回り、遠距離から雷を飛ばす。",
-                new Vector2(cx, -78f), new Vector2(430f, 54f), 13f, new Color(0.72f, 0.78f, 0.9f));
+                "特徴・見た目・戦い方\n例: 雷をまとった小柄な剣士。素早く跳び回り、遠距離から雷を飛ばす。",
+                new Vector2(cx, 55f), new Vector2(430f, 210f), true);
 
             // AIに名前・特徴を考えてもらうボタン（人間が後で編集・確認できる）
             float btnSlant = isP1 ? 14f : -14f;
@@ -1853,10 +1965,6 @@ namespace PromptFighters.GameFlow
                 new Vector2(0, 40), new Vector2(700, 40), 18f, PromptFighters.UI.UITheme.Ink);
             _generatingStatusText.fontStyle = FontStyles.Bold;
 
-            MakeLabel(_generatingPanel.transform, "GenNote",
-                "しばらくお待ちください。OpenAI API を使用しています。",
-                new Vector2(0, -20), new Vector2(700, 32), 14f, PromptFighters.UI.UITheme.InkDim);
-
             var cancelBtn = MakeButton(_generatingPanel.transform, "CancelBtn", "キャンセル（ローカル生成で続行）",
                 new Vector2(0, -100), new Vector2(420, 54), CancelGeneration,
                 PromptFighters.UI.UITheme.SteelLight);
@@ -1970,10 +2078,6 @@ namespace PromptFighters.GameFlow
                 PromptFighters.UI.UITheme.Gold);
             StyleArcadeButton(doneBtn, PromptFighters.UI.UITheme.Gold, 16f);
             SetButtonLabelStyle(doneBtn, 23f, FontStyles.Bold | FontStyles.Italic, new Color(0.12f, 0.08f, 0f));
-
-            MakeLabel(_skillConfirmPanel.transform, "BattleHint",
-                "生成したキャラはロスターに保存されます。キャラ選択画面でモードを選んでバトルへ。",
-                new Vector2(0, -475), new Vector2(720, 28), 13f, PromptFighters.UI.UITheme.InkDim);
         }
 
         // 生成キャラ削除の確認モーダル（アーケード調・誤削除防止）。
@@ -2107,6 +2211,18 @@ namespace PromptFighters.GameFlow
             if (ni < 0 || ni >= _presets.Count) return;
             _rosterPage = ni / (RosterColumns * RosterRows);
             SelectPreset(isP1, ni);
+        }
+
+        // ランダムにキャラクターを選ぶ。複数いる場合は現在の選択と別のキャラを選ぶ。
+        void SelectRandomPreset(bool isP1)
+        {
+            if (_presets == null || _presets.Count == 0) return;
+            int cur = isP1 ? _p1PresetIdx : _p2PresetIdx;
+            int idx = Random.Range(0, _presets.Count);
+            if (_presets.Count > 1 && idx == cur)
+                idx = (idx + 1 + Random.Range(0, _presets.Count - 1)) % _presets.Count;
+            _rosterPage = idx / (RosterColumns * RosterRows);
+            SelectPreset(isP1, idx);
         }
 
         void SelectPreset(bool isP1, int idx)
@@ -2653,6 +2769,7 @@ namespace PromptFighters.GameFlow
             if (_panel != null) _panel.SetActive(true);
             if (_titlePanel != null) _titlePanel.SetActive(false);
             if (_generationSetupPanel != null) _generationSetupPanel.SetActive(false);
+            if (_settingsPanel != null) _settingsPanel.SetActive(false);
             _waitForMenuInputRelease = true;
         }
 
@@ -2703,6 +2820,7 @@ namespace PromptFighters.GameFlow
             if (_panel != null) _panel.SetActive(false);
             if (_generationSetupPanel != null) _generationSetupPanel.SetActive(false);
             if (_trainingPanel != null) _trainingPanel.SetActive(false);
+            if (_settingsPanel != null) _settingsPanel.SetActive(false);
         }
 
         void ShowCharacterSelect()
@@ -2713,6 +2831,7 @@ namespace PromptFighters.GameFlow
             if (_trainingPanel != null) _trainingPanel.SetActive(false);
             if (_generatingPanel != null) _generatingPanel.SetActive(false);
             if (_skillConfirmPanel != null) _skillConfirmPanel.SetActive(false);
+            if (_settingsPanel != null) _settingsPanel.SetActive(false);
         }
 
         void ShowGenerationSetupPanel()
@@ -2723,6 +2842,7 @@ namespace PromptFighters.GameFlow
             if (_trainingPanel != null) _trainingPanel.SetActive(false);
             if (_generatingPanel != null) _generatingPanel.SetActive(false);
             if (_skillConfirmPanel != null) _skillConfirmPanel.SetActive(false);
+            if (_settingsPanel != null) _settingsPanel.SetActive(false);
         }
 
         void ShowGeneratingPanel()
