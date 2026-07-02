@@ -16,10 +16,20 @@ namespace PromptFighters.AI
         public const string CommentaryVoice = "ash";     // エネルギッシュな男性寄り（gpt-4o-mini-tts対応）
         public const string AngelVoice      = "shimmer"; // 明るく軽やかな印象（ボイスボール用）
         public const float  CommentarySpeed = 1.15f;     // やや速めで迫力を出す（フォールバックのtts-1用）
-        // 実況の声の演技指示。テンション・速度・抑揚をここで作る。
-        public const string CommentaryInstructions =
-            "テレビの格闘中継の熱血実況アナウンサー。テンションは最高潮、かなり早口で、" +
-            "抑揚を強く付けて決め所は絶叫気味に叫ぶ。語尾まで勢いを保ち、興奮が伝わる声で。";
+        // 実況の声の演技指示。台本読みではなく「生の人間の声」に寄せる。
+        // 熱い瞬間用：興奮した実況。つなぎ用：落ち着いた解説トーン。使い分けて人間らしさを出す。
+        public const string CommentaryInstructionsExcited =
+            "日本語のスポーツ実況アナウンサー本人として、目の前の試合に本気で驚き興奮している生の声で話す。" +
+            "台本の読み上げには絶対に聞こえないように。自然な日本語のイントネーションで、早口だが聞き取りやすく、" +
+            "決め所では声を張り上げ、語尾は叫びっぱなしにせず自然に抜く。息継ぎや間も人間らしく。";
+        public const string CommentaryInstructionsCalm =
+            "日本語のスポーツ実況アナウンサー本人として、試合の合間を落ち着いた解説トーンでつなぐ。" +
+            "自然な会話の速さと抑揚で、台本読みに聞こえないように。静かな中にも試合への熱を感じさせる声で。";
+
+        // 現在AI音声（実況・ボイスボール等）を再生中か。実況側が声の重なりを避けるために参照する。
+        // 再生開始時に終了予定時刻を記録する方式（コルーチンが途中停止されてもフラグが残らない）。
+        static float _speechEndTime;
+        public static bool IsSpeaking => Time.unscaledTime < _speechEndTime;
 
         public static Coroutine Speak(MonoBehaviour runner, string text,
             AudioSource audioSource,
@@ -102,8 +112,10 @@ namespace PromptFighters.AI
 
             if (audioSource != null)
             {
+                _speechEndTime = Mathf.Max(_speechEndTime, Time.unscaledTime + clip.length);
                 audioSource.PlayOneShot(clip, volume);
-                yield return new WaitForSeconds(clip.length);
+                // 音声はスローモーション中も実時間で流れるため、待ちも実時間で行う
+                yield return new WaitForSecondsRealtime(clip.length);
             }
 
             // AudioClip.Createで確保したネイティブリソースはGC対象外。再生完了後に明示破棄してリークを防ぐ。

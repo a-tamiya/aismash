@@ -15,7 +15,7 @@ namespace PromptFighters.UI
     {
         public static bool Enabled = true;
 
-        public float minGapSeconds  = 8f;  // 実況同士の最短間隔（連発防止）
+        public float minGapSeconds  = 6f;  // 前の読み上げ終了から次の実況までの最短間隔（連発防止）
         public float idleIntervalMin = 13f; // 何も起きない時のつなぎ実況間隔（ランダム下限）
         public float idleIntervalMax = 24f; // 同・上限
 
@@ -41,6 +41,20 @@ namespace PromptFighters.UI
         bool  _t30Announced, _t10Announced;
         readonly System.Collections.Generic.Queue<string> _recentLines =
             new System.Collections.Generic.Queue<string>(); // 直前の実況（繰り返し防止用）
+
+        // 外部（ボイスボール等）から通知される注目イベント。次の実況で最優先に拾う。
+        struct PendingMoment { public string text; public float time; }
+        static readonly System.Collections.Generic.Queue<PendingMoment> _pendingMoments =
+            new System.Collections.Generic.Queue<PendingMoment>();
+        const float PendingMomentLifetime = 20f; // 古くなった瞬間は実況しない
+
+        // ボイスボールの獲得・効果などを実況に拾わせるための通知口。
+        public static void NotifyMoment(string focusText)
+        {
+            if (!Enabled || string.IsNullOrWhiteSpace(focusText)) return;
+            _pendingMoments.Enqueue(new PendingMoment { text = focusText, time = Time.unscaledTime });
+            while (_pendingMoments.Count > 3) _pendingMoments.Dequeue();
+        }
 
         void Awake()
         {
@@ -211,6 +225,7 @@ namespace PromptFighters.UI
             _prevLeader = 0;
             _t30Announced = _t10Announced = false;
             _recentLines.Clear();
+            _pendingMoments.Clear();
         }
 
         IEnumerator CommentaryLoop()
@@ -220,9 +235,11 @@ namespace PromptFighters.UI
 
             // 0.5秒ごとに試合状況を監視し、熱い瞬間が来たら即実況。
             // 何も起きない時はランダム間隔のつなぎ実況でテンポを保つ。
+            // 前の読み上げ中・ボイスボールの録音/効果シーケンス中は発話しない（声の重なり・マイク混入防止）。
             while (true)
             {
                 if (_bm != null && _bm.Phase == BattlePhase.Fighting && !_isGenerating
+                    && !AITTSClient.IsSpeaking && !AngelController.SequenceBusy
                     && Time.time - _lastCommentaryTime >= minGapSeconds)
                 {
                     string focus = DetectHotMoment();
@@ -246,6 +263,13 @@ namespace PromptFighters.UI
         // 「今まさに実況すべき瞬間」を検知する。検知したら焦点の説明文を返す（消費式）。
         string DetectHotMoment()
         {
+            // 外部通知（ボイスボールの獲得・効果など）を最優先で拾う。古すぎるものは捨てる。
+            while (_pendingMoments.Count > 0)
+            {
+                var pm = _pendingMoments.Dequeue();
+                if (Time.unscaledTime - pm.time <= PendingMomentLifetime) return pm.text;
+            }
+
             var lg = BattleLogger.Instance;
             var f1 = _bm?.fighter1;
             var f2 = _bm?.fighter2;
@@ -343,6 +367,9 @@ namespace PromptFighters.UI
             while (_recentLines.Count > 3) _recentLines.Dequeue();
 
             ShowText(result);
+            float shownAt = Time.unscaledTime;
+
+            // 声色：熱い瞬間は興奮、つなぎは落ち着いた解説トーン（人間らしい緩急を付ける）
             bool ttsDone = false;
             AITTSClient.Speak(this, result, _audioSource,
                 onComplete: () => ttsDone = true,
@@ -350,10 +377,25 @@ namespace PromptFighters.UI
                 voice: AITTSClient.CommentaryVoice,
                 speed: AITTSClient.CommentarySpeed,
                 volume: 2.2f,
-                instructions: AITTSClient.CommentaryInstructions);
+                instructions: focus != null
+                    ? AITTSClient.CommentaryInstructionsExcited
+                    : AITTSClient.CommentaryInstructionsCalm);
 
+            // 読み上げが終わるまで次の実況をブロックする（声の重なり防止）。安全のため上限25秒。
+            float waited = 0f;
+            while (!ttsDone && waited < 25f) { waited += Time.unscaledDeltaTime; yield return null; }
+
+            // TTSが失敗・短くても、文章を読み切れる最低表示時間はテロップを保持する
+            float minRead = Mathf.Clamp(1.5f + result.Length * 0.12f, 3.5f, 9f);
+            while (Time.unscaledTime - shownAt < minRead) yield return null;
+            yield return new WaitForSecondsRealtime(1.2f);
+
+            // クールダウンは「読み上げが終わった時点」から数える
+            _lastCommentaryTime = Time.time;
             _isGenerating = false;
-            StartCoroutine(FadeOutAfterTTS(() => ttsDone));
+
+            if (_fadeRoutine != null) StopCoroutine(_fadeRoutine);
+            _fadeRoutine = StartCoroutine(FadeOutOnly());
         }
 
         CommentaryBattleState BuildState()
@@ -438,15 +480,6 @@ namespace PromptFighters.UI
             }
             _group.alpha = 1f;
             if (_panelRect != null) _panelRect.anchoredPosition = Vector2.zero;
-        }
-
-        IEnumerator FadeOutAfterTTS(System.Func<bool> isDone)
-        {
-            float waited = 0f;
-            while (!isDone() && waited < 25f) { waited += Time.deltaTime; yield return null; }
-            yield return new WaitForSeconds(1.5f);
-            if (_fadeRoutine != null) StopCoroutine(_fadeRoutine);
-            _fadeRoutine = StartCoroutine(FadeOutOnly());
         }
 
         IEnumerator FadeOutOnly()

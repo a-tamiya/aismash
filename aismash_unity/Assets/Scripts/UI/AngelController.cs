@@ -16,6 +16,11 @@ namespace PromptFighters.UI
     public class AngelController : MonoBehaviour
     {
         public static bool Enabled = true;
+
+        // 取得〜録音〜効果適用のシーケンス実行中か。
+        // 実況（CommentaryController）がこの間に喋ると、録音マイクに実況音声が混入したり
+        // ボイスボールのTTSと重なったりするため、実況側が参照して発話を控える。
+        public static bool SequenceBusy { get; private set; }
         public float recordSeconds  = 5f;
         public float spawnInterval  = 20f;  // アイテム出現間隔（秒）
         public float firstSpawnDelay = 8f;  // 試合開始から最初の出現まで
@@ -71,7 +76,7 @@ namespace PromptFighters.UI
             if (_activeItem != null) { Destroy(_activeItem.gameObject); _activeItem = null; }
             RestoreTimeScale();
             ShowSlowOverlay(false);
-            _busy = false; _listening = false;
+            _busy = false; _listening = false; SequenceBusy = false;
             if (_bannerGroup != null)   _bannerGroup.alpha   = 0f;
             if (_subtitleGroup != null) _subtitleGroup.alpha = 0f;
             if (_effectGroup != null)   _effectGroup.alpha   = 0f;
@@ -114,7 +119,7 @@ namespace PromptFighters.UI
             _applier?.ClearObstacles();
             RestoreTimeScale();
             ShowSlowOverlay(false);
-            _busy = false; _listening = false;
+            _busy = false; _listening = false; SequenceBusy = false;
         }
 
         // 一定間隔でアイテムを1個ずつ出現（同時に1個まで）。録音中は出さない。
@@ -168,6 +173,7 @@ namespace PromptFighters.UI
         IEnumerator AcquireSequence(Fighter breaker)
         {
             _busy = true;
+            SequenceBusy = true;
 
             // ギミックの適用対象を「取得者=自分 / 相手」で割り当てる。
             // 取得者は常に applyP1（acquirerSlot=player1=自分）、相手は applyP2（player2）。
@@ -225,10 +231,16 @@ namespace PromptFighters.UI
                     onError: e => Debug.LogWarning("[VoiceItemTTS] " + e),
                     voice: AITTSClient.AngelVoice, volume: 2.0f);
 
+                // 実況にもこの瞬間を拾わせる（効果内容つき）
+                BattleLogger.Instance?.LogEvent($"ボイスボール効果発動:{cg.message}");
+                CommentaryController.NotifyMoment(
+                    $"{_acquirerTag} {acquirerName}がボイスボールを獲得し、効果「{cg.message}」が発動した");
+
                 yield return new WaitForSecondsRealtime(3f);
                 HideBanner();
                 HideSubtitle();
                 _busy = false;
+                SequenceBusy = false;
                 yield break;
             }
 
@@ -332,11 +344,18 @@ namespace PromptFighters.UI
                 voice: AITTSClient.AngelVoice,
                 volume: 2.0f);
 
+            // 実況にもこの瞬間を拾わせる（願いの内容＋効果つき）
+            BattleLogger.Instance?.LogEvent($"ボイスボール効果発動:{gimmick.message}");
+            CommentaryController.NotifyMoment(hadVoice
+                ? $"{_acquirerTag} {acquirerName}がボイスボールに願い「{transcribed}」を唱え、効果「{gimmick.message}」が発動した"
+                : $"{_acquirerTag} {acquirerName}が獲得したボイスボールから効果「{gimmick.message}」が発動した");
+
             yield return new WaitForSecondsRealtime(3.5f);
             HideBanner();
             HideSubtitle();
 
             _busy = false;
+            SequenceBusy = false;
         }
 
         void RestoreTimeScale()
