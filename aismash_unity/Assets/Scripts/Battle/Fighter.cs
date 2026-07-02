@@ -909,6 +909,20 @@ namespace PromptFighters.Battle
             _skillChargeVisualTimer = 0.12f;
         }
 
+        // 攻撃ポーズのスプライト（発射位置・判定位置のアンカー解析用）。未生成ならnull。
+        public Sprite GetAttackPoseSprite(SkillSlot slot)
+        {
+            CharacterSpriteId id = slot switch
+            {
+                SkillSlot.AttackA => CharacterSpriteId.AttackA,
+                SkillSlot.AttackB => CharacterSpriteId.AttackB,
+                SkillSlot.AttackC => CharacterSpriteId.AttackC,
+                SkillSlot.SmashSide => CharacterSpriteId.SmashSide,
+                _ => CharacterSpriteId.Idle1,
+            };
+            return _spriteSet.Get(id, null, false);
+        }
+
         public Sprite GetEffectSprite(SkillSlot slot)
         {
             CharacterSpriteId id = slot switch

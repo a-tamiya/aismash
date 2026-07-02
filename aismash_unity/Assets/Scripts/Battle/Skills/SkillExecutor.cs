@@ -368,6 +368,30 @@ namespace PromptFighters.Battle.Skills
             float offsetX = a.spawn_x > 0f ? a.spawn_x : baseOffset.x;
             float offsetY = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : baseOffset.y;
             float height = a.size_y > 0f ? a.size_y : DefaultHitboxHeight(skill.slot);
+
+            // 攻撃ポーズの得物（剣・槍・拳）の位置に判定を合わせる
+            // （「剣を振っているのに判定が別の場所にある」対策）。
+            var anchor = AnchorFor(skill.slot);
+            if (anchor.valid)
+            {
+                if (anchor.weaponLength >= 0.35f)
+                {
+                    // 得物が写っている: 判定を「体の前端〜刃の先端」の帯に張り、見た目のリーチと一致させる
+                    float startX = Mathf.Max(anchor.bodyEdgeX * 0.6f, 0.1f);
+                    float endX   = Mathf.Max(anchor.tip.x + 0.15f, startX + range);
+                    endX = Mathf.Min(endX, startX + range * 1.5f, 3.2f); // 伸ばしすぎ防止（バランス保護）
+                    range   = endX - startX;
+                    offsetX = (startX + endX) * 0.5f;
+                    offsetY = Mathf.Clamp((0.95f + anchor.tip.y) * 0.5f, 0.6f, 1.5f);
+                    height  = Mathf.Clamp(Mathf.Max(height, Mathf.Abs(anchor.tip.y - 0.95f) + 0.9f), 0.8f, 2.2f);
+                }
+                else
+                {
+                    // 素手・体術: 拳・蹴りの高さに判定を合わせる
+                    offsetY = Mathf.Clamp(anchor.tip.y, 0.5f, 1.6f);
+                }
+            }
+
             // エフェクトなし（キャラ本体判定）は視覚補助がないぶんやや広めに
             if (a.hide_effect) { range *= 1.2f; height *= 1.2f; }
             // キャラサイズに合わせてヒットボックスをスケール
@@ -548,12 +572,31 @@ namespace PromptFighters.Battle.Skills
             return hb;
         }
 
+        // 攻撃ポーズのスプライト解析アンカー（武器の先端・銃口・拳の位置）。
+        AttackAnchor AnchorFor(SkillSlot slot)
+            => AttackAnchorEstimator.Get(_fighter.GetAttackPoseSprite(slot));
+
         void SpawnProjectile(SkillData skill, SkillAction a, float powerMultiplier)
         {
             float dirSign = _fighter.FacingRight ? 1f : -1f;
             Vector2 baseOffset = DefaultProjectileOffset(skill.slot);
             float offsetX = a.spawn_x > 0f ? a.spawn_x : baseOffset.x;
             float offsetY = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : baseOffset.y;
+
+            // 発射点を攻撃ポーズの銃口・杖先・拳の位置に合わせる（「銃の少し下から弾が出る」対策）。
+            // 落下弾・山なり弾など特殊軌道（重力・大角度・上空スポーン）はAI指定の軌道を尊重する。
+            bool specialTrajectory = !Mathf.Approximately(a.gravity_scale, 0f)
+                                     || Mathf.Abs(a.projectile_angle) >= 30f
+                                     || offsetY >= 2f;
+            var anchor = AnchorFor(skill.slot);
+            if (anchor.valid && !specialTrajectory)
+            {
+                offsetX = Mathf.Max(anchor.tip.x + 0.12f, 0.35f);
+                offsetY = Mathf.Clamp(anchor.tip.y, 0.3f, 2.0f);
+            }
+            // キャラの表示サイズに合わせて発射点もスケール（巨大化/縮小時のずれ防止）
+            offsetX *= _sizeScale;
+            offsetY *= _sizeScale;
             Vector2 spawn = (Vector2)_fighter.transform.position + new Vector2(dirSign * offsetX, offsetY);
 
             float speed    = a.projectile_speed    > 0f ? a.projectile_speed    : 9f;
@@ -608,8 +651,24 @@ namespace PromptFighters.Battle.Skills
             float width   = a.size_x > 0f ? a.size_x : (a.range > 0f ? a.range : 7f);
             float height  = a.size_y > 0f ? a.size_y : 0.5f;
             height = Mathf.Max(height, Mathf.Clamp(width * 0.1f, 0.55f, 1.2f));
-            float offsetX = a.spawn_x > 0f ? a.spawn_x : width * 0.5f;
-            float offsetY = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 0.8f;
+
+            // ビームは「起点（銃口・掌の位置）から前方へ伸びる」ように配置する。
+            // 従来は spawn_x をビーム中心として扱っていたため、幅が広いほど後ろ半分が
+            // キャラの背後へはみ出していた（「ビームが自分の後ろから出る」の原因）。
+            var anchor = AnchorFor(skill.slot);
+            float originX, originY;
+            if (anchor.valid)
+            {
+                originX = Mathf.Max(anchor.tip.x - 0.1f, 0.2f);
+                originY = Mathf.Clamp(anchor.tip.y, 0.4f, 1.8f);
+            }
+            else
+            {
+                originX = a.spawn_x > 0f ? a.spawn_x : 0.55f;
+                originY = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 0.8f;
+            }
+            float offsetX = originX + width * 0.5f; // 中心＝起点＋半幅（起点より後ろに判定を出さない）
+            float offsetY = originY;
             width   *= _sizeScale;
             height  *= _sizeScale;
             offsetX *= _sizeScale;
