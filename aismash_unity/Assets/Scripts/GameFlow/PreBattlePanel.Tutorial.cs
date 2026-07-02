@@ -9,38 +9,55 @@ using PromptFighters.UI;
 namespace PromptFighters.GameFlow
 {
     // 初めての人向けの操作チュートリアル。読ませるのではなく「やって覚える」方式。
-    // 1つの目標を大きく表示 → プレイヤーの操作を検知 → クリア音＋✓で次へ進む。
-    // トレーニング基盤を流用し、既知のプリセットを使う（技構成が標準的なため）。
+    // 1人でも2人でも遊べるよう、1P/2Pは独立トラックで並行進行する。
+    //  ・各プレイヤーが自分のペースで ①移動→⑥つかみ を1つずつクリアする
+    //  ・「参加した（何か操作した）プレイヤー全員」がクリアしたら終了
+    //    → 1人（1P）だけ操作すれば1Pのクリアで終了、2人操作なら両方のクリアで終了
+    //  ・誰も操作しないまま60秒経過、またはEscでタイトルへ戻る（放置対策）
     public partial class PreBattlePanel : MonoBehaviour
     {
         bool _tutorialActive;
-        int  _tutorialStep;
-        Fighter _tutFighter;
         FighterAI.CpuLevel _savedCpuLevel;
+        float _tutIdleTimer;
 
-        // 検知用の状態
-        float _tutPrevX, _tutMoveDist, _tutGuardTime;
-        bool  _tutJumped, _tutSmashed, _tutGrabbed;
-        int   _tutAttackCount;
-        bool  _tutStepClearing;
+        // プレイヤーごとの状態（[0]=1P, [1]=2P）
+        readonly Fighter[] _tutFighters   = new Fighter[2];
+        readonly int[]     _tutStep       = new int[2];
+        readonly bool[]    _tutStepClearing= new bool[2];
+        readonly bool[]    _tutEngaged     = new bool[2];
+        readonly float[]   _tutPrevX       = new float[2];
+        readonly float[]   _tutMoveDist    = new float[2];
+        readonly float[]   _tutGuardTime   = new float[2];
+        readonly bool[]    _tutJumped      = new bool[2];
+        readonly bool[]    _tutSmashed     = new bool[2];
+        readonly bool[]    _tutGrabbed     = new bool[2];
+        readonly int[]     _tutAttackCount = new int[2];
 
-        GameObject      _tutorialPanel;
-        TextMeshProUGUI _tutTitle;
-        TextMeshProUGUI _tutHint;
-        TextMeshProUGUI _tutProgress;
-        TextMeshProUGUI _tutCheck;
-        CanvasGroup     _tutCheckGroup;
+        // イベント購読の解除用に保持するデリゲート
+        readonly System.Action[]            _hJump  = new System.Action[2];
+        readonly System.Action[]            _hGrab  = new System.Action[2];
+        readonly System.Action<SkillSlot>[] _hSkill = new System.Action<SkillSlot>[2];
 
-        struct TutorialStep { public string title; public string hint; }
+        // UI（左=1P / 右=2P の2カラム）
+        GameObject          _tutorialPanel;
+        readonly TextMeshProUGUI[] _tutTitle    = new TextMeshProUGUI[2];
+        readonly TextMeshProUGUI[] _tutHint     = new TextMeshProUGUI[2];
+        readonly TextMeshProUGUI[] _tutProgress = new TextMeshProUGUI[2];
+        readonly TextMeshProUGUI[] _tutCheck    = new TextMeshProUGUI[2];
+        readonly CanvasGroup[]     _tutCheckGrp = new CanvasGroup[2];
+        TextMeshProUGUI     _tutFinish;
+        CanvasGroup         _tutFinishGrp;
+
+        struct TutorialStep { public string title, hint1, hint2, pad; }
 
         static readonly TutorialStep[] TutorialSteps =
         {
-            new TutorialStep { title = "① 動いてみよう",       hint = "1P: A / D　　パッド: 左スティック・十字キー" },
-            new TutorialStep { title = "② ジャンプ！",          hint = "1P: W　　パッド: Y / △　（空中でもう一度で2段ジャンプ）" },
-            new TutorialStep { title = "③ ガードで防ぐ",        hint = "1P: 左Shift を長押し　　パッド: RB / RT" },
-            new TutorialStep { title = "④ 技を出そう（3回）",   hint = "1P: J / K / L　　パッド: B / A / X" },
-            new TutorialStep { title = "⑤ スマッシュ！",        hint = "1P: A か D を素早く2回 → J　　パッド: 右スティックを横に倒す" },
-            new TutorialStep { title = "⑥ つかみ",              hint = "1P: G　　パッド: LB / LT　（ガードを無視してつかめる）" },
+            new TutorialStep { title = "① 動いてみよう",     hint1 = "A / D",         hint2 = "← / →",           pad = "左スティック" },
+            new TutorialStep { title = "② ジャンプ！",        hint1 = "W",             hint2 = "↑",                pad = "Y / △" },
+            new TutorialStep { title = "③ ガードで防ぐ",      hint1 = "左Shift 長押し", hint2 = "右Ctrl 長押し",     pad = "RB / RT" },
+            new TutorialStep { title = "④ 技を出そう（3回）", hint1 = "J / K / L",     hint2 = "テンキー 2 / 3 / 1", pad = "B / A / X" },
+            new TutorialStep { title = "⑤ スマッシュ！",      hint1 = "A/D 2回→J",     hint2 = "←/→ 2回→テン2",    pad = "右スティックを横" },
+            new TutorialStep { title = "⑥ つかみ",           hint1 = "G",             hint2 = "テンキー 0",         pad = "LB / LT" },
         };
 
         void StartTutorial()
@@ -60,137 +77,214 @@ namespace PromptFighters.GameFlow
             EnsureSpriteSet(d2);
 
             _tutorialActive = true;
-            _tutorialStep = 0;
-            _tutStepClearing = false;
+            _tutIdleTimer = 0f;
+            for (int i = 0; i < 2; i++)
+            {
+                _tutStep[i] = 0;
+                _tutStepClearing[i] = false;
+                _tutEngaged[i] = false;
+                ResetStepState(i);
+            }
             if (_titlePanel != null) _titlePanel.SetActive(false);
             if (_panel != null) _panel.SetActive(false);
             HideGamepadCursors();
 
             bm.StartTraining(d1, d2);
-            _tutFighter = bm.fighter1;
+            _tutFighters[0] = bm.fighter1;
+            _tutFighters[1] = bm.fighter2;
             SubscribeTutorial();
 
+            // 配置が終わったファイターの現在Xを基準に取り直す（スポーン移動を誤検知しないため）
+            for (int i = 0; i < 2; i++)
+            {
+                _tutMoveDist[i] = 0f;
+                _tutEngaged[i]  = false;
+                if (_tutFighters[i] != null) _tutPrevX[i] = _tutFighters[i].transform.position.x;
+            }
+
+            if (_tutFinishGrp != null) _tutFinishGrp.alpha = 0f;
             if (_tutorialPanel != null) _tutorialPanel.SetActive(true);
-            ShowTutorialStep(0);
+            for (int i = 0; i < 2; i++)
+            {
+                if (_tutCheckGrp[i] != null) _tutCheckGrp[i].alpha = 0f;
+                ShowStepFor(i);
+            }
         }
 
         void SubscribeTutorial()
         {
-            if (_tutFighter == null) return;
-            _tutFighter.OnJumped      += TutOnJumped;
-            _tutFighter.OnGrabAttempt += TutOnGrab;
-            var ex = _tutFighter.GetComponent<SkillExecutor>();
-            if (ex != null) ex.OnSkillExecuted += TutOnSkill;
+            for (int i = 0; i < 2; i++)
+            {
+                var f = _tutFighters[i];
+                if (f == null) continue;
+                int idx = i;
+                _hJump[idx]  = () => { if (_tutStep[idx] == 1) _tutJumped[idx] = true; TutNudge(idx); };
+                _hGrab[idx]  = () => { if (_tutStep[idx] == 5) _tutGrabbed[idx] = true; TutNudge(idx); };
+                _hSkill[idx] = (s) =>
+                {
+                    if (_tutStep[idx] == 3 && s != SkillSlot.SmashSide) _tutAttackCount[idx]++;
+                    if (_tutStep[idx] == 4 && s == SkillSlot.SmashSide) _tutSmashed[idx] = true;
+                    TutNudge(idx);
+                };
+                f.OnJumped      += _hJump[idx];
+                f.OnGrabAttempt += _hGrab[idx];
+                var ex = f.GetComponent<SkillExecutor>();
+                if (ex != null) ex.OnSkillExecuted += _hSkill[idx];
+            }
         }
 
         void UnsubscribeTutorial()
         {
-            if (_tutFighter == null) return;
-            _tutFighter.OnJumped      -= TutOnJumped;
-            _tutFighter.OnGrabAttempt -= TutOnGrab;
-            var ex = _tutFighter.GetComponent<SkillExecutor>();
-            if (ex != null) ex.OnSkillExecuted -= TutOnSkill;
+            for (int i = 0; i < 2; i++)
+            {
+                var f = _tutFighters[i];
+                if (f == null) continue;
+                if (_hJump[i]  != null) f.OnJumped      -= _hJump[i];
+                if (_hGrab[i]  != null) f.OnGrabAttempt -= _hGrab[i];
+                var ex = f.GetComponent<SkillExecutor>();
+                if (ex != null && _hSkill[i] != null) ex.OnSkillExecuted -= _hSkill[i];
+                _hJump[i] = null; _hGrab[i] = null; _hSkill[i] = null;
+            }
         }
 
-        void TutOnJumped() { if (_tutorialStep == 1) _tutJumped = true; }
-        void TutOnGrab()   { if (_tutorialStep == 5) _tutGrabbed = true; }
-        void TutOnSkill(SkillSlot s)
+        // 何か操作があった＝そのプレイヤーは参加中。放置タイマーもリセット。
+        void TutNudge(int i)
         {
-            if (_tutorialStep == 3 && s != SkillSlot.SmashSide) _tutAttackCount++;
-            if (_tutorialStep == 4 && s == SkillSlot.SmashSide) _tutSmashed = true;
+            _tutEngaged[i] = true;
+            _tutIdleTimer = 0f;
         }
 
         void UpdateTutorial()
         {
-            // Escでいつでも中断してタイトルへ
             if (WasKeyboardCancelPressed()) { EndTutorial(toTitle: true); return; }
-            if (_tutStepClearing || _tutFighter == null) return;
 
-            bool done = false;
-            switch (_tutorialStep)
+            _tutIdleTimer += Time.unscaledDeltaTime;
+            if (_tutIdleTimer > 60f) { EndTutorial(toTitle: true); return; } // 放置対策
+
+            for (int i = 0; i < 2; i++)
             {
-                case 0: // 移動
-                    _tutMoveDist += Mathf.Abs(_tutFighter.transform.position.x - _tutPrevX);
-                    _tutPrevX = _tutFighter.transform.position.x;
-                    done = _tutMoveDist > 3f;
-                    break;
-                case 1: done = _tutJumped; break;
-                case 2: // ガード
-                    if (_tutFighter.State == FighterState.Guarding) _tutGuardTime += Time.deltaTime;
-                    done = _tutGuardTime > 0.4f;
-                    break;
-                case 3: done = _tutAttackCount >= 3; break;
-                case 4: done = _tutSmashed; break;
-                case 5: done = _tutGrabbed; break;
+                var f = _tutFighters[i];
+                if (f == null || _tutStepClearing[i]) continue;
+                int step = _tutStep[i];
+                if (step >= TutorialSteps.Length) continue;
+
+                bool done = false;
+                switch (step)
+                {
+                    case 0: // 移動（テレポート・スポーン移動は1フレームの移動量が大きいので除外）
+                        float dx = Mathf.Abs(f.transform.position.x - _tutPrevX[i]);
+                        if (dx > 0.0005f && dx < 1f) { _tutMoveDist[i] += dx; if (_tutMoveDist[i] > 0.4f) TutNudge(i); }
+                        _tutPrevX[i] = f.transform.position.x;
+                        done = _tutMoveDist[i] > 3f;
+                        break;
+                    case 1: done = _tutJumped[i]; break;
+                    case 2: // ガード
+                        if (f.State == FighterState.Guarding) { _tutGuardTime[i] += Time.deltaTime; TutNudge(i); }
+                        done = _tutGuardTime[i] > 0.4f;
+                        break;
+                    case 3: done = _tutAttackCount[i] >= 3; break;
+                    case 4: done = _tutSmashed[i]; break;
+                    case 5: done = _tutGrabbed[i]; break;
+                }
+                if (done) StartCoroutine(CompleteStepRoutine(i));
             }
-            if (done) StartCoroutine(CompleteStepRoutine());
         }
 
-        IEnumerator CompleteStepRoutine()
+        IEnumerator CompleteStepRoutine(int i)
         {
-            _tutStepClearing = true;
+            _tutStepClearing[i] = true;
             PromptFighters.Audio.GameAudioManager.Instance?.PlayGimmickHeal();
 
-            // 大きな✓を一瞬表示
-            if (_tutCheck != null && _tutCheckGroup != null)
+            // そのプレイヤーのカラムに✓を一瞬表示
+            if (_tutCheck[i] != null && _tutCheckGrp[i] != null)
             {
-                _tutCheck.text = "✓ クリア！";
+                _tutCheck[i].text = "✓";
                 float t = 0f;
-                while (t < 0.7f)
+                while (t < 0.55f)
                 {
                     t += Time.unscaledDeltaTime;
-                    _tutCheckGroup.alpha = t < 0.15f ? t / 0.15f : Mathf.Clamp01((0.7f - t) / 0.35f);
-                    float s = Mathf.Lerp(0.7f, 1.1f, Mathf.Clamp01(t / 0.2f));
-                    _tutCheck.rectTransform.localScale = Vector3.one * s;
+                    _tutCheckGrp[i].alpha = t < 0.12f ? t / 0.12f : Mathf.Clamp01((0.55f - t) / 0.3f);
+                    _tutCheck[i].rectTransform.localScale = Vector3.one * Mathf.Lerp(0.7f, 1.15f, Mathf.Clamp01(t / 0.18f));
                     yield return null;
                 }
-                _tutCheckGroup.alpha = 0f;
+                _tutCheckGrp[i].alpha = 0f;
             }
 
-            _tutorialStep++;
-            ResetStepState();
+            _tutStep[i]++;
+            ResetStepState(i);
 
-            if (_tutorialStep >= TutorialSteps.Length)
+            if (_tutStep[i] >= TutorialSteps.Length)
             {
-                yield return FinishTutorialRoutine();
-                yield break;
+                ShowColumnClear(i);
+                if (IsTutorialComplete())
+                {
+                    yield return FinishTutorialRoutine();
+                    yield break;
+                }
             }
-            ShowTutorialStep(_tutorialStep);
-            _tutStepClearing = false;
+            else ShowStepFor(i);
+
+            _tutStepClearing[i] = false;
+        }
+
+        // 参加中のプレイヤーが全員クリアしたか。誰も参加していなければ未完了。
+        bool IsTutorialComplete()
+        {
+            bool anyEngaged = _tutEngaged[0] || _tutEngaged[1];
+            if (!anyEngaged) return false;
+            for (int i = 0; i < 2; i++)
+                if (_tutEngaged[i] && _tutStep[i] < TutorialSteps.Length) return false;
+            return true;
         }
 
         IEnumerator FinishTutorialRoutine()
         {
-            if (_tutTitle != null) _tutTitle.text = "クリア！ 準備OK！";
-            if (_tutHint != null)  _tutHint.text  = "さっそく自分だけのキャラを作って戦おう！";
-            if (_tutProgress != null) _tutProgress.text = "● ● ● ● ● ●";
+            if (_tutFinish != null) _tutFinish.text = "クリア！ 準備OK！\nさっそく自分だけのキャラを作って戦おう！";
             PromptFighters.Audio.GameAudioManager.Instance?.PlayGimmickBuff();
+            if (_tutFinishGrp != null)
+            {
+                float t = 0f;
+                while (t < 0.3f) { t += Time.unscaledDeltaTime; _tutFinishGrp.alpha = t / 0.3f; yield return null; }
+                _tutFinishGrp.alpha = 1f;
+            }
             yield return new WaitForSecondsRealtime(2.4f);
             EndTutorial(toTitle: false);
         }
 
-        void ResetStepState()
+        void ResetStepState(int i)
         {
-            _tutMoveDist = 0f;
-            _tutGuardTime = 0f;
-            _tutJumped = _tutSmashed = _tutGrabbed = false;
-            _tutAttackCount = 0;
-            if (_tutFighter != null) _tutPrevX = _tutFighter.transform.position.x;
+            _tutMoveDist[i] = 0f;
+            _tutGuardTime[i] = 0f;
+            _tutJumped[i] = _tutSmashed[i] = _tutGrabbed[i] = false;
+            _tutAttackCount[i] = 0;
+            if (_tutFighters[i] != null) _tutPrevX[i] = _tutFighters[i].transform.position.x;
         }
 
-        void ShowTutorialStep(int step)
+        void ShowStepFor(int i)
         {
-            ResetStepState();
+            int step = _tutStep[i];
             if (step < 0 || step >= TutorialSteps.Length) return;
-            if (_tutTitle != null) _tutTitle.text = TutorialSteps[step].title;
-            if (_tutHint != null)  _tutHint.text  = TutorialSteps[step].hint;
-            if (_tutProgress != null)
+            var s = TutorialSteps[step];
+            if (_tutTitle[i] != null) _tutTitle[i].text = s.title;
+            if (_tutHint[i] != null)  _tutHint[i].text  = $"{(i == 0 ? s.hint1 : s.hint2)}　パッド: {s.pad}";
+            if (_tutProgress[i] != null)
             {
                 var sb = new System.Text.StringBuilder();
-                for (int i = 0; i < TutorialSteps.Length; i++)
-                    sb.Append(i <= step ? "● " : "○ ");
-                _tutProgress.text = sb.ToString().TrimEnd();
+                for (int k = 0; k < TutorialSteps.Length; k++) sb.Append(k <= step ? "● " : "○ ");
+                _tutProgress[i].text = sb.ToString().TrimEnd();
             }
+        }
+
+        void ShowColumnClear(int i)
+        {
+            if (_tutTitle[i] != null) _tutTitle[i].text = "クリア！ ✓";
+            if (_tutHint[i] != null)
+            {
+                // 相手がまだ挑戦中なら「待っています」を出す
+                bool otherBusy = _tutEngaged[1 - i] && _tutStep[1 - i] < TutorialSteps.Length;
+                _tutHint[i].text = otherBusy ? "相手のクリアを待っています…" : "";
+            }
+            if (_tutProgress[i] != null) _tutProgress[i].text = "● ● ● ● ● ●";
         }
 
         void EndTutorial(bool toTitle)
@@ -198,8 +292,7 @@ namespace PromptFighters.GameFlow
             UnsubscribeTutorial();
             FighterAI.Level = _savedCpuLevel;
             _tutorialActive = false;
-            _tutStepClearing = false;
-            _tutFighter = null;
+            for (int i = 0; i < 2; i++) { _tutStepClearing[i] = false; _tutFighters[i] = null; }
             if (_tutorialPanel != null) _tutorialPanel.SetActive(false);
             BattleManager.Instance?.ReturnToSetup(); // 試合を止めてSetupへ（→ ShowPanel でキャラ選択表示）
             if (toTitle) ShowTitlePanel();
@@ -215,44 +308,71 @@ namespace PromptFighters.GameFlow
             cg.blocksRaycasts = false;
             var t = _tutorialPanel.transform;
 
-            // 上部の指示バナー（HPバーの下）。中央のキャラは隠さない。
-            var banner = MakePanel(t, "TutBanner", new Vector2(0f, 300f), new Vector2(1200f, 150f),
-                new Color(0.02f, 0.025f, 0.05f, 0.82f));
-            banner.raycastTarget = false;
-            MakeSlantBar(t, "TutBannerTop", new Vector2(0f, 375f), new Vector2(1200f, 5f),
-                PromptFighters.UI.UITheme.Gold, 26f);
+            BuildTutColumn(t, 0, -340f, PromptFighters.UI.UITheme.P1Neon);
+            BuildTutColumn(t, 1,  340f, PromptFighters.UI.UITheme.P2Neon);
 
-            _tutTitle = MakeLabel(t, "TutTitle", "",
-                new Vector2(0f, 332f), new Vector2(1140f, 60f), 40f, PromptFighters.UI.UITheme.Gold);
-            _tutTitle.fontStyle = FontStyles.Bold | FontStyles.Italic;
+            // 中央の完了メッセージ（最初は非表示）
+            var finGo = CreateUIObject("TutFinish", t);
+            var frt = finGo.GetComponent<RectTransform>();
+            frt.anchoredPosition = new Vector2(0f, 40f);
+            frt.sizeDelta = new Vector2(1200f, 240f);
+            _tutFinishGrp = finGo.AddComponent<CanvasGroup>();
+            _tutFinishGrp.alpha = 0f;
+            var finBg = finGo.AddComponent<Image>();
+            finBg.sprite = PromptFighters.UI.UITheme.VGradient; finBg.type = Image.Type.Simple;
+            finBg.color = new Color(0.02f, 0.025f, 0.05f, 0.92f);
+            finBg.raycastTarget = false;
+            _tutFinish = MakeLabel(finGo.transform, "TutFinishText", "",
+                new Vector2(0f, 0f), new Vector2(1140f, 220f), 40f, PromptFighters.UI.UITheme.Gold);
+            _tutFinish.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
-            _tutHint = MakeLabel(t, "TutHint", "",
-                new Vector2(0f, 282f), new Vector2(1140f, 44f), 24f, Color.white);
-            _tutHint.fontStyle = FontStyles.Bold;
-
-            _tutProgress = MakeLabel(t, "TutProgress", "",
-                new Vector2(0f, 240f), new Vector2(600f, 34f), 24f, PromptFighters.UI.UITheme.InkDim);
-            _tutProgress.fontStyle = FontStyles.Bold;
-
-            // クリア時の大きな✓
-            var checkGo = CreateUIObject("TutCheck", t);
-            var crt = checkGo.GetComponent<RectTransform>();
-            crt.anchoredPosition = new Vector2(0f, 40f);
-            crt.sizeDelta = new Vector2(900f, 160f);
-            _tutCheckGroup = checkGo.AddComponent<CanvasGroup>();
-            _tutCheckGroup.alpha = 0f;
-            _tutCheck = checkGo.AddComponent<TextMeshProUGUI>();
-            PromptFighters.UI.UITheme.Apply(_tutCheck, 92f, FontStyles.Bold | FontStyles.Italic);
-            _tutCheck.text = "✓";
-            _tutCheck.color = new Color(0.3f, 0.95f, 0.5f);
-            _tutCheck.alignment = TextAlignmentOptions.Center;
-            _tutCheck.raycastTarget = false;
-
-            MakeLabel(t, "TutQuit", "Escキー: やめる",
-                new Vector2(0f, -470f), new Vector2(400f, 30f), 16f, PromptFighters.UI.UITheme.InkDim)
+            MakeLabel(t, "TutQuit", "Escキー: やめる　　1人でも2人でも遊べます",
+                new Vector2(0f, -470f), new Vector2(700f, 30f), 16f, PromptFighters.UI.UITheme.InkDim)
                 .fontStyle = FontStyles.Bold;
 
             _tutorialPanel.SetActive(false);
+        }
+
+        void BuildTutColumn(Transform parent, int i, float cx, Color pColor)
+        {
+            var banner = MakePanel(parent, i == 0 ? "TutBanner1P" : "TutBanner2P",
+                new Vector2(cx, 300f), new Vector2(640f, 150f),
+                new Color(0.02f, 0.025f, 0.05f, 0.85f));
+            banner.raycastTarget = false;
+            MakeSlantBar(parent, i == 0 ? "TutTop1P" : "TutTop2P",
+                new Vector2(cx, 375f), new Vector2(640f, 5f), pColor, i == 0 ? 22f : -22f);
+
+            MakeSlantBar(parent, i == 0 ? "TutBadgePlate1P" : "TutBadgePlate2P",
+                new Vector2(cx - 280f, 345f), new Vector2(84f, 40f), pColor, i == 0 ? 12f : -12f);
+            MakeLabel(parent, i == 0 ? "TutBadge1P" : "TutBadge2P", i == 0 ? "1P" : "2P",
+                new Vector2(cx - 280f, 345f), new Vector2(84f, 40f), 24f, Color.white)
+                .fontStyle = FontStyles.Bold | FontStyles.Italic;
+
+            _tutTitle[i] = MakeLabel(parent, i == 0 ? "TutTitle1P" : "TutTitle2P", "",
+                new Vector2(cx + 24f, 342f), new Vector2(560f, 50f), 30f, pColor);
+            _tutTitle[i].fontStyle = FontStyles.Bold | FontStyles.Italic;
+
+            _tutHint[i] = MakeLabel(parent, i == 0 ? "TutHint1P" : "TutHint2P", "",
+                new Vector2(cx, 296f), new Vector2(600f, 40f), 20f, Color.white);
+            _tutHint[i].fontStyle = FontStyles.Bold;
+
+            _tutProgress[i] = MakeLabel(parent, i == 0 ? "TutProg1P" : "TutProg2P", "",
+                new Vector2(cx, 258f), new Vector2(400f, 32f), 22f, PromptFighters.UI.UITheme.InkDim);
+            _tutProgress[i].fontStyle = FontStyles.Bold;
+
+            // クリア時の✓（そのカラムの中央）
+            var checkGo = CreateUIObject(i == 0 ? "TutCheck1P" : "TutCheck2P", parent);
+            var crt = checkGo.GetComponent<RectTransform>();
+            crt.anchoredPosition = new Vector2(cx, 300f);
+            crt.sizeDelta = new Vector2(300f, 150f);
+            _tutCheckGrp[i] = checkGo.AddComponent<CanvasGroup>();
+            _tutCheckGrp[i].alpha = 0f;
+            _tutCheck[i] = checkGo.AddComponent<TextMeshProUGUI>();
+            PromptFighters.UI.UITheme.Apply(_tutCheck[i], 96f, FontStyles.Bold | FontStyles.Italic);
+            _tutCheck[i].text = "✓";
+            _tutCheck[i].color = new Color(0.3f, 0.95f, 0.5f);
+            _tutCheck[i].alignment = TextAlignmentOptions.Center;
+            _tutCheck[i].raycastTarget = false;
         }
     }
 }
