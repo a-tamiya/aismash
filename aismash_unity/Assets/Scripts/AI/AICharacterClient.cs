@@ -492,6 +492,16 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
   boomerang: true=ブーメラン（中間点で折り返す）
   projectile_count: 1〜5発（散弾・扇形）。spread_angle: 発射間の角度(5〜60、default 15)
   gravity_scale: 0=無重力(default)、1〜2=重力あり（山なり弾・落下弾）
+  explosion_radius: 0.8〜2.6=着弾点で爆発する範囲ダメージ弾（ミサイル・爆弾・砲撃向け。直撃ダメージは爆発に一本化される）
+  bounce_count: 1〜4=地面や壁で跳ね返る跳弾（ボール・岩・ゴム系。gravity_scale 1〜2と相性が良い）
+  wave_amplitude: 0.3〜1.2=上下にうねって飛ぶ波状弾（蛇・波・音波・リボン系）
+  pierce: true=敵を貫通する弾（槍・レーザー・矢など。1体につき1ヒット）
+- 【相手の位置に発生 spawn_at_enemy】area_hitbox / trap_hitbox / projectile に spawn_at_enemy: true を付けると相手の現在位置に発生する:
+  area_hitbox＋spawn_at_enemy → 0.4秒の警告マーカーの後に相手の足元で発動（落雷・地割れ・間欠泉・爆発陣）
+  trap_hitbox＋spawn_at_enemy → 相手の足元に罠を設置
+  projectile＋spawn_at_enemy → 相手の頭上から落下弾を落とす（落雷・隕石）
+  強力なので damage は控えめ・recovery は長め（0.4以上）にする。雷使い・魔術師・砲撃手など「狙い撃つ」キャラに使う
+- teleport の direction: ""behind_enemy"" で相手の背後へ回り込む（忍者・暗殺者向け。直後の melee_hitbox と組み合わせて奇襲技にする）
 - 【ノックバック方向】knockback_direction:
   ""away""=通常(default)、""up""=真上(ジャグル)、""spike""=真下(スパイク)、""toward""=引き寄せ(コンボ)、""diagonal_up""=斜め上(遠くへ)、""ground_bounce""=下方向に叩きつけ地面バウンド（コンボ延長）
 - 【新アクション types】

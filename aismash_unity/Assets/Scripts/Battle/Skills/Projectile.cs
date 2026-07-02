@@ -42,6 +42,12 @@ namespace PromptFighters.Battle.Skills
         public bool      FixedKnockbackDir;
         public bool      GroundBounce;
 
+        // 拡張バリエーション
+        public float ExplosionRadius; // >0: 着弾・壁・寿命切れで爆発（範囲ダメージ。直撃は爆発に一本化）
+        public int   BounceCount;     // >0: 地面・壁で跳ね返る回数（跳弾）
+        public float WaveAmplitude;   // >0: 進行方向と垂直にうねりながら飛ぶ（波状弾）
+        public bool  Pierce;          // true: 敵を貫通する（1体につき1ヒット）
+
         SpriteRenderer _debugSr;
         SpriteRenderer _sr;
         Rigidbody2D    _rb;
@@ -155,6 +161,10 @@ namespace PromptFighters.Battle.Skills
             KnockbackDir = new Vector2(1f, 0.3f);
             FixedKnockbackDir = false;
             GroundBounce = false;
+            ExplosionRadius = 0f;
+            BounceCount = 0;
+            WaveAmplitude = 0f;
+            Pierce = false;
 
             transform.rotation = Quaternion.identity;
             if (_rb != null)
@@ -212,6 +222,8 @@ namespace PromptFighters.Battle.Skills
             _activated = true;
 
             yield return new WaitForSeconds(Lifetime);
+            // 爆発弾は寿命切れでもその場で爆発する（時限爆弾的な使い方ができる）
+            if (ExplosionRadius > 0f && !_cancelled) Explode();
             Release();
         }
 
@@ -253,6 +265,15 @@ namespace PromptFighters.Battle.Skills
                     _rb.linearVelocity = (Vector2)(Quaternion.Euler(0f, 0f, angle) * vel);
                 }
             }
+
+            // 波状弾: 進行方向と垂直にうねる（追尾・重力・ブーメランとは併用しない）
+            if (WaveAmplitude > 0f && HomingTarget == null && GravityScale <= 0f && !IsBoomerang && _rb != null)
+            {
+                const float freq = 7f;
+                Vector2 perp = new Vector2(-Direction.y, Direction.x);
+                _rb.linearVelocity = Direction * Speed
+                    + perp * (WaveAmplitude * freq * Mathf.Cos((Time.time - _spawnTime) * freq));
+            }
         }
 
         void LateUpdate()
@@ -287,6 +308,81 @@ namespace PromptFighters.Battle.Skills
         void OnDestroy()
         {
             if (_debugSr != null) Destroy(_debugSr.gameObject);
+        }
+
+        // 爆発弾: 現在位置に円形の範囲判定＋属性色の爆発フラッシュを出す。
+        void Explode()
+        {
+            Vector2 pos = transform.position;
+            var hb = Hitbox.SpawnCircle(Owner, pos, ExplosionRadius, 0.12f);
+            hb.Damage                   = Damage;
+            hb.DamageIncludesOwnerBoost = DamageIncludesOwnerBoost;
+            hb.Knockback                = Knockback;
+            hb.KnockbackDir             = new Vector2(Mathf.Abs(KnockbackDir.x), Mathf.Max(KnockbackDir.y, 0.5f));
+            hb.StunTime                 = StunTime;
+            hb.GuardDamage              = GuardDamage;
+            hb.Element                  = Element;
+            hb.Status                   = Status;
+            hb.StatusDuration           = StatusDuration;
+            hb.StatusChance             = StatusChance;
+            hb.MaxHits                  = 2;
+
+            ExplosionFlash.Spawn(pos, ExplosionRadius * 2f, SkillEnumParser.ElementColor(Element));
+            Battle.CameraShake.Shake(0.12f, 0.16f);
+        }
+
+        // 跳弾: 地面なら上方向へ、壁なら左右反転して跳ね返る。
+        void DoBounce(Collider2D surface)
+        {
+            BounceCount--;
+            if (_rb == null) return;
+            Vector2 v = _rb.linearVelocity;
+            bool floorLike = transform.position.y > surface.bounds.max.y - 0.25f;
+            if (floorLike)
+            {
+                float vy = Mathf.Max(Mathf.Abs(v.y) * 0.9f, Speed * 0.4f);
+                _rb.linearVelocity = new Vector2(v.x, vy);
+            }
+            else
+            {
+                _rb.linearVelocity = new Vector2(-v.x, v.y);
+                Direction = new Vector2(-Direction.x, Direction.y);
+                if (_sr != null) _sr.flipX = !_sr.flipX;
+            }
+        }
+
+        // 爆発の見た目: 属性色のグローが広がりながら消える（自己完結の使い捨てオブジェクト）。
+        class ExplosionFlash : MonoBehaviour
+        {
+            SpriteRenderer _sr;
+            float _t;
+            float _diameter;
+            Color _color;
+            const float Dur = 0.22f;
+
+            public static void Spawn(Vector2 pos, float diameter, Color color)
+            {
+                var go = new GameObject("ExplosionFlash");
+                go.transform.position = pos;
+                var fx = go.AddComponent<ExplosionFlash>();
+                fx._diameter = diameter;
+                fx._color = color;
+                fx._sr = go.AddComponent<SpriteRenderer>();
+                fx._sr.sprite = RuntimeSprite.Glow();
+                fx._sr.sortingOrder = 11;
+            }
+
+            void Update()
+            {
+                _t += Time.deltaTime;
+                float k = Mathf.Clamp01(_t / Dur);
+                float d = _diameter * Mathf.Lerp(0.4f, 1f, 1f - (1f - k) * (1f - k));
+                Vector2 ss = _sr.sprite.bounds.size;
+                if (ss.x > 0f && ss.y > 0f)
+                    transform.localScale = new Vector3(d / ss.x, d / ss.y, 1f);
+                _sr.color = new Color(_color.r, _color.g, _color.b, Mathf.Lerp(0.9f, 0f, k));
+                if (_t >= Dur) Destroy(gameObject);
+            }
         }
 
         void FitColliderAndVisualToWorldSize(SpriteRenderer sr)
@@ -350,8 +446,13 @@ namespace PromptFighters.Battle.Skills
             var target = other.GetComponentInParent<Fighter>();
             if (target == null)
             {
-                // 壁・地面に当たった場合: ブーメランは貫通、通常弾は消える
-                if (!IsBoomerang && other.gameObject.layer != 0) Release();
+                // 壁・地面に当たった場合: ブーメランは貫通、跳弾は反射、爆発弾は爆発、通常弾は消える
+                if (!IsBoomerang && other.gameObject.layer != 0)
+                {
+                    if (BounceCount > 0) { DoBounce(other); return; }
+                    if (ExplosionRadius > 0f) Explode();
+                    Release();
+                }
                 return;
             }
             if (target == Owner)
@@ -379,9 +480,30 @@ namespace PromptFighters.Battle.Skills
                 return;
             }
 
+            // 爆発弾: 直撃時はダメージを爆発（範囲判定）に一本化する（直撃＋爆発の二重ヒット防止）
+            if (ExplosionRadius > 0f && !IsBoomerang)
+            {
+                Explode();
+                Release();
+                return;
+            }
+
             float dir = FixedKnockbackDir ? 1f : Mathf.Sign(Direction.x);
             if (dir == 0f) dir = 1f;
             var kb = new Vector2(dir * KnockbackDir.x * Knockback, KnockbackDir.y * Knockback);
+
+            // 貫通弾: 当たっても消えず、1体につき1回だけヒットする
+            if (Pierce && !IsBoomerang)
+            {
+                if (_boomerangHitSet == null) _boomerangHitSet = new HashSet<Fighter>();
+                if (_boomerangHitSet.Contains(target)) return;
+                _boomerangHitSet.Add(target);
+                target.TakeDamage(Damage, Knockback, kb, StunTime, GuardDamage, !DamageIncludesOwnerBoost);
+                if (GroundBounce) target.StartGroundBounce(Knockback * 0.75f);
+                if (Status != StatusType.None && Random.value <= StatusChance)
+                    target.ApplyStatus(Status, StatusDuration);
+                return;
+            }
 
             if (IsBoomerang)
             {

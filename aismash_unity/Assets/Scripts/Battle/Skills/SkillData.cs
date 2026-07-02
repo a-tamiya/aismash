@@ -88,6 +88,16 @@ namespace PromptFighters.Battle.Skills
         // projectile: 重力（0=無重力デフォルト、1=通常重力）
         public float  gravity_scale;
 
+        // projectile: 追加バリエーション
+        public float  explosion_radius;  // >0で着弾・壁・寿命切れに爆発（範囲ダメージ）
+        public int    bounce_count;      // 地面・壁で跳ね返る回数（跳弾）
+        public float  wave_amplitude;    // >0で上下にうねって飛ぶ（波状弾）
+        public bool   pierce;            // trueで敵を貫通（1体につき1ヒット）
+
+        // 発生位置: trueで相手の現在位置に発生する。
+        // area_hitboxは0.4秒の警告表示つき、trap_hitboxは相手の足元、projectileは相手の頭上から落下。
+        public bool   spawn_at_enemy;
+
         // ノックバック方向: "away"(default)/"up"/"spike"/"toward"/"diagonal_up"/"ground_bounce"
         public string knockback_direction;
 

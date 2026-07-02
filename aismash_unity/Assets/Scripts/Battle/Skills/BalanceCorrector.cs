@@ -147,6 +147,10 @@ namespace PromptFighters.Battle.Skills
                         if (a.spread_angle > 0f)     a.spread_angle     = Mathf.Clamp(a.spread_angle, 5f, 60f);
                         if (a.projectile_count > 5)  a.projectile_count = 5;
                         a.gravity_scale = Mathf.Clamp(a.gravity_scale, 0f, 3f);
+                        // 拡張バリエーションのクランプ
+                        a.explosion_radius = Mathf.Clamp(a.explosion_radius, 0f, 2.6f);
+                        a.bounce_count     = Mathf.Clamp(a.bounce_count, 0, 4);
+                        a.wave_amplitude   = Mathf.Clamp(a.wave_amplitude, 0f, 1.2f);
                         // 多発時は1発あたりダメージを按分
                         if (a.projectile_count > 1)
                         {
@@ -257,6 +261,14 @@ namespace PromptFighters.Battle.Skills
             EnsureSmashDirectAttack(skill);
             SyncStartupWithActions(skill, si);
             EnsureMultiHitActiveTime(skill);
+            // 相手の位置に発生する技（spawn_at_enemy）は強力なので、連発できないよう後隙を最低保証
+            if (skill.actions != null)
+                foreach (var a in skill.actions)
+                    if (a != null && a.spawn_at_enemy)
+                    {
+                        p.recovery = Mathf.Max(p.recovery, 0.35f);
+                        break;
+                    }
             // attack_a のチャージは横スマッシュ入力（はじき＋A）と競合するため無効化
             if (skill.slot == SkillSlot.AttackA && skill.chargeable)
             {

@@ -469,30 +469,40 @@ namespace PromptFighters.Battle.Skills
             float dirSign  = _fighter.FacingRight ? 1f : -1f;
             float lifetime = a.duration > 0f ? a.duration : Mathf.Max(skill.parameters.active_time, 0.12f);
             string shape   = string.IsNullOrEmpty(a.shape) ? "box" : a.shape;
+            // 相手の位置に発生（落雷・地割れ・間欠泉）。発動位置は今の相手位置で固定し、
+            // 0.4秒の警告マーカーの後に判定を出す（移動すれば避けられる読み合いにする）。
+            bool atEnemy = a.spawn_at_enemy && _fighter.Opponent != null;
+            Vector2 basePos = atEnemy
+                ? (Vector2)_fighter.Opponent.transform.position
+                : (Vector2)_fighter.transform.position;
 
             if (shape == "ring")
             {
                 float radius   = (a.size_x > 0f ? a.size_x : (a.range > 0f ? a.range : 2f)) * 0.5f * _sizeScale;
                 float offsetY  = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y * _sizeScale : 0.75f * _sizeScale;
-                var hb = Hitbox.SpawnCircle(_fighter,
-                    (Vector2)_fighter.transform.position + new Vector2(0f, offsetY),
-                    radius, lifetime);
-                float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) *
-                            powerMultiplier * _fighter.EffectiveDamageMultiplier;
-                hb.Damage         = dmg;
-                hb.DamageIncludesOwnerBoost = true;
-                hb.Knockback      = skill.parameters.knockback * powerMultiplier;
-                var (kbDirR, kbFixedR) = ComputeKnockback(a, 1f, 0.25f);
-                hb.KnockbackDir      = kbDirR;
-                hb.FixedKnockbackDir = kbFixedR;
-                hb.GroundBounce      = a.knockback_direction == "ground_bounce";
-                hb.StunTime      = skill.parameters.stun_time;
-                hb.GuardDamage   = skill.parameters.guard_damage;
-                hb.Element       = skill.element;
-                hb.MaxHits       = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
-                hb.FollowOwner   = a.follow_owner;
-                hb.OwnerLocalOffset = new Vector2(0f, offsetY / _sizeScale);
-                ApplyActionStatus(hb, a);
+                Vector2 center = basePos + new Vector2(0f, offsetY);
+                void SpawnRingNow()
+                {
+                    var hb = Hitbox.SpawnCircle(_fighter, center, radius, lifetime);
+                    float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) *
+                                powerMultiplier * _fighter.EffectiveDamageMultiplier;
+                    hb.Damage         = dmg;
+                    hb.DamageIncludesOwnerBoost = true;
+                    hb.Knockback      = skill.parameters.knockback * powerMultiplier;
+                    var (kbDirR, kbFixedR) = ComputeKnockback(a, 1f, 0.25f);
+                    hb.KnockbackDir      = kbDirR;
+                    hb.FixedKnockbackDir = kbFixedR;
+                    hb.GroundBounce      = a.knockback_direction == "ground_bounce";
+                    hb.StunTime      = skill.parameters.stun_time;
+                    hb.GuardDamage   = skill.parameters.guard_damage;
+                    hb.Element       = skill.element;
+                    hb.MaxHits       = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
+                    hb.FollowOwner   = !atEnemy && a.follow_owner;
+                    hb.OwnerLocalOffset = new Vector2(0f, offsetY / _sizeScale);
+                    ApplyActionStatus(hb, a);
+                }
+                if (atEnemy) StartCoroutine(TelegraphThenSpawn(center, radius * 2f, skill.element, 0.4f, SpawnRingNow));
+                else SpawnRingNow();
                 return;
             }
 
@@ -518,15 +528,45 @@ namespace PromptFighters.Battle.Skills
             offsetX  *= _sizeScale;
             offsetY2 *= _sizeScale;
 
-            var hbox = SpawnConfiguredHitbox(
-                skill, a, powerMultiplier,
-                (Vector2)_fighter.transform.position + new Vector2(dirSign * offsetX, offsetY2),
-                new Vector2(width, height),
-                lifetime);
-            hbox.FollowOwner      = a.follow_owner;
-            hbox.OwnerLocalOffset = new Vector2(offsetX, offsetY2);
-            if (shape == "cone")
-                hbox.SetDebugColor(new Color(0.3f, 0.9f, 1f, 0.6f)); // 水色: コーン判定
+            // 相手位置発生では前方オフセットは意味を持たないため中心に出す
+            Vector2 pos = basePos + new Vector2(atEnemy ? 0f : dirSign * offsetX, offsetY2);
+            void SpawnBoxNow()
+            {
+                var hbox = SpawnConfiguredHitbox(
+                    skill, a, powerMultiplier, pos, new Vector2(width, height), lifetime);
+                hbox.FollowOwner      = !atEnemy && a.follow_owner;
+                hbox.OwnerLocalOffset = new Vector2(offsetX, offsetY2);
+                if (shape == "cone")
+                    hbox.SetDebugColor(new Color(0.3f, 0.9f, 1f, 0.6f)); // 水色: コーン判定
+            }
+            if (atEnemy) StartCoroutine(TelegraphThenSpawn(pos, Mathf.Max(width, height), skill.element, 0.4f, SpawnBoxNow));
+            else SpawnBoxNow();
+        }
+
+        // 相手の位置に発生する技の警告表示。属性色のマーカーを点滅させてから発動する。
+        IEnumerator TelegraphThenSpawn(Vector2 pos, float diameter, Element element, float delay, System.Action spawnAction)
+        {
+            var go = new GameObject("SkillTelegraph");
+            go.transform.position = pos;
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = RuntimeSprite.Glow();
+            sr.sortingOrder = 6;
+            Color c = SkillEnumParser.ElementColor(element);
+            Vector2 ss = sr.sprite.bounds.size;
+            if (ss.x > 0f && ss.y > 0f)
+                go.transform.localScale = new Vector3(diameter / ss.x, diameter / ss.y, 1f);
+
+            float t = 0f;
+            while (t < delay)
+            {
+                t += Time.deltaTime;
+                float blink = 0.5f + 0.5f * Mathf.Sin(t * 28f);
+                sr.color = new Color(c.r, c.g, c.b, Mathf.Lerp(0.16f, 0.5f, blink));
+                yield return null;
+            }
+            Destroy(go);
+            if (_fighter != null && _fighter.State != FighterState.Dead)
+                spawnAction?.Invoke();
         }
 
         void SpawnTrapHitbox(SkillData skill, SkillAction a, float powerMultiplier)
@@ -549,7 +589,10 @@ namespace PromptFighters.Battle.Skills
             }
             else
             {
-                float trapX = _fighter.transform.position.x + dirSign * offsetX;
+                // spawn_at_enemy: 相手の足元に設置（アーム時間0.25秒＋脈動表示が回避猶予になる）
+                float trapX = a.spawn_at_enemy && _fighter.Opponent != null
+                    ? _fighter.Opponent.transform.position.x
+                    : _fighter.transform.position.x + dirSign * offsetX;
                 // 設置位置の床をレイキャストで探す（キャラのピボット＝足元。StageGroundYはステージに
                 // よって見た目の床と一致しないため使わない）。見つからなければ使用者の足元の高さ。
                 float groundRef = _fighter.transform.position.y;
@@ -622,6 +665,16 @@ namespace PromptFighters.Battle.Skills
             offsetY *= _sizeScale;
             Vector2 spawn = (Vector2)_fighter.transform.position + new Vector2(dirSign * offsetX, offsetY);
 
+            // 相手の位置に発生（落雷・隕石）: 相手の頭上から落とす。水平角のままだと回避不能なので落下弾化する。
+            float baseAngle = a.projectile_angle;
+            if (a.spawn_at_enemy && _fighter.Opponent != null)
+            {
+                Vector2 ep = _fighter.Opponent.transform.position;
+                float dropH = Mathf.Clamp(offsetY < 2f ? 3.5f : offsetY, 2.5f, 6f);
+                spawn = new Vector2(ep.x, ep.y + dropH);
+                if (baseAngle > -30f) baseAngle = -90f;
+            }
+
             float speed    = a.projectile_speed    > 0f ? a.projectile_speed    : 9f;
             float lifetime = a.projectile_lifetime > 0f ? a.projectile_lifetime : 1.5f;
             float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) *
@@ -637,7 +690,7 @@ namespace PromptFighters.Battle.Skills
 
             for (int i = 0; i < count; i++)
             {
-                float angleDeg = a.projectile_angle + (count > 1 ? -totalSpread * 0.5f + spreadDeg * i : 0f);
+                float angleDeg = baseAngle + (count > 1 ? -totalSpread * 0.5f + spreadDeg * i : 0f);
                 float rad = angleDeg * Mathf.Deg2Rad;
                 Vector2 dir = new Vector2(dirSign * Mathf.Cos(rad), Mathf.Sin(rad)).normalized;
 
@@ -660,6 +713,10 @@ namespace PromptFighters.Battle.Skills
                 p.DesiredWorldSize         = desiredSize;
                 p.GravityScale             = a.gravity_scale;
                 p.IsBoomerang              = a.boomerang;
+                p.ExplosionRadius          = a.explosion_radius;
+                p.BounceCount              = a.bounce_count;
+                p.WaveAmplitude            = a.wave_amplitude;
+                p.Pierce                   = a.pierce;
                 if ((a.homing || a.homing_strength > 0f) && _fighter.Opponent != null)
                 {
                     p.HomingTarget   = _fighter.Opponent.transform;
@@ -771,11 +828,26 @@ namespace PromptFighters.Battle.Skills
 
         void DoTeleport(SkillAction a)
         {
+            var bm = PromptFighters.Battle.BattleManager.Instance;
+
+            // behind_enemy: 相手の背後（自分から見て向こう側）へ回り込む。忍者・暗殺者の奇襲用。
+            if (a.direction == "behind_enemy" && _fighter.Opponent != null)
+            {
+                var op = _fighter.Opponent.transform.position;
+                float side = Mathf.Sign(op.x - _fighter.transform.position.x);
+                if (side == 0f) side = _fighter.FacingRight ? 1f : -1f;
+                Vector3 behind = new Vector3(op.x + side * 0.95f, _fighter.transform.position.y, 0f);
+                if (bm != null)
+                    behind.x = Mathf.Clamp(behind.x, bm.StageMinX + 0.5f, bm.StageMaxX - 0.5f);
+                _fighter.transform.position = behind;
+                PromptFighters.Audio.GameAudioManager.Instance?.PlayTeleport();
+                return;
+            }
+
             float dirSign = _fighter.FacingRight ? 1f : -1f;
             if (a.direction == "backward") dirSign = -dirSign;
             float distance = Mathf.Clamp(a.power > 0f ? a.power : 2.2f, 0.5f, 4f);
             Vector3 pos = _fighter.transform.position + new Vector3(dirSign * distance, 0f, 0f);
-            var bm = PromptFighters.Battle.BattleManager.Instance;
             if (bm != null)
                 pos.x = Mathf.Clamp(pos.x, bm.StageMinX + 0.5f, bm.StageMaxX - 0.5f);
             _fighter.transform.position = pos;
