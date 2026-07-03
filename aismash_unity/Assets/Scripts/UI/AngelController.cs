@@ -170,6 +170,21 @@ namespace PromptFighters.UI
             StartCoroutine(AcquireSequence(breaker));
         }
 
+        // 取得シーケンス（スロー＋音声入力＋ギミック適用）を外部から起動する。
+        // チュートリアルで「実際に声で指示する」体験をさせるために使う。
+        // 共有マイクのため、進行中の取得が終わるまで待ってから開始し、完了で onComplete を呼ぶ。
+        public void BeginAcquire(Fighter breaker, System.Action onComplete = null)
+        {
+            StartCoroutine(BeginAcquireCo(breaker, onComplete));
+        }
+
+        IEnumerator BeginAcquireCo(Fighter breaker, System.Action onComplete)
+        {
+            while (_busy) yield return null;
+            yield return AcquireSequence(breaker);
+            onComplete?.Invoke();
+        }
+
         IEnumerator AcquireSequence(Fighter breaker)
         {
             _busy = true;

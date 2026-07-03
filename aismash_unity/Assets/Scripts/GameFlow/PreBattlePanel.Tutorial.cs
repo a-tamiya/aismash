@@ -36,7 +36,9 @@ namespace PromptFighters.GameFlow
         // 練習用に生成するオブジェクト（サンドバッグ／ボイスボール）。終了時に一括破棄する。
         readonly System.Collections.Generic.List<GameObject> _tutSpawned = new System.Collections.Generic.List<GameObject>();
         readonly VoiceItem[] _tutVoice = new VoiceItem[2];
+        readonly TrainingSandbag[] _tutSandbag = new TrainingSandbag[2];
         const int VoiceStepIndex = 6;
+        const float GrabReachDistance = 3.2f;
 
         // イベント購読の解除用に保持するデリゲート
         readonly System.Action[]            _hJump  = new System.Action[2];
@@ -53,17 +55,18 @@ namespace PromptFighters.GameFlow
         TextMeshProUGUI     _tutFinish;
         CanvasGroup         _tutFinishGrp;
 
-        struct TutorialStep { public string title, hint1, hint2, pad; }
+        struct TutorialStep { public string title, hint; }
 
+        // ヒントはゲームパッド前提（キーボード表記は出さない）
         static readonly TutorialStep[] TutorialSteps =
         {
-            new TutorialStep { title = "① 動いてみよう",     hint1 = "A / D",         hint2 = "← / →",           pad = "左スティック" },
-            new TutorialStep { title = "② ジャンプ！",        hint1 = "W",             hint2 = "↑",                pad = "Y / △" },
-            new TutorialStep { title = "③ ガードで防ぐ",      hint1 = "左Shift 長押し", hint2 = "右Ctrl 長押し",     pad = "RB / RT" },
-            new TutorialStep { title = "④ 技を出そう（3回）", hint1 = "J / K / L",     hint2 = "テンキー 2 / 3 / 1", pad = "B / A / X" },
-            new TutorialStep { title = "⑤ スマッシュ！",      hint1 = "A/D 2回→J",     hint2 = "←/→ 2回→テン2",    pad = "右スティックを横" },
-            new TutorialStep { title = "⑥ つかみ",           hint1 = "G",             hint2 = "テンキー 0",         pad = "LB / LT" },
-            new TutorialStep { title = "⑦ ボイスボールをこわそう！", hint1 = "光る球を攻撃してこわす（試合中は声で願いが叶う）", hint2 = "光る球を攻撃してこわす（試合中は声で願いが叶う）", pad = "" },
+            new TutorialStep { title = "① 動いてみよう",     hint = "左スティック / 十字キーで動く" },
+            new TutorialStep { title = "② ジャンプ！",        hint = "Y / △ でジャンプ（空中でもう一度で2段ジャンプ）" },
+            new TutorialStep { title = "③ ガードで防ぐ",      hint = "RB / RT を押しっぱなしでガード" },
+            new TutorialStep { title = "④ 技を出そう（3回）", hint = "B / A / X でサンドバッグを3回たたく" },
+            new TutorialStep { title = "⑤ スマッシュ！",      hint = "右スティックを横に倒してスマッシュ" },
+            new TutorialStep { title = "⑥ つかみ",           hint = "サンドバッグに近づいて LB / LT でつかむ" },
+            new TutorialStep { title = "⑦ ボイスボール！",   hint = "光る球を攻撃してこわし、マイクに願いを話そう！" },
         };
 
         void StartTutorial()
@@ -128,7 +131,20 @@ namespace PromptFighters.GameFlow
                 if (f == null) continue;
                 int idx = i;
                 _hJump[idx]  = () => { if (_tutStep[idx] == 1) _tutJumped[idx] = true; TutNudge(idx); };
-                _hGrab[idx]  = () => { if (_tutStep[idx] == 5) _tutGrabbed[idx] = true; TutNudge(idx); };
+                _hGrab[idx]  = () =>
+                {
+                    TutNudge(idx);
+                    if (_tutStep[idx] != 5) return;
+                    // サンドバッグに近づいてつかむと、大きく揺さぶられてクリア
+                    var sb = _tutSandbag[idx];
+                    var ff = _tutFighters[idx];
+                    if (sb != null && ff != null &&
+                        Mathf.Abs(sb.transform.position.x - ff.transform.position.x) < GrabReachDistance)
+                    {
+                        sb.OnGrabReaction(ff);
+                        _tutGrabbed[idx] = true;
+                    }
+                };
                 _hSkill[idx] = (s) =>
                 {
                     if (_tutStep[idx] == 3 && s != SkillSlot.SmashSide) _tutAttackCount[idx]++;
@@ -173,6 +189,7 @@ namespace PromptFighters.GameFlow
                 float sign = f.FacingRight ? 1f : -1f;
                 Vector2 pos = new Vector2(f.transform.position.x + sign * 2.1f, groundY);
                 var sb = TrainingSandbag.Spawn(pos, f);
+                _tutSandbag[i] = sb;
                 if (sb != null) _tutSpawned.Add(sb.gameObject);
             }
         }
@@ -188,8 +205,15 @@ namespace PromptFighters.GameFlow
             int idx = i;
             _tutVoice[i] = VoiceItem.Spawn(pos, 1.2f, breaker =>
             {
-                _tutVoiceBroken[idx] = true;
                 _tutVoice[idx] = null;
+                // 実際の取得シーケンス（スロー＋マイク音声入力＋ギミック適用）を体験させる。
+                // 取得が終わったらそのプレイヤーのステップをクリアにする。
+                var angel = BattleManager.Instance != null
+                    ? BattleManager.Instance.GetComponent<PromptFighters.UI.AngelController>() : null;
+                if (angel != null)
+                    angel.BeginAcquire(breaker ?? _tutFighters[idx], () => _tutVoiceBroken[idx] = true);
+                else
+                    _tutVoiceBroken[idx] = true; // 保険：AngelControllerが無ければ破壊だけで完了
             });
             if (_tutVoice[i] != null) _tutSpawned.Add(_tutVoice[i].gameObject);
         }
@@ -304,11 +328,7 @@ namespace PromptFighters.GameFlow
             if (step < 0 || step >= TutorialSteps.Length) return;
             var s = TutorialSteps[step];
             if (_tutTitle[i] != null) _tutTitle[i].text = s.title;
-            if (_tutHint[i] != null)
-            {
-                string h = i == 0 ? s.hint1 : s.hint2;
-                _tutHint[i].text = string.IsNullOrEmpty(s.pad) ? h : $"{h}　パッド: {s.pad}";
-            }
+            if (_tutHint[i] != null)  _tutHint[i].text  = s.hint;
             // ボイスボールのステップに入ったら球を出す
             if (step == VoiceStepIndex) SpawnTutorialVoiceBall(i);
             if (_tutProgress[i] != null)
@@ -336,7 +356,7 @@ namespace PromptFighters.GameFlow
             UnsubscribeTutorial();
             FighterAI.Level = _savedCpuLevel;
             _tutorialActive = false;
-            for (int i = 0; i < 2; i++) { _tutStepClearing[i] = false; _tutFighters[i] = null; _tutVoice[i] = null; }
+            for (int i = 0; i < 2; i++) { _tutStepClearing[i] = false; _tutFighters[i] = null; _tutVoice[i] = null; _tutSandbag[i] = null; }
             // 練習用に出したサンドバッグ・ボイスボールを片付ける
             foreach (var go in _tutSpawned) if (go != null) Destroy(go);
             _tutSpawned.Clear();

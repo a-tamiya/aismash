@@ -1,4 +1,5 @@
 using UnityEngine;
+using PromptFighters.Audio;
 using PromptFighters.Battle.Skills;
 using PromptFighters.UI;
 
@@ -77,6 +78,19 @@ namespace PromptFighters.Battle
             DamagePopup.SpawnText(transform.position + Vector3.up * 1.7f,
                 Mathf.RoundToInt(dmg).ToString(), new Color(1f, 0.85f, 0.35f), 0.9f);
             CameraShake.Shake(0.04f, 0.07f);
+        }
+
+        // つかまれた反応（チュートリアルのつかみ練習用）。大きく揺さぶられる。
+        public void OnGrabReaction(Fighter by)
+        {
+            float dir = by != null ? Mathf.Sign(transform.position.x - by.transform.position.x) : 1f;
+            if (Mathf.Approximately(dir, 0f)) dir = 1f;
+            _angVel += dir * 55f;
+            _flash = 0.16f;
+            DamagePopup.SpawnText(transform.position + Vector3.up * 1.8f,
+                "つかみ！", new Color(0.55f, 0.9f, 1f), 1.2f);
+            GameAudioManager.Instance?.PlayGrab();
+            CameraShake.Shake(0.08f, 0.12f);
         }
 
         void Update()
