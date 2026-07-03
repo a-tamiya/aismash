@@ -969,8 +969,8 @@ namespace PromptFighters.Battle
             moveSpeed = Mathf.Clamp(stats.groundMoveSpeed, 2.5f, 9.5f);
             airMoveSpeed = Mathf.Clamp(stats.airMoveSpeed, 2.0f, 8.5f);
             // ジャンプ力の範囲を全キャラ一律で狭める（既存キャラ含む）：
-            // 最高値（上限）は今の0.7倍、最低値（下限）は今の1.2倍。高いキャラは下げ、低いキャラは上げる。
-            jumpForce = Mathf.Clamp(stats.jumpForce, 7f * 1.2f, 19f * 0.7f);
+            // 最高値（上限）は今の0.7倍、最低値（下限）はさらに今の1.2倍（7 * 1.2 * 1.2）。低いキャラをさらに底上げする。
+            jumpForce = Mathf.Clamp(stats.jumpForce, 7f * 1.2f * 1.2f, 19f * 0.7f);
             airJumpHeightMultiplier = Mathf.Clamp(stats.airJumpHeightMultiplier, 0.3f, 0.6f);
             walkSpeedRatio = Mathf.Clamp(stats.walkSpeedRatio, 0.2f, 0.5f);
             maxGuardDurability = Mathf.Clamp(stats.guardDurability, 40f, 90f) * 2f;

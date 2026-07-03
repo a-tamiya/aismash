@@ -205,6 +205,10 @@ namespace PromptFighters.Battle
             col.size = new Vector2(width, height);
             col.sharedMaterial = NoFriction(); // 壁への張り付き防止
 
+            // 地上回避・空中回避（ドッジ）中のファイターはこの壁をすり抜けられるようにする
+            // （Angelギミックの壁ですでに使っている仕組みをステージ壁にも適用）。
+            go.AddComponent<AngelWallPassable>();
+
             var sprite = LoadSprite(spritePath) ?? DefaultWallSprite();
 
             var vis = new GameObject("WallVisual");
