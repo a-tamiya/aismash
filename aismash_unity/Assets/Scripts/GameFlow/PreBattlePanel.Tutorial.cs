@@ -18,7 +18,6 @@ namespace PromptFighters.GameFlow
     {
         bool _tutorialActive;
         FighterAI.CpuLevel _savedCpuLevel;
-        float _tutIdleTimer;
 
         // プレイヤーごとの状態（[0]=1P, [1]=2P）
         readonly Fighter[] _tutFighters   = new Fighter[2];
@@ -77,7 +76,6 @@ namespace PromptFighters.GameFlow
             EnsureSpriteSet(d2);
 
             _tutorialActive = true;
-            _tutIdleTimer = 0f;
             for (int i = 0; i < 2; i++)
             {
                 _tutStep[i] = 0;
@@ -147,19 +145,15 @@ namespace PromptFighters.GameFlow
             }
         }
 
-        // 何か操作があった＝そのプレイヤーは参加中。放置タイマーもリセット。
+        // 何か操作があった＝そのプレイヤーは参加中。
         void TutNudge(int i)
         {
             _tutEngaged[i] = true;
-            _tutIdleTimer = 0f;
         }
 
         void UpdateTutorial()
         {
             if (WasKeyboardCancelPressed()) { EndTutorial(toTitle: true); return; }
-
-            _tutIdleTimer += Time.unscaledDeltaTime;
-            if (_tutIdleTimer > 60f) { EndTutorial(toTitle: true); return; } // 放置対策
 
             for (int i = 0; i < 2; i++)
             {
