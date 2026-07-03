@@ -30,7 +30,13 @@ namespace PromptFighters.GameFlow
         readonly bool[]    _tutJumped      = new bool[2];
         readonly bool[]    _tutSmashed     = new bool[2];
         readonly bool[]    _tutGrabbed     = new bool[2];
+        readonly bool[]    _tutVoiceBroken = new bool[2];
         readonly int[]     _tutAttackCount = new int[2];
+
+        // 練習用に生成するオブジェクト（サンドバッグ／ボイスボール）。終了時に一括破棄する。
+        readonly System.Collections.Generic.List<GameObject> _tutSpawned = new System.Collections.Generic.List<GameObject>();
+        readonly VoiceItem[] _tutVoice = new VoiceItem[2];
+        const int VoiceStepIndex = 6;
 
         // イベント購読の解除用に保持するデリゲート
         readonly System.Action[]            _hJump  = new System.Action[2];
@@ -57,6 +63,7 @@ namespace PromptFighters.GameFlow
             new TutorialStep { title = "④ 技を出そう（3回）", hint1 = "J / K / L",     hint2 = "テンキー 2 / 3 / 1", pad = "B / A / X" },
             new TutorialStep { title = "⑤ スマッシュ！",      hint1 = "A/D 2回→J",     hint2 = "←/→ 2回→テン2",    pad = "右スティックを横" },
             new TutorialStep { title = "⑥ つかみ",           hint1 = "G",             hint2 = "テンキー 0",         pad = "LB / LT" },
+            new TutorialStep { title = "⑦ ボイスボールをこわそう！", hint1 = "光る球を攻撃してこわす（試合中は声で願いが叶う）", hint2 = "光る球を攻撃してこわす（試合中は声で願いが叶う）", pad = "" },
         };
 
         void StartTutorial()
@@ -97,8 +104,12 @@ namespace PromptFighters.GameFlow
             {
                 _tutMoveDist[i] = 0f;
                 _tutEngaged[i]  = false;
+                _tutVoiceBroken[i] = false;
                 if (_tutFighters[i] != null) _tutPrevX[i] = _tutFighters[i].transform.position.x;
             }
+
+            // 各プレイヤーの前にサンドバッグ（練習台）を用意する
+            SpawnTutorialSandbags();
 
             if (_tutFinishGrp != null) _tutFinishGrp.alpha = 0f;
             if (_tutorialPanel != null) _tutorialPanel.SetActive(true);
@@ -151,6 +162,38 @@ namespace PromptFighters.GameFlow
             _tutEngaged[i] = true;
         }
 
+        // 各プレイヤーの少し前（内側）にサンドバッグを設置する。
+        void SpawnTutorialSandbags()
+        {
+            float groundY = BattleManager.Instance != null ? BattleManager.Instance.StageGroundY : -2.3f;
+            for (int i = 0; i < 2; i++)
+            {
+                var f = _tutFighters[i];
+                if (f == null) continue;
+                float sign = f.FacingRight ? 1f : -1f;
+                Vector2 pos = new Vector2(f.transform.position.x + sign * 2.1f, groundY);
+                var sb = TrainingSandbag.Spawn(pos, f);
+                if (sb != null) _tutSpawned.Add(sb.gameObject);
+            }
+        }
+
+        // ボイスボールのステップに入ったら、そのプレイヤーの近くにボイスボールを出す。
+        void SpawnTutorialVoiceBall(int i)
+        {
+            var f = _tutFighters[i];
+            if (f == null || _tutVoice[i] != null) return;
+            float groundY = BattleManager.Instance != null ? BattleManager.Instance.StageGroundY : -2.3f;
+            float sign = f.FacingRight ? 1f : -1f;
+            Vector2 pos = new Vector2(f.transform.position.x + sign * 2.0f, groundY + 1.6f);
+            int idx = i;
+            _tutVoice[i] = VoiceItem.Spawn(pos, 1.2f, breaker =>
+            {
+                _tutVoiceBroken[idx] = true;
+                _tutVoice[idx] = null;
+            });
+            if (_tutVoice[i] != null) _tutSpawned.Add(_tutVoice[i].gameObject);
+        }
+
         void UpdateTutorial()
         {
             if (WasKeyboardCancelPressed()) { EndTutorial(toTitle: true); return; }
@@ -179,6 +222,7 @@ namespace PromptFighters.GameFlow
                     case 3: done = _tutAttackCount[i] >= 3; break;
                     case 4: done = _tutSmashed[i]; break;
                     case 5: done = _tutGrabbed[i]; break;
+                    case VoiceStepIndex: done = _tutVoiceBroken[i]; break;
                 }
                 if (done) StartCoroutine(CompleteStepRoutine(i));
             }
@@ -260,7 +304,13 @@ namespace PromptFighters.GameFlow
             if (step < 0 || step >= TutorialSteps.Length) return;
             var s = TutorialSteps[step];
             if (_tutTitle[i] != null) _tutTitle[i].text = s.title;
-            if (_tutHint[i] != null)  _tutHint[i].text  = $"{(i == 0 ? s.hint1 : s.hint2)}　パッド: {s.pad}";
+            if (_tutHint[i] != null)
+            {
+                string h = i == 0 ? s.hint1 : s.hint2;
+                _tutHint[i].text = string.IsNullOrEmpty(s.pad) ? h : $"{h}　パッド: {s.pad}";
+            }
+            // ボイスボールのステップに入ったら球を出す
+            if (step == VoiceStepIndex) SpawnTutorialVoiceBall(i);
             if (_tutProgress[i] != null)
             {
                 var sb = new System.Text.StringBuilder();
@@ -286,7 +336,10 @@ namespace PromptFighters.GameFlow
             UnsubscribeTutorial();
             FighterAI.Level = _savedCpuLevel;
             _tutorialActive = false;
-            for (int i = 0; i < 2; i++) { _tutStepClearing[i] = false; _tutFighters[i] = null; }
+            for (int i = 0; i < 2; i++) { _tutStepClearing[i] = false; _tutFighters[i] = null; _tutVoice[i] = null; }
+            // 練習用に出したサンドバッグ・ボイスボールを片付ける
+            foreach (var go in _tutSpawned) if (go != null) Destroy(go);
+            _tutSpawned.Clear();
             if (_tutorialPanel != null) _tutorialPanel.SetActive(false);
             BattleManager.Instance?.ReturnToSetup(); // 試合を止めてSetupへ（→ ShowPanel でキャラ選択表示）
             if (toTitle) ShowTitlePanel();

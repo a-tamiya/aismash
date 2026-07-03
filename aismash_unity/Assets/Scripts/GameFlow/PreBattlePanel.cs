@@ -684,22 +684,8 @@ namespace PromptFighters.GameFlow
             SetButtonLabelStyle(startButton, 28f, FontStyles.Bold | FontStyles.Italic, new Color(0.12f, 0.08f, 0.0f));
             _startButtonRect = startButton.GetComponent<RectTransform>();
 
-            // 初めての人向けチュートリアル（ゲームスタートの下・目立つ位置）
-            var tutorialBtn = MakeButton(_titlePanel.transform, "TitleTutorialBtn", "はじめての方へ（操作練習）",
-                new Vector2(0, -178), new Vector2(400, 52), StartTutorial,
-                PromptFighters.UI.UITheme.P1Neon);
-            StyleArcadeButton(tutorialBtn, PromptFighters.UI.UITheme.P1Neon, 14f);
-            SetButtonLabelStyle(tutorialBtn, 20f, FontStyles.Bold | FontStyles.Italic, Color.white);
-
-            // 設定・操作説明（タイトルからいつでも開ける）
-            var settingsBtn = MakeButton(_titlePanel.transform, "TitleSettingsBtn", "設定",
-                new Vector2(-120, -258), new Vector2(220, 46), ShowSettingsPanel, ToggleOffColor);
-            StyleArcadeButton(settingsBtn, ToggleOffColor, 12f);
-            SetButtonLabelStyle(settingsBtn, 18f, FontStyles.Bold | FontStyles.Italic, PromptFighters.UI.UITheme.Ink);
-            var controlsBtn = MakeButton(_titlePanel.transform, "TitleControlsBtn", "操作説明",
-                new Vector2(120, -258), new Vector2(220, 46), ShowControlsPanel, ToggleOffColor);
-            StyleArcadeButton(controlsBtn, ToggleOffColor, 12f);
-            SetButtonLabelStyle(controlsBtn, 18f, FontStyles.Bold | FontStyles.Italic, PromptFighters.UI.UITheme.Ink);
+            // タイトルはロゴ＋ゲームスタートのみ。設定・操作説明・チュートリアルは
+            // ロビー（キャラクター選択画面）に集約する。
         }
 
         // ── 操作説明オーバーレイ ─────────────────────────────────────
@@ -1324,6 +1310,12 @@ namespace PromptFighters.GameFlow
                 new Vector2(820f, 522f), new Vector2(180f, 44f), ShowControlsPanel, ToggleOffColor);
             StyleArcadeButton(helpBtn, ToggleOffColor, 12f);
             SetButtonLabelStyle(helpBtn, 18f, FontStyles.Bold | FontStyles.Italic, PromptFighters.UI.UITheme.Ink);
+
+            // ── はじめての方へ（操作練習）── ヘッダー左に配置
+            var tutorialBtn = MakeButton(_panel.transform, "TutorialBtn", "はじめての方へ（操作練習）",
+                new Vector2(-720f, 522f), new Vector2(360f, 44f), StartTutorial, PromptFighters.UI.UITheme.P1Neon);
+            StyleArcadeButton(tutorialBtn, PromptFighters.UI.UITheme.P1Neon, 12f);
+            SetButtonLabelStyle(tutorialBtn, 18f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             BuildTrainingPanel();
             BuildStageSelectPanel();
