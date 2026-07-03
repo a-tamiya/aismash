@@ -2,6 +2,7 @@ using UnityEngine;
 using PromptFighters.Audio;
 using PromptFighters.Battle.Skills;
 using PromptFighters.UI;
+using PromptFighters.Utils;
 
 namespace PromptFighters.Battle
 {
@@ -23,6 +24,21 @@ namespace PromptFighters.Battle
         static Sprite _cachedSprite;
         static bool   _spriteTried;
 
+        // グリーンバック(#00FF00)のキャラ風画像を足元ピボット(0.5, 0)で読み込み、透過して1回だけキャッシュする。
+        static Sprite LoadChromaKeySprite(string resourcePath)
+        {
+            var tex = Resources.Load<Texture2D>(resourcePath);
+            if (tex == null) return null;
+            if (!tex.isReadable)
+            {
+                Debug.LogWarning($"[TrainingSandbag] {resourcePath} は isReadable=false のため透過処理できません（Import設定を確認してください）");
+                return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0f), tex.height * 0.5f);
+            }
+            var processed = WhiteBackgroundRemover.ApplyChromaGreen(tex);
+            return Sprite.Create(processed, new Rect(0, 0, processed.width, processed.height),
+                new Vector2(0.5f, 0f), processed.height * 0.5f);
+        }
+
         public static TrainingSandbag Spawn(Vector2 pos, Fighter layerOwner)
         {
             var go = new GameObject("TrainingSandbag");
@@ -32,14 +48,14 @@ namespace PromptFighters.Battle
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sortingOrder = 6;
 
-            if (!_spriteTried) { _cachedSprite = Resources.Load<Sprite>("Effects/sandbag"); _spriteTried = true; }
+            if (!_spriteTried) { _cachedSprite = LoadChromaKeySprite("Effects/sandbag"); _spriteTried = true; }
             Sprite sprite = _cachedSprite;
 
             if (sprite != null)
             {
                 sr.sprite = sprite;
                 float h = Mathf.Max(0.01f, sprite.bounds.size.y);
-                go.transform.localScale = Vector3.one * (2.5f / h); // 高さ約2.5に揃える
+                go.transform.localScale = Vector3.one * (2.2f / h); // 高さ約2.2に揃える（キャラよりひと回り小さめ）
             }
             else
             {
