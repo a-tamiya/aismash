@@ -10,10 +10,10 @@ namespace PromptFighters.GameFlow
 {
     // 初めての人向けの操作チュートリアル。読ませるのではなく「やって覚える」方式。
     // 1人でも2人でも遊べるよう、1P/2Pは独立トラックで並行進行する。
-    //  ・各プレイヤーが自分のペースで ①移動→⑥つかみ を1つずつクリアする
+    //  ・各プレイヤーが自分のペースで ①移動→⑦ボイスボール を1つずつクリアする
     //  ・「参加した（何か操作した）プレイヤー全員」がクリアしたら終了
     //    → 1人（1P）だけ操作すれば1Pのクリアで終了、2人操作なら両方のクリアで終了
-    //  ・誰も操作しないまま60秒経過、またはEscでタイトルへ戻る（放置対策）
+    //  ・Escでいつでもタイトルへ戻る
     public partial class PreBattlePanel : MonoBehaviour
     {
         bool _tutorialActive;
@@ -31,7 +31,14 @@ namespace PromptFighters.GameFlow
         readonly bool[]    _tutSmashed     = new bool[2];
         readonly bool[]    _tutGrabbed     = new bool[2];
         readonly bool[]    _tutVoiceBroken = new bool[2];
-        readonly int[]     _tutAttackCount = new int[2];
+        // 技ステップ: A/B/Cをそれぞれ1回ずつ出したか（同じ技の連打ではクリアにならない）
+        readonly bool[]    _tutSkillADone  = new bool[2];
+        readonly bool[]    _tutSkillBDone  = new bool[2];
+        readonly bool[]    _tutSkillCDone  = new bool[2];
+        // つかみステップ: 掴んだ直後の入力残留による誤判定を防ぐ猶予（掴んだ瞬間から少しの間は投げ判定しない）
+        readonly float[]   _tutHoldGraceTimer = new float[2];
+        const float ThrowGraceSeconds    = 0.3f;
+        const float ThrowInputThreshold  = 0.5f;
 
         // 練習用に生成するオブジェクト（サンドバッグ／ボイスボール）。終了時に一括破棄する。
         readonly System.Collections.Generic.List<GameObject> _tutSpawned = new System.Collections.Generic.List<GameObject>();
@@ -47,6 +54,7 @@ namespace PromptFighters.GameFlow
 
         // UI（左=1P / 右=2P の2カラム）
         GameObject          _tutorialPanel;
+        readonly CanvasGroup[]     _tutBannerGroup = new CanvasGroup[2]; // カラム全体（ボイスボール取得中に隠す用）
         readonly TextMeshProUGUI[] _tutTitle    = new TextMeshProUGUI[2];
         readonly TextMeshProUGUI[] _tutHint     = new TextMeshProUGUI[2];
         readonly TextMeshProUGUI[] _tutProgress = new TextMeshProUGUI[2];
@@ -63,9 +71,9 @@ namespace PromptFighters.GameFlow
             new TutorialStep { title = "① 動いてみよう",     hint = "左スティック / 十字キーで動く" },
             new TutorialStep { title = "② ジャンプ！",        hint = "Y / △ でジャンプ（空中でもう一度で2段ジャンプ）" },
             new TutorialStep { title = "③ ガードで防ぐ",      hint = "RB / RT を押しっぱなしでガード" },
-            new TutorialStep { title = "④ 技を出そう（3回）", hint = "B / A / X でサンドバッグを3回たたく" },
+            new TutorialStep { title = "④ 技を出そう（3種類）", hint = "B / A / X をそれぞれ1回ずつ出す" },
             new TutorialStep { title = "⑤ スマッシュ！",      hint = "右スティックを横に倒してスマッシュ" },
-            new TutorialStep { title = "⑥ つかみ",           hint = "サンドバッグに近づいて LB / LT でつかむ" },
+            new TutorialStep { title = "⑥ つかんで投げよう",  hint = "サンドバッグに近づいて LB / LT でつかむ" },
             new TutorialStep { title = "⑦ ボイスボール！",   hint = "光る球を攻撃してこわし、マイクに願いを話そう！" },
         };
 
@@ -111,7 +119,7 @@ namespace PromptFighters.GameFlow
                 if (_tutFighters[i] != null) _tutPrevX[i] = _tutFighters[i].transform.position.x;
             }
 
-            // 各プレイヤーの前にサンドバッグ（練習台）を用意する
+            // 各プレイヤーの前にサンドバッグ（練習台）を用意する（常に2体）
             SpawnTutorialSandbags();
 
             if (_tutFinishGrp != null) _tutFinishGrp.alpha = 0f;
@@ -119,6 +127,7 @@ namespace PromptFighters.GameFlow
             for (int i = 0; i < 2; i++)
             {
                 if (_tutCheckGrp[i] != null) _tutCheckGrp[i].alpha = 0f;
+                if (_tutBannerGroup[i] != null) _tutBannerGroup[i].alpha = 1f;
                 ShowStepFor(i);
             }
         }
@@ -135,19 +144,29 @@ namespace PromptFighters.GameFlow
                 {
                     TutNudge(idx);
                     if (_tutStep[idx] != 5) return;
-                    // サンドバッグに近づいてつかむと、大きく揺さぶられてクリア
+                    // サンドバッグに近づいてつかむと、そのまま持ち上げられて追従する
                     var sb = _tutSandbag[idx];
                     var ff = _tutFighters[idx];
-                    if (sb != null && ff != null &&
-                        Mathf.Abs(sb.transform.position.x - ff.transform.position.x) < GrabReachDistance)
+                    if (sb == null || ff == null || sb.IsHeld) return;
+                    if (Mathf.Abs(sb.transform.position.x - ff.transform.position.x) < GrabReachDistance)
                     {
-                        sb.OnGrabReaction(ff);
-                        _tutGrabbed[idx] = true;
+                        sb.BeginHeld(ff);
+                        _tutHoldGraceTimer[idx] = ThrowGraceSeconds;
+                        if (_tutHint[idx] != null) _tutHint[idx].text = "スティックを左右に倒して投げよう！";
                     }
                 };
                 _hSkill[idx] = (s) =>
                 {
-                    if (_tutStep[idx] == 3 && s != SkillSlot.SmashSide) _tutAttackCount[idx]++;
+                    if (_tutStep[idx] == 3)
+                    {
+                        switch (s)
+                        {
+                            case SkillSlot.AttackA: _tutSkillADone[idx] = true; break;
+                            case SkillSlot.AttackB: _tutSkillBDone[idx] = true; break;
+                            case SkillSlot.AttackC: _tutSkillCDone[idx] = true; break;
+                        }
+                        UpdateStep3Hint(idx);
+                    }
                     if (_tutStep[idx] == 4 && s == SkillSlot.SmashSide) _tutSmashed[idx] = true;
                     TutNudge(idx);
                 };
@@ -178,7 +197,20 @@ namespace PromptFighters.GameFlow
             _tutEngaged[i] = true;
         }
 
-        // 各プレイヤーの少し前（内側）にサンドバッグを設置する。
+        // 技ステップ中、まだ出していない技を「残り: B A」のようにヒントへ反映する。
+        void UpdateStep3Hint(int i)
+        {
+            if (_tutHint[i] == null) return;
+            var remaining = new System.Text.StringBuilder();
+            if (!_tutSkillADone[i]) remaining.Append("B ");
+            if (!_tutSkillBDone[i]) remaining.Append("A ");
+            if (!_tutSkillCDone[i]) remaining.Append("X ");
+            _tutHint[i].text = remaining.Length > 0
+                ? $"残り: {remaining.ToString().Trim()} を出そう"
+                : "OK！";
+        }
+
+        // 各プレイヤーの少し前（内側）にサンドバッグを設置する（常に2体、各プレイヤーに1体ずつ）。
         void SpawnTutorialSandbags()
         {
             float groundY = BattleManager.Instance != null ? BattleManager.Instance.StageGroundY : -2.3f;
@@ -211,11 +243,30 @@ namespace PromptFighters.GameFlow
                 var angel = BattleManager.Instance != null
                     ? BattleManager.Instance.GetComponent<PromptFighters.UI.AngelController>() : null;
                 if (angel != null)
-                    angel.BeginAcquire(breaker ?? _tutFighters[idx], () => _tutVoiceBroken[idx] = true);
+                {
+                    // AngelControllerの取得バナーは画面上部に全幅で表示され、
+                    // 1P/2P両方のチュートリアルバナーと同じ帯に重なるため、
+                    // 取得演出中は両方のチュートリアルバナーを一時的に隠す。
+                    SetTutorialBannerVisible(0, false);
+                    SetTutorialBannerVisible(1, false);
+                    angel.BeginAcquire(breaker ?? _tutFighters[idx], () =>
+                    {
+                        _tutVoiceBroken[idx] = true;
+                        SetTutorialBannerVisible(0, true);
+                        SetTutorialBannerVisible(1, true);
+                    });
+                }
                 else
+                {
                     _tutVoiceBroken[idx] = true; // 保険：AngelControllerが無ければ破壊だけで完了
+                }
             });
             if (_tutVoice[i] != null) _tutSpawned.Add(_tutVoice[i].gameObject);
+        }
+
+        void SetTutorialBannerVisible(int i, bool visible)
+        {
+            if (_tutBannerGroup[i] != null) _tutBannerGroup[i].alpha = visible ? 1f : 0f;
         }
 
         void UpdateTutorial()
@@ -243,9 +294,21 @@ namespace PromptFighters.GameFlow
                         if (f.State == FighterState.Guarding) { _tutGuardTime[i] += Time.deltaTime; TutNudge(i); }
                         done = _tutGuardTime[i] > 0.4f;
                         break;
-                    case 3: done = _tutAttackCount[i] >= 3; break;
+                    case 3: done = _tutSkillADone[i] && _tutSkillBDone[i] && _tutSkillCDone[i]; break;
                     case 4: done = _tutSmashed[i]; break;
-                    case 5: done = _tutGrabbed[i]; break;
+                    case 5: // つかみ→投げ
+                        var sb5 = _tutSandbag[i];
+                        if (sb5 != null && sb5.IsHeld)
+                        {
+                            if (_tutHoldGraceTimer[i] > 0f) _tutHoldGraceTimer[i] -= Time.deltaTime;
+                            else if (Mathf.Abs(f.LastMoveInputX) > ThrowInputThreshold)
+                            {
+                                sb5.Throw(new Vector2(Mathf.Sign(f.LastMoveInputX), 0.3f));
+                                _tutGrabbed[i] = true;
+                            }
+                        }
+                        done = _tutGrabbed[i];
+                        break;
                     case VoiceStepIndex: done = _tutVoiceBroken[i]; break;
                 }
                 if (done) StartCoroutine(CompleteStepRoutine(i));
@@ -318,7 +381,8 @@ namespace PromptFighters.GameFlow
             _tutMoveDist[i] = 0f;
             _tutGuardTime[i] = 0f;
             _tutJumped[i] = _tutSmashed[i] = _tutGrabbed[i] = false;
-            _tutAttackCount[i] = 0;
+            _tutSkillADone[i] = _tutSkillBDone[i] = _tutSkillCDone[i] = false;
+            _tutHoldGraceTimer[i] = 0f;
             if (_tutFighters[i] != null) _tutPrevX[i] = _tutFighters[i].transform.position.x;
         }
 
@@ -348,7 +412,7 @@ namespace PromptFighters.GameFlow
                 bool otherBusy = _tutEngaged[1 - i] && _tutStep[1 - i] < TutorialSteps.Length;
                 _tutHint[i].text = otherBusy ? "相手のクリアを待っています…" : "";
             }
-            if (_tutProgress[i] != null) _tutProgress[i].text = "● ● ● ● ● ●";
+            if (_tutProgress[i] != null) _tutProgress[i].text = "● ● ● ● ● ● ●";
         }
 
         void EndTutorial(bool toTitle)
@@ -356,7 +420,14 @@ namespace PromptFighters.GameFlow
             UnsubscribeTutorial();
             FighterAI.Level = _savedCpuLevel;
             _tutorialActive = false;
-            for (int i = 0; i < 2; i++) { _tutStepClearing[i] = false; _tutFighters[i] = null; _tutVoice[i] = null; _tutSandbag[i] = null; }
+            for (int i = 0; i < 2; i++)
+            {
+                _tutStepClearing[i] = false;
+                _tutFighters[i] = null;
+                _tutVoice[i] = null;
+                _tutSandbag[i]?.ReleaseHeld();
+                _tutSandbag[i] = null;
+            }
             // 練習用に出したサンドバッグ・ボイスボールを片付ける
             foreach (var go in _tutSpawned) if (go != null) Destroy(go);
             _tutSpawned.Clear();
@@ -402,32 +473,37 @@ namespace PromptFighters.GameFlow
 
         void BuildTutColumn(Transform parent, int i, float cx, Color pColor)
         {
-            var banner = MakePanel(parent, i == 0 ? "TutBanner1P" : "TutBanner2P",
-                new Vector2(cx, 300f), new Vector2(640f, 150f),
+            // このカラムの要素をまとめるコンテナ。ボイスボール取得中はAngelControllerの取得バナーと
+            // 画面上部の同じ帯に重なるため、CanvasGroupでカラムごと一時的に隠せるようにする。
+            var container = CreateUIObject(i == 0 ? "TutColumn1P" : "TutColumn2P", parent);
+            var containerRt = container.GetComponent<RectTransform>();
+            containerRt.anchoredPosition = new Vector2(cx, 0f);
+            _tutBannerGroup[i] = container.AddComponent<CanvasGroup>();
+            var t = container.transform;
+
+            var banner = MakePanel(t, "TutBanner", new Vector2(0f, 300f), new Vector2(640f, 150f),
                 new Color(0.02f, 0.025f, 0.05f, 0.85f));
             banner.raycastTarget = false;
-            MakeSlantBar(parent, i == 0 ? "TutTop1P" : "TutTop2P",
-                new Vector2(cx, 375f), new Vector2(640f, 5f), pColor, i == 0 ? 22f : -22f);
+            MakeSlantBar(t, "TutTop", new Vector2(0f, 375f), new Vector2(640f, 5f), pColor, i == 0 ? 22f : -22f);
 
-            MakeSlantBar(parent, i == 0 ? "TutBadgePlate1P" : "TutBadgePlate2P",
-                new Vector2(cx - 280f, 345f), new Vector2(84f, 40f), pColor, i == 0 ? 12f : -12f);
-            MakeLabel(parent, i == 0 ? "TutBadge1P" : "TutBadge2P", i == 0 ? "1P" : "2P",
-                new Vector2(cx - 280f, 345f), new Vector2(84f, 40f), 24f, Color.white)
+            MakeSlantBar(t, "TutBadgePlate", new Vector2(-280f, 345f), new Vector2(84f, 40f), pColor, i == 0 ? 12f : -12f);
+            MakeLabel(t, "TutBadge", i == 0 ? "1P" : "2P",
+                new Vector2(-280f, 345f), new Vector2(84f, 40f), 24f, Color.white)
                 .fontStyle = FontStyles.Bold | FontStyles.Italic;
 
-            _tutTitle[i] = MakeLabel(parent, i == 0 ? "TutTitle1P" : "TutTitle2P", "",
-                new Vector2(cx + 24f, 342f), new Vector2(560f, 50f), 30f, pColor);
+            _tutTitle[i] = MakeLabel(t, "TutTitle", "",
+                new Vector2(24f, 342f), new Vector2(560f, 50f), 30f, pColor);
             _tutTitle[i].fontStyle = FontStyles.Bold | FontStyles.Italic;
 
-            _tutHint[i] = MakeLabel(parent, i == 0 ? "TutHint1P" : "TutHint2P", "",
-                new Vector2(cx, 296f), new Vector2(600f, 40f), 20f, Color.white);
+            _tutHint[i] = MakeLabel(t, "TutHint", "",
+                new Vector2(0f, 296f), new Vector2(600f, 40f), 20f, Color.white);
             _tutHint[i].fontStyle = FontStyles.Bold;
 
-            _tutProgress[i] = MakeLabel(parent, i == 0 ? "TutProg1P" : "TutProg2P", "",
-                new Vector2(cx, 258f), new Vector2(400f, 32f), 22f, PromptFighters.UI.UITheme.InkDim);
+            _tutProgress[i] = MakeLabel(t, "TutProg", "",
+                new Vector2(0f, 258f), new Vector2(500f, 32f), 20f, PromptFighters.UI.UITheme.InkDim);
             _tutProgress[i].fontStyle = FontStyles.Bold;
 
-            // クリア時の✓（そのカラムの中央）
+            // クリア時の✓（そのカラムの中央。バナーとは別グループなので取得演出中も見える）
             var checkGo = CreateUIObject(i == 0 ? "TutCheck1P" : "TutCheck2P", parent);
             var crt = checkGo.GetComponent<RectTransform>();
             crt.anchoredPosition = new Vector2(cx, 300f);

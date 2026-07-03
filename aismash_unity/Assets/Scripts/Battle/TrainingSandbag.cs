@@ -6,7 +6,8 @@ using PromptFighters.Utils;
 
 namespace PromptFighters.Battle
 {
-    // チュートリアル用のサンドバッグ（練習台）。攻撃を受けると揺れて数字を出すが壊れない。
+    // チュートリアル用のサンドバッグ（練習台）。攻撃を受けるとノックバックして跳ね返り、
+    // 傾きながら元の位置へ戻る。壊れない。「掴んで投げる」練習にも対応する。
     // Hitbox / Projectile から TakeHit(dmg, attacker) を呼ばれる中立の的（トリガー判定・すり抜け可）。
     // 画像 Resources/Effects/sandbag.png があれば使用、無ければ簡易フォールバック表示。
     public class TrainingSandbag : MonoBehaviour
@@ -17,17 +18,28 @@ namespace PromptFighters.Battle
         Color _baseColor = Color.white;
         float _flash;      // 被弾フラッシュ残り
 
-        const float Spring   = 70f;   // 直立へ戻すばね
-        const float Damping  = 6.5f;  // 減衰
-        const float MaxAngle = 40f;
+        Vector3 _basePos;   // 揺れ・ノックバックが戻ってくる基準位置
+        float   _offsetX;   // 基準位置からの横方向オフセット（ノックバック変位）
+        float   _offsetVelX;
+
+        const float Spring     = 70f;   // 傾きを直立へ戻すばね
+        const float Damping    = 6.5f;  // 傾きの減衰
+        const float MaxAngle   = 40f;
+        const float PosSpring  = 35f;   // 横位置を戻すばね
+        const float PosDamping = 4.5f;  // 横位置の減衰
+        const float MaxOffset  = 2.4f;  // 横方向へ吹き飛ぶ最大距離
+
+        // つかまれ状態（チュートリアルの「掴んで投げる」練習用）
+        public bool IsHeld { get; private set; }
+        Fighter _heldBy;
+        float _holdTimer;
+        const float MaxHoldSeconds = 4f; // 掴んだまま放置された場合の自動解除
 
         static Sprite _cachedSprite;
         static bool   _spriteTried;
 
         // Enter Play Mode Options でドメインリロードを無効化しているため、静的キャッシュは
-        // エディタの再生を止めても残り続ける。画像未追加時に一度「見つからない」をキャッシュすると
-        // 後から画像を追加してもエディタ再起動まで反映されないバグを防ぐため、
-        // 新しいプレイセッション開始のたびに必ずキャッシュをクリアする。
+        // エディタの再生を止めても残り続ける。新しいプレイセッション開始のたびに必ずリセットする。
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStaticCacheOnPlay()
         {
@@ -80,6 +92,7 @@ namespace PromptFighters.Battle
             var s = go.AddComponent<TrainingSandbag>();
             s._sr = sr;
             s._baseColor = sr.color;
+            s._basePos = pos;
 
             // 当たり判定（トリガー・すり抜け）。スプライト範囲に合わせる。
             var col = go.AddComponent<BoxCollider2D>();
@@ -95,11 +108,13 @@ namespace PromptFighters.Battle
 
         public void TakeHit(float dmg, Fighter attacker)
         {
-            if (dmg <= 0f) return;
+            if (dmg <= 0f || IsHeld) return; // 掴まれている間は殴られても動かない
             float dir = attacker != null ? Mathf.Sign(transform.position.x - attacker.transform.position.x) : 1f;
             if (Mathf.Approximately(dir, 0f)) dir = 1f;
-            // 攻撃者から離れる向きへ傾ける。ダメージが大きいほど大きく揺れる。
-            _angVel += dir * Mathf.Clamp(10f + dmg * 2f, 12f, 48f);
+            // 攻撃者から離れる向きへノックバック＋傾く。ダメージが大きいほど大きく揺れる。
+            float power = Mathf.Clamp(10f + dmg * 2f, 12f, 48f);
+            _angVel     += dir * power;
+            _offsetVelX += dir * Mathf.Clamp(dmg * 0.4f, 1.5f, 6f);
             _flash = 0.12f;
 
             DamagePopup.SpawnText(transform.position + Vector3.up * 1.7f,
@@ -107,25 +122,67 @@ namespace PromptFighters.Battle
             CameraShake.Shake(0.04f, 0.07f);
         }
 
-        // つかまれた反応（チュートリアルのつかみ練習用）。大きく揺さぶられる。
-        public void OnGrabReaction(Fighter by)
+        // つかみ開始（チュートリアル用）。以降はプレイヤーの前方に追従する。
+        public void BeginHeld(Fighter by)
         {
-            float dir = by != null ? Mathf.Sign(transform.position.x - by.transform.position.x) : 1f;
-            if (Mathf.Approximately(dir, 0f)) dir = 1f;
-            _angVel += dir * 55f;
-            _flash = 0.16f;
-            DamagePopup.SpawnText(transform.position + Vector3.up * 1.8f,
-                "つかみ！", new Color(0.55f, 0.9f, 1f), 1.2f);
+            if (IsHeld || by == null) return;
+            IsHeld = true;
+            _heldBy = by;
+            _holdTimer = MaxHoldSeconds;
+            _angVel = 0f; _angle = 0f;
+            _offsetVelX = 0f; _offsetX = 0f;
             GameAudioManager.Instance?.PlayGrab();
-            CameraShake.Shake(0.08f, 0.12f);
+            DamagePopup.SpawnText(transform.position + Vector3.up * 1.8f,
+                "つかんだ！", new Color(0.55f, 0.9f, 1f), 1.0f);
+        }
+
+        // 投げ演出。既存のノックバックのばね機構を使って大きく吹き飛ばす。
+        public void Throw(Vector2 dir)
+        {
+            if (!IsHeld) return;
+            IsHeld = false;
+            _heldBy = null;
+            float sign = !Mathf.Approximately(dir.x, 0f) ? Mathf.Sign(dir.x) : 1f;
+            _offsetVelX += sign * 15f;
+            _angVel     += sign * 90f;
+            _flash = 0.2f;
+            DamagePopup.SpawnText(transform.position + Vector3.up * 1.8f,
+                "投げた！", new Color(1f, 0.75f, 0.2f), 1.4f);
+            GameAudioManager.Instance?.PlayGimmickBuff();
+            CameraShake.Shake(0.1f, 0.14f);
+        }
+
+        // 掴みを強制解除する（チュートリアル終了時などの後始末用）。
+        public void ReleaseHeld()
+        {
+            IsHeld = false;
+            _heldBy = null;
         }
 
         void Update()
         {
-            // ばね＋減衰で直立へ戻す（ボップバッグの揺れ）
+            if (IsHeld)
+            {
+                _holdTimer -= Time.deltaTime;
+                if (_heldBy != null)
+                {
+                    float dirSign = _heldBy.FacingRight ? 1f : -1f;
+                    Vector3 target = _heldBy.transform.position + new Vector3(dirSign * 1.1f, 1.1f, 0f);
+                    transform.position = Vector3.Lerp(transform.position, target, 14f * Time.deltaTime);
+                    _basePos = transform.position; // 離れた瞬間、そこが吹き飛びの基準位置になる
+                }
+                if (_holdTimer <= 0f) ReleaseHeld(); // 放置されたら自動解除
+                return;
+            }
+
+            // ばね＋減衰で直立・基準位置へ戻す（ボップバッグの揺れ＋ノックバック）
             _angVel += (-Spring * _angle - Damping * _angVel) * Time.deltaTime;
             _angle = Mathf.Clamp(_angle + _angVel * Time.deltaTime, -MaxAngle, MaxAngle);
             transform.rotation = Quaternion.Euler(0f, 0f, -_angle);
+
+            _offsetVelX += (-PosSpring * _offsetX - PosDamping * _offsetVelX) * Time.deltaTime;
+            _offsetX = Mathf.Clamp(_offsetX + _offsetVelX * Time.deltaTime, -MaxOffset, MaxOffset);
+            transform.position = _basePos + new Vector3(_offsetX, 0f, 0f);
 
             if (_flash > 0f && _sr != null)
             {
