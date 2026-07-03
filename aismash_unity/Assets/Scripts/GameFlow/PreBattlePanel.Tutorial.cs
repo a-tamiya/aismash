@@ -143,8 +143,8 @@ namespace PromptFighters.GameFlow
                 _hGrab[idx]  = () =>
                 {
                     TutNudge(idx);
-                    if (_tutStep[idx] != 5) return;
-                    // サンドバッグに近づいてつかむと、そのまま持ち上げられて追従する
+                    // サンドバッグに近づいてつかむと、そのまま持ち上げられて追従する。
+                    // どのステップからでも掴んで遊べる（クリア判定は⑥のステップのときだけ）。
                     var sb = _tutSandbag[idx];
                     var ff = _tutFighters[idx];
                     if (sb == null || ff == null || sb.IsHeld) return;
@@ -152,7 +152,8 @@ namespace PromptFighters.GameFlow
                     {
                         sb.BeginHeld(ff);
                         _tutHoldGraceTimer[idx] = ThrowGraceSeconds;
-                        if (_tutHint[idx] != null) _tutHint[idx].text = "スティックを左右に倒して投げよう！";
+                        if (_tutStep[idx] == 5 && _tutHint[idx] != null)
+                            _tutHint[idx].text = "スティックを左右に倒して投げよう！";
                     }
                 };
                 _hSkill[idx] = (s) =>
@@ -280,6 +281,19 @@ namespace PromptFighters.GameFlow
                 int step = _tutStep[i];
                 if (step >= TutorialSteps.Length) continue;
 
+                // サンドバッグを持っている間は、ステップに関わらず投げ入力を検出して投げる
+                // （⑥のステップ以外でも自由に掴んで投げて遊べるようにするため、switch外で判定する）。
+                var heldSandbag = _tutSandbag[i];
+                if (heldSandbag != null && heldSandbag.IsHeld)
+                {
+                    if (_tutHoldGraceTimer[i] > 0f) _tutHoldGraceTimer[i] -= Time.deltaTime;
+                    else if (Mathf.Abs(f.LastMoveInputX) > ThrowInputThreshold)
+                    {
+                        heldSandbag.Throw(new Vector2(Mathf.Sign(f.LastMoveInputX), 0.3f));
+                        if (step == 5) _tutGrabbed[i] = true;
+                    }
+                }
+
                 bool done = false;
                 switch (step)
                 {
@@ -296,19 +310,7 @@ namespace PromptFighters.GameFlow
                         break;
                     case 3: done = _tutSkillADone[i] && _tutSkillBDone[i] && _tutSkillCDone[i]; break;
                     case 4: done = _tutSmashed[i]; break;
-                    case 5: // つかみ→投げ
-                        var sb5 = _tutSandbag[i];
-                        if (sb5 != null && sb5.IsHeld)
-                        {
-                            if (_tutHoldGraceTimer[i] > 0f) _tutHoldGraceTimer[i] -= Time.deltaTime;
-                            else if (Mathf.Abs(f.LastMoveInputX) > ThrowInputThreshold)
-                            {
-                                sb5.Throw(new Vector2(Mathf.Sign(f.LastMoveInputX), 0.3f));
-                                _tutGrabbed[i] = true;
-                            }
-                        }
-                        done = _tutGrabbed[i];
-                        break;
+                    case 5: done = _tutGrabbed[i]; break; // つかんで投げる（判定は上のswitch外で共通処理）
                     case VoiceStepIndex: done = _tutVoiceBroken[i]; break;
                 }
                 if (done) StartCoroutine(CompleteStepRoutine(i));

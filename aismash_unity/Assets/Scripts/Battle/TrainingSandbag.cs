@@ -18,9 +18,11 @@ namespace PromptFighters.Battle
         Color _baseColor = Color.white;
         float _flash;      // 被弾フラッシュ残り
 
-        Vector3 _basePos;   // 揺れ・ノックバックが戻ってくる基準位置
+        Vector3 _basePos;   // 揺れ・ノックバックが戻ってくる基準位置（Y座標は常に地面の高さ）
+        float   _groundY;   // 設置された地面の高さ。掴まれて浮いても、離したらここへ戻す。
         float   _offsetX;   // 基準位置からの横方向オフセット（ノックバック変位）
         float   _offsetVelX;
+        float   _offsetY;   // 掴まれて浮いた高さ分のオフセット（投げたら滑らかに0=地面へ戻す）
 
         const float Spring     = 70f;   // 傾きを直立へ戻すばね
         const float Damping    = 6.5f;  // 傾きの減衰
@@ -28,6 +30,7 @@ namespace PromptFighters.Battle
         const float PosSpring  = 35f;   // 横位置を戻すばね
         const float PosDamping = 4.5f;  // 横位置の減衰
         const float MaxOffset  = 2.4f;  // 横方向へ吹き飛ぶ最大距離
+        const float FallLerpSpeed = 6f; // 投げられた後、地面の高さへ戻る速さ
 
         // つかまれ状態（チュートリアルの「掴んで投げる」練習用）
         public bool IsHeld { get; private set; }
@@ -89,10 +92,13 @@ namespace PromptFighters.Battle
             }
             sr.color = new Color(sr.color.r, sr.color.g, sr.color.b, sr.color.a);
 
+            float groundY = BattleManager.Instance != null ? BattleManager.Instance.StageGroundY : pos.y;
+
             var s = go.AddComponent<TrainingSandbag>();
             s._sr = sr;
             s._baseColor = sr.color;
-            s._basePos = pos;
+            s._groundY = groundY;
+            s._basePos = new Vector3(pos.x, groundY, 0f);
 
             // 当たり判定（トリガー・すり抜け）。スプライト範囲に合わせる。
             var col = go.AddComponent<BoxCollider2D>();
@@ -100,7 +106,6 @@ namespace PromptFighters.Battle
             col.size   = sr.sprite.bounds.size;
             col.offset = sr.sprite.bounds.center;
 
-            float groundY = BattleManager.Instance != null ? BattleManager.Instance.StageGroundY : pos.y;
             BlobShadow.Spawn(go.transform, groundY, 1.1f, sortingOrder: -2);
 
             return s;
@@ -130,7 +135,7 @@ namespace PromptFighters.Battle
             _heldBy = by;
             _holdTimer = MaxHoldSeconds;
             _angVel = 0f; _angle = 0f;
-            _offsetVelX = 0f; _offsetX = 0f;
+            _offsetVelX = 0f; _offsetX = 0f; _offsetY = 0f;
             GameAudioManager.Instance?.PlayGrab();
             DamagePopup.SpawnText(transform.position + Vector3.up * 1.8f,
                 "つかんだ！", new Color(0.55f, 0.9f, 1f), 1.0f);
@@ -140,8 +145,7 @@ namespace PromptFighters.Battle
         public void Throw(Vector2 dir)
         {
             if (!IsHeld) return;
-            IsHeld = false;
-            _heldBy = null;
+            SettleAfterRelease();
             float sign = !Mathf.Approximately(dir.x, 0f) ? Mathf.Sign(dir.x) : 1f;
             _offsetVelX += sign * 15f;
             _angVel     += sign * 90f;
@@ -155,8 +159,18 @@ namespace PromptFighters.Battle
         // 掴みを強制解除する（チュートリアル終了時などの後始末用）。
         public void ReleaseHeld()
         {
+            if (!IsHeld) return;
+            SettleAfterRelease();
+        }
+
+        // つかまれて浮いていた分を _offsetY に積み、基準位置(_basePos)を地面の高さへ戻す。
+        // Update側のばねで滑らかに0へ減衰し、地面に着地して見える。
+        void SettleAfterRelease()
+        {
             IsHeld = false;
             _heldBy = null;
+            _offsetY = transform.position.y - _groundY;
+            _basePos = new Vector3(transform.position.x, _groundY, 0f);
         }
 
         void Update()
@@ -167,9 +181,8 @@ namespace PromptFighters.Battle
                 if (_heldBy != null)
                 {
                     float dirSign = _heldBy.FacingRight ? 1f : -1f;
-                    Vector3 target = _heldBy.transform.position + new Vector3(dirSign * 1.1f, 1.1f, 0f);
+                    Vector3 target = _heldBy.transform.position + new Vector3(dirSign * 1.1f, 0.9f, 0f);
                     transform.position = Vector3.Lerp(transform.position, target, 14f * Time.deltaTime);
-                    _basePos = transform.position; // 離れた瞬間、そこが吹き飛びの基準位置になる
                 }
                 if (_holdTimer <= 0f) ReleaseHeld(); // 放置されたら自動解除
                 return;
@@ -182,7 +195,12 @@ namespace PromptFighters.Battle
 
             _offsetVelX += (-PosSpring * _offsetX - PosDamping * _offsetVelX) * Time.deltaTime;
             _offsetX = Mathf.Clamp(_offsetX + _offsetVelX * Time.deltaTime, -MaxOffset, MaxOffset);
-            transform.position = _basePos + new Vector3(_offsetX, 0f, 0f);
+
+            // 掴まれて浮いていた高さは、投げた/離した瞬間からゆっくり地面へ着地させる。
+            _offsetY = Mathf.Lerp(_offsetY, 0f, FallLerpSpeed * Time.deltaTime);
+            if (Mathf.Abs(_offsetY) < 0.01f) _offsetY = 0f;
+
+            transform.position = _basePos + new Vector3(_offsetX, _offsetY, 0f);
 
             if (_flash > 0f && _sr != null)
             {
