@@ -24,6 +24,17 @@ namespace PromptFighters.Battle
         static Sprite _cachedSprite;
         static bool   _spriteTried;
 
+        // Enter Play Mode Options でドメインリロードを無効化しているため、静的キャッシュは
+        // エディタの再生を止めても残り続ける。画像未追加時に一度「見つからない」をキャッシュすると
+        // 後から画像を追加してもエディタ再起動まで反映されないバグを防ぐため、
+        // 新しいプレイセッション開始のたびに必ずキャッシュをクリアする。
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStaticCacheOnPlay()
+        {
+            _cachedSprite = null;
+            _spriteTried = false;
+        }
+
         // グリーンバック(#00FF00)のキャラ風画像を足元ピボット(0.5, 0)で読み込み、透過して1回だけキャッシュする。
         static Sprite LoadChromaKeySprite(string resourcePath)
         {
