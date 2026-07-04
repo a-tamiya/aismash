@@ -140,8 +140,8 @@ namespace PromptFighters.Battle.Skills
                     {
                         a.projectile_speed    = Mathf.Clamp(a.projectile_speed, 0f, 18f);
                         a.projectile_lifetime = Mathf.Clamp(a.projectile_lifetime, 0f, 2.8f);
-                        if (a.size_x > 0f) a.size_x = Mathf.Clamp(a.size_x, 0.45f, 2.4f);
-                        if (a.size_y > 0f) a.size_y = Mathf.Clamp(a.size_y, 0.35f, 1.8f);
+                        if (a.size_x > 0f) a.size_x = Mathf.Clamp(a.size_x, 0.7f, 3.0f);
+                        if (a.size_y > 0f) a.size_y = Mathf.Clamp(a.size_y, 0.6f, 2.4f);
                         // 新フィールド
                         if (a.homing_strength != 0f) a.homing_strength = Mathf.Clamp01(a.homing_strength);
                         if (a.spread_angle > 0f)     a.spread_angle     = Mathf.Clamp(a.spread_angle, 5f, 60f);
@@ -197,6 +197,9 @@ namespace PromptFighters.Battle.Skills
                         if (a.power > 0f) a.power = Mathf.Clamp(a.power, 0.5f, 5f);
                         if (a.damage_override >= 0f)
                             a.damage_override = Mathf.Clamp(a.damage_override, 0f, totalMaxDmg * 0.6f);
+                        // 召喚物が小さく圧縮されて見えないよう、見た目サイズの下限を確保する。
+                        if (a.size_x > 0f) a.size_x = Mathf.Clamp(a.size_x, 1.0f, 2.6f);
+                        if (a.size_y > 0f) a.size_y = Mathf.Clamp(a.size_y, 1.2f, 3.2f);
                     }
 
                     // barrier: 吸収量・持続秒の上限。過大なシールドを防ぐ。

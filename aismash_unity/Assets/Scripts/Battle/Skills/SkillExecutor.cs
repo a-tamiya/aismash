@@ -684,8 +684,8 @@ namespace PromptFighters.Battle.Skills
             float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) *
                         powerMultiplier * _fighter.EffectiveDamageMultiplier;
             Vector2 desiredSize = new Vector2(
-                (a.size_x > 0f ? a.size_x : Mathf.Clamp(speed * lifetime * 0.08f, 0.74f, 1.74f)) * HitboxVisualScale * _sizeScale,
-                (a.size_y > 0f ? a.size_y : 0.75f) * HitboxVisualScale * _sizeScale);
+                (a.size_x > 0f ? a.size_x : Mathf.Clamp(speed * lifetime * 0.11f, 1.05f, 2.3f)) * HitboxVisualScale * _sizeScale,
+                (a.size_y > 0f ? a.size_y : 1.05f) * HitboxVisualScale * _sizeScale);
             var (kbDir, kbFixed) = ComputeKnockback(a, 1f, 0.3f);
 
             int count = a.projectile_count > 1 ? a.projectile_count : 1;
@@ -936,8 +936,8 @@ namespace PromptFighters.Battle.Skills
             float dmg      = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage * 0.5f) * powerMultiplier;
             float kb       = skill.parameters.knockback * 0.6f * powerMultiplier;
             Vector2 desiredSize = new Vector2(
-                (a.size_x > 0f ? a.size_x : 0.9f) * _sizeScale,
-                (a.size_y > 0f ? a.size_y : 1.2f) * _sizeScale);
+                (a.size_x > 0f ? a.size_x : 1.3f) * _sizeScale,
+                (a.size_y > 0f ? a.size_y : 1.7f) * _sizeScale);
             SummonEntity.Spawn(_fighter, pos, speed, lifetime, dmg, kb, skill.element,
                 a.hide_effect ? null : _fighter.GetEffectSprite(skill.slot), desiredSize, a);
         }
