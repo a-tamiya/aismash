@@ -42,7 +42,6 @@ namespace PromptFighters.Battle.Skills
         readonly HashSet<Battle.SummonEntity> _hitSummons = new HashSet<Battle.SummonEntity>();
         readonly HashSet<Battle.VoiceItem> _hitVoiceItems = new HashSet<Battle.VoiceItem>();
         readonly HashSet<Battle.DestructibleObstacle> _hitDestructibles = new HashSet<Battle.DestructibleObstacle>();
-        readonly HashSet<Battle.TrainingSandbag> _hitSandbags = new HashSet<Battle.TrainingSandbag>();
         int _hitsLanded;
 
         // デバッグオーバーレイ（col.boundsに毎フレーム追従する独立オブジェクト。プール対象と一緒に再利用）
@@ -166,7 +165,6 @@ namespace PromptFighters.Battle.Skills
             _hitSummons.Clear();
             _hitVoiceItems.Clear();
             _hitDestructibles.Clear();
-            _hitSandbags.Clear();
             _hitsLanded = 0;
 
             Owner = null;
@@ -377,17 +375,6 @@ namespace PromptFighters.Battle.Skills
                     _col.enabled = false;
                     if (IsTrap) TriggerTrapBurst();
                 }
-                return;
-            }
-
-            // チュートリアルのサンドバッグ（中立の練習台。壊れない）
-            var sandbag = other.GetComponentInParent<Battle.TrainingSandbag>();
-            if (sandbag != null && !_hitSandbags.Contains(sandbag))
-            {
-                _hitSandbags.Add(sandbag);
-                sandbag.TakeHit(Damage, Owner);
-                _hitsLanded++;
-                if (_hitsLanded >= MaxHits && _col != null) _col.enabled = false;
                 return;
             }
 

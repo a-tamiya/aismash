@@ -5,6 +5,7 @@ using TMPro;
 using PromptFighters.Battle;
 using PromptFighters.Battle.Skills;
 using PromptFighters.UI;
+using PromptFighters.Utils;
 
 namespace PromptFighters.GameFlow
 {
@@ -35,17 +36,65 @@ namespace PromptFighters.GameFlow
         readonly bool[]    _tutSkillADone  = new bool[2];
         readonly bool[]    _tutSkillBDone  = new bool[2];
         readonly bool[]    _tutSkillCDone  = new bool[2];
-        // つかみステップ: 掴んだ直後の入力残留による誤判定を防ぐ猶予（掴んだ瞬間から少しの間は投げ判定しない）
-        readonly float[]   _tutHoldGraceTimer = new float[2];
-        const float ThrowGraceSeconds    = 0.3f;
-        const float ThrowInputThreshold  = 0.5f;
+        // つかみステップ: 一度でも本当に掴んだ（IsHoldingOpponent）ことがあるか。
+        // 掴んだ後に離れた（投げた/自動解除）ら、そのステップをクリア扱いにする。
+        readonly bool[]    _tutHeldOnce    = new bool[2];
 
-        // 練習用に生成するオブジェクト（サンドバッグ／ボイスボール）。終了時に一括破棄する。
+        // 練習用に生成するオブジェクト（練習台ファイター／ボイスボール）。終了時に一括破棄する。
         readonly System.Collections.Generic.List<GameObject> _tutSpawned = new System.Collections.Generic.List<GameObject>();
         readonly VoiceItem[] _tutVoice = new VoiceItem[2];
-        readonly TrainingSandbag[] _tutSandbag = new TrainingSandbag[2];
+        // チュートリアル用の練習台。「HP無限・動かないプレイヤー」として本物のFighterをそのまま使う
+        // （AI/入力を無効化し、HPを実質無限にするだけ。ノックバック・つかみ・投げは実際の戦闘システムに任せる）。
+        readonly Fighter[] _tutDummy = new Fighter[2];
         const int VoiceStepIndex = 6;
-        const float GrabReachDistance = 3.2f;
+
+        static Sprite _dummySprite;
+        static bool   _dummySpriteTried;
+
+        // Enter Play Mode Options でドメインリロードを無効化しているため、静的キャッシュは
+        // エディタの再生を止めても残り続ける。新しいプレイセッション開始のたびに必ずリセットする。
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetTutorialDummySpriteCache()
+        {
+            _dummySprite = null;
+            _dummySpriteTried = false;
+        }
+
+        // 練習台の見た目（グリーンバックのサンドバッグ画像）を1回だけ読み込んでキャッシュする。
+        // 画像下部に透明な余白が残っていても地面から浮かないよう、実ピクセルの下端をピボットにする。
+        static Sprite GetDummySprite()
+        {
+            if (_dummySpriteTried) return _dummySprite;
+            _dummySpriteTried = true;
+            var tex = Resources.Load<Texture2D>("Effects/sandbag");
+            if (tex == null) return null;
+            if (!tex.isReadable)
+            {
+                Debug.LogWarning("[Tutorial] Effects/sandbag は isReadable=false のため透過処理できません");
+                _dummySprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+                    new Vector2(0.5f, 0f), tex.height * 0.5f);
+                return _dummySprite;
+            }
+            var processed = WhiteBackgroundRemover.ApplyChromaGreen(tex);
+            float footPivotY = EstimateDummyFootPivotY(processed);
+            _dummySprite = Sprite.Create(processed, new Rect(0, 0, processed.width, processed.height),
+                new Vector2(0.5f, footPivotY), processed.height * 0.5f);
+            return _dummySprite;
+        }
+
+        static float EstimateDummyFootPivotY(Texture2D processed)
+        {
+            const int AlphaThreshold = 20;
+            int w = processed.width, h = processed.height;
+            var px = processed.GetPixels32();
+            for (int y = 0; y < h; y++)
+            {
+                int row = y * w;
+                for (int x = 0; x < w; x++)
+                    if (px[row + x].a >= AlphaThreshold) return (float)y / h;
+            }
+            return 0f;
+        }
 
         // イベント購読の解除用に保持するデリゲート
         readonly System.Action[]            _hJump  = new System.Action[2];
@@ -119,8 +168,8 @@ namespace PromptFighters.GameFlow
                 if (_tutFighters[i] != null) _tutPrevX[i] = _tutFighters[i].transform.position.x;
             }
 
-            // 各プレイヤーの前にサンドバッグ（練習台）を用意する（常に2体）
-            SpawnTutorialSandbags();
+            // 各プレイヤーの前に練習台（HP無限・動かないプレイヤー）を用意する（常に2体）
+            SpawnTutorialDummies();
 
             if (_tutFinishGrp != null) _tutFinishGrp.alpha = 0f;
             if (_tutorialPanel != null) _tutorialPanel.SetActive(true);
@@ -140,22 +189,9 @@ namespace PromptFighters.GameFlow
                 if (f == null) continue;
                 int idx = i;
                 _hJump[idx]  = () => { if (_tutStep[idx] == 1) _tutJumped[idx] = true; TutNudge(idx); };
-                _hGrab[idx]  = () =>
-                {
-                    TutNudge(idx);
-                    // サンドバッグに近づいてつかむと、そのまま持ち上げられて追従する。
-                    // どのステップからでも掴んで遊べる（クリア判定は⑥のステップのときだけ）。
-                    var sb = _tutSandbag[idx];
-                    var ff = _tutFighters[idx];
-                    if (sb == null || ff == null || sb.IsHeld) return;
-                    if (Mathf.Abs(sb.transform.position.x - ff.transform.position.x) < GrabReachDistance)
-                    {
-                        sb.BeginHeld(ff);
-                        _tutHoldGraceTimer[idx] = ThrowGraceSeconds;
-                        if (_tutStep[idx] == 5 && _tutHint[idx] != null)
-                            _tutHint[idx].text = "スティックを左右に倒して投げよう！";
-                    }
-                };
+                // つかみ自体は本物のFighterのグラブ機構がそのまま処理する（近づいてボタンを押せば掴める）。
+                // ここでは「参加した」記録だけ行う。
+                _hGrab[idx]  = () => TutNudge(idx);
                 _hSkill[idx] = (s) =>
                 {
                     if (_tutStep[idx] == 3)
@@ -211,19 +247,63 @@ namespace PromptFighters.GameFlow
                 : "OK！";
         }
 
-        // 各プレイヤーの少し前（内側）にサンドバッグを設置する（常に2体、各プレイヤーに1体ずつ）。
-        void SpawnTutorialSandbags()
+        // 各プレイヤーの少し前（内側）に練習台ファイターを設置する（常に2体、各プレイヤーに1体ずつ）。
+        // 「HP無限・動かないプレイヤー」の実体は本物のFighter（bm.bossの複製）。AI/入力を無効化し、
+        // HPを実質無限にするだけで、ノックバック・つかみ・投げは通常の戦闘システムがそのまま処理する。
+        void SpawnTutorialDummies()
         {
-            float groundY = BattleManager.Instance != null ? BattleManager.Instance.StageGroundY : -2.3f;
+            var bm = BattleManager.Instance;
+            if (bm == null || bm.boss == null) return;
+            float groundY = bm.StageGroundY;
+            var sprite = GetDummySprite();
+
             for (int i = 0; i < 2; i++)
             {
                 var f = _tutFighters[i];
                 if (f == null) continue;
+
+                var dummyGo = Instantiate(bm.boss.gameObject);
+                dummyGo.name = i == 0 ? "TutorialDummy1P" : "TutorialDummy2P";
+                dummyGo.SetActive(true);
+                var dummy = dummyGo.GetComponent<Fighter>();
+                if (dummy == null) { Destroy(dummyGo); continue; }
+
+                // 動かない：AIにも入力にも操作されないようにする。
+                var ai = dummy.GetComponent<FighterAI>();
+                if (ai != null) ai.enabled = false;
+                var input = dummy.GetComponent<FighterInput>();
+                if (input != null) input.enabled = false;
+
+                var data = new CharacterData { characterName = "サンドバッグ" };
+                SampleSkillLibrary.EquipDefaults(data);
+                if (sprite != null)
+                {
+                    data.characterSprite = sprite;
+                    for (int s = 0; s < 15; s++) data.spriteSet.Set((CharacterSpriteId)s, sprite);
+                }
+
+                dummy.ResetGimmickStats();
+                dummy.GetComponent<SkillExecutor>()?.LoadCharacter(data);
+                dummy.ApplyCharacterStats(data.stats);
+                dummy.SetGrabThrowParameters(data.grabParameters, data.throwParameters);
+                dummy.SetSizeScale(1f);
+                if (sprite != null) dummy.SetCharacterSprites(data.spriteSet);
+                dummy.maxHP = 999999f; // HP無限扱い（ApplyCharacterStatsのクランプを上書き）
+                // フレンドリーファイア回避のため、担当プレイヤーと逆チームにする（Hitboxの陣営判定対策）。
+                dummy.Team = f.Team == FighterTeam.Players ? FighterTeam.Enemies : FighterTeam.Players;
+
+                float scale = bm.fighterScale;
+                dummy.transform.localScale = new Vector3(scale, scale, dummy.transform.localScale.z);
+
                 float sign = f.FacingRight ? 1f : -1f;
-                Vector2 pos = new Vector2(f.transform.position.x + sign * 2.1f, groundY);
-                var sb = TrainingSandbag.Spawn(pos, f);
-                _tutSandbag[i] = sb;
-                if (sb != null) _tutSpawned.Add(sb.gameObject);
+                Vector3 pos = new Vector3(f.transform.position.x + sign * 2.1f, groundY, 0f);
+                dummy.ResetForBattle(pos, faceRight: !f.FacingRight); // プレイヤーの方を向かせる
+                dummy.GetComponent<SkillExecutor>()?.ResetSkillState();
+
+                f.Opponent = dummy; // 実際のつかみ・攻撃対象をこの練習台にする
+
+                _tutDummy[i] = dummy;
+                _tutSpawned.Add(dummyGo);
             }
         }
 
@@ -281,17 +361,21 @@ namespace PromptFighters.GameFlow
                 int step = _tutStep[i];
                 if (step >= TutorialSteps.Length) continue;
 
-                // サンドバッグを持っている間は、ステップに関わらず投げ入力を検出して投げる
+                // 練習台を持っている間/持っていた後は、ステップに関わらず検出する
                 // （⑥のステップ以外でも自由に掴んで投げて遊べるようにするため、switch外で判定する）。
-                var heldSandbag = _tutSandbag[i];
-                if (heldSandbag != null && heldSandbag.IsHeld)
+                // 実際の掴み・投げは本物のFighterのグラブ機構が処理するので、ここでは
+                // 「一度でも持った→離れた（投げた/自動解除）」の遷移だけを見る。
+                bool holdingNow = f.IsHoldingOpponent;
+                if (holdingNow)
                 {
-                    if (_tutHoldGraceTimer[i] > 0f) _tutHoldGraceTimer[i] -= Time.deltaTime;
-                    else if (Mathf.Abs(f.LastMoveInputX) > ThrowInputThreshold)
-                    {
-                        heldSandbag.Throw(new Vector2(Mathf.Sign(f.LastMoveInputX), 0.3f));
-                        if (step == 5) _tutGrabbed[i] = true;
-                    }
+                    if (!_tutHeldOnce[i] && step == 5 && _tutHint[i] != null)
+                        _tutHint[i].text = "スティックを倒して投げよう！";
+                    _tutHeldOnce[i] = true;
+                }
+                else if (_tutHeldOnce[i])
+                {
+                    _tutHeldOnce[i] = false;
+                    if (step == 5) _tutGrabbed[i] = true;
                 }
 
                 bool done = false;
@@ -384,7 +468,7 @@ namespace PromptFighters.GameFlow
             _tutGuardTime[i] = 0f;
             _tutJumped[i] = _tutSmashed[i] = _tutGrabbed[i] = false;
             _tutSkillADone[i] = _tutSkillBDone[i] = _tutSkillCDone[i] = false;
-            _tutHoldGraceTimer[i] = 0f;
+            _tutHeldOnce[i] = false;
             if (_tutFighters[i] != null) _tutPrevX[i] = _tutFighters[i].transform.position.x;
         }
 
@@ -427,10 +511,9 @@ namespace PromptFighters.GameFlow
                 _tutStepClearing[i] = false;
                 _tutFighters[i] = null;
                 _tutVoice[i] = null;
-                _tutSandbag[i]?.ReleaseHeld();
-                _tutSandbag[i] = null;
+                _tutDummy[i] = null;
             }
-            // 練習用に出したサンドバッグ・ボイスボールを片付ける
+            // 練習用に出した練習台・ボイスボールを片付ける
             foreach (var go in _tutSpawned) if (go != null) Destroy(go);
             _tutSpawned.Clear();
             if (_tutorialPanel != null) _tutorialPanel.SetActive(false);
