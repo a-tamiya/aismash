@@ -99,7 +99,7 @@ namespace PromptFighters.Battle
         {
             var s = JumpGSprite();
             if (s == null) { Dust(feetPos, 3, 0.9f); return; }
-            Spawn(s, feetPos + Vector3.up * 0.18f, 1.9f, 0.7f, 1.1f, 0.32f,
+            Spawn(s, feetPos + Vector3.up * 0.28f, 1.9f, 0.7f, 1.1f, 0.32f,
                   new Color(1f, 1f, 1f, 0.95f), 9, 0.1f);
         }
 

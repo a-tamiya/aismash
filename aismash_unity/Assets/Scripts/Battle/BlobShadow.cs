@@ -9,6 +9,7 @@ namespace PromptFighters.Battle
     public class BlobShadow : MonoBehaviour
     {
         Transform _target;
+        Collider2D _selfCollider; // 対象自身のコライダー。真下へのレイが自分自身に当たるのを防ぐため除外する。
         float _fallbackGroundY; // 真下に何も見つからなかった場合のフォールバック（地面Y+オフセット）
         float _yOffset;
         float _baseWidth;
@@ -29,6 +30,7 @@ namespace PromptFighters.Battle
             var go = new GameObject("BlobShadow");
             var bs = go.AddComponent<BlobShadow>();
             bs._target          = target;
+            bs._selfCollider    = target != null ? target.GetComponent<Collider2D>() : null;
             bs._yOffset         = yOffset;
             bs._fallbackGroundY = groundY + yOffset;
             bs._baseWidth       = baseWidth;
@@ -84,6 +86,7 @@ namespace PromptFighters.Battle
             bool found = false;
             for (int i = 0; i < count; i++)
             {
+                if (s_hitBuf[i].collider == _selfCollider) continue; // 自分自身は地面として扱わない
                 if (s_hitBuf[i].point.y > best) { best = s_hitBuf[i].point.y; found = true; }
             }
             return found ? best + _yOffset : _fallbackGroundY;
