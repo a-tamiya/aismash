@@ -44,6 +44,21 @@ namespace PromptFighters.GameFlow
             return kb != null && kb.escapeKey.wasPressedThisFrame;
         }
 
+        // 実際にファイターを操作中（トレーニング・チュートリアル）の「戻る/やめる」用。
+        // buttonEastは攻撃ボタンと兼用のため使わず、キーボードEscapeとゲームパッドの
+        // Startボタン単押しに対応する（ゲームパッドのみの環境でも中断できるように）。
+        static bool WasGameplayCancelPressed()
+        {
+            var kb = Keyboard.current;
+            if (kb != null && kb.escapeKey.wasPressedThisFrame) return true;
+            foreach (var gp in Gamepad.all)
+            {
+                if (gp.lastUpdateTime <= 0) continue;
+                if (gp.startButton.wasPressedThisFrame) return true;
+            }
+            return false;
+        }
+
         static bool WasKeyboardConfirmPressed()
         {
             var kb = Keyboard.current;

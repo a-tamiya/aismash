@@ -141,7 +141,7 @@ namespace PromptFighters.UI
         {
             float halfW = _bm != null ? _bm.stageHalfWidth * 0.7f : 4.5f;
             float x = Random.Range(-halfW, halfW);
-            float y = Random.Range(-1.0f, 2.0f); // 空中（前より少し低め）
+            float y = Random.Range(-1.6f, 1.2f); // 空中（前よりさらに低め）
             _activeItem = VoiceItem.Spawn(new Vector2(x, y), halfW, OnItemBroken);
             if (!_firstItemShown)
             {

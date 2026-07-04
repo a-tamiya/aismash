@@ -200,7 +200,15 @@ namespace PromptFighters.GameFlow
             bool inMatch = bm != null && !bm.IsTraining &&
                 (bm.Phase == BattlePhase.Fighting || bm.Phase == BattlePhase.Countdown);
             var kb = UnityEngine.InputSystem.Keyboard.current;
-            if (!inMatch || kb == null || !kb.escapeKey.isPressed)
+            bool keyHeld = kb != null && kb.escapeKey.isPressed;
+            // ゲームパッドのみの環境（展示会場など）でも中断できるよう、Startボタン長押しにも対応する。
+            bool padHeld = false;
+            foreach (var gp in UnityEngine.InputSystem.Gamepad.all)
+            {
+                if (gp.lastUpdateTime <= 0) continue;
+                if (gp.startButton.isPressed) { padHeld = true; break; }
+            }
+            if (!inMatch || (!keyHeld && !padHeld))
             {
                 _matchEscHold = 0f;
                 return;
@@ -502,6 +510,8 @@ namespace PromptFighters.GameFlow
             // 削除確認モーダルが開いている間は他の入力を遮断
             if (_deleteConfirmPanel != null && _deleteConfirmPanel.activeSelf)
             {
+                // ゲームパッドA/Startはカーソルのクリック・ボタン操作に使うため、直接確定はキーボードのみにする
+                // （このモーダルは削除/キャンセルの押せるボタンを持ち、ゲームパッドはカーソル経由で操作する）。
                 if (WasKeyboardConfirmPressed()) ConfirmDeleteCharacter();
                 else if (WasKeyboardCancelPressed()) HideDeleteConfirm();
                 return;
@@ -560,8 +570,7 @@ namespace PromptFighters.GameFlow
 
             if (_trainingPanel != null && _trainingPanel.activeSelf)
             {
-                var kb = UnityEngine.InputSystem.Keyboard.current;
-                if (WasKeyboardCancelPressed())
+                if (WasGameplayCancelPressed())
                 {
                     // 生成中でもメニューへ戻る（生成はバックグラウンド継続、進捗はオーバーレイで表示）。
                     BattleManager.Instance?.ReturnToSetup();
@@ -702,72 +711,39 @@ namespace PromptFighters.GameFlow
             closeAll.onClick.AddListener(HideControlsPanel);
 
             var t = _controlsPanel.transform;
-            MakeSlantBar(t, "CtrlTitleSlash", new Vector2(0, 430f), new Vector2(460f, 54f),
+            MakeSlantBar(t, "CtrlTitleSlash", new Vector2(0, 340f), new Vector2(460f, 54f),
                 new Color(PromptFighters.UI.UITheme.GoldDim.r, PromptFighters.UI.UITheme.GoldDim.g, PromptFighters.UI.UITheme.GoldDim.b, 0.30f), 24f);
             MakeLabel(t, "CtrlTitle", "操作説明",
-                new Vector2(0, 430f), new Vector2(500f, 60f), 36, PromptFighters.UI.UITheme.Gold)
+                new Vector2(0, 340f), new Vector2(500f, 60f), 36, PromptFighters.UI.UITheme.Gold)
                 .fontStyle = FontStyles.Bold | FontStyles.Italic;
 
-            const string p1Text =
-                "移動　　　　A / D\n" +
-                "ジャンプ　　W（空中でもう一度で2段ジャンプ）\n" +
-                "急降下　　　S（空中）　台すり抜け　S（台の上）\n" +
-                "ガード　　　左Shift 長押し\n" +
-                "回避　　　　ガード + 方向入力\n" +
-                "技　　　　　J / K / L\n" +
-                "スマッシュ　A/D 直後に J 長押し → 離す\n" +
-                "掴み　　　　G　→ 方向入力で投げ";
-            const string p2Text =
-                "移動　　　　← / →\n" +
-                "ジャンプ　　↑（空中でもう一度で2段ジャンプ）\n" +
-                "急降下　　　↓（空中）　台すり抜け　↓（台の上）\n" +
-                "ガード　　　右Ctrl 長押し\n" +
-                "回避　　　　ガード + 方向入力\n" +
-                "技　　　　　テンキー 2 / 3 / 1\n" +
-                "スマッシュ　←/→ 直後に テン2 長押し → 離す\n" +
-                "掴み　　　　テン0　→ 方向入力で投げ";
+            // ゲームパッド前提（キーボードは開発用に内部では残すが、画面上の説明には出さない）。
             const string padText =
-                "ゲームパッド（1台目=1P / 2台目=2P）　移動: 左スティック・十字キー　ジャンプ: Y/△　" +
-                "ガード: RB・RT　技: B・A・X　掴み: LB・LT　回避: ガード + 方向　　Esc長押し: 試合を中断";
+                "移動　　　　左スティック・十字キー\n" +
+                "ジャンプ　　Y / △（空中でもう一度で2段ジャンプ）\n" +
+                "急降下　　　左スティックを下（空中）　台すり抜け　下（台の上）\n" +
+                "ガード　　　RB・RT 長押し\n" +
+                "回避　　　　ガード + 方向入力\n" +
+                "技　　　　　B・A・X\n" +
+                "スマッシュ　右スティックを倒す\n" +
+                "掴み　　　　LB・LT　→ 方向入力で投げ\n\n" +
+                "1台目のゲームパッド=1P　2台目=2P　　Start長押し: 試合を中断";
 
-            BuildControlsColumn(t, true,  p1Text);
-            BuildControlsColumn(t, false, p2Text);
-
-            var pad = MakeLabel(t, "PadHelp", padText,
-                new Vector2(0, -310f), new Vector2(1500f, 64f), 18, PromptFighters.UI.UITheme.Ink);
-            pad.alignment = TextAlignmentOptions.Center;
+            var card = MakePanel(t, "CtrlCard", new Vector2(0f, 40f), new Vector2(760f, 540f),
+                new Color(0.012f, 0.014f, 0.024f, 0.95f));
+            card.raycastTarget = false;
+            var body = MakeLabel(t, "CtrlBody", padText,
+                new Vector2(0f, 40f), new Vector2(680f, 480f), 24, PromptFighters.UI.UITheme.Ink);
+            body.alignment = TextAlignmentOptions.TopLeft;
+            body.lineSpacing = 28f;
 
             var closeBtn = MakeButton(t, "CtrlCloseBtn", "閉じる",
-                new Vector2(0, -420f), new Vector2(240f, 56f), HideControlsPanel,
+                new Vector2(0, -320f), new Vector2(240f, 56f), HideControlsPanel,
                 PromptFighters.UI.UITheme.Gold);
             StyleArcadeButton(closeBtn, PromptFighters.UI.UITheme.Gold, 14f);
             SetButtonLabelStyle(closeBtn, 22f, FontStyles.Bold | FontStyles.Italic, new Color(0.12f, 0.08f, 0f));
 
             _controlsPanel.SetActive(false);
-        }
-
-        void BuildControlsColumn(Transform parent, bool isP1, string body)
-        {
-            float cx = isP1 ? -390f : 390f;
-            var pColor = isP1 ? PromptFighters.UI.UITheme.P1Neon : PromptFighters.UI.UITheme.P2Neon;
-            float slant = isP1 ? 14f : -14f;
-
-            var card = MakePanel(parent, isP1 ? "CtrlCard1P" : "CtrlCard2P",
-                new Vector2(cx, 40f), new Vector2(700f, 600f),
-                new Color(0.012f, 0.014f, 0.024f, 0.95f));
-            card.raycastTarget = false;
-            MakeSlantBar(parent, isP1 ? "CtrlTop1P" : "CtrlTop2P",
-                new Vector2(cx, 338f), new Vector2(700f, 6f), pColor, slant);
-
-            var head = MakeLabel(parent, isP1 ? "CtrlHead1P" : "CtrlHead2P",
-                isP1 ? "1P（キーボード）" : "2P（キーボード）",
-                new Vector2(cx, 290f), new Vector2(640f, 44f), 26, pColor);
-            head.fontStyle = FontStyles.Bold | FontStyles.Italic;
-
-            var bodyLabel = MakeLabel(parent, isP1 ? "CtrlBody1P" : "CtrlBody2P", body,
-                new Vector2(cx, 0f), new Vector2(620f, 480f), 21, PromptFighters.UI.UITheme.Ink);
-            bodyLabel.alignment = TextAlignmentOptions.TopLeft;
-            bodyLabel.lineSpacing = 22f;
         }
 
         void ShowControlsPanel()
@@ -2938,12 +2914,11 @@ namespace PromptFighters.GameFlow
         string BuildTrainingHelpText()
         {
             string esc = _generationTrainingActive && _generationCoroutine != null
-                ? "Escキー: 生成進行画面に戻る"
-                : "Escキー: キャラ選択に戻る";
-            return "1P: WASD 移動 / J K L 技 / A/Dはじき+J スマッシュ / G つかみ / 左Shift ガード・回避    " +
-                   "2P: 矢印 移動 / テンキー2 3 1 技 / ←/→はじき+2 スマッシュ / 0 つかみ / 右Shift ガード・回避\n" +
-                   "Pad: Y ジャンプ / LT・LB つかみ / RT・RB ガード・回避 / B A X 技 / はじき+B スマッシュ    " +
-                   $"{esc}    Rキー: 位置・HP・技状態をリセット";
+                ? "Start: 生成進行画面に戻る"
+                : "Start: キャラ選択に戻る";
+            return "移動: 左スティック・十字キー　ジャンプ: Y / △　掴み: LB・LT　ガード・回避: RB・RT + 方向　" +
+                   "技: B・A・X　スマッシュ: 右スティック    " +
+                   $"{esc}    左スティック押し込み: 位置・HP・技状態をリセット";
         }
 
         // 削除ボタン押下。誤削除防止のため即削除せず確認モーダルを開く。

@@ -160,13 +160,14 @@ namespace PromptFighters.Battle
             if (Homing && Owner != null && Owner.Opponent != null)
             {
                 float dx = Owner.Opponent.transform.position.x - transform.position.x;
-                if (Mathf.Abs(dx) > 0.05f)
-                {
-                    _dir = Mathf.Sign(dx);
-                    _rb.linearVelocity = new Vector2(_dir * Speed, 0f);
-                    GetComponent<SpriteRenderer>().flipX = _dir < 0;
-                    return;
-                }
+                // 相手と重なる付近でdxの符号が細かくぶれて左右反転を連発しないよう、
+                // 現在の向きと逆側へ切り替えるときだけ広めのしきい値を要求する（ヒステリシス）。
+                bool sameDir  = (dx >= 0f) == (_dir >= 0f);
+                float threshold = sameDir ? 0.05f : 0.35f;
+                if (Mathf.Abs(dx) > threshold) _dir = Mathf.Sign(dx);
+                _rb.linearVelocity = new Vector2(_dir * Speed, 0f);
+                GetComponent<SpriteRenderer>().flipX = _dir < 0;
+                return;
             }
 
             if (Direction == "stationary")

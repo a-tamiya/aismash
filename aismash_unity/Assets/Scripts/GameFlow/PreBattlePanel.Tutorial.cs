@@ -308,14 +308,22 @@ namespace PromptFighters.GameFlow
         }
 
         // ボイスボールのステップに入ったら、そのプレイヤーの近くにボイスボールを出す。
+        // 2人同時に出るとカオスになるため、既にどちらかの分が出ている間は自分の分を保留する（先着順）。
+        // UpdateTutorial()から毎フレーム呼ばれ、相手の分が片付き次第このプレイヤーの分を出す。
         void SpawnTutorialVoiceBall(int i)
         {
             var f = _tutFighters[i];
-            if (f == null || _tutVoice[i] != null) return;
+            if (f == null || _tutVoice[i] != null || _tutVoiceBroken[i]) return;
+            if (_tutVoice[1 - i] != null)
+            {
+                if (_tutHint[i] != null) _tutHint[i].text = "相手のボイスボールが終わるまで少し待とう…";
+                return;
+            }
             float groundY = BattleManager.Instance != null ? BattleManager.Instance.StageGroundY : -2.3f;
             float sign = f.FacingRight ? 1f : -1f;
-            Vector2 pos = new Vector2(f.transform.position.x + sign * 2.0f, groundY + 1.6f);
+            Vector2 pos = new Vector2(f.transform.position.x + sign * 2.0f, groundY + 1.0f);
             int idx = i;
+            if (_tutHint[i] != null) _tutHint[i].text = TutorialSteps[VoiceStepIndex].hint;
             _tutVoice[i] = VoiceItem.Spawn(pos, 1.2f, breaker =>
             {
                 _tutVoice[idx] = null;
@@ -352,7 +360,7 @@ namespace PromptFighters.GameFlow
 
         void UpdateTutorial()
         {
-            if (WasKeyboardCancelPressed()) { EndTutorial(toTitle: true); return; }
+            if (WasGameplayCancelPressed()) { EndTutorial(toTitle: true); return; }
 
             for (int i = 0; i < 2; i++)
             {
@@ -395,7 +403,11 @@ namespace PromptFighters.GameFlow
                     case 3: done = _tutSkillADone[i] && _tutSkillBDone[i] && _tutSkillCDone[i]; break;
                     case 4: done = _tutSmashed[i]; break;
                     case 5: done = _tutGrabbed[i]; break; // つかんで投げる（判定は上のswitch外で共通処理）
-                    case VoiceStepIndex: done = _tutVoiceBroken[i]; break;
+                    case VoiceStepIndex:
+                        // 相手の分が出ている間は保留されるので、空き次第このプレイヤーの分を出す。
+                        SpawnTutorialVoiceBall(i);
+                        done = _tutVoiceBroken[i];
+                        break;
                 }
                 if (done) StartCoroutine(CompleteStepRoutine(i));
             }
@@ -549,7 +561,7 @@ namespace PromptFighters.GameFlow
                 new Vector2(0f, 0f), new Vector2(1140f, 220f), 40f, PromptFighters.UI.UITheme.Gold);
             _tutFinish.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
-            MakeLabel(t, "TutQuit", "Escキー: やめる　　1人でも2人でも遊べます",
+            MakeLabel(t, "TutQuit", "Startボタン: やめる　　1人でも2人でも遊べます",
                 new Vector2(0f, -470f), new Vector2(700f, 30f), 16f, PromptFighters.UI.UITheme.InkDim)
                 .fontStyle = FontStyles.Bold;
 
