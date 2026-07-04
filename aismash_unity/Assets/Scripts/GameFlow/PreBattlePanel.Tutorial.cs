@@ -51,6 +51,24 @@ namespace PromptFighters.GameFlow
         static Sprite _dummySprite;
         static bool   _dummySpriteTried;
 
+        // 各ステップで押すべきボタンを示すコントローラー全体図（該当ボタンが光った状態の画像）。
+        // Resources/UI/pad_*.png が無ければ何も表示しない（フォールバック＝非表示）。
+        readonly Image[] _tutPadIcon = new Image[2];
+        static readonly string[] StepPadIconNames =
+        {
+            "pad_move",   // ① 移動：左スティック
+            "pad_jump",   // ② ジャンプ：Y
+            "pad_guard",  // ③ ガード：RB
+            "pad_skills", // ④ 技：B/A/X
+            "pad_smash",  // ⑤ スマッシュ：右スティック
+            "pad_grab",   // ⑥ つかみ：LB
+            null,         // ⑦ ボイスボール：専用ボタンなし
+        };
+        static readonly System.Collections.Generic.Dictionary<string, Sprite> _padSpriteCache =
+            new System.Collections.Generic.Dictionary<string, Sprite>();
+        static readonly System.Collections.Generic.HashSet<string> _padSpriteTried =
+            new System.Collections.Generic.HashSet<string>();
+
         // Enter Play Mode Options でドメインリロードを無効化しているため、静的キャッシュは
         // エディタの再生を止めても残り続ける。新しいプレイセッション開始のたびに必ずリセットする。
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -58,6 +76,46 @@ namespace PromptFighters.GameFlow
         {
             _dummySprite = null;
             _dummySpriteTried = false;
+            _padSpriteCache.Clear();
+            _padSpriteTried.Clear();
+        }
+
+        // コントローラーアイコン（Resources/UI/pad_*.png）を1回だけ読み込んでキャッシュする。
+        // グリーンバック画像として透過処理する。見つからなければnull（呼び出し側で非表示にする）。
+        static Sprite GetPadSprite(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            if (_padSpriteTried.Contains(name))
+                return _padSpriteCache.TryGetValue(name, out var cached) ? cached : null;
+            _padSpriteTried.Add(name);
+
+            var tex = Resources.Load<Texture2D>("UI/" + name);
+            if (tex == null) return null;
+
+            Sprite sprite;
+            if (!tex.isReadable)
+            {
+                Debug.LogWarning($"[Tutorial] UI/{name} は isReadable=false のため透過処理できません（Import設定を確認してください）");
+                sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
+            }
+            else
+            {
+                var processed = WhiteBackgroundRemover.ApplyChromaGreen(tex);
+                sprite = Sprite.Create(processed, new Rect(0, 0, processed.width, processed.height),
+                    new Vector2(0.5f, 0.5f), 100f);
+            }
+            _padSpriteCache[name] = sprite;
+            return sprite;
+        }
+
+        // このプレイヤーの現在ステップに応じてコントローラーアイコンを差し替える（無ければ非表示）。
+        void UpdateTutPadIcon(int i, int step)
+        {
+            if (_tutPadIcon[i] == null) return;
+            string name = (step >= 0 && step < StepPadIconNames.Length) ? StepPadIconNames[step] : null;
+            var sprite = GetPadSprite(name);
+            _tutPadIcon[i].sprite  = sprite;
+            _tutPadIcon[i].enabled = sprite != null;
         }
 
         // 練習台の見た目（グリーンバックのサンドバッグ画像）を1回だけ読み込んでキャッシュする。
@@ -499,11 +557,13 @@ namespace PromptFighters.GameFlow
                 for (int k = 0; k < TutorialSteps.Length; k++) sb.Append(k <= step ? "● " : "○ ");
                 _tutProgress[i].text = sb.ToString().TrimEnd();
             }
+            UpdateTutPadIcon(i, step);
         }
 
         void ShowColumnClear(int i)
         {
             if (_tutTitle[i] != null) _tutTitle[i].text = "クリア！ ✓";
+            if (_tutPadIcon[i] != null) _tutPadIcon[i].enabled = false;
             if (_tutHint[i] != null)
             {
                 // 相手がまだ挑戦中なら「待っています」を出す
@@ -599,6 +659,16 @@ namespace PromptFighters.GameFlow
             _tutProgress[i] = MakeLabel(t, "TutProg", "",
                 new Vector2(0f, 258f), new Vector2(500f, 32f), 20f, PromptFighters.UI.UITheme.InkDim);
             _tutProgress[i].fontStyle = FontStyles.Bold;
+
+            // 押すべきボタンが光ったコントローラー全体図（バナーの下）。画像未着時は非表示。
+            var padGo = CreateUIObject(i == 0 ? "TutPad1P" : "TutPad2P", t);
+            var padRt = padGo.GetComponent<RectTransform>();
+            padRt.anchoredPosition = new Vector2(0f, 160f);
+            padRt.sizeDelta = new Vector2(280f, 170f);
+            _tutPadIcon[i] = padGo.AddComponent<Image>();
+            _tutPadIcon[i].raycastTarget = false;
+            _tutPadIcon[i].preserveAspect = true;
+            _tutPadIcon[i].enabled = false;
 
             // クリア時の✓（そのカラムの中央。バナーとは別グループなので取得演出中も見える）
             var checkGo = CreateUIObject(i == 0 ? "TutCheck1P" : "TutCheck2P", parent);
