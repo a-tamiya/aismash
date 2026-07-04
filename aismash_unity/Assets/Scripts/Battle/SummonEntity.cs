@@ -170,21 +170,27 @@ namespace PromptFighters.Battle
                 }
             }
 
-            if (Homing && Owner != null && Owner.Opponent != null)
+            if (Homing && Owner != null)
             {
-                float dx = Owner.Opponent.transform.position.x - transform.position.x;
-                // 相手と重なる付近でdxの符号が細かくぶれて左右反転を連発しないよう、
-                // 現在の向きと逆側へ切り替えるときだけ広めのしきい値を要求する（ヒステリシス）。
-                bool sameDir  = (dx >= 0f) == (_dir >= 0f);
-                float threshold = sameDir ? 0.05f : 0.35f;
-                if (Mathf.Abs(dx) > threshold) _dir = Mathf.Sign(dx);
+                // ボイスボールが出ている間はそちらを優先して追尾する（相手より先に割って割り込む）。
+                Transform homingTarget = VoiceItem.Active != null ? VoiceItem.Active.transform
+                    : Owner.Opponent != null ? Owner.Opponent.transform : null;
+                if (homingTarget != null)
+                {
+                    float dx = homingTarget.position.x - transform.position.x;
+                    // 相手と重なる付近でdxの符号が細かくぶれて左右反転を連発しないよう、
+                    // 現在の向きと逆側へ切り替えるときだけ広めのしきい値を要求する（ヒステリシス）。
+                    bool sameDir  = (dx >= 0f) == (_dir >= 0f);
+                    float threshold = sameDir ? 0.05f : 0.35f;
+                    if (Mathf.Abs(dx) > threshold) _dir = Mathf.Sign(dx);
 
-                // 縦方向も相手へ追尾する（比例制御。フリップは絡まないのでヒステリシス不要）。
-                float dy = Owner.Opponent.transform.position.y - transform.position.y;
-                float vy = Mathf.Clamp(dy * 2.5f, -Speed, Speed);
-                _rb.linearVelocity = new Vector2(_dir * Speed, vy);
-                GetComponent<SpriteRenderer>().flipX = _dir < 0;
-                return;
+                    // 縦方向も追尾する（比例制御。フリップは絡まないのでヒステリシス不要）。
+                    float dy = homingTarget.position.y - transform.position.y;
+                    float vy = Mathf.Clamp(dy * 2.5f, -Speed, Speed);
+                    _rb.linearVelocity = new Vector2(_dir * Speed, vy);
+                    GetComponent<SpriteRenderer>().flipX = _dir < 0;
+                    return;
+                }
             }
 
             if (Direction == "stationary")
@@ -280,6 +286,14 @@ namespace PromptFighters.Battle
 
         void OnTriggerEnter2D(Collider2D other)
         {
+            // ボイスボールへも攻撃を通す（陣営問わず誰でも殴れる中立物）。
+            var voiceItem = other.GetComponentInParent<VoiceItem>();
+            if (voiceItem != null)
+            {
+                voiceItem.TakeHit(Damage, Owner);
+                return;
+            }
+
             var target = other.GetComponentInParent<Fighter>();
             if (target == null || target == Owner) return;
             // フレンドリーファイアOFF：同陣営には当てない
