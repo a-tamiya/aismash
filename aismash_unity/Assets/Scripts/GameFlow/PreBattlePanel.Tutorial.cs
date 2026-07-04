@@ -308,12 +308,16 @@ namespace PromptFighters.GameFlow
         // 各プレイヤーの少し前（内側）に練習台ファイターを設置する（常に2体、各プレイヤーに1体ずつ）。
         // 「HP無限・動かないプレイヤー」の実体は本物のFighter（bm.bossの複製）。AI/入力を無効化し、
         // HPを実質無限にするだけで、ノックバック・つかみ・投げは通常の戦闘システムがそのまま処理する。
+        // チュートリアル専用キャラの名前（1P用/2P用）。ゲーム内で生成・保存済みならそれを使い、
+        // 未生成ならサンドバッグ画像のフォールバックのままにする（SpawnTutorialDummies参照）。
+        static readonly string[] TutorialDummyCharacterNames = { "ケンゴ", "サヤ" };
+
         void SpawnTutorialDummies()
         {
             var bm = BattleManager.Instance;
             if (bm == null || bm.boss == null) return;
             float groundY = bm.StageGroundY;
-            var sprite = GetDummySprite();
+            var fallbackSprite = GetDummySprite();
 
             for (int i = 0; i < 2; i++)
             {
@@ -332,20 +336,32 @@ namespace PromptFighters.GameFlow
                 var input = dummy.GetComponent<FighterInput>();
                 if (input != null) input.enabled = false;
 
-                var data = new CharacterData { characterName = "サンドバッグ" };
-                SampleSkillLibrary.EquipDefaults(data);
-                if (sprite != null)
+                // 専用のチュートリアルキャラが生成済みならそれを使う（見た目・技とも本物）。
+                // 未生成ならサンドバッグ画像で代替する（従来通り）。
+                var named = CharacterSaveManager.LoadByName(TutorialDummyCharacterNames[i]);
+                CharacterData data;
+                if (named != null)
                 {
-                    data.characterSprite = sprite;
-                    for (int s = 0; s < 15; s++) data.spriteSet.Set((CharacterSpriteId)s, sprite);
+                    data = PromptCharacterFactory.Clone(named);
+                    EnsureSpriteSet(data);
+                }
+                else
+                {
+                    data = new CharacterData { characterName = "サンドバッグ" };
+                    SampleSkillLibrary.EquipDefaults(data);
+                    if (fallbackSprite != null)
+                    {
+                        data.characterSprite = fallbackSprite;
+                        for (int s = 0; s < 15; s++) data.spriteSet.Set((CharacterSpriteId)s, fallbackSprite);
+                    }
                 }
 
                 dummy.ResetGimmickStats();
                 dummy.GetComponent<SkillExecutor>()?.LoadCharacter(data);
                 dummy.ApplyCharacterStats(data.stats);
                 dummy.SetGrabThrowParameters(data.grabParameters, data.throwParameters);
-                dummy.SetSizeScale(1f);
-                if (sprite != null) dummy.SetCharacterSprites(data.spriteSet);
+                dummy.SetSizeScale(data.sizeScale > 0f ? data.sizeScale : 1f);
+                if (data.characterSprite != null) dummy.SetCharacterSprites(data.spriteSet);
                 dummy.maxHP = 999999f; // HP無限扱い（ApplyCharacterStatsのクランプを上書き）
                 // フレンドリーファイア回避のため、担当プレイヤーと逆チームにする（Hitboxの陣営判定対策）。
                 dummy.Team = f.Team == FighterTeam.Players ? FighterTeam.Enemies : FighterTeam.Players;

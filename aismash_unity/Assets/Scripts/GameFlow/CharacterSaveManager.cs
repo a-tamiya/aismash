@@ -124,6 +124,14 @@ namespace PromptFighters.GameFlow
             }
         }
 
+        // 保存済みキャラから名前が一致する1件だけを探す（無ければnull）。
+        // チュートリアル専用キャラ・固定ボスキャラなど、名前で特定の1体を参照したい場面向け。
+        public static CharacterData LoadByName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            return LoadAll().Find(d => d != null && d.characterName == name);
+        }
+
         // 保存済みキャラを全件ロードする。Idle1プレビュー用スプライトも設定する。
         public static List<CharacterData> LoadAll()
         {
