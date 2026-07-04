@@ -44,7 +44,7 @@ namespace PromptFighters.Battle
         public static void Shockwave(Vector3 feetPos, float scale = 1f)
         {
             var s = Fx("shockwave"); if (s == null) { Dust(feetPos, 3, scale); return; }
-            Spawn(s, feetPos + Vector3.up * 0.1f, 2.1f * scale, 0.4f, 1.55f, 0.4f, Color.white, 8, 0f);
+            Spawn(s, feetPos + Vector3.up * 0.1f, 1.3f * scale, 0.4f, 1.2f, 0.35f, Color.white, 8, 0f);
         }
 
         // 強化（上昇）・弱体（下降）オーラの一瞬の演出。
@@ -90,7 +90,7 @@ namespace PromptFighters.Battle
         {
             var s = DustSprite();
             if (s == null) { GlowFallback(feetPos, Mathf.Max(count, 3), scale); return; }
-            Spawn(s, feetPos + Vector3.up * 0.18f, 1.15f * scale, 0.55f, 1.25f, 0.4f,
+            Spawn(s, feetPos + Vector3.up * 0.18f, 0.85f * scale, 0.55f, 1.1f, 0.35f,
                   new Color(1f, 1f, 1f, 0.95f), 9, 0.28f);
         }
 

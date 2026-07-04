@@ -1588,9 +1588,9 @@ namespace PromptFighters.Battle
         {
             if (_shadow != null) return;
             float groundY = BattleManager.Instance != null ? BattleManager.Instance.StageGroundY : -1.8f;
-            // 影はキャラの足元の少し下に置く（上に見えないように）。
+            // 影は足元の真下（地面/台/壁の上面）を検出して落とす。ごくわずかに下へ逃がして地面テクスチャとの重なりを防ぐ。
             _shadow = BlobShadow.Spawn(transform, groundY, 1.15f, sortingOrder: -2,
-                sizeProvider: () => CurrentSizeScale, yOffset: -0.35f);
+                sizeProvider: () => CurrentSizeScale, yOffset: -0.05f);
         }
 
         void EnsureVisualRenderer()
