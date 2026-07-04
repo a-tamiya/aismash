@@ -458,7 +458,7 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
 - 下記のアーキタイプ例を参考に、特徴から最も近いものを選び、その骨格で組む（複数混合も可）。例に無い独自構成も歓迎:
   ・ラッシュ/連撃: 近接中心＋follow_up_actionsを1〜2枠
   ・カウンター/受け: counter or reflectorを1枠＋確定反撃用の近接技
-  ・召喚/使い魔: summonを1〜2枠（player_controlled/homingで個性付け）＋自衛の近接1枠
+  ・召喚/使い魔: summonを1〜2枠（player_controlled/homing/direction:diagonal・hoverで軌道に個性付け）＋自衛の近接1枠
   ・トリックスター/瞬間移動: teleport＋area_hitbox(ring)＋設置や攪乱
   ・砲撃/狙撃: charge付きprojectile/beam＋落下弾(spawn_y高め)＋牽制trap
   ・重量/パワー: 単発高威力body_hitbox/area_hitbox(cone)＋knockback大＋startup大
@@ -524,7 +524,7 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
     ★ counter技のactionsにはcounterアクション1つだけを入れること。melee_hitboxやprojectileと混在させない（counterが反撃を自動処理するため不要）
   reflector: duration=反射受付秒(1.0〜3.0)。発動中は相手の飛び道具を速度・威力1.2倍で逆方向に反射する。攻撃判定は一切なし・反射のみ。ピンク色に光る。
     ★ reflector技のactionsにはreflectorアクション1つだけを入れること。melee_hitboxやprojectileと混在させない
-  summon: duration=召喚体の寿命(1〜6)、power=移動速度(0.5〜5)、spawn_x/y=出現位置、damage_override=接触ダメージ。召喚するものの見た目はその技スロットのeffect画像として生成される前提で、skill_name/descriptionに召喚物の名前や形状を明確に含める。directionで移動方向を指定できる（forward/backward/left/right/toward_enemy/away_enemy/stationary）。player_controlled:trueならプレイヤーの左右入力で操縦。homing:trueなら敵を追う。knockback_directionとstatus/status_duration/chanceも接触時に有効。recovery 0.10〜0.35（召喚直後すぐ動ける）
+  summon: duration=召喚体の寿命(1〜6)、power=移動速度(0.5〜5)、spawn_x/y=出現位置、damage_override=接触ダメージ。召喚するものの見た目はその技スロットのeffect画像として生成される前提で、skill_name/descriptionに召喚物の名前や形状を明確に含める。directionで移動方向を指定できる（forward/backward/left/right/toward_enemy/away_enemy/stationary/diagonal/hover）。diagonal=斜めに往復（跳ねる系・機動兵器向け）、hover=上下にホバリングしながら緩やかに横移動（幽霊・浮遊物向け）。player_controlled:trueならプレイヤーの左右入力で操縦。homing:trueなら敵を上下左右とも追尾する（鳥・使い魔・誘導ミサイル向け）。knockback_directionとstatus/status_duration/chanceも接触時に有効。recovery 0.10〜0.35（召喚直後すぐ動ける）
 - 【area_hitbox の形状】area_hitboxにshapeフィールドを追加可能:
   shape: ""box""(default/四角)、""cone""(前方扇形・幅広)、""ring""(自分の周囲円形)
 - 【派生技 follow_up_actions】必要な技だけスキルJSON最上位に追加:

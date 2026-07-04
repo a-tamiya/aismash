@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using PromptFighters.AI;
 using PromptFighters.Audio;
@@ -689,6 +690,8 @@ namespace PromptFighters.Battle
     public class AngelWallPassable : MonoBehaviour
     {
         Collider2D _wallCol;
+        // ファイターごとの直近の無視状態。値が変化したときだけ Physics2D.IgnoreCollision を呼ぶ。
+        readonly Dictionary<Fighter, bool> _ignoredState = new Dictionary<Fighter, bool>();
 
         void Awake() { _wallCol = GetComponent<Collider2D>(); }
 
@@ -703,8 +706,15 @@ namespace PromptFighters.Battle
                 if (f == null) continue;
                 var fc = f.GetComponent<Collider2D>();
                 if (fc == null) continue;
+
                 // 回避中はすり抜け（衝突無視）、通常時は衝突を戻す。
-                Physics2D.IgnoreCollision(_wallCol, fc, f.IsDodging);
+                // 毎フレーム同じ値でPhysics2D.IgnoreCollisionを呼び続けると、壁の上に乗っている
+                // ファイターの接地コンタクトが物理的に不安定になり、壁の上でジャンプできない・
+                // 壁際の挙動がおかしくなる不具合の原因になるため、状態が変化したときだけ呼ぶ。
+                bool shouldIgnore = f.IsDodging;
+                if (_ignoredState.TryGetValue(f, out bool prev) && prev == shouldIgnore) continue;
+                _ignoredState[f] = shouldIgnore;
+                Physics2D.IgnoreCollision(_wallCol, fc, shouldIgnore);
             }
         }
     }

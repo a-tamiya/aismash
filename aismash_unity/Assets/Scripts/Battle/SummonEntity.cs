@@ -30,7 +30,11 @@ namespace PromptFighters.Battle
         Rigidbody2D _rb;
         SpriteRenderer _sr;
         float _startX;
+        float _startY;
         float _dir = 1f;
+        float _vertDir = 1f; // diagonal/hover用の垂直方向
+        const float VerticalRange = 1.3f;      // 上下方向の振れ幅
+        const float VerticalSpeedFactor = 0.7f; // 横速度に対する縦方向速度の比率
         float _lifetime = 3f;
         float _age;
         float _flashTimer;   // 被弾フラッシュの残り時間
@@ -50,9 +54,17 @@ namespace PromptFighters.Battle
             go.transform.position = pos;
             go.layer = owner.gameObject.layer;
 
+            // 追尾・斜め・上下移動は縦方向にも動く必要があるため、その場合だけY固定を外す。
+            bool needsVerticalMotion = sourceAction != null && (
+                sourceAction.homing ||
+                sourceAction.direction == "diagonal" ||
+                sourceAction.direction == "hover");
+
             var rb = go.AddComponent<Rigidbody2D>();
             rb.gravityScale = 0f;
-            rb.constraints  = RigidbodyConstraints2D.FreezeRotation | RigidbodyConstraints2D.FreezePositionY;
+            rb.constraints  = needsVerticalMotion
+                ? RigidbodyConstraints2D.FreezeRotation
+                : RigidbodyConstraints2D.FreezeRotation | RigidbodyConstraints2D.FreezePositionY;
             rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
 
             var sr = go.AddComponent<SpriteRenderer>();
@@ -121,6 +133,7 @@ namespace PromptFighters.Battle
             _rb        = GetComponent<Rigidbody2D>();
             _sr        = GetComponent<SpriteRenderer>();
             _startX    = transform.position.x;
+            _startY    = transform.position.y;
             _dir       = InitialDirection();
             _baseScale = transform.localScale;
             if (_sr != null) _baseColor = _sr.color;
@@ -165,7 +178,11 @@ namespace PromptFighters.Battle
                 bool sameDir  = (dx >= 0f) == (_dir >= 0f);
                 float threshold = sameDir ? 0.05f : 0.35f;
                 if (Mathf.Abs(dx) > threshold) _dir = Mathf.Sign(dx);
-                _rb.linearVelocity = new Vector2(_dir * Speed, 0f);
+
+                // 縦方向も相手へ追尾する（比例制御。フリップは絡まないのでヒステリシス不要）。
+                float dy = Owner.Opponent.transform.position.y - transform.position.y;
+                float vy = Mathf.Clamp(dy * 2.5f, -Speed, Speed);
+                _rb.linearVelocity = new Vector2(_dir * Speed, vy);
                 GetComponent<SpriteRenderer>().flipX = _dir < 0;
                 return;
             }
@@ -173,6 +190,37 @@ namespace PromptFighters.Battle
             if (Direction == "stationary")
             {
                 _rb.linearVelocity = Vector2.zero;
+                return;
+            }
+
+            // 上下にホバリングしながら緩やかに横移動する（幽霊・浮遊物向け）。
+            if (Direction == "hover")
+            {
+                float targetY = _startY + Mathf.Sin(_age * 2.2f) * VerticalRange;
+                float vy = (targetY - transform.position.y) * 6f;
+                float distXHover = transform.position.x - _startX;
+                if ((_dir > 0 && distXHover > PatrolRange) || (_dir < 0 && distXHover < -PatrolRange))
+                {
+                    _dir = -_dir;
+                    GetComponent<SpriteRenderer>().flipX = _dir < 0;
+                }
+                _rb.linearVelocity = new Vector2(_dir * Speed * 0.4f, vy);
+                return;
+            }
+
+            // 斜めに往復する（左右のパトロールに上下の往復を組み合わせる）。
+            if (Direction == "diagonal")
+            {
+                float distXDiag = transform.position.x - _startX;
+                if ((_dir > 0 && distXDiag > PatrolRange) || (_dir < 0 && distXDiag < -PatrolRange))
+                {
+                    _dir = -_dir;
+                    GetComponent<SpriteRenderer>().flipX = _dir < 0;
+                }
+                float distYDiag = transform.position.y - _startY;
+                if ((_vertDir > 0 && distYDiag > VerticalRange) || (_vertDir < 0 && distYDiag < -VerticalRange))
+                    _vertDir = -_vertDir;
+                _rb.linearVelocity = new Vector2(_dir * Speed, _vertDir * Speed * VerticalSpeedFactor);
                 return;
             }
 
