@@ -1,0 +1,93 @@
+﻿{
+  "character_name": "ケンゴ",
+  "input_features": "動きやすい道着を着た青年格闘家。素早い正拳突きと蹴りを得意とし、離れた相手には気弾を放って攻撃する。近距離も遠距離もどちらも一通りこなせる、オーソドックスな戦い方をする。特別に速くも遅くもなく、力も普通くらいの標準的な体格。",
+  "base_visual_prompt": "2D anime standing character, full body, young martial artist in a moving-friendly white dojo gi with a dark belt, short black hair, athletic average build, clean hand wraps, simple training shoes, balanced stance, subtle blue energy on fists",
+  "visual_description": "動きやすい白い道着に黒帯を締めた青年格闘家。短髪の黒髪で、引き締まった標準的な体格。手には軽い拳サポーターを付け、足元は軽快な प्रशिक्षण用シューズ。構えは正拳と蹴りを使い分けるオーソドックスな戦闘スタイル。",
+  "stats": {"maxHP": 300, "groundMoveSpeed": 5.8, "airMoveSpeed": 5.2, "jumpForce": 12, "airJumpHeightMultiplier": 0.45, "walkSpeedRatio": 0.34, "guardDurability": 62, "lightness": 1, "weight": 1, "groundDodgeDistance": 2.2, "airDodgeDistance": 1.8},
+  "skills": [
+    {
+      "slot": "attack_a",
+      "skill_name": "正拳連打",
+      "description": "素早い正拳の二段突き",
+      "element": "physical",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 3, "hit_count": 2, "range": 1.2,
+        "startup": 0.05, "active_time": 0.16, "recovery": 0.18,
+        "knockback": 5, "stun_time": 0.1,
+        "guard_damage": 0.55, "move_force": 0.2
+      },
+      "actions": [
+        {"type":"melee_hitbox","time":0.05,"range":1.2,"spawn_x":0.55,"spawn_y":0.72,"size_x":1,"size_y":1,"hit_count":2}
+      ],
+      "chargeable": false,
+      "max_charge_time": 0,
+      "follow_up_actions": [],
+      "follow_up_window": 0
+    },
+    {
+      "slot": "attack_b",
+      "skill_name": "旋風蹴り",
+      "description": "踏み込みから鋭く蹴る",
+      "element": "physical",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 7, "hit_count": 1, "range": 1.5,
+        "startup": 0.08, "active_time": 0.14, "recovery": 0.24,
+        "knockback": 7.5, "stun_time": 0,
+        "guard_damage": 0.77, "move_force": 0
+      },
+      "actions": [
+        {"type":"dash","time":0.08,"direction":"forward","power":1.8,"hit_count":1},
+        {"type":"melee_hitbox","time":0.08,"range":1.5,"spawn_x":1.05,"spawn_y":0.22,"size_x":1.15,"size_y":1.05,"hit_count":1}
+      ],
+      "chargeable": false,
+      "max_charge_time": 0,
+      "follow_up_actions": [],
+      "follow_up_window": 0
+    },
+    {
+      "slot": "attack_c",
+      "skill_name": "気弾",
+      "description": "小さな気弾をまっすぐ放つ",
+      "element": "physical",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 6, "hit_count": 1, "range": 3.6,
+        "startup": 0.1, "active_time": 0.2, "recovery": 0.26,
+        "knockback": 6.25, "stun_time": 0.05,
+        "guard_damage": 0, "move_force": 0
+      },
+      "actions": [
+        {"type":"projectile","time":0.1,"range":12,"spawn_x":0.85,"spawn_y":1.05,"size_x":0.7,"size_y":0.6,"hit_count":1}
+      ],
+      "chargeable": false,
+      "max_charge_time": 0,
+      "follow_up_actions": [],
+      "follow_up_window": 0
+    },
+    {
+      "slot": "smash_side",
+      "skill_name": "飛燕烈拳",
+      "description": "踏み込み正拳の決め技",
+      "element": "physical",
+      "risk_level": "high",
+      "parameters": {
+        "damage": 16, "hit_count": 1, "range": 2.1,
+        "startup": 0.14, "active_time": 0.12, "recovery": 0.34,
+        "knockback": 13.75, "stun_time": 0.22,
+        "guard_damage": 1.76, "move_force": 0
+      },
+      "actions": [
+        {"type":"dash","time":0.1,"direction":"forward","power":2.4,"hit_count":1},
+        {"type":"melee_hitbox","time":0.14,"range":2.1,"spawn_x":1.35,"spawn_y":0.68,"size_x":1.25,"size_y":1.05,"hit_count":1}
+      ],
+      "chargeable": false,
+      "max_charge_time": 0,
+      "follow_up_actions": [],
+      "follow_up_window": 0
+    }
+  ],
+  "grab_parameters": {"range": 1.5, "startup": 0.08, "recovery": 0.14},
+  "throw_parameters": {"front_damage": 10, "front_knockback": 8, "back_damage": 10, "back_knockback": 10, "up_damage": 10, "up_knockback": 9}
+}

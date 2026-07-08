@@ -1,0 +1,92 @@
+﻿{
+  "character_name": "サヤ",
+  "input_features": "動きやすい服を着た女性格闘家。鋭い蹴り技を得意とし、離れた相手には手から光の弾を放って攻撃する。近距離も遠距離もどちらも一通りこなせる、オーソドックスな戦い方をする。特別に速くも遅くもなく、力も普通くらいの標準的な体格。",
+  "base_visual_prompt": "2D anime standing character, full body, athletic Japanese woman fighter wearing flexible lightweight training clothes, sleeveless fitted top, tapered pants, short boots, fingerless gloves, short black hair, focused expression, clean practical outfit with subtle white and blue accents, dynamic combat-ready stance",
+  "visual_description": "動きやすい軽装の女性格闘家。短めの黒髪で、動作を妨げないフィット感のあるトップスと細身のパンツ、短いブーツを着用している。全体的に実戦向きで、鋭い蹴りを繰り出しやすい機能的な外見。",
+  "stats": {"maxHP": 300, "groundMoveSpeed": 6.2, "airMoveSpeed": 5.8, "jumpForce": 12, "airJumpHeightMultiplier": 0.48, "walkSpeedRatio": 0.34, "guardDurability": 64, "lightness": 1, "weight": 1, "groundDodgeDistance": 2.4, "airDodgeDistance": 1.8},
+  "skills": [
+    {
+      "slot": "attack_a",
+      "skill_name": "閃脚",
+      "description": "素早い鋭い前蹴り",
+      "element": "physical",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 6, "hit_count": 1, "range": 1.4,
+        "startup": 0.05, "active_time": 0.12, "recovery": 0.22,
+        "knockback": 5, "stun_time": 0,
+        "guard_damage": 0.66, "move_force": 0.8
+      },
+      "actions": [
+        {"type":"melee_hitbox","time":0.05,"range":1.4,"spawn_x":0.9,"spawn_y":0.18,"size_x":1,"size_y":1.6,"hit_count":1}
+      ],
+      "chargeable": false,
+      "max_charge_time": 0,
+      "follow_up_actions": [],
+      "follow_up_window": 0
+    },
+    {
+      "slot": "attack_b",
+      "skill_name": "光弾掌",
+      "description": "手から光弾を放つ",
+      "element": "lightning",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 6, "hit_count": 1, "range": 10,
+        "startup": 0.08, "active_time": 0.15, "recovery": 0.26,
+        "knockback": 6.25, "stun_time": 0,
+        "guard_damage": 0.77, "move_force": 0
+      },
+      "actions": [
+        {"type":"projectile","time":0.08,"range":10,"spawn_x":1.1,"spawn_y":1.05,"size_x":0.7,"size_y":0.6,"hit_count":1,"projectile_speed":10}
+      ],
+      "chargeable": false,
+      "max_charge_time": 0,
+      "follow_up_actions": [],
+      "follow_up_window": 0
+    },
+    {
+      "slot": "attack_c",
+      "skill_name": "旋風連蹴",
+      "description": "回転して連続で蹴り上げる",
+      "element": "physical",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 2, "hit_count": 3, "range": 2,
+        "startup": 0.1, "active_time": 0.28, "recovery": 0.32,
+        "knockback": 8.75, "stun_time": 0,
+        "guard_damage": 0, "move_force": 0
+      },
+      "actions": [
+        {"type":"area_hitbox","time":0.1,"range":2,"spawn_y":0.85,"size_x":2.1,"size_y":1.9,"hit_count":3,"shape":"ring"}
+      ],
+      "chargeable": false,
+      "max_charge_time": 0,
+      "follow_up_actions": [],
+      "follow_up_window": 0
+    },
+    {
+      "slot": "smash_side",
+      "skill_name": "裂空蹴",
+      "description": "踏み込みから鋭く蹴り抜く",
+      "element": "physical",
+      "risk_level": "high",
+      "parameters": {
+        "damage": 18, "hit_count": 1, "range": 2.8,
+        "startup": 0.14, "active_time": 0.16, "recovery": 0.42,
+        "knockback": 13.75, "stun_time": 0,
+        "guard_damage": 1.87, "move_force": 0
+      },
+      "actions": [
+        {"type":"dash","time":0.1,"direction":"forward","power":1.4,"hit_count":1},
+        {"type":"melee_hitbox","time":0.14,"range":2.8,"spawn_x":1.4,"spawn_y":0.22,"size_x":1.4,"size_y":1.9,"hit_count":1}
+      ],
+      "chargeable": false,
+      "max_charge_time": 0,
+      "follow_up_actions": [],
+      "follow_up_window": 0
+    }
+  ],
+  "grab_parameters": {"range": 1.5, "startup": 0.08, "recovery": 0.14},
+  "throw_parameters": {"front_damage": 10, "front_knockback": 8, "back_damage": 10, "back_knockback": 10, "up_damage": 10, "up_knockback": 9}
+}

@@ -1,0 +1,256 @@
+﻿{
+  "character_name": "冥王ゾルバイン",
+  "input_features": "全身を漆黒の重厚な鎧で覆われた巨大な魔王。二刀の大剣を薙ぎ払う近接の一撃と、掌から放つ漆黒の光弾、地面を割る衝撃波を織り交ぜて戦う。動きは重く遅いが、一撃ごとの威力と耐久力は桁外れ。あらゆる格闘スタイルを極めた、大会の頂点に立つ存在。",
+  "base_visual_prompt": "2D anime standing character, full body, gigantic dark demon overlord in heavy obsidian armor, massive black pauldrons, twin greatswords, glowing crimson eyes, horned helmet, layered metal plates, ominous shadow aura, imposing silhouette",
+  "visual_description": "全身を漆黒の重厚鎧で包んだ巨大な魔王。角飾りのある兜と巨大な双剣を携え、赤い眼光と黒いオーラを放つ。体格は圧倒的で、立っているだけで威圧感がある。",
+  "stats": {"maxHP": 350, "groundMoveSpeed": 9.5, "airMoveSpeed": 8.5, "jumpForce": 19, "airJumpHeightMultiplier": 0.6, "walkSpeedRatio": 0.5, "guardDurability": 90, "lightness": 1, "weight": 2, "groundDodgeDistance": 3.8, "airDodgeDistance": 3.2},
+  "skills": [
+    {
+      "slot": "attack_a",
+      "skill_name": "双魔断ち",
+      "description": "二刀を薙ぐ重い近接斬り",
+      "element": "dark",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 3, "hit_count": 2, "range": 2.4,
+        "startup": 0.1, "active_time": 0.22, "recovery": 0.28,
+        "knockback": 10.9375, "stun_time": 0.22,
+        "guard_damage": 0.4840001, "move_force": 0.6
+      },
+      "actions": [
+        {"type":"melee_hitbox","time":0.1,"range":2.4,"spawn_x":1.4,"spawn_y":0.72,"size_x":1.7,"size_y":1.9,"hit_count":2}
+      ],
+      "chargeable": false,
+      "max_charge_time": 0,
+      "follow_up_actions": [],
+      "follow_up_window": 0
+    },
+    {
+      "slot": "attack_b",
+      "skill_name": "冥掌光弾",
+      "description": "掌から黒光弾を放つ",
+      "element": "dark",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 6, "hit_count": 1, "range": 14,
+        "startup": 0.09, "active_time": 0.2, "recovery": 0.34,
+        "knockback": 9.375, "stun_time": 0,
+        "guard_damage": 0.4235, "move_force": 0
+      },
+      "actions": [
+        {"type":"projectile","time":0.09,"range":14,"spawn_x":1.9,"spawn_y":1.15,"size_x":0.7,"size_y":0.6,"hit_count":1,"projectile_speed":7.2,"pierce":true}
+      ],
+      "chargeable": false,
+      "max_charge_time": 0,
+      "follow_up_actions": [],
+      "follow_up_window": 0
+    },
+    {
+      "slot": "attack_c",
+      "skill_name": "大地断衝",
+      "description": "地面を割る闇の衝撃波",
+      "element": "dark",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 9, "hit_count": 1, "range": 3.4,
+        "startup": 0.18, "active_time": 0.28, "recovery": 0.32,
+        "knockback": 15.625, "stun_time": 0.4,
+        "guard_damage": 0, "move_force": 0
+      },
+      "actions": [
+        {"type":"shockwave","time":0.18,"range":3.2,"spawn_y":0.32,"size_x":3.4,"size_y":0.95,"hit_count":1,"knockback_direction":"up"}
+      ],
+      "chargeable": false,
+      "max_charge_time": 0,
+      "follow_up_actions": [],
+      "follow_up_window": 0
+    },
+    {
+      "slot": "smash_side",
+      "skill_name": "冥王双閃",
+      "description": "二刀大剣の渾身横薙ぎ",
+      "element": "dark",
+      "risk_level": "high",
+      "parameters": {
+        "damage": 22, "hit_count": 1, "range": 3.2,
+        "startup": 0.24, "active_time": 0.2, "recovery": 0.52,
+        "knockback": 18, "stun_time": 0.55,
+        "guard_damage": 1.331, "move_force": 0
+      },
+      "actions": [
+        {"type":"dash","time":0.1,"direction":"forward","power":1.1,"hit_count":1},
+        {"type":"melee_hitbox","time":0.24,"range":3.2,"spawn_x":1.8,"spawn_y":0.78,"size_x":2.4,"size_y":2.1,"hit_count":1}
+      ],
+      "chargeable": false,
+      "max_charge_time": 0,
+      "follow_up_actions": [],
+      "follow_up_window": 0
+    }
+  ],
+  "extra_skills": [
+    {
+      "slot": "attack_a",
+      "skill_name": "双魔大薙ぎ",
+      "description": "二刀を横薙ぎする主力斬撃",
+      "element": "dark",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 3, "hit_count": 2, "range": 2.4,
+        "startup": 0.09, "active_time": 0.18, "recovery": 0.28,
+        "knockback": 7.5, "stun_time": 0.18,
+        "guard_damage": 0.99, "move_force": 0.2
+      },
+      "actions": [
+        {"type":"melee_hitbox","time":0.09,"range":2.4,"spawn_x":1.2,"spawn_y":0.62,"size_x":1.6,"size_y":1.8,"hit_count":2}
+      ],
+      "chargeable": false,
+      "max_charge_time": 0,
+      "follow_up_actions": [],
+      "follow_up_window": 0
+    },
+    {
+      "slot": "attack_b",
+      "skill_name": "冥府の召喚印",
+      "description": "漆黒の使い魔を1体呼ぶ",
+      "element": "dark",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 6, "hit_count": 1, "range": 3.2,
+        "startup": 0.14, "active_time": 0.1, "recovery": 0.24,
+        "knockback": 5, "stun_time": 0,
+        "guard_damage": 0.66, "move_force": 0
+      },
+      "actions": [
+        {"type":"summon","time":0.14,"direction":"toward_enemy","power":2.2,"spawn_x":1,"spawn_y":0.65,"size_x":1,"size_y":1.2,"hit_count":1,"homing":true,"status":"dark","duration":4.5,"status_duration":1.2,"chance":0.4,"damage_override":6}
+      ],
+      "chargeable": false,
+      "max_charge_time": 0,
+      "follow_up_actions": [],
+      "follow_up_window": 0
+    },
+    {
+      "slot": "attack_c",
+      "skill_name": "冥王の戒罰",
+      "description": "受けた瞬間に闇刃で反撃",
+      "element": "dark",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 12, "hit_count": 1, "range": 1.8,
+        "startup": 0.1, "active_time": 1.2, "recovery": 0.24,
+        "knockback": 8.75, "stun_time": 0,
+        "guard_damage": 0, "move_force": 0
+      },
+      "actions": [
+        {"type":"counter","time":0.1,"hit_count":1,"duration":1.2,"damage_override":12}
+      ],
+      "chargeable": false,
+      "max_charge_time": 0,
+      "follow_up_actions": [],
+      "follow_up_window": 0
+    },
+    {
+      "slot": "smash_side",
+      "skill_name": "虚影転刃",
+      "description": "背後へ転移して斬り裂く",
+      "element": "dark",
+      "risk_level": "high",
+      "parameters": {
+        "damage": 22, "hit_count": 1, "range": 3,
+        "startup": 0.18, "active_time": 0.14, "recovery": 0.42,
+        "knockback": 16.25, "stun_time": 0.24,
+        "guard_damage": 2.31, "move_force": 0
+      },
+      "actions": [
+        {"type":"teleport","time":0.18,"direction":"behind_enemy","hit_count":1},
+        {"type":"melee_hitbox","time":0.18,"range":2.8,"spawn_x":0.9,"spawn_y":0.68,"size_x":1.8,"size_y":1.9,"hit_count":1}
+      ],
+      "chargeable": false,
+      "max_charge_time": 0,
+      "follow_up_actions": [],
+      "follow_up_window": 0
+    },
+    {
+      "slot": "attack_a",
+      "skill_name": "双刃黒薙ぎ",
+      "description": "二刀を横薙ぎに払う",
+      "element": "dark",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 3, "hit_count": 2, "range": 2.6,
+        "startup": 0.1, "active_time": 0.1, "recovery": 0.8,
+        "knockback": 7.5, "stun_time": 0.15,
+        "guard_damage": 0.99, "move_force": 0.6
+      },
+      "actions": [
+        {"type":"reflector","time":0.12,"hit_count":1,"duration":1.1}
+      ],
+      "chargeable": false,
+      "max_charge_time": 0,
+      "follow_up_actions": [],
+      "follow_up_window": 0
+    },
+    {
+      "slot": "attack_b",
+      "skill_name": "冥闇穿光",
+      "description": "貫通する漆黒のビーム",
+      "element": "dark",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 6, "hit_count": 1, "range": 15,
+        "startup": 0.3, "active_time": 0.28, "recovery": 0.42,
+        "knockback": 8.75, "stun_time": 0,
+        "guard_damage": 1.21, "move_force": 0
+      },
+      "actions": [
+        {"type":"beam","time":0.3,"spawn_x":1.8,"spawn_y":1.1,"size_x":10.5,"size_y":1,"hit_count":1}
+      ],
+      "chargeable": true,
+      "max_charge_time": 1.8,
+      "follow_up_actions": [],
+      "follow_up_window": 0
+    },
+    {
+      "slot": "attack_c",
+      "skill_name": "冥王の黒煌壁",
+      "description": "吸収盾で己を癒す",
+      "element": "dark",
+      "risk_level": "medium",
+      "parameters": {
+        "damage": 0, "hit_count": 1, "range": 0.5,
+        "startup": 0.16, "active_time": 0.05, "recovery": 0.24,
+        "knockback": 2.8, "stun_time": 0,
+        "guard_damage": 0, "move_force": 0
+      },
+      "actions": [
+        {"type":"barrier","time":0.16,"power":18,"hit_count":1,"duration":3}
+      ],
+      "chargeable": false,
+      "max_charge_time": 0,
+      "follow_up_actions": [],
+      "follow_up_window": 0
+    },
+    {
+      "slot": "smash_side",
+      "skill_name": "冥界吸血断",
+      "description": "斬撃で命を奪い癒す",
+      "element": "dark",
+      "risk_level": "high",
+      "parameters": {
+        "damage": 22, "hit_count": 1, "range": 3,
+        "startup": 0.2, "active_time": 0.2, "recovery": 0.5,
+        "knockback": 15, "stun_time": 0.2,
+        "guard_damage": 2.31, "move_force": 0
+      },
+      "actions": [
+        {"type":"dash","time":0.1,"direction":"forward","power":0.9,"hit_count":1},
+        {"type":"lifesteal","time":0.2,"range":3,"spawn_x":2,"spawn_y":0.8,"size_x":2.4,"size_y":1.7,"hit_count":1,"lifesteal_ratio":0.35}
+      ],
+      "chargeable": false,
+      "max_charge_time": 0,
+      "follow_up_actions": [],
+      "follow_up_window": 0
+    }
+  ],
+  "grab_parameters": {"range": 1.6, "startup": 0.1, "recovery": 0.18},
+  "throw_parameters": {"front_damage": 11, "front_knockback": 10, "back_damage": 11, "back_knockback": 12, "up_damage": 10, "up_knockback": 11}
+}

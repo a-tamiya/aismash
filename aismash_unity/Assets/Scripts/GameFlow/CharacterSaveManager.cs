@@ -132,9 +132,52 @@ namespace PromptFighters.GameFlow
             return LoadAll().Find(d => d != null && d.characterName == name);
         }
 
+        static bool _defaultCharsSeeded;
+
+        // ゲームが依存する必須キャラ（チュートリアル用「ケンゴ」「サヤ」・固定ボス「冥王ゾルバイン」）を
+        // Assets/StreamingAssets/DefaultSavedChars に同梱し、初回起動時にpersistentDataPathへコピーする。
+        // これにより他PCへ配布した場合でも、キャラを別途生成し直さなくてもそのまま同じ内容で遊べる。
+        // 既にプレイヤー側に同名の保存データがある場合は上書きしない（プレイヤーの生成物を優先）。
+        static void EnsureDefaultCharactersSeeded()
+        {
+            if (_defaultCharsSeeded) return;
+            _defaultCharsSeeded = true;
+
+            string srcRoot = Path.Combine(Application.streamingAssetsPath, "DefaultSavedChars");
+            if (!Directory.Exists(srcRoot)) return;
+
+            try
+            {
+                Directory.CreateDirectory(SaveDir);
+                foreach (var srcJson in Directory.GetFiles(srcRoot, "*.json"))
+                {
+                    string id = Path.GetFileNameWithoutExtension(srcJson);
+                    string destJson = Path.Combine(SaveDir, id + ".json");
+                    if (File.Exists(destJson)) continue; // 既にプレイヤー側にあれば上書きしない
+
+                    File.Copy(srcJson, destJson);
+
+                    string srcSpritesDir = Path.Combine(srcRoot, id, "sprites");
+                    if (!Directory.Exists(srcSpritesDir)) continue;
+                    string destSpritesDir = Path.Combine(SaveDir, id, "sprites");
+                    Directory.CreateDirectory(destSpritesDir);
+                    foreach (var file in Directory.GetFiles(srcSpritesDir))
+                        File.Copy(file, Path.Combine(destSpritesDir, Path.GetFileName(file)), overwrite: true);
+
+                    Debug.Log($"[Save] 同梱デフォルトキャラをシードしました: {id}");
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Save] デフォルトキャラのシード失敗: {e.Message}");
+            }
+        }
+
         // 保存済みキャラを全件ロードする。Idle1プレビュー用スプライトも設定する。
         public static List<CharacterData> LoadAll()
         {
+            EnsureDefaultCharactersSeeded();
+
             var results = new List<CharacterData>();
             if (!Directory.Exists(SaveDir)) return results;
 
