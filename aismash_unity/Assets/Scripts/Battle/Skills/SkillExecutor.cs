@@ -226,7 +226,7 @@ namespace PromptFighters.Battle.Skills
 
             var chosen = pool[UnityEngine.Random.Range(0, pool.Count)];
             _lastRandomSkill = chosen;
-            Debug.Log($"[BossAI] 選択: {chosen.skill_name} (poolSize={pool.Count}, preferRanged={preferRanged})");
+            Debug.Log($"[BossAI] 選択: {chosen.skill_name} slot={chosen.slot} extraIdx={chosen.extraSpriteIndex} (poolSize={pool.Count}, preferRanged={preferRanged})");
             return TryUseDebugSkill(chosen);
         }
 
