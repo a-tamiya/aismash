@@ -231,8 +231,8 @@ namespace PromptFighters.Battle
 
             if (Mode == BattleMode.CoopVsBoss)
             {
-                // ボスは常にAI（敵）。難易度は味方トグルと独立に常に最高（Hard）固定。
-                SetFighterAi(boss, enable: true, levelOverride: FighterAI.CpuLevel.Hard);
+                // ボスは常にAI（敵）。難易度は味方トグルと独立に専用の最強プリセット（Boss）固定。
+                SetFighterAi(boss, enable: true, levelOverride: FighterAI.CpuLevel.Boss);
             }
 
             // 選択した側をCPU（ON時）に、もう一方は人間に。強さはトグル準拠。

@@ -14,6 +14,7 @@ namespace PromptFighters.Battle.Skills
         public SkillData[] skills = new SkillData[4]; // index = SkillSlot
         // ボス専用の追加技プール（4枠システムとは独立。通常キャラは常に空）。FighterAIがボスのときだけ使う。
         public List<SkillData> extraSkills = new List<SkillData>();
+        SkillData _lastRandomSkill; // TryUseRandomSkillの直前の選択（連発防止用）
         public bool autoEquipSampleSkills = true;
         const float HitboxVisualScale = SkillConstants.HitboxVisualScale;
         const int MaxFollowUpCount = SkillConstants.MaxFollowUpCount;
@@ -91,6 +92,7 @@ namespace PromptFighters.Battle.Skills
         public void ResetSkillState()
         {
             _isExecuting   = false;
+            _lastRandomSkill = null;
             _followUpReady = false;
             _followUpTimer = 0f;
             _followUpSkill = null;
@@ -215,7 +217,16 @@ namespace PromptFighters.Battle.Skills
                 if (ranged.Count > 0) pool = ranged;
             }
 
+            // 直前と同じ技の連発を避ける（選択肢が他にあるときだけ除外。手数の多さを体感しやすくする）
+            if (pool.Count > 1 && _lastRandomSkill != null)
+            {
+                var withoutLast = pool.FindAll(s => s != _lastRandomSkill);
+                if (withoutLast.Count > 0) pool = withoutLast;
+            }
+
             var chosen = pool[UnityEngine.Random.Range(0, pool.Count)];
+            _lastRandomSkill = chosen;
+            Debug.Log($"[BossAI] 選択: {chosen.skill_name} (poolSize={pool.Count}, preferRanged={preferRanged})");
             return TryUseDebugSkill(chosen);
         }
 

@@ -8,7 +8,7 @@ namespace PromptFighters.Battle
     [RequireComponent(typeof(Fighter))]
     public class FighterAI : MonoBehaviour
     {
-        public enum CpuLevel { Off, Easy, Normal, Hard }
+        public enum CpuLevel { Off, Easy, Normal, Hard, Boss }
 
         // ロビーの「CPU対戦」トグル。BattleManager が CpuSide 側へ適用する。
         public static CpuLevel Level = CpuLevel.Off;
@@ -61,6 +61,10 @@ namespace PromptFighters.Battle
                     aggression = 0.35f; defense = 0.30f; decisionInterval = 0.30f; break;
                 case CpuLevel.Hard:
                     aggression = 0.85f; defense = 0.75f; decisionInterval = 0.10f; break;
+                case CpuLevel.Boss:
+                    // 固定ボス専用。ロビーの「CPU対戦」トグル（グローバルLevel）とは独立に、常にこの強さで動かす。
+                    // Hardの全項目を上回る（攻め・守り・反応速度いずれも最上位）。
+                    aggression = 0.97f; defense = 0.85f; decisionInterval = 0.07f; break;
                 default: // Normal
                     aggression = 0.60f; defense = 0.50f; decisionInterval = 0.18f; break;
             }
@@ -148,8 +152,10 @@ namespace PromptFighters.Battle
                 _moveDir = sign;
                 if (_fighter.IsGrounded && (dy > 1.2f || Random.value < 0.05f))
                     _fighter.Jump();
-                // 遠距離なら飛び道具で牽制
-                if (dist > 4f && _actionCooldown <= 0f && Random.value < aggression * 0.5f)
+                // 遠距離なら飛び道具で牽制（ボスは間合いを問わずより高頻度で仕掛ける＝ダウンタイムを減らして手数を増やす）
+                float pokeRangeThreshold = IsBossFighter ? 2.0f : 4f;
+                float pokeChance         = IsBossFighter ? aggression * 0.9f : aggression * 0.5f;
+                if (dist > pokeRangeThreshold && _actionCooldown <= 0f && Random.value < pokeChance)
                     Attack(sign, preferRanged: true);
             }
             else
