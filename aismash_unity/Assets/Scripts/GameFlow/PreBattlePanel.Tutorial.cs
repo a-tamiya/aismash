@@ -544,13 +544,15 @@ namespace PromptFighters.GameFlow
             _tutStepClearing[i] = false;
         }
 
-        // 参加中のプレイヤーが全員クリアしたか。誰も参加していなければ未完了。
+        // 両プレイヤーがクリアしたか。誰も参加していなければ未完了。
+        // （_tutEngaged[i]==falseは「まだ何も操作していない」だけで「参加していない」ことの証明にはならないため、
+        // 　片方が先に全ステップを終えても、もう片方の進捗は無条件でチェックする）
         bool IsTutorialComplete()
         {
             bool anyEngaged = _tutEngaged[0] || _tutEngaged[1];
             if (!anyEngaged) return false;
             for (int i = 0; i < 2; i++)
-                if (_tutEngaged[i] && _tutStep[i] < TutorialSteps.Length) return false;
+                if (_tutStep[i] < TutorialSteps.Length) return false;
             return true;
         }
 
@@ -603,7 +605,7 @@ namespace PromptFighters.GameFlow
             if (_tutHint[i] != null)
             {
                 // 相手がまだ挑戦中なら「待っています」を出す
-                bool otherBusy = _tutEngaged[1 - i] && _tutStep[1 - i] < TutorialSteps.Length;
+                bool otherBusy = _tutStep[1 - i] < TutorialSteps.Length;
                 _tutHint[i].text = otherBusy ? "相手のクリアを待っています…" : "";
             }
             if (_tutProgress[i] != null) _tutProgress[i].text = "● ● ● ● ● ● ●";

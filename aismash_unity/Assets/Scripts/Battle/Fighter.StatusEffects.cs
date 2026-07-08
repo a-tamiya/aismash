@@ -42,10 +42,18 @@ namespace PromptFighters.Battle
 
         // バリアで吸収できる残りダメージ量（TakeDamage/TakeThrowで消費）。
         float _barrierHP;
+        Coroutine _barrierRoutine;
+        GameObject _barrierAuraGo;
 
         // 一定量のダメージを吸収するシールド（barrier アクション用）。
+        // 発動中に再度発動された場合、古いオーラ/コルーチンを破棄してから張り直す
+        // （多重発動でオーラが重なり合い、画面が真っ青に見えるほど濃くなる不具合の対策）。
         public void StartBarrier(float amount, float duration)
-            => StartCoroutine(BarrierRoutine(amount, duration));
+        {
+            if (_barrierRoutine != null) StopCoroutine(_barrierRoutine);
+            if (_barrierAuraGo != null) { Destroy(_barrierAuraGo); _barrierAuraGo = null; }
+            _barrierRoutine = StartCoroutine(BarrierRoutine(amount, duration));
+        }
 
         System.Collections.IEnumerator BarrierRoutine(float amount, float duration)
         {
@@ -55,6 +63,7 @@ namespace PromptFighters.Battle
             BattleLogger.Instance?.LogEvent($"{PlayerLabel()}がバリア展開");
 
             var aura = CreateBarrierAura();
+            _barrierAuraGo = aura;
             var auraSr = aura != null ? aura.GetComponent<SpriteRenderer>() : null;
             float elapsed = 0f;
             // 効果中はオーラを表示。時間切れ or 吸収しきりで終了。
@@ -71,6 +80,8 @@ namespace PromptFighters.Battle
             }
             _barrierHP = 0f;
             if (aura != null) Destroy(aura);
+            _barrierAuraGo = null;
+            _barrierRoutine = null;
         }
 
         static Sprite _barrierAuraSprite;

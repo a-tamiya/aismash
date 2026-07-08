@@ -3,6 +3,7 @@ aismash_unity/Temp/
 aismash_unity/Logs/
 aismash_unity/UserSettings/
 aismash_unity/.vs/
+aismash_unity/Build/
 *.csproj
 *.slnx
 .claude/

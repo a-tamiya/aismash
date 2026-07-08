@@ -407,6 +407,10 @@ namespace PromptFighters.Battle
         {
             if (Phase != BattlePhase.Setup && Phase != BattlePhase.Training) return;
 
+            // トレーニングは常に1vs1相当。直前がボス討伐（協力）モードのままだと、
+            // ApplyMode()がRequestedModeを見てボスを表示したままにしてしまうため、ここで強制的に戻す。
+            RequestedMode = BattleMode.Versus;
+
             ApplyMode();
             ApplyCharacters(data1, data2);
             ApplyCpuControl();
