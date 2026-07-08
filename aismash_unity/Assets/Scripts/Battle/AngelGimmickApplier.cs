@@ -570,10 +570,34 @@ namespace PromptFighters.Battle
 
         // 触れると上に跳ねる設置物。物理的な壁ではないため、当たり判定はトリガー専用にする
         // （プレイヤーはすり抜けて重なることができ、重なった瞬間だけ上方向へ弾かれる）。
+        // 出現位置は対象キャラの足場（今いる地面/台の上面）に合わせる。時間経過による自動消滅はしない
+        // （他の設置物と同様、_persistentObstaclesに登録しBO3終了までClearObstacles()で残す）。
         void SpawnBouncePad(float duration, string posHint, Fighter p1, Fighter p2)
         {
+            var bm = BattleManager.Instance;
+            float minX = bm?.StageMinX ?? -5f;
+            float maxX = bm?.StageMaxX ??  5f;
+
+            float x;
+            Vector2 rayOrigin;
+            if (posHint == "player1" && p1 != null)
+            {
+                x = Mathf.Clamp(p1.transform.position.x + Random.Range(-0.5f, 0.5f), minX + 1.2f, maxX - 1.2f);
+                rayOrigin = new Vector2(x, p1.transform.position.y + 0.1f);
+            }
+            else if (posHint == "player2" && p2 != null)
+            {
+                x = Mathf.Clamp(p2.transform.position.x + Random.Range(-0.5f, 0.5f), minX + 1.2f, maxX - 1.2f);
+                rayOrigin = new Vector2(x, p2.transform.position.y + 0.1f);
+            }
+            else
+            {
+                x = Mathf.Clamp((minX + maxX) * 0.5f + Random.Range(-2.5f, 2.5f), minX + 1.2f, maxX - 1.2f);
+                rayOrigin = new Vector2(x, 20f);
+            }
+            float groundY = ResolveGroundYBelow(rayOrigin, p1, p2);
+
             var go = new GameObject("AngelBounce");
-            go.transform.position = ObstaclePos(posHint, p1, p2, 0.25f);
 
             var rb = go.AddComponent<Rigidbody2D>();
             rb.bodyType = RigidbodyType2D.Static;
@@ -581,11 +605,12 @@ namespace PromptFighters.Battle
             col.isTrigger = true;
 
             var sprite = BouncePadSprite();
+            float hVis;
             if (sprite != null)
             {
                 float aspect = sprite.bounds.size.x / Mathf.Max(0.01f, sprite.bounds.size.y);
                 float wVis   = 2f;
-                float hVis   = wVis / aspect;
+                hVis         = wVis / aspect;
                 col.size = new Vector2(wVis, hVis);
                 go.transform.localScale = new Vector3(wVis / sprite.bounds.size.x, hVis / sprite.bounds.size.y, 1f);
                 var sr = go.AddComponent<SpriteRenderer>();
@@ -596,15 +621,43 @@ namespace PromptFighters.Battle
             else
             {
                 // フォールバック：従来の緑単色バー
+                hVis = 0.3f;
                 col.size = Vector2.one;
-                go.transform.localScale = new Vector3(2f, 0.3f, 1f);
+                go.transform.localScale = new Vector3(2f, hVis, 1f);
                 var sr = go.AddComponent<SpriteRenderer>();
                 sr.sprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0, 0, 1, 1), new Vector2(0.5f, 0.5f), 1f);
                 sr.color  = new Color(0.15f, 1f, 0.45f, 0.95f);
             }
 
+            // スプライトの中心ピボット基準なので、足場の上面 + 半分の高さをセンターY位置にする。
+            go.transform.position = new Vector3(x, groundY + hVis * 0.5f, 0f);
+
             go.AddComponent<AngelBouncePad>();
             RegisterObstacle(go);
+        }
+
+        // 指定位置から真下にある地面/台の上面Yを検出する（BlobShadowと同じ手法）。
+        // 対象キャラ自身の当たり判定は地面として扱わないよう除外する。見つからなければステージ基本地面高さにフォールバック。
+        static float ResolveGroundYBelow(Vector2 origin, Fighter excludeA, Fighter excludeB)
+        {
+            var filter = new ContactFilter2D();
+            filter.useTriggers  = false;
+            filter.useLayerMask = false;
+            var hits = new RaycastHit2D[8];
+            int count = Physics2D.Raycast(origin, Vector2.down, filter, hits, 40f);
+
+            var colA = excludeA != null ? excludeA.GetComponent<Collider2D>() : null;
+            var colB = excludeB != null ? excludeB.GetComponent<Collider2D>() : null;
+            float best = float.NegativeInfinity;
+            bool found = false;
+            for (int i = 0; i < count; i++)
+            {
+                if (hits[i].collider == colA || hits[i].collider == colB) continue;
+                if (hits[i].point.y > best) { best = hits[i].point.y; found = true; }
+            }
+
+            var bm = BattleManager.Instance;
+            return found ? best : (bm != null ? bm.StageGroundY : -1.8f);
         }
 
         void SpawnRain(int count, float duration)
@@ -792,7 +845,7 @@ namespace PromptFighters.Battle
         {
             var f = other.GetComponent<Fighter>();
             if (f == null) return;
-            f.ApplyImpulse(new Vector2(0f, 22f), 0.12f);
+            f.ApplyImpulse(new Vector2(0f, 22f * 0.7f), 0.12f);
             PromptFighters.UI.DamagePopup.SpawnText(
                 transform.position + Vector3.up * 0.5f,
                 "BOUNCE!", new Color(0.15f, 1f, 0.45f), 1.5f);

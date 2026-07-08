@@ -2052,3 +2052,10 @@ APIキーの権限変更で whisper-1（音声認識）と gpt-4o-mini-tts（表
 - なお「バリア」は当初ガードバリア（RB/RTのガード時に表示、`Fighter.CreateGuardBarrier`）だと思い提示したが、ユーザーの意図は**技の効果で一定ダメージを吸収するバリア**（`barrier`アクション、`Fighter.StartBarrier`/`CreateBarrierAura`）だったため訂正・対応した。
 - `CreateBarrierAura()`が従来`Skills.RuntimeSprite.Circle()`の円形プレースホルダーのみを使っていたのを、`Resources/Effects/barrier_aura.png`があれば自動で読み込むように対応（`BarrierAuraSprite()`、既存の画像フォールバックパターンと同様）。画像が無い場合は従来通り円形プレースホルダーにフォールバック。
 - ユーザーへ`bounce_pad.png`・`barrier_aura.png`の画像生成プロンプトを提示済み（ガードバリア用プロンプトは誤りだったため撤回）。生成後は指定パスに配置するだけで反映される。
+
+### 25.53 バウンスパッド・バリア画像を反映、バウンスパッドを足場グラウンド式に・上昇量調整（実装済み・2026-07-08）
+
+- **画像を反映**: ユーザーが`asset/`直下に生成した`bounce_pad.png`・`barrier_aura.png`（共に緑バック）を、既存の`WhiteBackgroundRemover.ApplyChromaGreen`で透過処理した上で`Resources/Stage/bounce_pad.png`・`Resources/Effects/barrier_aura.png`に配置。テクスチャインポート設定も既存の`wall.png`等と同じ（Sprite/Single/alphaIsTransparency有効/isReadable無効）に統一。
+- **バウンスパッドの出現位置を足場基準に変更**: 従来は固定Y座標（0.25等）に出現していたため、台の上にいる相手を狙って出しても地上に浮いた位置に出ることがあった。`BlobShadow`と同じ「対象の真下へ下方向レイを飛ばし最も近い地面/台の上面を検出する」手法を`AngelGimmickApplier`に追加（`ResolveGroundYBelow`）し、対象キャラ（またはランダム時はX座標の真上）の実際の足場に高さを合わせるようにした。スプライトは中心ピボットのため、足場上面+スプライト高さの半分をセンターYとする。
+- **上昇量を0.7倍に調整**: `AngelBouncePad`の上方向インパルスを`22`→`22 * 0.7 = 15.4`に変更。
+- 実機確認: 段差ステージの高台（Y=1.05の台）にいるキャラを狙ってバウンスパッドを出し、パッドが台の上面ちょうどに出現すること（`pad.y ≈ groundY + hVis*0.5`）、`isTrigger=true`で物理的な押し返しが無いこと、実際に触れた際の上方向速度が`15.4`（旧`22`の0.7倍）になることをスクリーンショット・数値の両方で確認。時間経過による自動消滅は元々実装されておらず（設置物はBO3終了までのみ`ClearObstacles()`で一括破棄）、追加対応は不要と確認。バリア（吸収シールド）画像も実戦闘で正しく表示されることを確認。
