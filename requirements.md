@@ -2043,3 +2043,11 @@ APIキーの権限変更で whisper-1（音声認識）と gpt-4o-mini-tts（表
   - 結果、12技中10種類のメカニクスが揃うようになった（近接一閃のみ基本枠と1枠重複が残るが、召喚・カウンター・リフレクター・ビーム・バリア・吸血・瞬間移動奇襲など、基本4技には無い機構が新たに8枠中7枠に追加された）。
   - 専用ポーズ・エフェクト画像も8技分だけ対象を絞って再生成（`extra_pose_0〜7`・必要な`extra_effect_0〜7`）。counter/reflector/barrierは技の性質上ヒットボックスを生成しないため専用エフェクト画像が不要（既存の`NeedsSeparateEffect`判定通り）。
 - 実機確認: 再生成後の12技すべてでポーズ・エフェクトのSprite参照が個別に解決され重複がないこと、`maxHP=750`など既存ステータスが維持されていることを確認。
+
+### 25.52 バウンスパッドを物理判定なしのトリガー式に変更（実装済み・2026-07-08、画像は別途生成待ち）
+
+- **不具合/要望**: ボイスボールギミック「obstacle_bounce」（`AngelBouncePad`）は`BoxCollider2D`が通常の物理コライダーのままで、乗ったり押し返されたりする実体のある壁として振る舞っていた。要望により、物理的な当たり判定を無くし、触れた瞬間に上へ弾かれるだけの純粋なトリガー判定に変更。
+- `AngelGimmickApplier.SpawnBouncePad()`のコライダーを`isTrigger = true`に変更し、`AngelBouncePad`のヒット検知を`OnCollisionEnter2D`から`OnTriggerEnter2D`へ変更。
+- `Resources/Stage/bounce_pad.png`があれば自動で読み込み表示するように対応（`BouncePadSprite()`、`WallSprite()`/`PlatformSprite()`と同じ既存パターン）。画像が無い場合は従来通り緑の単色バーにフォールバック。未使用になった汎用ヘルパー`MakeStaticObstacle`は削除。
+- なお「バリア」（ガードバリア: `Fighter.CreateGuardBarrier`/`UpdateGuardBarrier`、`Resources/Effects/guard_barrier_full/mid/low.png`）は仕組み自体は既に実装済みで、画像が無いため現在非表示なだけと判明。コード変更は不要で、画像を配置するだけで有効になる。
+- ユーザーへ`bounce_pad.png`・`guard_barrier_full.png`（+任意で`_mid`/`_low`）の画像生成プロンプトを提示済み。生成後は指定パスに配置するだけで反映される。

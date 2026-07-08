@@ -22,6 +22,8 @@ namespace PromptFighters.Battle
         static bool _rainBlockTried;
         static Sprite _wallSprite;
         static Sprite _platformSprite;
+        static Sprite _bouncePadSprite;
+        static bool _bouncePadTried;
         // 台画像の不透明上端のピボットからのピクセル（StagePlatformSpawnerと同じ基準）。
         const float PlatformOpaqueTopPixels = 176f;
 
@@ -391,20 +393,6 @@ namespace PromptFighters.Battle
             return new Vector3(Mathf.Clamp(x, minX + 1.2f, maxX - 1.2f), y, 0f);
         }
 
-        static GameObject MakeStaticObstacle(string name, Vector3 pos, Vector3 scale, Color col)
-        {
-            var go = new GameObject(name);
-            go.transform.position = pos;
-            go.transform.localScale = scale;
-            var rb = go.AddComponent<Rigidbody2D>();
-            rb.bodyType = RigidbodyType2D.Static;
-            go.AddComponent<BoxCollider2D>().size = Vector2.one;
-            var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0,0,1,1), new Vector2(0.5f,0.5f), 1f);
-            sr.color = col;
-            return go;
-        }
-
         static Sprite RainBlockSprite()
         {
             if (!_rainBlockTried)
@@ -426,6 +414,12 @@ namespace PromptFighters.Battle
         {
             if (_platformSprite == null) _platformSprite = Resources.Load<Sprite>("Stage/platform");
             return _platformSprite;
+        }
+
+        static Sprite BouncePadSprite()
+        {
+            if (!_bouncePadTried) { _bouncePadSprite = Resources.Load<Sprite>("Stage/bounce_pad"); _bouncePadTried = true; }
+            return _bouncePadSprite;
         }
 
         // 横足場の本体を生成（テクスチャがあれば台画像、無ければ単色バー）。
@@ -574,12 +568,41 @@ namespace PromptFighters.Battle
             RegisterObstacle(go);
         }
 
+        // 触れると上に跳ねる設置物。物理的な壁ではないため、当たり判定はトリガー専用にする
+        // （プレイヤーはすり抜けて重なることができ、重なった瞬間だけ上方向へ弾かれる）。
         void SpawnBouncePad(float duration, string posHint, Fighter p1, Fighter p2)
         {
-            var go = MakeStaticObstacle("AngelBounce",
-                ObstaclePos(posHint, p1, p2, 0.25f),
-                new Vector3(2f, 0.3f, 1f),
-                new Color(0.15f, 1f, 0.45f, 0.95f));
+            var go = new GameObject("AngelBounce");
+            go.transform.position = ObstaclePos(posHint, p1, p2, 0.25f);
+
+            var rb = go.AddComponent<Rigidbody2D>();
+            rb.bodyType = RigidbodyType2D.Static;
+            var col = go.AddComponent<BoxCollider2D>();
+            col.isTrigger = true;
+
+            var sprite = BouncePadSprite();
+            if (sprite != null)
+            {
+                float aspect = sprite.bounds.size.x / Mathf.Max(0.01f, sprite.bounds.size.y);
+                float wVis   = 2f;
+                float hVis   = wVis / aspect;
+                col.size = new Vector2(wVis, hVis);
+                go.transform.localScale = new Vector3(wVis / sprite.bounds.size.x, hVis / sprite.bounds.size.y, 1f);
+                var sr = go.AddComponent<SpriteRenderer>();
+                sr.sprite       = sprite;
+                sr.color        = Color.white;
+                sr.sortingOrder = 7;
+            }
+            else
+            {
+                // フォールバック：従来の緑単色バー
+                col.size = Vector2.one;
+                go.transform.localScale = new Vector3(2f, 0.3f, 1f);
+                var sr = go.AddComponent<SpriteRenderer>();
+                sr.sprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0, 0, 1, 1), new Vector2(0.5f, 0.5f), 1f);
+                sr.color  = new Color(0.15f, 1f, 0.45f, 0.95f);
+            }
+
             go.AddComponent<AngelBouncePad>();
             RegisterObstacle(go);
         }
@@ -765,9 +788,9 @@ namespace PromptFighters.Battle
     // 踏んだファイターを上方向に弾くバウンスパッド
     public class AngelBouncePad : MonoBehaviour
     {
-        void OnCollisionEnter2D(Collision2D col)
+        void OnTriggerEnter2D(Collider2D other)
         {
-            var f = col.gameObject.GetComponent<Fighter>();
+            var f = other.GetComponent<Fighter>();
             if (f == null) return;
             f.ApplyImpulse(new Vector2(0f, 22f), 0.12f);
             PromptFighters.UI.DamagePopup.SpawnText(
