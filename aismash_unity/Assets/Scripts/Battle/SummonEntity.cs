@@ -296,8 +296,9 @@ namespace PromptFighters.Battle
 
             var target = other.GetComponentInParent<Fighter>();
             if (target == null || target == Owner) return;
-            // フレンドリーファイアOFF：同陣営には当てない
-            if (Owner != null && target.Team == Owner.Team) return;
+            // フレンドリーファイアOFF：同陣営には当てない。
+            // チュートリアルの練習台は陣営に関わらずどちらからも攻撃が通る。
+            if (Owner != null && target.Team == Owner.Team && !target.IsPracticeDummy) return;
             if (target.IsDodging) return;
             if (_recentHits.Contains(target)) return;
 

@@ -468,8 +468,9 @@ namespace PromptFighters.Battle.Skills
                 if (IsBoomerang && _boomerangFlipped) Release(); // 回収
                 return;
             }
-            // フレンドリーファイアOFF：同陣営には当てない（Hitbox/SummonEntityと同じ扱い）
-            if (Owner != null && target.Team == Owner.Team) return;
+            // フレンドリーファイアOFF：同陣営には当てない（Hitbox/SummonEntityと同じ扱い）。
+            // チュートリアルの練習台は陣営に関わらずどちらからも攻撃が通る。
+            if (Owner != null && target.Team == Owner.Team && !target.IsPracticeDummy) return;
             if (target.IsDodging) return;
 
             // リフレクター: 速度・威力を1.2倍にして逆ベクトルで反射、オーナーを切り替え（1回限り）

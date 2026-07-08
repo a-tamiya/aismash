@@ -32,6 +32,9 @@ namespace PromptFighters.GameFlow
         readonly bool[]    _tutSmashed     = new bool[2];
         readonly bool[]    _tutGrabbed     = new bool[2];
         readonly bool[]    _tutVoiceBroken = new bool[2];
+        // 球が壊れてから取得シーケンス（マイク録音込み）が完全に終わるまでtrue。
+        // この間は相手側のボイスボールも保留する（2個同時進行になるのを防ぐ）。
+        readonly bool[]    _tutVoiceAcquiring = new bool[2];
         // 技ステップ: A/B/Cをそれぞれ1回ずつ出したか（同じ技の連打ではクリアにならない）
         readonly bool[]    _tutSkillADone  = new bool[2];
         readonly bool[]    _tutSkillBDone  = new bool[2];
@@ -181,7 +184,7 @@ namespace PromptFighters.GameFlow
             new TutorialStep { title = "④ 技を出そう（3種類）", hint = "B / A / X をそれぞれ1回ずつ出す" },
             new TutorialStep { title = "⑤ スマッシュ！",      hint = "右スティックを横に倒してスマッシュ" },
             new TutorialStep { title = "⑥ つかんで投げよう",  hint = "サンドバッグに近づいて LB / LT でつかむ" },
-            new TutorialStep { title = "⑦ ボイスボール！",   hint = "光る球を攻撃してこわし、マイクに願いを話そう！" },
+            new TutorialStep { title = "⑦ ボイスボール！",   hint = "光る球をこわし、マイクに話そう！ 例:「自分を大きくして！」" },
         };
 
         // プレイヤー自身が操作するチュートリアル用アバターの名前（1P用/2P用）。
@@ -233,6 +236,7 @@ namespace PromptFighters.GameFlow
                 _tutMoveDist[i] = 0f;
                 _tutEngaged[i]  = false;
                 _tutVoiceBroken[i] = false;
+                _tutVoiceAcquiring[i] = false;
                 if (_tutFighters[i] != null) _tutPrevX[i] = _tutFighters[i].transform.position.x;
             }
 
@@ -358,8 +362,9 @@ namespace PromptFighters.GameFlow
                 dummy.SetSizeScale(data.sizeScale > 0f ? data.sizeScale : 1f);
                 if (data.characterSprite != null) dummy.SetCharacterSprites(data.spriteSet);
                 dummy.maxHP = 999999f; // HP無限扱い（ApplyCharacterStatsのクランプを上書き）
-                // フレンドリーファイア回避のため、担当プレイヤーと逆チームにする（Hitboxの陣営判定対策）。
-                dummy.Team = f.Team == FighterTeam.Players ? FighterTeam.Enemies : FighterTeam.Players;
+                // 練習台は陣営に関わらずどちらのプレイヤーからも攻撃・つかみが通るようにする
+                // （Hitbox/Projectile/SummonEntityの陣営判定でこのフラグを見て素通りさせる）。
+                dummy.IsPracticeDummy = true;
 
                 float scale = bm.fighterScale;
                 dummy.transform.localScale = new Vector3(scale, scale, dummy.transform.localScale.z);
@@ -369,7 +374,7 @@ namespace PromptFighters.GameFlow
                 dummy.ResetForBattle(pos, faceRight: !f.FacingRight); // プレイヤーの方を向かせる
                 dummy.GetComponent<SkillExecutor>()?.ResetSkillState();
 
-                f.Opponent = dummy; // 実際のつかみ・攻撃対象をこの練習台にする
+                f.Opponent = dummy; // 初期のつかみ・攻撃対象（毎フレームUpdateTutorialで近い方に更新される）
 
                 _tutDummy[i] = dummy;
                 _tutSpawned.Add(dummyGo);
@@ -379,11 +384,16 @@ namespace PromptFighters.GameFlow
         // ボイスボールのステップに入ったら、そのプレイヤーの近くにボイスボールを出す。
         // 2人同時に出るとカオスになるため、既にどちらかの分が出ている間は自分の分を保留する（先着順）。
         // UpdateTutorial()から毎フレーム呼ばれ、相手の分が片付き次第このプレイヤーの分を出す。
+        // 「片付いた」は球が壊れた瞬間ではなく、取得シーケンス（マイク録音込み）が完全に
+        // 終わるまでを指す（_tutVoiceAcquiring）。球が壊れてから取得完了までの数秒間に
+        // 相手側の分を出してしまうと、2個同時進行のような状態になってしまうため。
         void SpawnTutorialVoiceBall(int i)
         {
             var f = _tutFighters[i];
-            if (f == null || _tutVoice[i] != null || _tutVoiceBroken[i]) return;
-            if (_tutVoice[1 - i] != null)
+            // 自分自身が取得シーケンス中（球は壊れ済みだがマイク録音等が完了していない）間は、
+            // 二重生成を防ぐため新しい球を出さない。
+            if (f == null || _tutVoice[i] != null || _tutVoiceBroken[i] || _tutVoiceAcquiring[i]) return;
+            if (_tutVoice[1 - i] != null || _tutVoiceAcquiring[1 - i])
             {
                 if (_tutHint[i] != null) _tutHint[i].text = "相手のボイスボールが終わるまで少し待とう…";
                 return;
@@ -396,6 +406,7 @@ namespace PromptFighters.GameFlow
             _tutVoice[i] = VoiceItem.Spawn(pos, 1.2f, breaker =>
             {
                 _tutVoice[idx] = null;
+                _tutVoiceAcquiring[idx] = true;
                 // 実際の取得シーケンス（スロー＋マイク音声入力＋ギミック適用）を体験させる。
                 // 取得が終わったらそのプレイヤーのステップをクリアにする。
                 var angel = BattleManager.Instance != null
@@ -410,6 +421,7 @@ namespace PromptFighters.GameFlow
                     angel.BeginAcquire(breaker ?? _tutFighters[idx], () =>
                     {
                         _tutVoiceBroken[idx] = true;
+                        _tutVoiceAcquiring[idx] = false;
                         SetTutorialBannerVisible(0, true);
                         SetTutorialBannerVisible(1, true);
                     });
@@ -417,6 +429,7 @@ namespace PromptFighters.GameFlow
                 else
                 {
                     _tutVoiceBroken[idx] = true; // 保険：AngelControllerが無ければ破壊だけで完了
+                    _tutVoiceAcquiring[idx] = false;
                 }
             });
             if (_tutVoice[i] != null) _tutSpawned.Add(_tutVoice[i].gameObject);
@@ -435,6 +448,18 @@ namespace PromptFighters.GameFlow
             {
                 var f = _tutFighters[i];
                 if (f == null || _tutStepClearing[i]) continue;
+
+                // 練習台はどちらのプレイヤーからも攻撃・つかみが通るようにするため、
+                // 実際に近い方を毎フレームOpponentにする（実際に変わった時だけ代入し、
+                // Physics2D.IgnoreCollisionの毎フレーム再呼び出しによる接地不安定化を避ける）。
+                if (_tutDummy[0] != null && _tutDummy[1] != null)
+                {
+                    float dd0 = Mathf.Abs(_tutDummy[0].transform.position.x - f.transform.position.x);
+                    float dd1 = Mathf.Abs(_tutDummy[1].transform.position.x - f.transform.position.x);
+                    var nearestDummy = dd0 <= dd1 ? _tutDummy[0] : _tutDummy[1];
+                    if (f.Opponent != nearestDummy) f.Opponent = nearestDummy;
+                }
+
                 int step = _tutStep[i];
                 if (step >= TutorialSteps.Length) continue;
 
@@ -594,6 +619,7 @@ namespace PromptFighters.GameFlow
                 _tutStepClearing[i] = false;
                 _tutFighters[i] = null;
                 _tutVoice[i] = null;
+                _tutVoiceAcquiring[i] = false;
                 _tutDummy[i] = null;
             }
             // 練習用に出した練習台・ボイスボールを片付ける

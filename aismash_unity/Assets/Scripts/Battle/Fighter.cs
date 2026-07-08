@@ -82,6 +82,9 @@ namespace PromptFighters.Battle
         public int PlayerIndex { get; set; }
         // 所属陣営（既定Players）。BattleManagerがスポーン時に設定。
         public FighterTeam Team { get; set; } = FighterTeam.Players;
+        // チュートリアルの練習台か。trueの場合、陣営に関わらずどちらのプレイヤーからも攻撃が通る
+        // （Hitbox/Projectile/SummonEntityの陣営判定でこのフラグを見て素通りさせる）。
+        public bool IsPracticeDummy { get; set; }
         // 協力モードでダウン（戦闘不能だが復活可能）中か。Downed/Reviveはサブタスク5で実装。
         public bool IsDowned { get; private set; }
         public bool IsHoldingOpponent => _heldOpponent != null;
