@@ -2049,5 +2049,6 @@ APIキーの権限変更で whisper-1（音声認識）と gpt-4o-mini-tts（表
 - **不具合/要望**: ボイスボールギミック「obstacle_bounce」（`AngelBouncePad`）は`BoxCollider2D`が通常の物理コライダーのままで、乗ったり押し返されたりする実体のある壁として振る舞っていた。要望により、物理的な当たり判定を無くし、触れた瞬間に上へ弾かれるだけの純粋なトリガー判定に変更。
 - `AngelGimmickApplier.SpawnBouncePad()`のコライダーを`isTrigger = true`に変更し、`AngelBouncePad`のヒット検知を`OnCollisionEnter2D`から`OnTriggerEnter2D`へ変更。
 - `Resources/Stage/bounce_pad.png`があれば自動で読み込み表示するように対応（`BouncePadSprite()`、`WallSprite()`/`PlatformSprite()`と同じ既存パターン）。画像が無い場合は従来通り緑の単色バーにフォールバック。未使用になった汎用ヘルパー`MakeStaticObstacle`は削除。
-- なお「バリア」（ガードバリア: `Fighter.CreateGuardBarrier`/`UpdateGuardBarrier`、`Resources/Effects/guard_barrier_full/mid/low.png`）は仕組み自体は既に実装済みで、画像が無いため現在非表示なだけと判明。コード変更は不要で、画像を配置するだけで有効になる。
-- ユーザーへ`bounce_pad.png`・`guard_barrier_full.png`（+任意で`_mid`/`_low`）の画像生成プロンプトを提示済み。生成後は指定パスに配置するだけで反映される。
+- なお「バリア」は当初ガードバリア（RB/RTのガード時に表示、`Fighter.CreateGuardBarrier`）だと思い提示したが、ユーザーの意図は**技の効果で一定ダメージを吸収するバリア**（`barrier`アクション、`Fighter.StartBarrier`/`CreateBarrierAura`）だったため訂正・対応した。
+- `CreateBarrierAura()`が従来`Skills.RuntimeSprite.Circle()`の円形プレースホルダーのみを使っていたのを、`Resources/Effects/barrier_aura.png`があれば自動で読み込むように対応（`BarrierAuraSprite()`、既存の画像フォールバックパターンと同様）。画像が無い場合は従来通り円形プレースホルダーにフォールバック。
+- ユーザーへ`bounce_pad.png`・`barrier_aura.png`の画像生成プロンプトを提示済み（ガードバリア用プロンプトは誤りだったため撤回）。生成後は指定パスに配置するだけで反映される。

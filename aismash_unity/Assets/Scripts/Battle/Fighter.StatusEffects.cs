@@ -73,13 +73,23 @@ namespace PromptFighters.Battle
             if (aura != null) Destroy(aura);
         }
 
+        static Sprite _barrierAuraSprite;
+        static bool _barrierAuraTried;
+
+        // 専用画像（Resources/Effects/barrier_aura）があればそれを使い、無ければ従来の円形プレースホルダーにフォールバックする。
+        static Sprite BarrierAuraSprite()
+        {
+            if (!_barrierAuraTried) { _barrierAuraSprite = Resources.Load<Sprite>("Effects/barrier_aura"); _barrierAuraTried = true; }
+            return _barrierAuraSprite;
+        }
+
         GameObject CreateBarrierAura()
         {
             var go = new GameObject("BarrierAura");
             go.transform.SetParent(transform, false);
             go.transform.localPosition = new Vector3(0f, 0.75f * _charSizeScale, 0f);
             var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite = Skills.RuntimeSprite.Circle();
+            sr.sprite = BarrierAuraSprite() ?? Skills.RuntimeSprite.Circle();
             sr.color = new Color(0.4f, 0.8f, 1f, 0.3f);
             sr.sortingOrder = 8; // キャラの少し手前に半透明で重ねる
             go.transform.localScale = Vector3.one * (2.2f * _charSizeScale);
