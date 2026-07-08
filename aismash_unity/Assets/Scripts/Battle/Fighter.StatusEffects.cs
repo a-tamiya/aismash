@@ -65,6 +65,11 @@ namespace PromptFighters.Battle
             var aura = CreateBarrierAura();
             _barrierAuraGo = aura;
             var auraSr = aura != null ? aura.GetComponent<SpriteRenderer>() : null;
+            // スプライトの実サイズ（画像のピクセル寸法次第で変わる）を1ワールド単位に正規化する係数。
+            // これが無いと、画像の解像度が高いほどバリアが際限なく大きく表示されてしまう。
+            float spriteNormalize = auraSr != null && auraSr.sprite != null
+                ? 1f / Mathf.Max(0.01f, auraSr.sprite.bounds.size.x)
+                : 1f;
             float elapsed = 0f;
             // 効果中はオーラを表示。時間切れ or 吸収しきりで終了。
             while (elapsed < duration && _barrierHP > 0f && State != FighterState.Dead)
@@ -73,7 +78,7 @@ namespace PromptFighters.Battle
                 {
                     float pulse = (Mathf.Sin(Time.time * 6f) + 1f) * 0.5f;
                     auraSr.color = new Color(0.4f, 0.8f, 1f, 0.20f + 0.18f * pulse);
-                    aura.transform.localScale = Vector3.one * ((2.2f + 0.12f * pulse) * _charSizeScale);
+                    aura.transform.localScale = Vector3.one * ((2.2f + 0.12f * pulse) * _charSizeScale * spriteNormalize);
                 }
                 elapsed += Time.deltaTime;
                 yield return null;
@@ -103,7 +108,10 @@ namespace PromptFighters.Battle
             sr.sprite = BarrierAuraSprite() ?? Skills.RuntimeSprite.Circle();
             sr.color = new Color(0.4f, 0.8f, 1f, 0.3f);
             sr.sortingOrder = 8; // キャラの少し手前に半透明で重ねる
-            go.transform.localScale = Vector3.one * (2.2f * _charSizeScale);
+            // スプライトの実サイズを1ワールド単位に正規化してから初期スケールを当てる
+            // （BarrierRoutine側の毎フレーム更新と同じ計算。最初の1フレーム分のズレ防止）。
+            float spriteNormalize = sr.sprite != null ? 1f / Mathf.Max(0.01f, sr.sprite.bounds.size.x) : 1f;
+            go.transform.localScale = Vector3.one * (2.2f * _charSizeScale * spriteNormalize);
             return go;
         }
 
