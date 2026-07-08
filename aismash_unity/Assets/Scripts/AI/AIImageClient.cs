@@ -447,7 +447,8 @@ namespace PromptFighters.AI
                 if (a.type == "projectile" || a.type == "area_hitbox" || a.type == "trap_hitbox" ||
                     a.type == "summon" ||
                     a.type == "beam" ||
-                    a.type == "melee_hitbox" || a.type == "jump_attack")
+                    a.type == "melee_hitbox" || a.type == "jump_attack" ||
+                    a.type == "shockwave")
                     return true;
             }
             return false;

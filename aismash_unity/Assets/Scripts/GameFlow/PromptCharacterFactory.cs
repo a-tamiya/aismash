@@ -278,6 +278,7 @@ namespace PromptFighters.GameFlow
             var clone = new SkillData
             {
                 slot = src.slot,
+                extraSpriteIndex = src.extraSpriteIndex,
                 skill_name = src.skill_name,
                 description = src.description,
                 element = src.element,
