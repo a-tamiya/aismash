@@ -9,3 +9,7 @@ aismash_unity/Build/
 .claude/
 aismash_unity/Assets/StreamingAssets/config.json
 aismash_unity/Assets/StreamingAssets/config.json.meta
+
+# AIコーディングツール向けの指示ファイル（共有先には不要）
+CLAUDE.md
+AGENTS.md
