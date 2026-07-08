@@ -184,6 +184,11 @@ namespace PromptFighters.GameFlow
             new TutorialStep { title = "⑦ ボイスボール！",   hint = "光る球を攻撃してこわし、マイクに願いを話そう！" },
         };
 
+        // プレイヤー自身が操作するチュートリアル用アバターの名前（1P用/2P用）。
+        // ゲーム内で生成・保存済みならそれを使い、未生成ならプリセット先頭2体にフォールバックする
+        // （StartTutorial参照。練習台＝サンドバッグ側は常に固定でこれとは別）。
+        static readonly string[] TutorialDummyCharacterNames = { "ケンゴ", "サヤ" };
+
         void StartTutorial()
         {
             var bm = BattleManager.Instance;
@@ -195,8 +200,13 @@ namespace PromptFighters.GameFlow
             FighterAI.Level = FighterAI.CpuLevel.Off;
             BattleManager.RequestedMode = BattleMode.Versus;
 
-            var d1 = PromptCharacterFactory.Clone(_presets[0]);
-            var d2 = PromptCharacterFactory.Clone(_presets.Count > 1 ? _presets[1] : _presets[0]);
+            // プレイヤー自身が操作するチュートリアル用アバターは「ケンゴ」「サヤ」を優先して使う
+            // （生成済みなら）。未生成ならこれまで通りプリセット先頭2体にフォールバックする。
+            var preset1 = CharacterSaveManager.LoadByName(TutorialDummyCharacterNames[0]) ?? _presets[0];
+            var preset2 = CharacterSaveManager.LoadByName(TutorialDummyCharacterNames[1])
+                ?? (_presets.Count > 1 ? _presets[1] : _presets[0]);
+            var d1 = PromptCharacterFactory.Clone(preset1);
+            var d2 = PromptCharacterFactory.Clone(preset2);
             EnsureSpriteSet(d1);
             EnsureSpriteSet(d2);
 
@@ -308,10 +318,7 @@ namespace PromptFighters.GameFlow
         // 各プレイヤーの少し前（内側）に練習台ファイターを設置する（常に2体、各プレイヤーに1体ずつ）。
         // 「HP無限・動かないプレイヤー」の実体は本物のFighter（bm.bossの複製）。AI/入力を無効化し、
         // HPを実質無限にするだけで、ノックバック・つかみ・投げは通常の戦闘システムがそのまま処理する。
-        // チュートリアル専用キャラの名前（1P用/2P用）。ゲーム内で生成・保存済みならそれを使い、
-        // 未生成ならサンドバッグ画像のフォールバックのままにする（SpawnTutorialDummies参照）。
-        static readonly string[] TutorialDummyCharacterNames = { "ケンゴ", "サヤ" };
-
+        // 見た目は常にサンドバッグ画像（プレイヤー自身が操作するアバターとは別。そちらはStartTutorial参照）。
         void SpawnTutorialDummies()
         {
             var bm = BattleManager.Instance;
@@ -336,24 +343,12 @@ namespace PromptFighters.GameFlow
                 var input = dummy.GetComponent<FighterInput>();
                 if (input != null) input.enabled = false;
 
-                // 専用のチュートリアルキャラが生成済みならそれを使う（見た目・技とも本物）。
-                // 未生成ならサンドバッグ画像で代替する（従来通り）。
-                var named = CharacterSaveManager.LoadByName(TutorialDummyCharacterNames[i]);
-                CharacterData data;
-                if (named != null)
+                var data = new CharacterData { characterName = "サンドバッグ" };
+                SampleSkillLibrary.EquipDefaults(data);
+                if (fallbackSprite != null)
                 {
-                    data = PromptCharacterFactory.Clone(named);
-                    EnsureSpriteSet(data);
-                }
-                else
-                {
-                    data = new CharacterData { characterName = "サンドバッグ" };
-                    SampleSkillLibrary.EquipDefaults(data);
-                    if (fallbackSprite != null)
-                    {
-                        data.characterSprite = fallbackSprite;
-                        for (int s = 0; s < 15; s++) data.spriteSet.Set((CharacterSpriteId)s, fallbackSprite);
-                    }
+                    data.characterSprite = fallbackSprite;
+                    for (int s = 0; s < 15; s++) data.spriteSet.Set((CharacterSpriteId)s, fallbackSprite);
                 }
 
                 dummy.ResetGimmickStats();
