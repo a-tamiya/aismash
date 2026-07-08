@@ -17,6 +17,8 @@ namespace PromptFighters.Battle.Skills.Json
         public string catch_copy;          // AIが生成するキャッチコピー（例: "最速の電撃剣士！"）
         public CharacterStats stats = new CharacterStats();
         public List<SkillJsonRaw> skills = new List<SkillJsonRaw>();
+        // ボス専用の追加技プール。通常キャラのJSONには存在しない（null許容・完全後方互換）。
+        public List<SkillJsonRaw> extra_skills;
         public GrabParameters grab_parameters = new GrabParameters();
         public ThrowParameters throw_parameters = new ThrowParameters();
     }

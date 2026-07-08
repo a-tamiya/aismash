@@ -114,7 +114,11 @@ namespace PromptFighters.Battle
         SkillExecutor _skillExecutor;
         CharacterSpriteSet _spriteSet = new CharacterSpriteSet();
         CharacterSpriteId? _forcedSprite;
+        Sprite _forcedRawSprite; // ボス専用の追加技プール用（CharacterSpriteSetを経由しない直接指定）
         float _forcedSpriteTimer;
+        // ボス専用の追加技プールのポーズ/エフェクト画像（通常キャラは空リストのまま）
+        List<Sprite> _extraPoseSprites;
+        List<Sprite> _extraEffectSprites;
         float _idleAnimTimer;
         int _idleFrame;
         float _stunTimer;
@@ -338,7 +342,7 @@ namespace PromptFighters.Battle
             if (_forcedSpriteTimer  > 0f)
             {
                 _forcedSpriteTimer -= Time.deltaTime;
-                if (_forcedSpriteTimer <= 0f) _forcedSprite = null;
+                if (_forcedSpriteTimer <= 0f) { _forcedSprite = null; _forcedRawSprite = null; }
             }
             TickBurn();
             TickGuard();
@@ -579,7 +583,11 @@ namespace PromptFighters.Battle
         void UpdateStateSprite()
         {
             Sprite next = null;
-            if (_forcedSprite.HasValue)
+            if (_forcedRawSprite != null)
+            {
+                next = _forcedRawSprite;
+            }
+            else if (_forcedSprite.HasValue)
             {
                 next = _spriteSet.Get(_forcedSprite.Value, _sprite.sprite);
             }
@@ -895,6 +903,19 @@ namespace PromptFighters.Battle
             ForceSprite(id, seconds);
         }
 
+        // ボス専用の追加技プール向けオーバーロード。専用ポーズ画像があればそれを、なければ既存4枠のslot絵にフォールバックする。
+        public void ShowSkillSprite(SkillData skill, float seconds)
+        {
+            if (skill == null) return;
+            if (skill.extraSpriteIndex >= 0 && _extraPoseSprites != null &&
+                skill.extraSpriteIndex < _extraPoseSprites.Count && _extraPoseSprites[skill.extraSpriteIndex] != null)
+            {
+                ForceSprite(_extraPoseSprites[skill.extraSpriteIndex], seconds);
+                return;
+            }
+            ShowSkillSprite(skill.slot, seconds);
+        }
+
         public void ShowGrabSprite(float seconds)
         {
             ForceSprite(CharacterSpriteId.Grab, seconds);
@@ -927,6 +948,16 @@ namespace PromptFighters.Battle
             return _spriteSet.Get(id, null, false);
         }
 
+        // ボス専用の追加技プール向けオーバーロード。専用ポーズ画像があればそれを、なければ既存4枠のslot絵にフォールバックする。
+        public Sprite GetAttackPoseSprite(SkillData skill)
+        {
+            if (skill == null) return null;
+            if (skill.extraSpriteIndex >= 0 && _extraPoseSprites != null &&
+                skill.extraSpriteIndex < _extraPoseSprites.Count && _extraPoseSprites[skill.extraSpriteIndex] != null)
+                return _extraPoseSprites[skill.extraSpriteIndex];
+            return GetAttackPoseSprite(skill.slot);
+        }
+
         public Sprite GetEffectSprite(SkillSlot slot)
         {
             CharacterSpriteId id = slot switch
@@ -940,9 +971,35 @@ namespace PromptFighters.Battle
             return _spriteSet.Get(id, null, false);
         }
 
+        // ボス専用の追加技プール向けオーバーロード。専用エフェクト画像があればそれを、なければ既存4枠のslotエフェクトにフォールバックする。
+        public Sprite GetEffectSprite(SkillData skill)
+        {
+            if (skill == null) return null;
+            if (skill.extraSpriteIndex >= 0 && _extraEffectSprites != null &&
+                skill.extraSpriteIndex < _extraEffectSprites.Count && _extraEffectSprites[skill.extraSpriteIndex] != null)
+                return _extraEffectSprites[skill.extraSpriteIndex];
+            return GetEffectSprite(skill.slot);
+        }
+
+        // ボス専用の追加技プール・専用スプライトを反映する（BattleManager.ApplySpriteから呼ばれる）。
+        public void SetExtraSkillSprites(List<Sprite> poses, List<Sprite> effects)
+        {
+            _extraPoseSprites = poses;
+            _extraEffectSprites = effects;
+        }
+
         void ForceSprite(CharacterSpriteId id, float seconds)
         {
             _forcedSprite = id;
+            _forcedRawSprite = null;
+            _forcedSpriteTimer = Mathf.Max(_forcedSpriteTimer, seconds);
+        }
+
+        // ボス専用の追加技プール向け: CharacterSpriteSetを経由せず生のSpriteを直接強制表示する。
+        void ForceSprite(Sprite sprite, float seconds)
+        {
+            _forcedSprite = null;
+            _forcedRawSprite = sprite;
             _forcedSpriteTimer = Mathf.Max(_forcedSpriteTimer, seconds);
         }
 
@@ -1032,6 +1089,7 @@ namespace PromptFighters.Battle
             _controlLockTimer = 0f;
             _forcedSpriteTimer = 0f;
             _forcedSprite = null;
+            _forcedRawSprite = null;
             RestoreDodgeGravity();
             RestoreOpponentCollision();
             State = FighterState.Idle;
@@ -1314,6 +1372,7 @@ namespace PromptFighters.Battle
             RestoreDodgeGravity();
             RestoreOpponentCollision();
             _forcedSprite       = null;
+            _forcedRawSprite    = null;
             _forcedSpriteTimer  = 0f;
             _idleAnimTimer      = 0f;
             _idleFrame          = 0;

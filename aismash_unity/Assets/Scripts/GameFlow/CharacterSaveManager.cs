@@ -207,6 +207,25 @@ namespace PromptFighters.GameFlow
             }
         }
 
+        // ボス専用の追加技プール用ポーズ/エフェクト画像をロードする（extra_pose_0.png, extra_effect_0.png, ...）。
+        // 通常キャラはファイルが存在しないため空リストを返す（無コスト・無変更）。
+        public static void LoadExtraSprites(string spriteDir, System.Collections.Generic.List<Sprite> poses, System.Collections.Generic.List<Sprite> effects)
+        {
+            poses.Clear();
+            effects.Clear();
+            if (string.IsNullOrEmpty(spriteDir) || !Directory.Exists(spriteDir)) return;
+
+            for (int i = 0; ; i++)
+            {
+                string posePath = Path.Combine(spriteDir, $"extra_pose_{i}.png");
+                if (!File.Exists(posePath)) break;
+                poses.Add(SpriteLoader.LoadDirect(posePath));
+
+                string effectPath = Path.Combine(spriteDir, $"extra_effect_{i}.png");
+                effects.Add(File.Exists(effectPath) ? SpriteLoader.LoadDirect(effectPath) : null);
+            }
+        }
+
         // バトル開始時に保存済みスプライトセットをフルロードする。
         public static CharacterSpriteSet LoadSpriteSet(string spriteDir)
         {
@@ -281,6 +300,22 @@ namespace PromptFighters.GameFlow
             }
             sb.AppendLine();
             sb.AppendLine("  ],");
+
+            if (d.extraSkills != null && d.extraSkills.Count > 0)
+            {
+                sb.AppendLine("  \"extra_skills\": [");
+                bool firstExtra = true;
+                foreach (var skill in d.extraSkills)
+                {
+                    if (skill == null) continue;
+                    if (!firstExtra) sb.AppendLine(",");
+                    firstExtra = false;
+                    AppendSkill(sb, skill);
+                }
+                sb.AppendLine();
+                sb.AppendLine("  ],");
+            }
+
             sb.AppendLine($"  \"grab_parameters\": {{\"range\": {d.grabParameters.range}, \"startup\": {d.grabParameters.startup}, \"recovery\": {d.grabParameters.recovery}}},");
             sb.AppendLine($"  \"throw_parameters\": {{\"front_damage\": {d.throwParameters.front_damage}, \"front_knockback\": {d.throwParameters.front_knockback}, \"back_damage\": {d.throwParameters.back_damage}, \"back_knockback\": {d.throwParameters.back_knockback}, \"up_damage\": {d.throwParameters.up_damage}, \"up_knockback\": {d.throwParameters.up_knockback}}}");
             sb.Append("}");

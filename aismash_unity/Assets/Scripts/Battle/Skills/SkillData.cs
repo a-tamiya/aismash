@@ -24,6 +24,10 @@ namespace PromptFighters.Battle.Skills
         // charge: 長押しで powerMultiplier 1.0→1.8
         public bool  chargeable;
         public float max_charge_time;  // 最大チャージ秒（0→デフォルト1.5s）
+
+        // ボス専用の追加技プール用。-1=既存4枠のslotポーズ/エフェクトを使う。
+        // 0以上=CharacterData.extraPoseSprites/extraEffectSpritesの該当インデックスの専用画像を使う。
+        public int extraSpriteIndex = -1;
     }
 
     [Serializable]

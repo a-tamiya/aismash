@@ -2006,3 +2006,13 @@ APIキーの権限変更で whisper-1（音声認識）と gpt-4o-mini-tts（表
 
 - `AICharacterClient.cs` のシステムプロンプトから、「実在のゲーム・アニメ・漫画・映画の版権キャラクター名や作品名を使わない」旨の指示を全箇所（キャラ原案生成・本生成のJSON出力テンプレ・末尾の注意書き）から削除。ユーザーの意向により、版権・実在キャラクターの名前や特徴をそのまま反映できるようにした。
 - 注意: 公開展示（オープンキャンパス等）では著作権者から問題視されるリスクがあることをユーザーに確認の上で対応。
+
+### 25.48 固定ボスキャラ「冥王ゾルバイン」を追加：技数拡張・最強ステータス・非プレイアブル化（実装済み・2026-07-08）
+
+- **技を4枠の外に増やす「追加技プール」を新設**: 通常キャラの技システム（`CharacterData.skills[4]`、`SkillSlot`の4値固定）には一切手を入れず、ボス専用に`CharacterData.extraSkills`（`List<SkillData>`、数の制限なし）を並行して追加。`SkillJsonParser`は`extra_skills`というJSON配列（nullable・既存キャラには存在せず完全後方互換）をこの追加プールへ変換し、通常の4枠のような重複排除は行わない。`SkillExecutor.TryUseRandomSkill(bool preferRanged)`を新設し、4枠＋追加技プールの中からランダムに1つ選んで発動する（既存の`TryUseDebugSkill`をそのまま流用）。
+- **専用のポーズ・エフェクト画像も追加技ごとに生成**: 画像生成で妥協しないという方針のもと、追加技も既存4ポーズの使い回しではなく専用画像を用意する。`SkillData.extraSpriteIndex`と`CharacterData.extraPoseSprites`/`extraEffectSprites`（並行リスト）を追加し、`Fighter`に`GetAttackPoseSprite(SkillData)`/`GetEffectSprite(SkillData)`/`ShowSkillSprite(SkillData,float)`のオーバーロードを新設（既存の`SkillSlot`版はそのまま残し通常キャラは無変更）。`AIImageClient.GenerateBossSpriteSet`を新設し、既存の`GenerateSpriteSet`/`BuildEditEntries`/呼び出し元には一切触れずに、通常14枚＋追加技分のポーズ・エフェクト画像を同じ並列生成ロジックで生成する。
+- **ボスだけ追加技プールを使うAI**: `FighterAI`に`IsBossFighter`（`BattleManager.Instance.boss == 自分`）を追加し、ボスの場合のみ技発動を`TryUseRandomSkill`に振り分ける。プレイヤーキャラ・通常CPUの挙動は無変更。
+- **最強ステータス**: 汎用のボス倍率（`bossHpMultiplier`等、`BattleManager.cs`）は他のボス選択にも影響するため変更せず、代わりにこのキャラ専用のセーブデータへ生成時に上限値（maxHP=350、moveSpeed/jumpForce/guardDurability/dodge距離など）を直接焼き込んだ。
+- **P1/P2選択には出さず、協力モードのボスにのみ登場**: `PreBattlePanel`の`_presets`（P1/P2選択・削除UI等で共用）から`FixedBossCharacterName`（「冥王ゾルバイン」）を除外し、ボス◀/▶セレクター専用の`_bossPresets`（`_presets`+固定ボスを先頭挿入）を新設。協力モードのデフォルトボスは自動的に固定ボスになり、◀/▶で他キャラにも変更できる（選択式は維持）。
+- **コンテンツ生成**: ユーザーの明示許可のもと、「冥王ゾルバイン」（全身漆黒の重厚な鎧を纏う巨大な魔王、二刀の大剣・光弾・衝撃波を操る）というfeaturesでOpenAI APIを実行。技生成を3回（基本4技＋バリエーション4技×2回）呼び出し合計12技のプールを構築し、画像生成は1回（ベース+通常14枚+追加技分のポーズ/エフェクトを含む計28枚）で全専用スプライトを揃えた。
+- 実機確認: 協力モードのボス欄がデフォルトで「ボス: 冥王ゾルバイン」になっていること、P1/P2の通常キャラ選択には出てこないこと、実際の戦闘で追加技プールの技（例:「冥王双断」）が使用されること、HP・サイズ・見た目が通常キャラと明確に異なる最強仕様になっていることをスクリーンショット・ログで確認。

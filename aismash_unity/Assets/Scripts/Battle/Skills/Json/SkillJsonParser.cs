@@ -76,6 +76,20 @@ namespace PromptFighters.Battle.Skills.Json
             }
 
             data.skills = skillMap;
+
+            // ボス専用の追加技プール（slot重複チェックなし。4枠システムとは独立）
+            if (raw.extra_skills != null)
+            {
+                foreach (var rawSkill in raw.extra_skills)
+                {
+                    var skill = ConvertSkill(rawSkill);
+                    if (skill == null) continue;
+                    BalanceCorrector.Apply(skill);
+                    skill.extraSpriteIndex = data.extraSkills.Count;
+                    data.extraSkills.Add(skill);
+                }
+            }
+
             data.sizeScale = CharacterSizeEstimator.Estimate(data);
             return data;
         }

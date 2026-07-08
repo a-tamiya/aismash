@@ -107,6 +107,16 @@ namespace PromptFighters.GameFlow
             clone.sizeScale = src.sizeScale;
             for (int i = 0; i < clone.skills.Length && i < src.skills.Length; i++)
                 clone.skills[i] = CloneSkill(src.skills[i]);
+
+            // ボス専用の追加技プール・専用スプライト（存在する場合のみ）
+            if (src.extraSkills != null)
+                foreach (var skill in src.extraSkills)
+                    clone.extraSkills.Add(CloneSkill(skill));
+            if (src.extraPoseSprites != null)
+                clone.extraPoseSprites.AddRange(src.extraPoseSprites);
+            if (src.extraEffectSprites != null)
+                clone.extraEffectSprites.AddRange(src.extraEffectSprites);
+
             return clone;
         }
 

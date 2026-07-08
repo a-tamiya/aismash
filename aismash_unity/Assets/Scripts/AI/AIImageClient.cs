@@ -218,6 +218,191 @@ namespace PromptFighters.AI
             onSuccess?.Invoke(set);
         }
 
+        // ボス専用: 通常15枚に加えて、追加技プール(data.extraSkills)の各技に専用のポーズ・エフェクト画像を生成する。
+        // 既存のGenerateSpriteSet/BuildEditEntries/呼び出し元(PreBattlePanel)には一切触れない、完全に独立した経路。
+        public static Coroutine GenerateBossSpriteSet(MonoBehaviour runner,
+            CharacterData data,
+            Action<string> onProgress,
+            Action<CharacterSpriteSet, List<Sprite>, List<Sprite>> onSuccess,
+            Action<string> onError,
+            string saveDir = null)
+        {
+            return runner.StartCoroutine(
+                GenerateBossSpriteSetCoroutine(runner, data, onProgress, onSuccess, onError, saveDir));
+        }
+
+        static IEnumerator GenerateBossSpriteSetCoroutine(
+            MonoBehaviour runner,
+            CharacterData data,
+            Action<string> onProgress,
+            Action<CharacterSpriteSet, List<Sprite>, List<Sprite>> onSuccess,
+            Action<string> onError,
+            string saveDir)
+        {
+            if (!HasConfiguredApiKey(out string keyError))
+            {
+                onError?.Invoke(keyError);
+                yield break;
+            }
+            string key = ApiKey;
+            string baseVisualPrompt = data?.visualPrompt ?? "";
+
+            onProgress?.Invoke("ベース画像を生成中...");
+            Sprite baseSprite = null;
+            byte[] baseRawBytes = null;
+            string baseError = null;
+            string usedModel = Model;
+
+            yield return GenerateBaseCoroutine(baseVisualPrompt, key,
+                (sprite, rawBytes, model) => { baseSprite = sprite; baseRawBytes = rawBytes; usedModel = model; },
+                err => baseError = err);
+
+            if (baseSprite == null)
+            {
+                onError?.Invoke(baseError ?? "ベース画像(Idle1)の生成に失敗しました");
+                yield break;
+            }
+
+            var set = new CharacterSpriteSet();
+            set.Set(CharacterSpriteId.Idle1, baseSprite);
+            if (saveDir != null) TrySavePng(saveDir, "idle1", baseSprite);
+
+            // 通常14枚（既存ロジックを完全再利用）
+            var editEntries = BuildEditEntries(data);
+
+            // 追加技プール分のポーズ・エフェクトエントリを組み立てる
+            var extraPoseEntries = new List<(int index, string filename, string prompt, string size)>();
+            var extraEffectEntries = new List<(int index, string filename, string prompt, string size)>();
+            int extraCount = data?.extraSkills?.Count ?? 0;
+
+            if (data?.extraSkills != null)
+            {
+                for (int i = 0; i < data.extraSkills.Count; i++)
+                {
+                    var skill = data.extraSkills[i];
+                    if (skill == null) continue;
+
+                    string posePrompt = $"{baseVisualPrompt}, action pose performing '{skill.skill_name}' ({skill.description}), same character, {CharSuffix}";
+                    extraPoseEntries.Add((i, $"extra_pose_{i}", posePrompt, CharacterSize));
+
+                    if (NeedsSeparateEffect(skill))
+                    {
+                        bool vertical = PrefersVerticalEffect(skill);
+                        string orientation = HasAction(skill, "summon")
+                            ? "summoned creature or minion sprite for a 2D fighting game skill, clear full body, transparent background"
+                            : HasAction(skill, "beam")
+                            ? "long horizontal 2D energy beam visual effect, bright core, transparent background, no rectangular block"
+                            : vertical
+                            ? "tall vertical 2D game visual effect, rising column or upward slash"
+                            : "wide horizontal 2D game visual effect, side slash, beam, wave, or projectile trail";
+                        string effectPrompt = $"{skill.skill_name} {orientation}, {EffectSuffix}";
+                        extraEffectEntries.Add((i, $"extra_effect_{i}", effectPrompt, vertical ? CharacterSize : EffectSize));
+                    }
+                }
+            }
+
+            int totalCount = editEntries.Count + extraPoseEntries.Count + extraEffectEntries.Count;
+            onProgress?.Invoke($"バリエーション画像を並列生成中... ({totalCount}枚)");
+
+            int pending = totalCount;
+            int failedCount = 0;
+            var failedNames = new List<string>();
+            var extraPoseSprites = new List<Sprite>(new Sprite[extraCount]);
+            var extraEffectSprites = new List<Sprite>(new Sprite[extraCount]);
+
+            foreach (var entry in editEntries)
+            {
+                var (id, filename, editPrompt, size) = entry;
+                if (string.IsNullOrEmpty(editPrompt))
+                {
+                    set.Set(id, null);
+                    pending--;
+                    continue;
+                }
+                string fullPrompt = baseVisualPrompt + ", " + editPrompt;
+                runner.StartCoroutine(GenerateEditCoroutine(
+                    id, filename, fullPrompt, size, baseRawBytes, key, saveDir, usedModel,
+                    (spriteId, fname, sprite) =>
+                    {
+                        set.Set(spriteId, sprite);
+                        pending--;
+                        onProgress?.Invoke($"生成完了: {fname} (残り {pending} 枚)");
+                    },
+                    (spriteId, err) =>
+                    {
+                        Debug.LogWarning($"[AIImage] {spriteId} 生成失敗（Idle1で代替）: {err}");
+                        set.Set(spriteId, baseSprite);
+                        failedCount++;
+                        failedNames.Add(spriteId.ToString());
+                        pending--;
+                    }));
+            }
+
+            foreach (var (idx, filename, prompt, size) in extraPoseEntries)
+            {
+                runner.StartCoroutine(GenerateEditCoroutine(
+                    CharacterSpriteId.Idle1, filename, prompt, size, baseRawBytes, key, saveDir, usedModel,
+                    (_, fname, sprite) =>
+                    {
+                        extraPoseSprites[idx] = sprite;
+                        pending--;
+                        onProgress?.Invoke($"生成完了: {fname} (残り {pending} 枚)");
+                    },
+                    (_, err) =>
+                    {
+                        Debug.LogWarning($"[AIImage] {filename} 生成失敗（ベース画像で代替）: {err}");
+                        extraPoseSprites[idx] = baseSprite;
+                        failedCount++;
+                        failedNames.Add(filename);
+                        pending--;
+                    }));
+            }
+
+            foreach (var (idx, filename, prompt, size) in extraEffectEntries)
+            {
+                runner.StartCoroutine(GenerateEditCoroutine(
+                    CharacterSpriteId.Idle1, filename, prompt, size, baseRawBytes, key, saveDir, usedModel,
+                    (_, fname, sprite) =>
+                    {
+                        extraEffectSprites[idx] = sprite;
+                        pending--;
+                        onProgress?.Invoke($"生成完了: {fname} (残り {pending} 枚)");
+                    },
+                    (_, err) =>
+                    {
+                        Debug.LogWarning($"[AIImage] {filename} 生成失敗（エフェクトなし）: {err}");
+                        extraEffectSprites[idx] = null;
+                        failedCount++;
+                        failedNames.Add(filename);
+                        pending--;
+                    }));
+            }
+
+            const float overallTimeout = 300f;
+            float elapsed = 0f;
+            while (pending > 0 && elapsed < overallTimeout)
+            {
+                yield return null;
+                elapsed += Time.unscaledDeltaTime;
+            }
+            if (pending > 0)
+            {
+                Debug.LogWarning($"[AIImage] 画像生成が{overallTimeout:F0}秒以内に完了しませんでした（残り{pending}枚）");
+                onProgress?.Invoke($"⚠ 画像生成タイムアウト（残り{pending}枚）");
+                failedCount += pending;
+                pending = 0;
+            }
+
+            if (failedCount > 0)
+            {
+                string failedList = string.Join(", ", failedNames);
+                Debug.LogWarning($"[AIImage] {failedCount}枚の画像生成に失敗しました: {failedList}");
+                onProgress?.Invoke($"⚠ {failedCount}枚の画像生成に失敗: {failedList}");
+            }
+
+            onSuccess?.Invoke(set, extraPoseSprites, extraEffectSprites);
+        }
+
         static List<(CharacterSpriteId id, string filename, string prompt, string size)> BuildEditEntries(CharacterData data)
         {
             var entries = new List<(CharacterSpriteId id, string filename, string prompt, string size)>(BaseEditEntries);

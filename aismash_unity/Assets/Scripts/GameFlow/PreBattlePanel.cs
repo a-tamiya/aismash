@@ -17,6 +17,9 @@ namespace PromptFighters.GameFlow
     public partial class PreBattlePanel : MonoBehaviour
     {
         List<CharacterData> _presets;
+        // 固定ボス専用: _presetsからは除外し（P1/P2選択に出さない）、ボス◀/▶セレクター専用のリストにだけ含める。
+        const string FixedBossCharacterName = "冥王ゾルバイン";
+        List<CharacterData> _bossPresets;
         int _builtInPresetCount = 0; // プリセット（初期キャラ）の件数。以降が生成済みキャラ。
         int _p1PresetIdx = 0;
         int _p2PresetIdx = 1;
@@ -161,6 +164,8 @@ namespace PromptFighters.GameFlow
             _builtInPresetCount = builtIn.Count;
             _presets = new List<CharacterData>(builtIn);
             _presets.AddRange(CharacterSaveManager.LoadAll());
+            ExcludeFixedBossFromPresets();
+            BuildBossPresets();
             if (_presets.Count < 2) _p2PresetIdx = 0;
             BuildTitlePanel();
             BuildPanel();
@@ -926,20 +931,20 @@ namespace PromptFighters.GameFlow
         }
 
         string BossPresetText() =>
-            $"ボス: {GetPresetName(_bossPresetIdx)}";
+            $"ボス: {GetBossPresetName(_bossPresetIdx)}";
 
         void OnBossPresetCycle()
         {
-            if (_presets == null || _presets.Count == 0) return;
-            _bossPresetIdx = (_bossPresetIdx + 1) % _presets.Count;
+            if (_bossPresets == null || _bossPresets.Count == 0) return;
+            _bossPresetIdx = (_bossPresetIdx + 1) % _bossPresets.Count;
             SyncBossCharacter();
             RefreshToggleVisuals();
         }
 
         void OnBossPresetPrev()
         {
-            if (_presets == null || _presets.Count == 0) return;
-            _bossPresetIdx = (_bossPresetIdx - 1 + _presets.Count) % _presets.Count;
+            if (_bossPresets == null || _bossPresets.Count == 0) return;
+            _bossPresetIdx = (_bossPresetIdx - 1 + _bossPresets.Count) % _bossPresets.Count;
             SyncBossCharacter();
             RefreshToggleVisuals();
         }
@@ -947,10 +952,10 @@ namespace PromptFighters.GameFlow
         // 選択中のボスキャラをBattleManagerへ反映する。
         void SyncBossCharacter()
         {
-            if (_presets == null || _presets.Count == 0) return;
-            if (_bossPresetIdx < 0 || _bossPresetIdx >= _presets.Count) _bossPresetIdx = 0;
+            if (_bossPresets == null || _bossPresets.Count == 0) return;
+            if (_bossPresetIdx < 0 || _bossPresetIdx >= _bossPresets.Count) _bossPresetIdx = 0;
             PromptFighters.Battle.BattleManager.RequestedBossCharacter =
-                PromptCharacterFactory.Clone(_presets[_bossPresetIdx]);
+                PromptCharacterFactory.Clone(_bossPresets[_bossPresetIdx]);
         }
 
         static string CommentaryToggleText() =>
@@ -2436,6 +2441,28 @@ namespace PromptFighters.GameFlow
             return _presets[idx].characterName;
         }
 
+        // 固定ボスはP1/P2選択（_presets）には出さない（プレイアブル不可のため）。
+        void ExcludeFixedBossFromPresets()
+        {
+            if (_presets == null) return;
+            _presets.RemoveAll(c => c != null && c.characterName == FixedBossCharacterName);
+        }
+
+        // ボス◀/▶セレクター専用のリスト。_presets（P1/P2用・固定ボス除外済み）に固定ボスを先頭挿入する。
+        // 固定ボスが未生成の場合はフォールバックで_presetsと同じ内容になる。
+        void BuildBossPresets()
+        {
+            _bossPresets = new List<CharacterData>(_presets ?? new List<CharacterData>());
+            var fixedBoss = CharacterSaveManager.LoadByName(FixedBossCharacterName);
+            if (fixedBoss != null) _bossPresets.Insert(0, fixedBoss);
+        }
+
+        string GetBossPresetName(int idx)
+        {
+            if (_bossPresets == null || idx < 0 || idx >= _bossPresets.Count) return "---";
+            return _bossPresets[idx].characterName;
+        }
+
         void OnStartPressed()
         {
             if (BattleManager.Instance == null) return;
@@ -2829,11 +2856,14 @@ namespace PromptFighters.GameFlow
         {
             string p1Name = GetPresetName(_p1PresetIdx);
             string p2Name = GetPresetName(_p2PresetIdx);
+            string bossName = GetBossPresetName(_bossPresetIdx);
 
             var builtIn = PresetCharacterLoader.LoadAll();
             _builtInPresetCount = builtIn.Count;
             _presets = new List<CharacterData>(builtIn);
             _presets.AddRange(CharacterSaveManager.LoadAll());
+            ExcludeFixedBossFromPresets();
+            BuildBossPresets();
 
             int maxIdx = Mathf.Max(0, _presets.Count - 1);
 
@@ -2842,6 +2872,9 @@ namespace PromptFighters.GameFlow
 
             int f2 = p2Name != "---" ? _presets.FindIndex(c => c.characterName == p2Name) : -1;
             _p2PresetIdx = f2 >= 0 ? f2 : Mathf.Clamp(_p2PresetIdx, 0, maxIdx);
+
+            int fb = bossName != "---" ? _bossPresets.FindIndex(c => c.characterName == bossName) : -1;
+            _bossPresetIdx = fb >= 0 ? fb : Mathf.Clamp(_bossPresetIdx, 0, Mathf.Max(0, _bossPresets.Count - 1));
 
             if (_p1PresetLabel != null) _p1PresetLabel.text = GetPresetName(_p1PresetIdx);
             if (_p2PresetLabel != null) _p2PresetLabel.text = GetPresetName(_p2PresetIdx);

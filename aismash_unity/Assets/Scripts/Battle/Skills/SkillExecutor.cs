@@ -12,6 +12,8 @@ namespace PromptFighters.Battle.Skills
     public class SkillExecutor : MonoBehaviour
     {
         public SkillData[] skills = new SkillData[4]; // index = SkillSlot
+        // ボス専用の追加技プール（4枠システムとは独立。通常キャラは常に空）。FighterAIがボスのときだけ使う。
+        public List<SkillData> extraSkills = new List<SkillData>();
         public bool autoEquipSampleSkills = true;
         const float HitboxVisualScale = SkillConstants.HitboxVisualScale;
         const int MaxFollowUpCount = SkillConstants.MaxFollowUpCount;
@@ -73,6 +75,7 @@ namespace PromptFighters.Battle.Skills
             int n = data.skills != null ? data.skills.Length : 0;
             for (int i = 0; i < skills.Length; i++)
                 skills[i] = i < n ? data.skills[i] : null;
+            extraSkills = data.extraSkills != null ? new List<SkillData>(data.extraSkills) : new List<SkillData>();
             _baseSizeScale = Mathf.Clamp(data.sizeScale > 0f ? data.sizeScale : 1f, 0.5f, 2f);
             ResetSkillState();
             Debug.Log($"[SkillExecutor] キャラクター「{data.characterName}」の技をロードしました。(sizeScale={_sizeScale:F2})");
@@ -189,6 +192,33 @@ namespace PromptFighters.Battle.Skills
             return true;
         }
 
+        // ボス専用: 4枠(skills)＋追加技プール(extraSkills)から1つランダムに選んで発動する。
+        // preferRanged=trueかつプール内にprojectile/beam系の技があればその中から選ぶ。
+        public bool TryUseRandomSkill(bool preferRanged)
+        {
+            if (_isExecuting || !_fighter.CanAct) return false;
+
+            var pool = new List<SkillData>();
+            foreach (var s in skills) if (s != null) pool.Add(s);
+            pool.AddRange(extraSkills);
+            if (pool.Count == 0) return false;
+
+            if (preferRanged)
+            {
+                var ranged = new List<SkillData>();
+                foreach (var s in pool)
+                {
+                    if (s.actions == null) continue;
+                    foreach (var a in s.actions)
+                        if (a != null && (a.type == "projectile" || a.type == "beam")) { ranged.Add(s); break; }
+                }
+                if (ranged.Count > 0) pool = ranged;
+            }
+
+            var chosen = pool[UnityEngine.Random.Range(0, pool.Count)];
+            return TryUseDebugSkill(chosen);
+        }
+
         IEnumerator ExecuteSkill(SkillData skill, float powerMultiplier)
         {
             _isExecuting = true;
@@ -202,7 +232,7 @@ namespace PromptFighters.Battle.Skills
             if (firstBeamTime > 0f)
                 totalDuration = Mathf.Max(totalDuration, firstBeamTime + skill.parameters.active_time + recovery);
             _fighter.BeginSkillRecovery(totalDuration);
-            _fighter.ShowSkillSprite(skill.slot, totalDuration);
+            _fighter.ShowSkillSprite(skill, totalDuration);
             // スマッシュのオーラは溜め中(Fighter.UpdateSmashAura)で表示するため、発動時には出さない。
             float whiffDelay = WhiffCheckDelay(skill);
             if (whiffDelay > 0f)
@@ -375,7 +405,7 @@ namespace PromptFighters.Battle.Skills
 
             // 攻撃ポーズの得物（剣・槍・拳）の位置に判定を合わせる
             // （「剣を振っているのに判定が別の場所にある」対策）。
-            var anchor = AnchorFor(skill.slot);
+            var anchor = AnchorFor(skill);
             if (anchor.valid)
             {
                 if (anchor.weaponLength >= 0.35f)
@@ -423,7 +453,7 @@ namespace PromptFighters.Battle.Skills
             hb.StunTime       = skill.parameters.stun_time;
             hb.GuardDamage    = skill.parameters.guard_damage;
             hb.Element        = skill.element;
-            hb.EffectSprite   = a.hide_effect ? null : _fighter.GetEffectSprite(skill.slot);
+            hb.EffectSprite   = a.hide_effect ? null : _fighter.GetEffectSprite(skill);
             hb.HideVisual     = a.hide_effect;
             hb.FlipEffectX    = !_fighter.FacingRight;
             hb.MaxHits        = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
@@ -634,7 +664,7 @@ namespace PromptFighters.Battle.Skills
             hb.StunTime       = skill.parameters.stun_time;
             hb.GuardDamage    = skill.parameters.guard_damage;
             hb.Element        = skill.element;
-            hb.EffectSprite   = a.hide_effect ? null : _fighter.GetEffectSprite(skill.slot);
+            hb.EffectSprite   = a.hide_effect ? null : _fighter.GetEffectSprite(skill);
             hb.HideVisual     = a.hide_effect;
             hb.FlipEffectX    = !_fighter.FacingRight;
             hb.MaxHits        = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
@@ -643,8 +673,8 @@ namespace PromptFighters.Battle.Skills
         }
 
         // 攻撃ポーズのスプライト解析アンカー（武器の先端・銃口・拳の位置）。
-        AttackAnchor AnchorFor(SkillSlot slot)
-            => AttackAnchorEstimator.Get(_fighter.GetAttackPoseSprite(slot));
+        AttackAnchor AnchorFor(SkillData skill)
+            => AttackAnchorEstimator.Get(_fighter.GetAttackPoseSprite(skill));
 
         void SpawnProjectile(SkillData skill, SkillAction a, float powerMultiplier)
         {
@@ -658,7 +688,7 @@ namespace PromptFighters.Battle.Skills
             bool specialTrajectory = !Mathf.Approximately(a.gravity_scale, 0f)
                                      || Mathf.Abs(a.projectile_angle) >= 30f
                                      || offsetY >= 2f;
-            var anchor = AnchorFor(skill.slot);
+            var anchor = AnchorFor(skill);
             if (anchor.valid && !specialTrajectory)
             {
                 offsetX = Mathf.Max(anchor.tip.x + 0.12f, 0.35f);
@@ -711,7 +741,7 @@ namespace PromptFighters.Battle.Skills
                 p.StatusDuration           = a.status_duration > 0f ? a.status_duration : a.duration;
                 p.StatusChance             = Mathf.Clamp01(a.chance);
                 p.Element                  = skill.element;
-                p.EffectSprite             = a.hide_effect ? null : _fighter.GetEffectSprite(skill.slot);
+                p.EffectSprite             = a.hide_effect ? null : _fighter.GetEffectSprite(skill);
                 p.HideVisual               = a.hide_effect;
                 p.FlipEffectX              = !_fighter.FacingRight;
                 p.DesiredWorldSize         = desiredSize;
@@ -739,7 +769,7 @@ namespace PromptFighters.Battle.Skills
             // ビームは「起点（銃口・掌の位置）から前方へ伸びる」ように配置する。
             // 従来は spawn_x をビーム中心として扱っていたため、幅が広いほど後ろ半分が
             // キャラの背後へはみ出していた（「ビームが自分の後ろから出る」の原因）。
-            var anchor = AnchorFor(skill.slot);
+            var anchor = AnchorFor(skill);
             float originX, originY;
             if (anchor.valid)
             {
@@ -939,7 +969,7 @@ namespace PromptFighters.Battle.Skills
                 (a.size_x > 0f ? a.size_x : 1.3f) * _sizeScale,
                 (a.size_y > 0f ? a.size_y : 1.7f) * _sizeScale);
             SummonEntity.Spawn(_fighter, pos, speed, lifetime, dmg, kb, skill.element,
-                a.hide_effect ? null : _fighter.GetEffectSprite(skill.slot), desiredSize, a);
+                a.hide_effect ? null : _fighter.GetEffectSprite(skill), desiredSize, a);
         }
 
         // heal_self: HP回復。power=回復量(HP)。未指定なら最大HPの5%。
@@ -1007,7 +1037,7 @@ namespace PromptFighters.Battle.Skills
             hb.StunTime       = skill.parameters.stun_time;
             hb.GuardDamage    = skill.parameters.guard_damage;
             hb.Element        = skill.element;
-            hb.EffectSprite   = a.hide_effect ? null : _fighter.GetEffectSprite(skill.slot);
+            hb.EffectSprite   = a.hide_effect ? null : _fighter.GetEffectSprite(skill);
             hb.HideVisual     = a.hide_effect;
             hb.FlipEffectX    = side < 0f;
             hb.MaxHits        = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
@@ -1027,7 +1057,7 @@ namespace PromptFighters.Battle.Skills
             float duration = a.duration > 0f ? a.duration : 1.2f;
             _fighter.StartGravityWell(center, radius, force, duration);
             if (!a.hide_effect)
-                SpawnFieldVisual(center, radius * 2f, _fighter.GetEffectSprite(skill.slot), skill.element, duration);
+                SpawnFieldVisual(center, radius * 2f, _fighter.GetEffectSprite(skill), skill.element, duration);
         }
 
         // 引き寄せ範囲などの「効果範囲」を可視化する非接触ビジュアル。直径＝効果範囲で一致させる。

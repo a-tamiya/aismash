@@ -55,6 +55,11 @@ namespace PromptFighters.Battle.Skills
         public string catchCopy          = ""; // AIキャッチコピー
 
         public SkillData[] skills = new SkillData[4]; // index = SkillSlot
+        // ボス専用の追加技プール（4枠システムとは独立。数に制限なし）と、その専用ポーズ/エフェクト画像。
+        // 通常のプレイアブルキャラは空リストのまま（無変更・無コスト）。
+        public System.Collections.Generic.List<SkillData> extraSkills = new System.Collections.Generic.List<SkillData>();
+        public System.Collections.Generic.List<Sprite> extraPoseSprites = new System.Collections.Generic.List<Sprite>();
+        public System.Collections.Generic.List<Sprite> extraEffectSprites = new System.Collections.Generic.List<Sprite>();
         public CharacterStats stats = new CharacterStats();
         public GrabParameters grabParameters = new GrabParameters();
         public ThrowParameters throwParameters = new ThrowParameters();

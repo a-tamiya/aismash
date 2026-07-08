@@ -23,6 +23,9 @@ namespace PromptFighters.Battle
 
         const float AttackRange = 1.5f;
 
+        // 協力モードの固定/選択ボスかどうか。ボスは4枠に縛られず追加技プールも使う。
+        bool IsBossFighter => BattleManager.Instance != null && BattleManager.Instance.boss == _fighter;
+
         Fighter _fighter;
         SkillExecutor _skills;
         float _decisionTimer;
@@ -203,7 +206,8 @@ namespace PromptFighters.Battle
                 if (_actionCooldown <= 0f && _skills != null && !_skills.IsExecuting && _fighter.CanAct)
                 {
                     _fighter.FaceTowardInput(sign);
-                    if (_skills.TryUseSkill(PickSlot()))
+                    bool used = IsBossFighter ? _skills.TryUseRandomSkill(false) : _skills.TryUseSkill(PickSlot());
+                    if (used)
                         _actionCooldown = Random.Range(0.3f, 0.6f);
                 }
             }
@@ -214,6 +218,13 @@ namespace PromptFighters.Battle
         {
             if (_skills == null || _skills.IsExecuting || !_fighter.CanAct) return;
             _fighter.FaceTowardInput(sign);
+
+            if (IsBossFighter)
+            {
+                if (_skills.TryUseRandomSkill(preferRanged))
+                    _actionCooldown = Random.Range(0.35f, 0.7f);
+                return;
+            }
 
             SkillSlot slot;
             if (preferRanged && TryFindRangedSlot(out var ranged))

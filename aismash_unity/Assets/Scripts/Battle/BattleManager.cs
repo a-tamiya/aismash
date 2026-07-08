@@ -641,6 +641,14 @@ namespace PromptFighters.Battle
         static void EnsureBossSpriteSet(CharacterData data)
         {
             if (data == null) return;
+
+            // 追加技プール専用のポーズ/エフェクト画像（存在すれば）
+            if (data.extraSkills != null && data.extraSkills.Count > 0 &&
+                data.extraPoseSprites.Count == 0 && !string.IsNullOrEmpty(data.spriteDir))
+            {
+                CharacterSaveManager.LoadExtraSprites(data.spriteDir, data.extraPoseSprites, data.extraEffectSprites);
+            }
+
             if (HasPoseAndEffectSprites(data.spriteSet)) return;
             if (string.IsNullOrEmpty(data.spriteDir)) return;
 
@@ -699,6 +707,9 @@ namespace PromptFighters.Battle
         static void ApplySprite(Fighter fighter, CharacterData data)
         {
             if (fighter == null || data == null) return;
+
+            // ボス専用の追加技プール・専用スプライト（通常キャラは空リストのまま＝無影響）
+            fighter.SetExtraSkillSprites(data.extraPoseSprites, data.extraEffectSprites);
 
             // characterSpriteが既にセットされていればそちらを優先
             if (data.characterSprite != null)
