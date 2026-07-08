@@ -2589,7 +2589,10 @@ namespace PromptFighters.GameFlow
             }
             else _pendingData2 = preset2;
 
-            // 生成失敗時はローカル生成で代替
+            // 生成失敗時はローカル生成で代替。通信不調でAI生成できなくても「作ろうとしたキャラが
+            // 結局残らない」とならないよう、この代替キャラも見た目一式をプリセットから借りて保存する
+            // （FinalizeLocalFallbackCharacterで対応。技はローカル簡易生成のものになる）。
+            bool usedFallback1 = false, usedFallback2 = false;
             if (_pendingData1 == null)
             {
                 if (!string.IsNullOrEmpty(errorMsg))
@@ -2597,12 +2600,14 @@ namespace PromptFighters.GameFlow
                 UpdateGeneratingStatus(BuildFallbackMessage(errorMsg));
                 _pendingData1 = PromptCharacterFactory.Create(
                     _p1NameInput?.text, _p1FeatureInput?.text, preset1);
-                yield return new WaitForSeconds(1.5f);
+                usedFallback1 = true; // このブロックはgenP1=trueかつAI生成失敗時のみ通る
+                yield return new WaitForSeconds(2.5f);
             }
             if (_pendingData2 == null)
             {
                 _pendingData2 = PromptCharacterFactory.Create(
                     _p2NameInput?.text, _p2FeatureInput?.text, preset2);
+                usedFallback2 = true; // 同上（genP2=trueかつAI生成失敗時のみ）
             }
 
             // 画像生成はAIキャラ生成が成功した側だけ行う。
@@ -2645,7 +2650,10 @@ namespace PromptFighters.GameFlow
             // 画像まで完成したキャラだけを保存してロスターへ追加する。
             // 画像生成に失敗したキャラは保存せず破棄（白ボックスのキャラが一覧に並ぶのを防ぐ）。
             if (genP1 && aiOk1) FinalizeGeneratedCharacter(_pendingData1, true);
+            else if (usedFallback1) FinalizeLocalFallbackCharacter(_pendingData1, preset1, true);
+
             if (genP2 && aiOk2) FinalizeGeneratedCharacter(_pendingData2, false);
+            else if (usedFallback2) FinalizeLocalFallbackCharacter(_pendingData2, preset2, false);
 
             // 生成完了。生成画面へは移行せず、プレイ中の画面はそのままに、
             // オーバーレイを「完了」にして少し見せてから消す（プレイを中断しない）。
@@ -2660,6 +2668,24 @@ namespace PromptFighters.GameFlow
 
             yield return new WaitForSecondsRealtime(3f);
             ShowGenOverlay(false);
+        }
+
+        // AI生成が通信エラー等で失敗し、ローカル生成（PromptCharacterFactory.Create）に切り替わった
+        // キャラを保存する。技はローカル簡易生成のものになるが、見た目一式を素材元のプリセットから
+        // 借りて自分専用のPNGとして保存することで、次回起動後も同じ見た目のまま名前付きで残るようにする
+        // （保存しないと「作ろうとしたキャラが結局残らない」体験になってしまうため）。
+        void FinalizeLocalFallbackCharacter(CharacterData data, CharacterData sourcePreset, bool isP1)
+        {
+            if (data == null) return;
+            if (sourcePreset?.spriteSet?.sprites != null && data.spriteSet?.sprites != null)
+            {
+                int n = Mathf.Min(data.spriteSet.sprites.Length, sourcePreset.spriteSet.sprites.Length);
+                for (int i = 0; i < n; i++)
+                    data.spriteSet.sprites[i] = sourcePreset.spriteSet.sprites[i];
+            }
+            CharacterSaveManager.PrepareDirectory(data);
+            CharacterSaveManager.SaveSprites(data);
+            FinalizeGeneratedCharacter(data, isP1);
         }
 
         // 生成が完全に成功（テキスト＋画像）したキャラだけを保存し、ロスターへ追加・選択する。
@@ -2783,7 +2809,7 @@ namespace PromptFighters.GameFlow
                                                              reason = "AIサーバーが応答しません（通信タイムアウト）";
             else if (error.Contains("APIキー"))               reason = "APIキー未設定";
             else                                             reason = "AI生成に失敗";
-            return reason + " — ローカル生成で続行します...";
+            return reason + " — 簡易ローカル生成で保存します（技は簡略化されます）";
         }
 
         // 生成進捗メッセージから画像枚数を解析して "N/15" 表示に変換する（Feature E）
