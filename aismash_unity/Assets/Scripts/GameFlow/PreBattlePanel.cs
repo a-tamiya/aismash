@@ -98,6 +98,7 @@ namespace PromptFighters.GameFlow
         readonly string[] _genName    = new string[2];
         readonly int[]    _genPercent  = new int[2];
         readonly bool[]   _genActive   = new bool[2];
+        readonly string[] _genResultText = new string[2];
         Coroutine         _genOverlayNoticeCoroutine;
 
         // このセッションで新しく生成したキャラ名。ロスターで枠を光らせて見分けやすくする。
@@ -503,7 +504,9 @@ namespace PromptFighters.GameFlow
                 if (_genActive[i])
                 {
                     string nm = string.IsNullOrWhiteSpace(_genName[i]) ? (i == 0 ? "1P" : "2P") : _genName[i];
-                    _genOverlayLines[i].text = _genPercent[i] < 0
+                    _genOverlayLines[i].text = !string.IsNullOrEmpty(_genResultText[i])
+                        ? $"{nm}：{_genResultText[i]}"
+                        : _genPercent[i] < 0
                         ? $"{nm}：画像生成に失敗（保存されませんでした）"
                         : _genPercent[i] >= 100
                             ? $"{nm}：完了 ✓"
@@ -2564,7 +2567,8 @@ namespace PromptFighters.GameFlow
             // トレーニングへ入っても、使用キャラが生成途中データへ差し替わらないようにする。
             CharacterData generatedData1 = genP1 ? null : preset1;
             CharacterData generatedData2 = genP2 ? null : preset2;
-            string errorMsg = null;
+            string error1 = null;
+            string error2 = null;
             bool aiOk1 = false;
             bool aiOk2 = false;
 
@@ -2574,6 +2578,8 @@ namespace PromptFighters.GameFlow
             _genName[1] = string.IsNullOrWhiteSpace(_p2NameInput?.text) ? "2P" : _p2NameInput.text.Trim();
             _genPercent[0] = genP1 ? 3 : 0;
             _genPercent[1] = genP2 ? 3 : 0;
+            _genResultText[0] = null;
+            _genResultText[1] = null;
             ShowGenOverlay(genP1 || genP2);
             RefreshGenOverlay();
 
@@ -2598,7 +2604,7 @@ namespace PromptFighters.GameFlow
                         SetGenProgress(0, 10);
                         done = true;
                     },
-                    err  => { errorMsg = err; done = true; });
+                    err  => { error1 = err; done = true; });
                 yield return new WaitUntil(() => done);
             }
             else generatedData1 = preset1;
@@ -2622,7 +2628,7 @@ namespace PromptFighters.GameFlow
                         SetGenProgress(1, 10);
                         done = true;
                     },
-                    err  => { if (errorMsg == null) errorMsg = err; done = true; });
+                    err  => { error2 = err; done = true; });
                 yield return new WaitUntil(() => done);
             }
             else generatedData2 = preset2;
@@ -2633,9 +2639,10 @@ namespace PromptFighters.GameFlow
             bool usedFallback1 = false, usedFallback2 = false;
             if (generatedData1 == null)
             {
-                if (!string.IsNullOrEmpty(errorMsg))
-                    Debug.LogWarning("[PreBattle] AI生成失敗: " + errorMsg);
-                UpdateGeneratingStatus(BuildFallbackMessage(errorMsg));
+                if (!string.IsNullOrEmpty(error1))
+                    Debug.LogWarning("[PreBattle] AI生成失敗: " + error1);
+                SetGenerationRestrictionResult(0, error1, usedFallback: true);
+                UpdateGeneratingStatus(BuildFallbackMessage(error1));
                 generatedData1 = PromptCharacterFactory.Create(
                     _p1NameInput?.text, _p1FeatureInput?.text, preset1);
                 usedFallback1 = true; // このブロックはgenP1=trueかつAI生成失敗時のみ通る
@@ -2643,6 +2650,9 @@ namespace PromptFighters.GameFlow
             }
             if (generatedData2 == null)
             {
+                if (!string.IsNullOrEmpty(error2))
+                    Debug.LogWarning("[PreBattle] AI生成失敗: " + error2);
+                SetGenerationRestrictionResult(1, error2, usedFallback: true);
                 generatedData2 = PromptCharacterFactory.Create(
                     _p2NameInput?.text, _p2FeatureInput?.text, preset2);
                 usedFallback2 = true; // 同上（genP2=trueかつAI生成失敗時のみ）
@@ -2661,8 +2671,8 @@ namespace PromptFighters.GameFlow
                 // 失敗した側は少し待ってもう1周だけ自動リトライ（一時的なAPIエラーで
                 // キャラ生成全体を失敗にしないための保険。クライアント側でもモデル
                 // フォールバック済みなので、ここまで来る失敗はほぼ通信起因）。
-                bool retry1 = genImg1 && generatedData1?.characterSprite == null;
-                bool retry2 = genImg2 && generatedData2?.characterSprite == null;
+                bool retry1 = genImg1 && generatedData1?.characterSprite == null && string.IsNullOrEmpty(_genResultText[0]);
+                bool retry2 = genImg2 && generatedData2?.characterSprite == null && string.IsNullOrEmpty(_genResultText[1]);
                 if (retry1 || retry2)
                 {
                     UpdateGeneratingStatus("画像生成をリトライしています...");
@@ -2787,7 +2797,12 @@ namespace PromptFighters.GameFlow
                         SetGenProgress(0, 95);
                         img1Done = true;
                     },
-                    err => { Debug.LogWarning("[AIImage] 1P: " + err); img1Done = true; },
+                    err =>
+                    {
+                        Debug.LogWarning("[AIImage] 1P: " + err);
+                        SetGenerationRestrictionResult(0, err, usedFallback: false);
+                        img1Done = true;
+                    },
                     saveDir: data1.spriteDir);
                 yield return new WaitUntil(() => img1Done);
             }
@@ -2809,7 +2824,12 @@ namespace PromptFighters.GameFlow
                         SetGenProgress(1, 95);
                         img2Done = true;
                     },
-                    err => { Debug.LogWarning("[AIImage] 2P: " + err); img2Done = true; },
+                    err =>
+                    {
+                        Debug.LogWarning("[AIImage] 2P: " + err);
+                        SetGenerationRestrictionResult(1, err, usedFallback: false);
+                        img2Done = true;
+                    },
                     saveDir: data2.spriteDir);
                 yield return new WaitUntil(() => img2Done);
             }
@@ -2856,6 +2876,10 @@ namespace PromptFighters.GameFlow
         // 生成失敗の理由を簡潔に伝えつつローカル生成へ切り替える旨を表示する
         static string BuildFallbackMessage(string error)
         {
+            string restriction = GetGenerationRestrictionReason(error);
+            if (!string.IsNullOrEmpty(restriction))
+                return restriction + "のため、簡易ローカル生成で保存します（技は簡略化されます）";
+
             string reason;
             if (string.IsNullOrEmpty(error))                 reason = "AI生成に失敗";
             else if (error.Contains("timeout") || error.Contains("タイムアウト"))
@@ -2863,6 +2887,32 @@ namespace PromptFighters.GameFlow
             else if (error.Contains("APIキー"))               reason = "APIキー未設定";
             else                                             reason = "AI生成に失敗";
             return reason + " — 簡易ローカル生成で保存します（技は簡略化されます）";
+        }
+
+        void SetGenerationRestrictionResult(int slot, string error, bool usedFallback)
+        {
+            if (slot < 0 || slot >= _genResultText.Length) return;
+            string restriction = GetGenerationRestrictionReason(error);
+            if (string.IsNullOrEmpty(restriction)) return;
+
+            _genResultText[slot] = usedFallback
+                ? restriction + "：簡易保存"
+                : restriction + "：画像未保存";
+            RefreshGenOverlay();
+        }
+
+        static string GetGenerationRestrictionReason(string error)
+        {
+            if (string.IsNullOrWhiteSpace(error)) return null;
+            string text = error.ToLowerInvariant();
+            if (text.Contains("copyright") || text.Contains("trademark") ||
+                text.Contains("intellectual property") || text.Contains("著作") ||
+                text.Contains("版権") || text.Contains("商標") || text.Contains("既存作品"))
+                return "版権・既存作品の制限";
+            if (text.Contains("content_policy") || text.Contains("policy_violation") ||
+                text.Contains("safety system") || text.Contains("safety policy"))
+                return "コンテンツポリシー制限";
+            return null;
         }
 
         // 生成進捗メッセージから画像枚数を解析して "N/15" 表示に変換する（Feature E）
