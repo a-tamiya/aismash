@@ -1820,6 +1820,7 @@ namespace PromptFighters.Battle
 
             DamagePopup.SpawnText(transform.position + Vector3.up * 1.0f,
                 "DOWN!", new Color(1f, 0.4f, 0.4f), 1.8f);
+            DownedMarker.Create(this); // 頭上に目立つ下矢印を出し、救助対象として見つけやすくする
 
             OnDowned?.Invoke();
         }

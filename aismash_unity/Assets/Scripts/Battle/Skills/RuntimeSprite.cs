@@ -8,6 +8,7 @@ namespace PromptFighters.Battle.Skills
         static Sprite _square;
         static Sprite _circle;
         static Sprite _glow;
+        static Sprite _downArrow;
 
         public static Sprite Square()
         {
@@ -72,6 +73,29 @@ namespace PromptFighters.Battle.Skills
             tex.Apply();
             _glow = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
             return _glow;
+        }
+
+        // 下向き矢印（▽）。ダウン中の味方など、頭上マーカーの目印に使う。
+        public static Sprite DownArrow()
+        {
+            if (_downArrow != null) return _downArrow;
+            const int size = 64;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            var pixels = new Color[size * size];
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float fx = x / (float)(size - 1);
+                    float fy = y / (float)(size - 1); // 0=下端, 1=上端
+                    float halfWidthAllow = fy * 0.5f;  // 上端=全幅、下端=先端の点
+                    float dx = Mathf.Abs(fx - 0.5f);
+                    pixels[y * size + x] = dx <= halfWidthAllow ? Color.white : Color.clear;
+                }
+            tex.SetPixels(pixels);
+            tex.filterMode = FilterMode.Bilinear;
+            tex.Apply();
+            _downArrow = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
+            return _downArrow;
         }
     }
 }

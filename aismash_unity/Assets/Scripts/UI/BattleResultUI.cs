@@ -260,7 +260,7 @@ namespace PromptFighters.UI
             bool coop = bm != null && bm.Mode == BattleMode.CoopVsBoss;
 
             _accent = coop
-                ? (winnerIndex == 0 ? P1Col : DrawCol)
+                ? (winnerIndex == 0 ? P1Col : UITheme.Urgent)
                 : (winnerIndex == 0 ? P1Col : winnerIndex == 1 ? P2Col : DrawCol);
 
             // 勝者キャラと表示文言
@@ -269,9 +269,11 @@ namespace PromptFighters.UI
             string winWord = "WIN";
             if (coop)
             {
-                winner  = winnerIndex == 0 ? bm.Character1 : bm.Character2;
+                // tagが勝者陣営（PLAYERS/BOSS）を示すため、文言は常にWIN側で統一する
+                // （以前は"BOSS"+"LOSE"のように勝者側なのに敗北表記になり、ボス勝利時に誤読を招いていた）。
+                winner  = winnerIndex == 0 ? bm.Character1 : bm.BossCharacter;
                 tag     = winnerIndex == 0 ? "PLAYERS" : "BOSS";
-                winWord = winnerIndex == 0 ? "WIN" : "LOSE";
+                winWord = "WIN";
             }
             else if (winnerIndex == 0) { winner = bm?.Character1; tag = "1P"; }
             else if (winnerIndex == 1) { winner = bm?.Character2; tag = "2P"; }
@@ -279,7 +281,7 @@ namespace PromptFighters.UI
 
             // アクセント色を各所へ
             _tagText.color   = _accent;
-            _winText.color   = winWord == "LOSE" ? new Color(0.75f,0.78f,0.82f) : TextWht;
+            _winText.color   = TextWht;
             _tagText.text    = tag;
             _winText.text    = winWord;
             _rightBand.color = new Color(_accent.r, _accent.g, _accent.b, 0.06f);
