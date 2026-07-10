@@ -74,6 +74,7 @@ namespace PromptFighters.GameFlow
                 spriteSet = CloneSpriteSet(src.spriteSet),
                 stats = new CharacterStats
                 {
+                    maxHP = src.stats.maxHP,
                     groundMoveSpeed = src.stats.groundMoveSpeed,
                     airMoveSpeed = src.stats.airMoveSpeed,
                     jumpForce = src.stats.jumpForce,

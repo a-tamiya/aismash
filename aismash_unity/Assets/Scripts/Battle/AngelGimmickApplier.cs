@@ -264,10 +264,22 @@ namespace PromptFighters.Battle
                                 new Color(1f, 0.4f, 0.3f), 1.6f);
                     }
                     break;
-                case "guard_fill":
-                    target1?.FillGuard();
-                    target2?.FillGuard();
+                case "defense_up":
+                    // 防御力ギミックは固定倍率（0.7=被ダメ0.7倍）。願いの value は使わない。
+                    target1?.ApplyPermanentDefense(0.7f);
+                    target2?.ApplyPermanentDefense(0.7f);
                     GameAudioManager.Instance?.PlayGimmickBuff();
+                    break;
+                case "defense_down":
+                    // 防御力ギミックは固定倍率（1.3=被ダメ1.3倍）。願いの value は使わない。
+                    target1?.ApplyPermanentDefense(1.3f);
+                    target2?.ApplyPermanentDefense(1.3f);
+                    GameAudioManager.Instance?.PlayGimmickDebuff();
+                    break;
+                case "ally_revive":
+                    // ボス戦（協力モード）専用：ダウン中の味方を復活させる。
+                    ReviveDownedAlly();
+                    GameAudioManager.Instance?.PlayGimmickHeal();
                     break;
 
                 // ── 拡張ギミック ────────────────────────────────────────
@@ -364,6 +376,27 @@ namespace PromptFighters.Battle
                 case 5: f.ApplyStatus(StatusType.Slow, 6f * DurationScale); return "スロー状態";
                 case 6: f.ApplyStatus(StatusType.Burn, 5f * DurationScale); return "バーン状態";
                 default:                                                     return "デバフ";
+            }
+        }
+
+        // ボス戦（協力モード）でダウン中の味方プレイヤーを1体復活させる。
+        // 通常対戦モードやダウン中の味方がいない場合は何もしない。
+        void ReviveDownedAlly()
+        {
+            var bm = BattleManager.Instance;
+            if (bm == null || bm.Mode != BattleMode.CoopVsBoss) return;
+            var fighters = bm.Fighters;
+            if (fighters == null) return;
+            for (int i = 0; i < fighters.Count; i++)
+            {
+                var f = fighters[i];
+                if (f != null && f.Team == FighterTeam.Players && f.IsDowned)
+                {
+                    f.Revive(0.5f);
+                    PromptFighters.UI.DamagePopup.SpawnText(
+                        f.transform.position + Vector3.up, "復活!", new Color(0.4f, 1f, 0.6f), 1.8f);
+                    return;
+                }
             }
         }
 

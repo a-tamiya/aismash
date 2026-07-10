@@ -138,6 +138,7 @@ namespace PromptFighters.GameFlow
         TextMeshProUGUI _modeCoopLabel;
         GameObject _bossSelectorRoot;
         TextMeshProUGUI _bossPresetLabel;
+        Image _bossPresetBg; // 固定ボス/おまけボスを背景色で見分けるため
 
         // ── ステージ選択パネル ──
         GameObject _stageSelectPanel;
@@ -955,6 +956,7 @@ namespace PromptFighters.GameFlow
             _bossPresetLabel = nameBtn.GetComponentInChildren<TextMeshProUGUI>();
             _bossPresetLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
             _bossPresetLabel.fontSize = 17f;
+            _bossPresetBg = nameBtn.GetComponent<Image>();
 
             var nextBtn = MakeButton(t, "BossNext", "▶",
                 new Vector2(320f, rowY), new Vector2(50f, 44f), OnBossPresetCycle, PromptFighters.UI.UITheme.Urgent);
@@ -962,8 +964,11 @@ namespace PromptFighters.GameFlow
             SetButtonLabelStyle(nextBtn, 20f, FontStyles.Bold, Color.white);
         }
 
+        // 固定ボス（index 0）とおまけボス（既存キャラのボス化）を文言で明示する。
         string BossPresetText() =>
-            $"ボス: {GetBossPresetName(_bossPresetIdx)}";
+            _bossPresetIdx == 0
+                ? $"固定ボス: {GetBossPresetName(_bossPresetIdx)}"
+                : $"おまけ: {GetBossPresetName(_bossPresetIdx)}";
 
         void OnBossPresetCycle()
         {
@@ -1232,6 +1237,8 @@ namespace PromptFighters.GameFlow
             {
                 SyncBossCharacter();
                 if (_bossPresetLabel != null) _bossPresetLabel.text = BossPresetText();
+                // 固定ボスはゴールド、おまけ（既存キャラのボス化）は通常色で見分けられるようにする
+                if (_bossPresetBg != null) _bossPresetBg.color = _bossPresetIdx == 0 ? PromptFighters.UI.UITheme.GoldDim : ToggleOffColor;
             }
             // 選択中モードがロビーでも分かるよう、開始ボタンの文言を切り替える
             if (_startBtnLabel != null) _startBtnLabel.text = coop ? "ボス討伐開始" : "バトル開始";

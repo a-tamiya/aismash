@@ -214,11 +214,13 @@ namespace PromptFighters.Battle.Skills
                         a.power = Mathf.Clamp(a.power, 0f, 18f);
 
                     // gravity_well: 引力・半径・持続の上限。
+                    // 拘束が強すぎる不満があったため、引力の上限と拘束時間の上限を引き下げ、
+                    // 拘束されている側が自力で抜け出しやすくしてある（Fighter.StartGravityWell側でも入力抵抗を追加）。
                     if (a.type == "gravity_well")
                     {
-                        if (a.power > 0f)    a.power    = Mathf.Clamp(a.power, 4f, 40f);
+                        if (a.power > 0f)    a.power    = Mathf.Clamp(a.power, 4f, 25f);
                         if (a.range > 0f)    a.range    = Mathf.Clamp(a.range, 1f, 5f);
-                        a.duration = Mathf.Clamp(a.duration > 0f ? a.duration : 1.2f, 0.3f, 2.5f);
+                        a.duration = Mathf.Clamp(a.duration > 0f ? a.duration : 1.0f, 0.3f, 1.5f);
                     }
 
                     // command_throw: 掴み範囲・高さの上限（ワイヤー投げでも届きすぎ防止）。

@@ -27,6 +27,7 @@ namespace PromptFighters.Battle
             if (PermDamageMult  != 1f) outList.Add(new StatusChip(PermDamageMult  > 1f ? "攻撃↑" : "攻撃↓", -1f, PermDamageMult  > 1f));
             if (PermGravityMult != 1f) outList.Add(new StatusChip(PermGravityMult > 1f ? "重力↑" : "浮遊",   -1f, PermGravityMult < 1f));
             if (PermSizeMult    != 1f) outList.Add(new StatusChip(PermSizeMult    > 1f ? "巨大化" : "縮小化", -1f, PermSizeMult    > 1f));
+            if (PermDefenseMult != 1f) outList.Add(new StatusChip(PermDefenseMult < 1f ? "防御↑" : "防御↓", -1f, PermDefenseMult < 1f));
 
             if (_transparencyTimer  > 0f) outList.Add(new StatusChip("無敵",     _transparencyTimer,  true));
             if (_reflectTimer       > 0f) outList.Add(new StatusChip("反射",     _reflectTimer,       true));
@@ -129,7 +130,14 @@ namespace PromptFighters.Battle
                 {
                     Vector2 d = center - (Vector2)opp.transform.position;
                     if (d.magnitude <= radius)
-                        opp.AddExternalForce(d.normalized * force);
+                    {
+                        Vector2 dir = d.normalized;
+                        float pullForce = force;
+                        // 拘束されている側が引力と逆方向に入力していれば引力を弱め、自力で抜け出しやすくする。
+                        float escapeInput = -Mathf.Sign(dir.x) * opp.LastMoveInputX;
+                        if (escapeInput > 0.3f) pullForce *= 0.5f;
+                        opp.AddExternalForce(dir * pullForce);
+                    }
                 }
                 elapsed += Time.deltaTime;
                 yield return null;
@@ -144,6 +152,7 @@ namespace PromptFighters.Battle
         [System.NonSerialized] public float PermDamageMult  = 1f;
         [System.NonSerialized] public float PermGravityMult = 1f;
         [System.NonSerialized] public float PermSizeMult    = 1f;
+        [System.NonSerialized] public float PermDefenseMult = 1f;
         float _moveSpeedBase, _airMoveSpeedBase; bool _speedBaseSet;
         float _jumpForceBase; bool _jumpBaseSet;
         Coroutine _speedTempCo, _jumpTempCo, _damageTempCo;
@@ -189,6 +198,14 @@ namespace PromptFighters.Battle
             ShowStatPopup(mult >= 1f ? "POWER UP!" : "POWER DOWN!", mult >= 1f ? DamageBoostColor : SlowColor);
             SpawnBuffFx(mult >= 1f);
         }
+        // ボイスボールの防御力ギミック専用。0.7=防御増加（食らうダメージ減）/1.3=防御低下（食らうダメージ増）で固定使用する。
+        public void ApplyPermanentDefense(float mult)
+        {
+            PermDefenseMult = mult;
+            DefenseMultiplier = mult;
+            ShowStatPopup(mult < 1f ? "DEFENSE UP!" : "DEFENSE DOWN!", mult < 1f ? DamageBoostColor : SlowColor);
+            SpawnBuffFx(mult < 1f); // 防御増加（被ダメ減）=有利、防御低下（被ダメ増）=不利
+        }
         public void ApplyPermanentGravity(float mult)
         {
             PermGravityMult = mult;
@@ -213,12 +230,13 @@ namespace PromptFighters.Battle
             if (_speedTempCo  != null) { StopCoroutine(_speedTempCo);  _speedTempCo  = null; }
             if (_jumpTempCo   != null) { StopCoroutine(_jumpTempCo);   _jumpTempCo   = null; }
             if (_damageTempCo != null) { StopCoroutine(_damageTempCo); _damageTempCo = null; }
-            PermSpeedMult = PermJumpMult = PermDamageMult = PermGravityMult = PermSizeMult = 1f;
+            PermSpeedMult = PermJumpMult = PermDamageMult = PermGravityMult = PermSizeMult = PermDefenseMult = 1f;
             _speedBaseSet = false;  // 次のマッチのキャラ基準速度で取り直す
             _jumpBaseSet  = false;  // 同上（ジャンプ）
             _speedBoostTimer = 0f;
             _jumpBoostTimer  = 0f;
             DamageMultiplier = 1f;
+            DefenseMultiplier = 1f;
         }
 
         // 永続倍率を再適用（ResetForBattleからラウンド開始時に呼び、ラウンドをまたいで保持する）
@@ -227,6 +245,7 @@ namespace PromptFighters.Battle
             if (_speedBaseSet) { moveSpeed = _moveSpeedBase * PermSpeedMult; airMoveSpeed = _airMoveSpeedBase * PermSpeedMult; }
             if (_jumpBaseSet)  jumpForce = _jumpForceBase * PermJumpMult;
             DamageMultiplier = PermDamageMult;
+            DefenseMultiplier = PermDefenseMult;
             if (!_dodgeGravitySuppressed) _rb.gravityScale = _defaultGravityScale * PermGravityMult;
             if (PermSizeMult != 1f) { ApplyVisualScaleCorrection(); ApplyColliderScaleCorrection(); }
             if (PermSpeedMult > 1f) _speedBoostTimer = 99999f;

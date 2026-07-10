@@ -423,18 +423,31 @@ namespace PromptFighters.UI
             return f1 ?? f2;
         }
 
+        // 協力モード（対ボス）でダウン中の味方がいるか。ally_reviveをランダム候補に混ぜるかの判定に使う。
+        static bool AllyDownedAvailable()
+        {
+            var bm = BattleManager.Instance;
+            if (bm == null || bm.Mode != BattleMode.CoopVsBoss) return false;
+            var fighters = bm.Fighters;
+            if (fighters == null) return false;
+            for (int i = 0; i < fighters.Count; i++)
+                if (fighters[i] != null && fighters[i].Team == FighterTeam.Players && fighters[i].IsDowned)
+                    return true;
+            return false;
+        }
+
         // CPU取得時に使う「取得者にメリットのある」ギミック（自分強化 or 相手弱体のみ）。
         static GimmickData BeneficialGimmick(string acquirerSlot)
         {
             string oppSlot = acquirerSlot == "player2" ? "player1" : "player2";
-            (string g, float v, float d, string who, string msg)[] picks =
+            var picks = new System.Collections.Generic.List<(string g, float v, float d, string who, string msg)>
             {
                 ("hp_recover",  0.30f, 0f, "self", "HPが回復した！"),
                 ("speed_boost", 1.40f, 8f, "self", "スピードアップ！"),
                 ("jump_boost",  1.40f, 8f, "self", "ジャンプ強化！"),
                 ("damage_boost",1.50f, 8f, "self", "パワーアップ！"),
                 ("invincible",  0f,    4f, "self", "無敵化！"),
-                ("guard_fill",  0f,    0f, "self", "ガード全回復！"),
+                ("defense_up",  0f,    0f, "self", "防御力アップ！"),
                 ("reflect",     0f,    6f, "self", "ダメージ反射！"),
                 ("size_up",     1.35f, 8f, "self", "巨大化！"),
                 ("speed_down",  0.60f, 8f, "opp",  "相手が鈍足に！"),
@@ -445,7 +458,9 @@ namespace PromptFighters.UI
                 ("launch",      3.0f,  0f, "opp",  "相手を吹き飛ばし！"),
                 ("hp_drain",    0.20f, 0f, "opp",  "相手のHPを削った！"),
             };
-            var p = picks[Random.Range(0, picks.Length)];
+            if (AllyDownedAvailable())
+                picks.Add(("ally_revive", 0f, 0f, "self", "仲間を復活させた！"));
+            var p = picks[Random.Range(0, picks.Count)];
             return new GimmickData
             {
                 gimmick  = p.g,
@@ -460,7 +475,7 @@ namespace PromptFighters.UI
         {
             string oppSlot = acquirerSlot == "player2" ? "player1" : "player2";
 
-            (string g, float v, float d, string who, string msg)[] picks =
+            var picks = new System.Collections.Generic.List<(string g, float v, float d, string who, string msg)>
             {
                 // 取得者バフ
                 ("hp_recover",   0.30f, 0f, "self", "HPが回復した！"),
@@ -468,13 +483,14 @@ namespace PromptFighters.UI
                 ("jump_boost",   1.40f, 8f, "self", "ジャンプ強化！"),
                 ("damage_boost", 1.50f, 8f, "self", "パワーアップ！"),
                 ("invincible",   0f,    4f, "self", "無敵化！"),
-                ("guard_fill",   0f,    0f, "self", "ガード全回復！"),
+                ("defense_up",   0f,    0f, "self", "防御力アップ！"),
                 ("gravity_down", 0.45f, 8f, "self", "ふわふわ浮遊！"),
                 ("reflect",      0f,    6f, "self", "ダメージ反射！"),
                 ("size_up",      1.40f, 8f, "self", "巨大化！"),
                 // 相手デバフ
                 ("speed_down",   0.60f, 8f, "opp",  "相手が鈍足に！"),
                 ("damage_down",  0.60f, 8f, "opp",  "相手のパワーダウン！"),
+                ("defense_down", 0f,    0f, "opp",  "相手の防御力ダウン！"),
                 ("freeze",       0f,    2f, "opp",  "相手が氷漬け！"),
                 ("burn",         0f,    6f, "opp",  "相手に火がついた！"),
                 ("chaos",        0f,    6f, "opp",  "相手の操作が混乱！"),
@@ -493,7 +509,9 @@ namespace PromptFighters.UI
                 ("obstacle_platform",3f,0f, "both", "足場が出現！"),
                 ("obstacle_tilt",3f,    0f, "both", "斜め足場が出現！"),
             };
-            var p = picks[Random.Range(0, picks.Length)];
+            if (AllyDownedAvailable())
+                picks.Add(("ally_revive", 0f, 0f, "self", "仲間を復活させた！"));
+            var p = picks[Random.Range(0, picks.Count)];
             string target = p.who switch
             {
                 "self" => acquirerSlot,
@@ -540,6 +558,8 @@ namespace PromptFighters.UI
             "jump_down"    => "ジャンプ DOWN ↓",
             "damage_boost" => "パワー UP ↑",
             "damage_down"  => "パワー DOWN ↓",
+            "defense_up"   => "防御力 UP ↑",
+            "defense_down" => "防御力 DOWN ↓",
             "transparent"  => "無敵化 ✦",
             "invincible"   => "無敵化 ✦",
             "chaos"        => "操作混乱 ！",
@@ -562,7 +582,7 @@ namespace PromptFighters.UI
             "slow"           => "スロー状態",
             "reflect"        => "ダメージ反射 ✦",
             "hp_set"         => "HP強制変更 ！",
-            "guard_fill"     => "ガード全回復",
+            "ally_revive"    => "仲間復活 ！",
             "wind"           => "強風 〜〜",
             "floor_lava"     => "床が溶岩 ！",
             "guard_disable"  => "ガード不可 ！",

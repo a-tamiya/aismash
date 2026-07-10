@@ -938,7 +938,9 @@ namespace PromptFighters.Battle.Skills
 
         void BuffSelf(SkillAction a)
         {
-            float duration = Mathf.Max(0.1f, a.duration);
+            // 技発動で付与される自己バフは最低2秒は持続させる（無敵/透明は短い判定窓を維持するため対象外。
+            // s_selfBuffs側でMathf.Min(d,1.2f)により1.2秒以下に固定されるので、ここで底上げしても無敵には影響しない）。
+            float duration = Mathf.Max(2f, a.duration);
             float multiplier = a.power > 0f ? a.power : 1.2f;
             if (a.status != null && s_selfBuffs.TryGetValue(a.status, out var apply))
                 apply(_fighter, multiplier, duration);
@@ -948,13 +950,15 @@ namespace PromptFighters.Battle.Skills
 
         void DoReflector(SkillAction a)
         {
-            float duration = a.duration > 0f ? Mathf.Min(a.duration, 3f) : 0.8f;
+            // 技バフは最低2秒（無敵以外）。反射も2〜3秒を保証する。
+            float duration = Mathf.Clamp(a.duration > 0f ? a.duration : 2f, 2f, 3f);
             _fighter.StartTemporaryReflect(duration);
         }
 
         void DoCounter(SkillAction a)
         {
-            float duration  = a.duration > 0f ? Mathf.Clamp(a.duration, 0.1f, 1.5f) : 0.4f;
+            // 技バフは最低2秒（無敵以外）。カウンター構えも2〜3秒を保証する。
+            float duration  = Mathf.Clamp(a.duration > 0f ? a.duration : 2f, 2f, 3f);
             float damage    = a.damage_override >= 0f ? a.damage_override : 10f;
             float kx        = !Mathf.Approximately(a.knockback_x, 0f) ? Mathf.Abs(a.knockback_x) : 1f;
             float ky        = !Mathf.Approximately(a.knockback_y, 0f) ? Mathf.Abs(a.knockback_y) : 0.4f;
@@ -1064,8 +1068,9 @@ namespace PromptFighters.Battle.Skills
             Vector2 center = (Vector2)_fighter.transform.position
                            + new Vector2(dirSign * spawnX * _sizeScale, spawnY * _sizeScale);
             float radius   = (a.range > 0f ? a.range : 3.5f) * _sizeScale;
-            float force    = Mathf.Clamp(a.power > 0f ? a.power : 18f, 4f, 40f);
-            float duration = a.duration > 0f ? a.duration : 1.2f;
+            // 引き寄せ力を弱め、拘束時間も短くする（拘束される側が振り切って動けるように）。
+            float force    = Mathf.Clamp(a.power > 0f ? a.power : 12f, 3f, 18f);
+            float duration = Mathf.Min(a.duration > 0f ? a.duration : 0.7f, 0.9f);
             _fighter.StartGravityWell(center, radius, force, duration);
             if (!a.hide_effect)
                 SpawnFieldVisual(center, radius * 2f, _fighter.GetEffectSprite(skill), skill.element, duration);

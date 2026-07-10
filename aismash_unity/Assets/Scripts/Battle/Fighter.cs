@@ -208,6 +208,8 @@ namespace PromptFighters.Battle
         // ボス強化用の恒常的な与ダメージ倍率（ステータス効果のDamageMultiplierとは独立に乗算）。
         public float BossDamageScale  { get; set; } = 1f;
         public float EffectiveDamageMultiplier => DamageMultiplier * BossDamageScale;
+        // ボイスボールの防御力ギミック用：食らうダメージへの固定倍率（0.7=防御増加/1.3=防御低下）。
+        public float DefenseMultiplier { get; private set; } = 1f;
         public bool  IsInvincible     { get; private set; }
         public bool  InputReversed    { get; private set; }
         public bool  IsReflecting     => _reflectTimer > 0f;
@@ -740,7 +742,13 @@ namespace PromptFighters.Battle
             // リフレクターは飛び道具のみ反射（Projectile.cs で処理）。近接打撃は通常通り受ける。
 
             bool blocking = State == FighterState.Guarding && _guardBreakTimer <= 0f;
+            // 攻撃側の威力（倍率適用前）。攻撃力低下で1まで落ちるのを防ぐ下限判定に使う。
+            float baseDamage = damage;
             if (!blocking && applyOpponentDamageBoost && Opponent != null) damage *= Opponent.EffectiveDamageMultiplier;
+            // 攻撃力低下しても最低3は保証する（元の威力が3以下の技はそのまま）。
+            if (baseDamage > 3f && damage < 3f) damage = 3f;
+            // 防御力バフ/デバフ：食らう攻撃を固定倍率で調整（0.7=防御up / 1.3=防御down）。
+            damage *= DefenseMultiplier;
             float actual  = blocking ? Mathf.Max(0f, damage * guardDamageRatio) : damage;
             actual        = AbsorbBarrier(actual);
             CurrentHP     = Mathf.Max(0f, CurrentHP - actual);
@@ -1870,18 +1878,6 @@ namespace PromptFighters.Battle
         public void StartGroundBounce(float force)
         {
             _groundBounceForce = Mathf.Max(_groundBounceForce, force);
-        }
-
-        public void FillGuard()
-        {
-            if (State == FighterState.Dead) return;
-            _guardBreakTimer = 0f;
-            CurrentGuardDurability = maxGuardDurability;
-            _guardRecoveryDelayTimer = 0f;
-            if (State == FighterState.Stunned && _stunTimer <= 0f) State = FighterState.Idle;
-            OnGuardChanged?.Invoke(CurrentGuardDurability, maxGuardDurability);
-            DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "GUARD UP!", new Color(0.28f, 0.72f, 1f), 1.8f);
-            SpawnBuffFx(true);
         }
 
         public void StartHPShare(Fighter partner, float duration)
