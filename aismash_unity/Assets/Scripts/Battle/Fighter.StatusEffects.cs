@@ -78,7 +78,10 @@ namespace PromptFighters.Battle
                 if (auraSr != null)
                 {
                     float pulse = (Mathf.Sin(Time.time * 6f) + 1f) * 0.5f;
-                    auraSr.color = new Color(0.4f, 0.8f, 1f, 0.20f + 0.18f * pulse);
+                    // barrier_aura.png導入後、旧プレースホルダー（無地の円）向けの低アルファ（0.20〜0.38）のままだと
+                    // ハニカム柄・発光コアなどのテクスチャ模様がアルファ合成でほぼ潰れて見えなくなっていた。
+                    // 模様が視認できる濃さまでアルファを引き上げる。
+                    auraSr.color = new Color(0.6f, 0.9f, 1f, 0.5f + 0.3f * pulse);
                     aura.transform.localScale = Vector3.one * ((2.2f + 0.12f * pulse) * _charSizeScale * spriteNormalize);
                 }
                 elapsed += Time.deltaTime;
@@ -107,7 +110,7 @@ namespace PromptFighters.Battle
             go.transform.localPosition = new Vector3(0f, 0.75f * _charSizeScale, 0f);
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sprite = BarrierAuraSprite() ?? Skills.RuntimeSprite.Circle();
-            sr.color = new Color(0.4f, 0.8f, 1f, 0.3f);
+            sr.color = new Color(0.6f, 0.9f, 1f, 0.55f);
             sr.sortingOrder = 8; // キャラの少し手前に半透明で重ねる
             // スプライトの実サイズを1ワールド単位に正規化してから初期スケールを当てる
             // （BarrierRoutine側の毎フレーム更新と同じ計算。最初の1フレーム分のズレ防止）。
