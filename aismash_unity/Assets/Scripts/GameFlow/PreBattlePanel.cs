@@ -2479,6 +2479,12 @@ namespace PromptFighters.GameFlow
         {
             if (BattleManager.Instance == null) return;
             if (_presets == null || _presets.Count == 0) return;
+            if (_generationCoroutine != null)
+            {
+                Debug.LogWarning("[PreBattle] キャラクター生成はすでに進行中です。");
+                ShowPanel();
+                return;
+            }
 
             bool hasP1Input = HasCharacterInput(true);
             bool hasP2Input = HasCharacterInput(false);
@@ -2524,8 +2530,10 @@ namespace PromptFighters.GameFlow
         IEnumerator GenerateBothChars(CharacterData preset1, CharacterData preset2,
             bool genP1, bool genP2)
         {
-            _pendingData1 = null;
-            _pendingData2 = null;
+            // 対戦開始待ちの _pendingData1/2 とは分離する。生成中にステージ選択や
+            // トレーニングへ入っても、使用キャラが生成途中データへ差し替わらないようにする。
+            CharacterData generatedData1 = genP1 ? null : preset1;
+            CharacterData generatedData2 = genP2 ? null : preset2;
             string errorMsg = null;
             bool aiOk1 = false;
             bool aiOk2 = false;
@@ -2549,7 +2557,7 @@ namespace PromptFighters.GameFlow
                 AICharacterClient.Generate(this, name1, feat1,
                     data =>
                     {
-                        _pendingData1 = data;
+                        generatedData1 = data;
                         aiOk1 = true;
                         // 保存・ロスター追加は画像生成が完全に終わってから行う（生成途中のキャラで
                         // 遊べてしまう／画像なしの白ボックスキャラが並ぶのを防ぐ）。
@@ -2563,7 +2571,7 @@ namespace PromptFighters.GameFlow
                     err  => { errorMsg = err; done = true; });
                 yield return new WaitUntil(() => done);
             }
-            else _pendingData1 = preset1;
+            else generatedData1 = preset1;
 
             if (genP2)
             {
@@ -2575,7 +2583,7 @@ namespace PromptFighters.GameFlow
                 AICharacterClient.Generate(this, name2, feat2,
                     data =>
                     {
-                        _pendingData2 = data;
+                        generatedData2 = data;
                         aiOk2 = true;
                         // 1P側と同じく、保存・ロスター追加は画像完成後（保存先の確保のみ先行）
                         CharacterSaveManager.PrepareDirectory(data);
@@ -2587,25 +2595,25 @@ namespace PromptFighters.GameFlow
                     err  => { if (errorMsg == null) errorMsg = err; done = true; });
                 yield return new WaitUntil(() => done);
             }
-            else _pendingData2 = preset2;
+            else generatedData2 = preset2;
 
             // 生成失敗時はローカル生成で代替。通信不調でAI生成できなくても「作ろうとしたキャラが
             // 結局残らない」とならないよう、この代替キャラも見た目一式をプリセットから借りて保存する
             // （FinalizeLocalFallbackCharacterで対応。技はローカル簡易生成のものになる）。
             bool usedFallback1 = false, usedFallback2 = false;
-            if (_pendingData1 == null)
+            if (generatedData1 == null)
             {
                 if (!string.IsNullOrEmpty(errorMsg))
                     Debug.LogWarning("[PreBattle] AI生成失敗: " + errorMsg);
                 UpdateGeneratingStatus(BuildFallbackMessage(errorMsg));
-                _pendingData1 = PromptCharacterFactory.Create(
+                generatedData1 = PromptCharacterFactory.Create(
                     _p1NameInput?.text, _p1FeatureInput?.text, preset1);
                 usedFallback1 = true; // このブロックはgenP1=trueかつAI生成失敗時のみ通る
                 yield return new WaitForSeconds(2.5f);
             }
-            if (_pendingData2 == null)
+            if (generatedData2 == null)
             {
-                _pendingData2 = PromptCharacterFactory.Create(
+                generatedData2 = PromptCharacterFactory.Create(
                     _p2NameInput?.text, _p2FeatureInput?.text, preset2);
                 usedFallback2 = true; // 同上（genP2=trueかつAI生成失敗時のみ）
             }
@@ -2618,20 +2626,20 @@ namespace PromptFighters.GameFlow
             if ((genImg1 || genImg2) && !DebugSettings.SkipImageGeneration)
             {
                 UpdateGeneratingStatus("キャラクター画像を生成中...");
-                yield return GenerateImages(_pendingData1, _pendingData2, genImg1, genImg2);
+                yield return GenerateImages(generatedData1, generatedData2, genImg1, genImg2);
 
                 // 失敗した側は少し待ってもう1周だけ自動リトライ（一時的なAPIエラーで
                 // キャラ生成全体を失敗にしないための保険。クライアント側でもモデル
                 // フォールバック済みなので、ここまで来る失敗はほぼ通信起因）。
-                bool retry1 = genImg1 && _pendingData1?.characterSprite == null;
-                bool retry2 = genImg2 && _pendingData2?.characterSprite == null;
+                bool retry1 = genImg1 && generatedData1?.characterSprite == null;
+                bool retry2 = genImg2 && generatedData2?.characterSprite == null;
                 if (retry1 || retry2)
                 {
                     UpdateGeneratingStatus("画像生成をリトライしています...");
                     if (retry1) SetGenProgress(0, 12);
                     if (retry2) SetGenProgress(1, 12);
                     yield return new WaitForSecondsRealtime(5f);
-                    yield return GenerateImages(_pendingData1, _pendingData2, retry1, retry2);
+                    yield return GenerateImages(generatedData1, generatedData2, retry1, retry2);
                 }
             }
             else if (DebugSettings.SkipImageGeneration)
@@ -2645,15 +2653,14 @@ namespace PromptFighters.GameFlow
             }
 
             _generatingPanel?.SetActive(false);
-            _generationCoroutine = null;
 
             // 画像まで完成したキャラだけを保存してロスターへ追加する。
             // 画像生成に失敗したキャラは保存せず破棄（白ボックスのキャラが一覧に並ぶのを防ぐ）。
-            if (genP1 && aiOk1) FinalizeGeneratedCharacter(_pendingData1, true);
-            else if (usedFallback1) FinalizeLocalFallbackCharacter(_pendingData1, preset1, true);
+            if (genP1 && aiOk1) FinalizeGeneratedCharacter(generatedData1, true);
+            else if (usedFallback1) FinalizeLocalFallbackCharacter(generatedData1, preset1, true);
 
-            if (genP2 && aiOk2) FinalizeGeneratedCharacter(_pendingData2, false);
-            else if (usedFallback2) FinalizeLocalFallbackCharacter(_pendingData2, preset2, false);
+            if (genP2 && aiOk2) FinalizeGeneratedCharacter(generatedData2, false);
+            else if (usedFallback2) FinalizeLocalFallbackCharacter(generatedData2, preset2, false);
 
             // 生成完了。生成画面へは移行せず、プレイ中の画面はそのままに、
             // オーバーレイを「完了」にして少し見せてから消す（プレイを中断しない）。
@@ -2668,6 +2675,7 @@ namespace PromptFighters.GameFlow
 
             yield return new WaitForSecondsRealtime(3f);
             ShowGenOverlay(false);
+            _generationCoroutine = null;
         }
 
         // AI生成が通信エラー等で失敗し、ローカル生成（PromptCharacterFactory.Create）に切り替わった
@@ -2684,15 +2692,14 @@ namespace PromptFighters.GameFlow
                     data.spriteSet.sprites[i] = sourcePreset.spriteSet.sprites[i];
             }
             CharacterSaveManager.PrepareDirectory(data);
-            CharacterSaveManager.SaveSprites(data);
             FinalizeGeneratedCharacter(data, isP1);
         }
 
         // 生成が完全に成功（テキスト＋画像）したキャラだけを保存し、ロスターへ追加・選択する。
         // 画像が用意できなかった場合は保存せず破棄する（画像なしの白ボックスキャラを一覧に出さない）。
-        void FinalizeGeneratedCharacter(CharacterData data, bool isP1)
+        bool FinalizeGeneratedCharacter(CharacterData data, bool isP1)
         {
-            if (data == null) return;
+            if (data == null) return false;
             int slot = isP1 ? 0 : 1;
             bool imagesOk = DebugSettings.SkipImageGeneration
                 || (data.spriteSet != null && data.characterSprite != null);
@@ -2701,10 +2708,24 @@ namespace PromptFighters.GameFlow
                 CharacterSaveManager.DiscardPrepared(data);
                 _genPercent[slot] = -1; // オーバーレイに失敗表示
                 Debug.LogWarning($"[PreBattle] 「{data.characterName}」は画像生成に失敗したため保存しませんでした");
-                return;
+                return false;
             }
 
-            CharacterSaveManager.Save(data);
+            if (!DebugSettings.SkipImageGeneration && !CharacterSaveManager.SaveSprites(data))
+            {
+                CharacterSaveManager.DiscardPrepared(data);
+                _genPercent[slot] = -1;
+                Debug.LogWarning($"[PreBattle] 「{data.characterName}」は画像ファイルの保存に失敗したため完成扱いにしませんでした");
+                return false;
+            }
+
+            if (!CharacterSaveManager.Save(data))
+            {
+                CharacterSaveManager.DiscardPrepared(data);
+                _genPercent[slot] = -1;
+                Debug.LogWarning($"[PreBattle] 「{data.characterName}」は保存に失敗したため完成扱いにしませんでした");
+                return false;
+            }
             if (!_presets.Contains(data)) _presets.Add(data);
             if (isP1) _p1PresetIdx = _presets.IndexOf(data);
             else      _p2PresetIdx = _presets.IndexOf(data);
@@ -2712,6 +2733,8 @@ namespace PromptFighters.GameFlow
                 _newCharNames.Add(data.characterName);
             // 完成披露の演出キューへ（安全な画面に戻ったタイミングで再生される）
             EnqueueReveal(data);
+            SetGenProgress(slot, 100);
+            return true;
         }
 
         IEnumerator GenerateImages(CharacterData data1, CharacterData data2, bool generateP1, bool generateP2)
@@ -2731,7 +2754,7 @@ namespace PromptFighters.GameFlow
                     {
                         data1.spriteSet = sprites;
                         data1.characterSprite = sprites.Get(CharacterSpriteId.Idle1);
-                        SetGenProgress(0, 100);
+                        SetGenProgress(0, 95);
                         img1Done = true;
                     },
                     err => { Debug.LogWarning("[AIImage] 1P: " + err); img1Done = true; },
@@ -2753,7 +2776,7 @@ namespace PromptFighters.GameFlow
                     {
                         data2.spriteSet = sprites;
                         data2.characterSprite = sprites.Get(CharacterSpriteId.Idle1);
-                        SetGenProgress(1, 100);
+                        SetGenProgress(1, 95);
                         img2Done = true;
                     },
                     err => { Debug.LogWarning("[AIImage] 2P: " + err); img2Done = true; },
@@ -2880,8 +2903,8 @@ namespace PromptFighters.GameFlow
         // バトルから戻るたびにプリセットを再読み込みし、直前生成キャラを自動選択する
         void RefreshPresets()
         {
-            string p1Name = GetPresetName(_p1PresetIdx);
-            string p2Name = GetPresetName(_p2PresetIdx);
+            CharacterData selectedP1 = GetPreset(true);
+            CharacterData selectedP2 = GetPreset(false);
             string bossName = GetBossPresetName(_bossPresetIdx);
 
             var builtIn = PresetCharacterLoader.LoadAll();
@@ -2893,10 +2916,10 @@ namespace PromptFighters.GameFlow
 
             int maxIdx = Mathf.Max(0, _presets.Count - 1);
 
-            int f1 = p1Name != "---" ? _presets.FindIndex(c => c.characterName == p1Name) : -1;
+            int f1 = FindPresetIndex(selectedP1);
             _p1PresetIdx = f1 >= 0 ? f1 : Mathf.Clamp(_p1PresetIdx, 0, maxIdx);
 
-            int f2 = p2Name != "---" ? _presets.FindIndex(c => c.characterName == p2Name) : -1;
+            int f2 = FindPresetIndex(selectedP2);
             _p2PresetIdx = f2 >= 0 ? f2 : Mathf.Clamp(_p2PresetIdx, 0, maxIdx);
 
             int fb = bossName != "---" ? _bossPresets.FindIndex(c => c.characterName == bossName) : -1;
@@ -2907,6 +2930,20 @@ namespace PromptFighters.GameFlow
             UpdateCategoryLabels();
             RebuildIconGrids();
             RefreshCharacterPreview();
+        }
+
+        int FindPresetIndex(CharacterData target)
+        {
+            if (target == null || _presets == null) return -1;
+            if (!string.IsNullOrEmpty(target.spriteDir))
+            {
+                int byDirectory = _presets.FindIndex(c => c != null &&
+                    string.Equals(c.spriteDir, target.spriteDir, System.StringComparison.OrdinalIgnoreCase));
+                if (byDirectory >= 0) return byDirectory;
+            }
+
+            return _presets.FindIndex(c => c != null &&
+                c.characterName == target.characterName && c.spritePath == target.spritePath);
         }
 
         void UpdateCategoryLabels()
@@ -2948,6 +2985,12 @@ namespace PromptFighters.GameFlow
 
         void ShowGenerationSetupPanel()
         {
+            if (_generationCoroutine != null)
+            {
+                Debug.LogWarning("[PreBattle] 生成中のため、新しい生成設定は開きません。");
+                ShowPanel();
+                return;
+            }
             if (_titlePanel != null) _titlePanel.SetActive(false);
             if (_panel != null) _panel.SetActive(false);
             if (_generationSetupPanel != null) _generationSetupPanel.SetActive(true);

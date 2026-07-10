@@ -19,6 +19,7 @@ namespace PromptFighters.Utils
             dst.wrapMode = src.wrapMode;
 
             Color[] pixels = src.GetPixels();
+            bool[] connectedBackground = FindConnectedGreenBackground(pixels, w, h);
             for (int i = 0; i < pixels.Length; i++)
             {
                 Color p = pixels[i];
@@ -27,16 +28,102 @@ namespace PromptFighters.Utils
                                    p.r <= maxRedBlue &&
                                    p.b <= maxRedBlue &&
                                    greenLead >= 0.22f;
-                if (!strongGreen) continue;
+                if (!connectedBackground[i] && !strongGreen) continue;
 
-                float t = Mathf.InverseLerp(0.22f, 0.22f + fadeRange, greenLead);
-                p.a = 1f - Mathf.Clamp01(t);
+                if (connectedBackground[i])
+                {
+                    p.a = 0f;
+                }
+                else
+                {
+                    float t = Mathf.InverseLerp(0.22f, 0.22f + fadeRange, greenLead);
+                    p.a = 1f - Mathf.Clamp01(t);
+                }
                 pixels[i] = p;
             }
 
             dst.SetPixels(pixels);
             dst.Apply();
             return dst;
+        }
+
+        // 生成AIが返す背景は #00FF00 から明度・色味がずれることがあるため、
+        // 外周にある緑を実測し、それにつながる領域を背景として除去する。
+        static bool[] FindConnectedGreenBackground(Color[] pixels, int w, int h)
+        {
+            var result = new bool[pixels.Length];
+            Color key = Color.clear;
+            int keyCount = 0;
+
+            void Accumulate(int index)
+            {
+                Color p = pixels[index];
+                if (!IsLooseGreen(p)) return;
+                key += p;
+                keyCount++;
+            }
+
+            for (int x = 0; x < w; x++)
+            {
+                Accumulate(x);
+                if (h > 1) Accumulate((h - 1) * w + x);
+            }
+            for (int y = 1; y < h - 1; y++)
+            {
+                Accumulate(y * w);
+                if (w > 1) Accumulate(y * w + w - 1);
+            }
+
+            int minimumSamples = Mathf.Max(4, (w + h) / 20);
+            if (keyCount < minimumSamples) return result;
+            key /= keyCount;
+
+            var queue = new Queue<int>();
+            void TryAdd(int index)
+            {
+                if (result[index] || !MatchesGreenKey(pixels[index], key)) return;
+                result[index] = true;
+                queue.Enqueue(index);
+            }
+
+            for (int x = 0; x < w; x++)
+            {
+                TryAdd(x);
+                if (h > 1) TryAdd((h - 1) * w + x);
+            }
+            for (int y = 1; y < h - 1; y++)
+            {
+                TryAdd(y * w);
+                if (w > 1) TryAdd(y * w + w - 1);
+            }
+
+            while (queue.Count > 0)
+            {
+                int index = queue.Dequeue();
+                int x = index % w;
+                int y = index / w;
+                if (x > 0) TryAdd(index - 1);
+                if (x < w - 1) TryAdd(index + 1);
+                if (y > 0) TryAdd(index - w);
+                if (y < h - 1) TryAdd(index + w);
+            }
+
+            return result;
+        }
+
+        static bool IsLooseGreen(Color p)
+        {
+            float lead = p.g - Mathf.Max(p.r, p.b);
+            return p.a > 0.01f && p.g >= 0.35f && lead >= 0.06f;
+        }
+
+        static bool MatchesGreenKey(Color p, Color key)
+        {
+            if (!IsLooseGreen(p)) return false;
+            float dr = p.r - key.r;
+            float dg = p.g - key.g;
+            float db = p.b - key.b;
+            return dr * dr + dg * dg + db * db <= 0.42f;
         }
 
         // threshold : この値以上の min(R,G,B) を「白とみなせる」上限 (0-1)

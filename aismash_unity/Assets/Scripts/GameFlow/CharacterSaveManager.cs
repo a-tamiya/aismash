@@ -15,6 +15,8 @@ namespace PromptFighters.GameFlow
     public static class CharacterSaveManager
     {
         static string SaveDir => Path.Combine(Application.persistentDataPath, "SavedChars");
+        static readonly object SaveStampLock = new object();
+        static long _lastSaveStamp;
 
         static readonly (CharacterSpriteId id, string filename)[] SpriteEntries =
         {
@@ -44,7 +46,7 @@ namespace PromptFighters.GameFlow
             if (!string.IsNullOrEmpty(data.spriteDir)) return; // 確保済み
             try
             {
-                string id = SanitizeId(data.characterName) + "_" + DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                string id = SanitizeId(data.characterName) + "_" + NextSaveStamp();
                 data.spriteDir = Path.Combine(SaveDir, id, "sprites");
                 Directory.CreateDirectory(data.spriteDir);
             }
@@ -73,9 +75,9 @@ namespace PromptFighters.GameFlow
 
         // JSONを保存し、data.spriteDir を設定する。
         // PrepareDirectory 済みの場合は同じIDを使う（画像の保存先とJSONを一致させる）。
-        public static void Save(CharacterData data)
+        public static bool Save(CharacterData data)
         {
-            if (data == null || string.IsNullOrWhiteSpace(data.characterName)) return;
+            if (data == null || string.IsNullOrWhiteSpace(data.characterName)) return false;
             try
             {
                 Directory.CreateDirectory(SaveDir);
@@ -84,11 +86,11 @@ namespace PromptFighters.GameFlow
                 {
                     id = Path.GetFileName(Directory.GetParent(data.spriteDir)?.FullName ?? "");
                     if (string.IsNullOrEmpty(id))
-                        id = SanitizeId(data.characterName) + "_" + DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                        id = SanitizeId(data.characterName) + "_" + NextSaveStamp();
                 }
                 else
                 {
-                    id = SanitizeId(data.characterName) + "_" + DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                    id = SanitizeId(data.characterName) + "_" + NextSaveStamp();
                 }
                 string path = Path.Combine(SaveDir, id + ".json");
                 data.spriteDir = Path.Combine(SaveDir, id, "sprites");
@@ -96,17 +98,29 @@ namespace PromptFighters.GameFlow
                 File.WriteAllText(path, json, Encoding.UTF8);
                 PresetCharacterLoader.ClearCache();
                 Debug.Log($"[Save] 保存完了: {path}");
+                return true;
             }
             catch (Exception e)
             {
                 Debug.LogWarning($"[Save] 保存失敗: {e.Message}");
+                return false;
+            }
+        }
+
+        static long NextSaveStamp()
+        {
+            lock (SaveStampLock)
+            {
+                long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                _lastSaveStamp = Math.Max(now, _lastSaveStamp + 1);
+                return _lastSaveStamp;
             }
         }
 
         // 透過済みスプライトをPNGとして保存する（AIImageClientが保存済みの場合は不要）
-        public static void SaveSprites(CharacterData data)
+        public static bool SaveSprites(CharacterData data)
         {
-            if (data?.spriteSet == null || string.IsNullOrEmpty(data.spriteDir)) return;
+            if (data?.spriteSet == null || string.IsNullOrEmpty(data.spriteDir)) return false;
             try
             {
                 Directory.CreateDirectory(data.spriteDir);
@@ -117,10 +131,12 @@ namespace PromptFighters.GameFlow
                     byte[] png = ImageConversion.EncodeToPNG(sprite.texture);
                     File.WriteAllBytes(Path.Combine(data.spriteDir, filename + ".png"), png);
                 }
+                return File.Exists(Path.Combine(data.spriteDir, "idle1.png"));
             }
             catch (Exception e)
             {
                 Debug.LogWarning($"[Save] スプライト保存失敗: {e.Message}");
+                return false;
             }
         }
 
