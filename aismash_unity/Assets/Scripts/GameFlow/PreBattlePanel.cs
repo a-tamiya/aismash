@@ -93,10 +93,12 @@ namespace PromptFighters.GameFlow
 
         // 生成進捗オーバーレイ（生成中も自由にプレイできるよう、生成画面に移行せず常時表示する）。
         GameObject        _genOverlay;
+        TextMeshProUGUI   _genOverlayTitle;
         TextMeshProUGUI[] _genOverlayLines = new TextMeshProUGUI[2];
         readonly string[] _genName    = new string[2];
         readonly int[]    _genPercent  = new int[2];
         readonly bool[]   _genActive   = new bool[2];
+        Coroutine         _genOverlayNoticeCoroutine;
 
         // このセッションで新しく生成したキャラ名。ロスターで枠を光らせて見分けやすくする。
         readonly System.Collections.Generic.HashSet<string> _newCharNames =
@@ -422,10 +424,10 @@ namespace PromptFighters.GameFlow
             var eImg = edge.AddComponent<Image>();
             eImg.color = PromptFighters.UI.UITheme.Gold; eImg.raycastTarget = false;
 
-            var title = MakeOverlayLabel(_genOverlay.transform, "Title",
+            _genOverlayTitle = MakeOverlayLabel(_genOverlay.transform, "Title",
                 new Vector2(14f, -8f), new Vector2(432f, 34f), 24f, PromptFighters.UI.UITheme.Gold);
-            title.text = "● 生成中…";
-            title.fontStyle = FontStyles.Bold | FontStyles.Italic;
+            SetGenOverlayTitleDefault();
+            _genOverlayTitle.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
             _genOverlayLines[0] = MakeOverlayLabel(_genOverlay.transform, "Line0",
                 new Vector2(14f, -48f), new Vector2(432f, 32f), 22f, PromptFighters.UI.UITheme.P1Neon);
@@ -457,6 +459,33 @@ namespace PromptFighters.GameFlow
         void ShowGenOverlay(bool on)
         {
             if (_genOverlay != null) _genOverlay.SetActive(on);
+        }
+
+        void ShowGenerationInProgressNotice()
+        {
+            ShowGenOverlay(true);
+            RefreshGenOverlay();
+            if (_genOverlayTitle == null) return;
+
+            if (_genOverlayNoticeCoroutine != null)
+                StopCoroutine(_genOverlayNoticeCoroutine);
+            _genOverlayTitle.text = "！ 既にキャラ生成中";
+            _genOverlayTitle.color = PromptFighters.UI.UITheme.Urgent;
+            _genOverlayNoticeCoroutine = StartCoroutine(ResetGenOverlayNotice());
+        }
+
+        IEnumerator ResetGenOverlayNotice()
+        {
+            yield return new WaitForSecondsRealtime(2.5f);
+            SetGenOverlayTitleDefault();
+            _genOverlayNoticeCoroutine = null;
+        }
+
+        void SetGenOverlayTitleDefault()
+        {
+            if (_genOverlayTitle == null) return;
+            _genOverlayTitle.text = "● 生成中…";
+            _genOverlayTitle.color = PromptFighters.UI.UITheme.Gold;
         }
 
         void SetGenProgress(int slot, int percent)
@@ -2483,6 +2512,7 @@ namespace PromptFighters.GameFlow
             {
                 Debug.LogWarning("[PreBattle] キャラクター生成はすでに進行中です。");
                 ShowPanel();
+                ShowGenerationInProgressNotice();
                 return;
             }
 
@@ -2989,6 +3019,7 @@ namespace PromptFighters.GameFlow
             {
                 Debug.LogWarning("[PreBattle] 生成中のため、新しい生成設定は開きません。");
                 ShowPanel();
+                ShowGenerationInProgressNotice();
                 return;
             }
             if (_titlePanel != null) _titlePanel.SetActive(false);
