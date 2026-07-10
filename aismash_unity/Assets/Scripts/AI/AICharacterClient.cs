@@ -226,16 +226,7 @@ namespace PromptFighters.AI
         {
             "小柄で軽い", "細身で長身", "中肉中背", "がっしりした大柄", "巨体で重量級",
             "ずんぐりした低身長", "手足が異様に長い", "宙に浮いている", "人間ではない生き物の姿",
-            "機械のボディ", "着ぐるみのような姿", "複数の腕を持つ姿", "細長い異形の姿"
-        };
-        static readonly string[] ConceptDemographics =
-        {
-            "少年", "少女", "青年", "女性", "男性", "壮年", "年齢を特定しない人外"
-        };
-        static readonly string[] ConceptColorPalettes =
-        {
-            "赤と黒", "青と銀", "黄と紫", "緑と白", "橙と紺", "桃と水色", "金と深緑",
-            "灰と蛍光色", "白と群青", "茶と朱", "黒とシアン", "乳白色と青緑"
+            "機械のボディ", "着ぐるみのような姿", "少年/少女の姿", "老練な姿"
         };
         // 性能傾向の種。ステータスのトレードオフを散らす。
         static readonly string[] ConceptStatBiases =
@@ -280,8 +271,6 @@ namespace PromptFighters.AI
         static readonly ShuffleDeck ArchetypeDeck = new ShuffleDeck(ConceptArchetypes);
         static readonly ShuffleDeck WeaponDeck = new ShuffleDeck(ConceptWeapons);
         static readonly ShuffleDeck BuildDeck = new ShuffleDeck(ConceptBuilds);
-        static readonly ShuffleDeck DemographicDeck = new ShuffleDeck(ConceptDemographics);
-        static readonly ShuffleDeck ColorPaletteDeck = new ShuffleDeck(ConceptColorPalettes);
         static readonly ShuffleDeck StatBiasDeck = new ShuffleDeck(ConceptStatBiases);
         static readonly ShuffleDeck StyleDeck = new ShuffleDeck(ConceptStyles);
         static readonly ShuffleDeck NameStyleDeck = new ShuffleDeck(ConceptNameStyles);
@@ -370,8 +359,6 @@ $@"プレイヤーが次の素材を入力しました。これを最優先で�
             string style     = StyleDeck.Next();
             string weapon    = WeaponDeck.Next();
             string build     = BuildDeck.Next();
-            string demographic = DemographicDeck.Next();
-            string colors = ColorPaletteDeck.Next();
             string statBias  = StatBiasDeck.Next();
             string visualDirection = VisualDirectionDeck.Next();
             string combatHook = CombatHookDeck.Next();
@@ -379,32 +366,23 @@ $@"プレイヤーが次の素材を入力しました。これを最優先で�
             string profile = $"モチーフ={motif}/{motif2}; 役割={archetype}; 武器={weapon}; 体格={build}; 戦法={style}; 性能={statBias}";
 
             return new ConceptPrompt { noveltyProfile = profile, text =
-$@"あなたはプロの2D格闘ゲームのキャラクタープランナーです。
-以下の【設定条件】と【パラメータ】に従って、新キャラクターの設定テキストを作成してください。
-
-【設定条件】
-・5文程度で簡潔にまとめること。
-・モチーフ、戦闘スタイル、機動力、具体的な戦い方と技のギミックを自然に組み込むこと。
-・すべてのパラメータを設定へ反映すること。パラメータを別の定番設定へ置き換えないこと。
-・性格、口調、話し方、内面は書かないこと。
-・テーマ語を箇条書きで並べず、常体の自然な紹介文に統合すること。
-
-【パラメータ】
-・性別／年齢層: {demographic}
-・メインモチーフ: {motif} / {motif2}
-・役割: {archetype}
-・体格: {build}
-・武器・攻撃手段: {weapon}
-・戦闘スタイル: {style}
-・イメージカラー: {colors}
-・特殊ギミック: {combatHook}
-・性能傾向: {statBias}
-・見た目の方向性: {visualDirection}
-・名前の形式: {nameStyle}
-・識別子: {nonce}
+$@"個性的な2D格闘ゲームのキャラクターを1体、新しく考案してください。
+次のテーマ種は**全項目を必ず設定へ採用**してください。言い換えは可能ですが、無視・一般的な剣士や魔法使いへの置換は禁止です。
+- モチーフ: {motif} / {motif2}
+- 役割: {archetype}
+- 体格・姿: {build}
+- 武器・攻撃手段: {weapon}
+- 戦い方: {style}
+- 性能の傾向: {statBias}
+- 見た目の方向: {visualDirection}
+- 戦闘上の仕掛け: {combatHook}
+- 名前の作り方: {nameStyle}（このタイプの名前にする。読みやすさは保つ）
+バリエーション種: {nonce}
 {recentAvoidance}
 
-character_name と features をJSONで出力してください。" };
+個性は『見た目』と『技・戦い方』で出す（性格・口調・話し方は書かない）。
+features には見た目・武器・戦い方・性能の傾向の4要素を必ず入れること。
+character_name と features を出力してください。テーマ種の語をそのまま列挙せず、自然な紹介文に統合してください。" };
         }
 
         static string BuildRecentAvoidance()
@@ -423,13 +401,25 @@ character_name と features をJSONで出力してください。" };
         }
 
         static string BuildConceptSystemPrompt() =>
-$@"あなたはプロの2D格闘ゲームのキャラクタープランナーです。JSONのみ出力（説明不要）。
+$@"あなたは2D格闘ゲームのキャラクター原案を生み出す、発想豊かなクリエイターです。JSONのみ出力（説明不要）。
 出力形式:
 {{ ""character_name"": ""..."", ""features"": ""..."" }}
 
-- character_name: ユーザー指定の名前形式とパラメータに従う、声に出して読める固有名。4〜14字程度。難読表記、記号の詰め込み、肩書きの盛りすぎは避ける。
-- features: 120〜210字程度の常体による紹介文。5文程度にし、指定されたパラメータをすべて反映する。文章中で固定の具体例を出したり、パラメータ以外の定番設定を補ったりしない。
-- 性格、口調、話し方、内面は書かない。技名は出さず、戦い方とギミックの内容を説明する。";
+- character_name: 声に出して読める固有名。読みやすさは保ちつつ、カタカナ名／和風名／二つ名・異名／モチーフ由来のニックネーム／英語風の通称を偏りなく使い分ける。日本人のありふれた姓＋名ばかりに偏らせない。難読漢字・無理な当て字・記号や奇抜な文字の詰め込みと、肩書きの盛りすぎは避ける。全体で4〜14字程度。
+- features: そのキャラを友達に紹介するような、平易で読みやすい日本語の文章（120〜210字程度）。**個性は『見た目』と『技・戦い方』だけで表現する**。後でこの文章を素材に技とステータスを自動生成するため、設定だけで終わらせず実際の立ち回りまで具体的に書く。
+  空行で区切った**5段落**を、次の順序で出力する:
+  ①モチーフ2つ・体格・配色・服装を示す見た目。②武器/攻撃手段と、`【近距離・ラッシュ型】`のような間合い＋戦闘型。③他キャラと差が出る固有ギミックと、その代償または弱点。④代表的な攻め方と、相手をどう崩すか。⑤その性能で生まれる操作感・読み合いの魅力。
+  固有ギミックは、移動・攻撃・設置・召喚・防御・状態変化などゲーム内で技として表現できる内容にする。性能の傾向（速さ・重さ・耐久・パワーのトレードオフ）も②〜④のどこかで明確にする。
+- **性格・口調・話し方・内面の描写は書かない**（例：『気取った話し方をする』『人を見下す』『冷酷な性格』などは不要）。
+- features の文章作法（重要。次の『悪い例』のような文体にしない）:
+  ・難しい言葉・詩的/文学的/厨二的な言い回し・凝った比喩・古風で読みにくい語彙を避け、日常的で分かりやすい言葉で書く。
+  ・1段落は1〜2文にし、1文に情報を詰め込みすぎない。読点でだらだらと長くつながない。
+  ・『見た目：』のようなラベル列挙や箇条書きにしない。5段落の普通の紹介文にする。
+  ・文体は常体（〜だ／〜する／〜型）で統一する。です・ます調は使わない。
+  ・同じ語尾の繰り返しや、指示文・入力に出てくる語（戦法名・ステータス表現・テーマ種など）をそのまま貼り付けるのを避ける。
+  ・固定の例文・固有名・モチーフを繰り返し使わない。与えられたテーマ種から毎回新しい紹介文を組み立てる。
+- 技名（固有の必殺技名）は出力しない。技は名前ではなく『どんな技か』を内容で説明する。
+- 毎回まったく異なるタイプのキャラにするが、奇抜さや凝った表現より『分かりやすさ・読みやすさ』を優先する。";
 
         // OpenAI Chat Completions レスポンスから content を取り出す
         [Serializable] class OAIResp   { public OAIChoice[] choices; }
