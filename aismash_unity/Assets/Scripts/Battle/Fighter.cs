@@ -108,7 +108,7 @@ namespace PromptFighters.Battle
         SpriteRenderer _sprite;
         SpriteRenderer _rootSprite;
         Transform _visualRoot;
-        [SerializeField] float downedVisualDrop = 0.35f; // ダウン時に伏せて見せる下げ量（ローカル）
+        [SerializeField] float downedVisualDrop = 0.22f; // ダウン時に伏せて見せる下げ量（ローカル。見つけやすいよう少し浅めに）
         float _charSizeScale = 1f;
         SpriteRenderer _hurtboxDebugSr;
         SkillExecutor _skillExecutor;
@@ -512,7 +512,12 @@ namespace PromptFighters.Battle
                     _visualRoot.localRotation = Quaternion.Euler(0f, 0f, -90f * dir);
                     _visualRoot.localPosition = new Vector3(0f, -downedVisualDrop, 0f);
                 }
-                _sprite.color = new Color(0.55f, 0.55f, 0.6f, 0.6f);
+                // 救助が必要な味方を見つけやすいよう、不透明度を上げつつ金色でゆっくり明滅させる。
+                float downedPulse = (Mathf.Sin(Time.time * 3f) + 1f) * 0.5f;
+                Color downedBase = new Color(0.55f, 0.55f, 0.6f);
+                Color downedGlow = new Color(1f, 0.85f, 0.35f);
+                Color downedTint = Color.Lerp(downedBase, downedGlow, downedPulse * 0.6f);
+                _sprite.color = new Color(downedTint.r, downedTint.g, downedTint.b, Mathf.Lerp(0.78f, 0.95f, downedPulse));
                 return;
             }
 
