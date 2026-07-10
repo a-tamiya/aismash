@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -131,7 +132,8 @@ namespace PromptFighters.AI
             }
 
             string systemPrompt = BuildConceptSystemPrompt();
-            string userPrompt   = BuildConceptUserPrompt(name, features);
+            var conceptPrompt   = BuildConceptUserPrompt(name, features);
+            string userPrompt   = conceptPrompt.text;
             string lastError = null;
             // 主モデルが全滅した場合は軽量モデルでも試す
             string[] models = { Model, LightModel };
@@ -169,6 +171,7 @@ namespace PromptFighters.AI
                             throw new Exception("conceptが空です");
                         concept.character_name = (concept.character_name ?? "").Trim();
                         concept.features       = (concept.features ?? "").Trim();
+                        RememberConceptProfile(conceptPrompt.noveltyProfile);
                         onSuccess?.Invoke(concept);
                         yield break;
                     }
@@ -234,12 +237,6 @@ namespace PromptFighters.AI
             "手数の多さで押し切るラッシュ型", "重装甲で吹き飛ばされにくい",
             "地上は遅いが空中では素早い", "攻守ともに高いが体力が少ない"
         };
-        static readonly string[] ConceptTones =
-        {
-            "冷酷", "陽気", "高貴", "狂気的", "クール", "熱血", "無口", "気品ある", "残忍",
-            "優雅", "飄々とした", "ストイック", "お調子者", "厳格", "純真", "皮肉屋",
-            "傲慢", "穏やか", "野心的", "陰険", "豪快", "ミステリアス"
-        };
         static readonly string[] ConceptStyles =
         {
             "近接でラッシュをかける", "遠距離から狙撃する", "罠を設置して制圧する",
@@ -251,87 +248,156 @@ namespace PromptFighters.AI
         // 名前の作り方の種。生成ごとにランダムに1つ与えて、名前の型が偏らないようにする。
         static readonly string[] ConceptNameStyles =
         {
-            "短いカタカナ名（例：レヴィ、ガロ、ノクス、ミオ）",
-            "二つ名・異名つきの名（例：紅蓮のガロ、静寂のレン）",
-            "和風の名（例：椿丸、雷蔵、白夜）",
-            "英語・外来語風の通称（例：ブレイズ、ヴェスパ、コバルト）",
-            "モチーフを表す通称・あだ名（例：火喰い鳥、影縫い、鉄牙）",
-            "ひらがな/カタカナの短い愛称（例：くぅ、ぴあ、ザジ）",
-            "称号＋短い名（例：機械王ロウ、砂の魔女ナハ）"
+            "短いカタカナ名", "二つ名・異名つきの名", "和風の名", "英語・外来語風の通称",
+            "モチーフを表す通称・あだ名", "ひらがな/カタカナの短い愛称", "称号＋短い名"
+        };
+        static readonly string[] ConceptVisualDirections =
+        {
+            "作業着や工具を戦闘用に改造した見た目", "祭りや舞台衣装を実戦向けにした見た目",
+            "スポーツ用品を防具や武器にした見た目", "雨具や防寒具を活かした見た目",
+            "宇宙・深海などの作業装備を活かした見た目", "古着やリペア品を組み合わせた見た目",
+            "植物や鉱物の質感を衣装に取り入れた見た目", "乗り物や公共施設の意匠を取り入れた見た目"
+        };
+        static readonly string[] ConceptCombatHooks =
+        {
+            "武器の反動で位置を変えながら戦う", "置いた道具を回収して攻めを組み立てる",
+            "空中に短く留まって角度を変える", "相手を押したり引いたりして間合いを作る",
+            "リズムや回転をためてから強い一撃を出す", "地面や壁を使って軌道を変える",
+            "一度離れてから戻る道具で挟み込む", "守りの動作を攻めにつなげる"
         };
 
         static readonly System.Random ConceptRng = new System.Random();
-        static string Pick(string[] arr) => arr[ConceptRng.Next(arr.Length)];
+        static readonly ShuffleDeck MotifDeck = new ShuffleDeck(ConceptMotifs);
+        static readonly ShuffleDeck ArchetypeDeck = new ShuffleDeck(ConceptArchetypes);
+        static readonly ShuffleDeck WeaponDeck = new ShuffleDeck(ConceptWeapons);
+        static readonly ShuffleDeck BuildDeck = new ShuffleDeck(ConceptBuilds);
+        static readonly ShuffleDeck StatBiasDeck = new ShuffleDeck(ConceptStatBiases);
+        static readonly ShuffleDeck StyleDeck = new ShuffleDeck(ConceptStyles);
+        static readonly ShuffleDeck NameStyleDeck = new ShuffleDeck(ConceptNameStyles);
+        static readonly ShuffleDeck VisualDirectionDeck = new ShuffleDeck(ConceptVisualDirections);
+        static readonly ShuffleDeck CombatHookDeck = new ShuffleDeck(ConceptCombatHooks);
+        static readonly Queue<string> RecentConceptProfiles = new Queue<string>();
+        const int RecentConceptProfileLimit = 8;
 
-        static string BuildConceptUserPrompt(string name, string features)
+        sealed class ConceptPrompt
+        {
+            public string text;
+            public string noveltyProfile;
+        }
+
+        sealed class ShuffleDeck
+        {
+            readonly string[] _values;
+            readonly List<int> _remaining = new List<int>();
+
+            public ShuffleDeck(string[] values)
+            {
+                _values = values;
+            }
+
+            public string Next()
+            {
+                if (_remaining.Count == 0)
+                    for (int i = 0; i < _values.Length; i++) _remaining.Add(i);
+
+                int pick = ConceptRng.Next(_remaining.Count);
+                int valueIndex = _remaining[pick];
+                _remaining.RemoveAt(pick);
+                return _values[valueIndex];
+            }
+        }
+
+        static ConceptPrompt BuildConceptUserPrompt(string name, string features)
         {
             string n = (name ?? "").Trim();
             string f = (features ?? "").Trim();
             bool hasN = n.Length > 0;
             bool hasF = f.Length > 0;
             int nonce = ConceptRng.Next(100000, 999999);
-            string nameStyle = Pick(ConceptNameStyles);
+            string nameStyle = NameStyleDeck.Next();
 
             // 名前のみ → 名前から特徴を発案（名前は変えずにそのまま使う）
             if (hasN && !hasF)
             {
-                return
+                return new ConceptPrompt { text =
 $@"キャラクター名「{n}」だけが与えられています。
 この名前から連想されるキャラクターを想像し、features を作ってください。
 features には ①見た目（体格・色・服装・モチーフ） ②武器・攻撃手段 ③戦い方（間合い・戦術） ④性能の傾向（速さ・重さ・耐久などのトレードオフ）の4要素を必ず入れる。
 - character_name は「{n}」を**そのまま**使う（変更しない）。
 - 個性は『見た目』と『技・戦い方』で表現する。性格・口調・話し方は書かない。
-バリエーション種: {nonce}";
+バリエーション種: {nonce}" };
             }
 
             // 特徴のみ → 特徴に合う名前を発案（特徴は意味を変えず自然に整える）
             if (!hasN && hasF)
             {
-                return
+                return new ConceptPrompt { text =
 $@"次のキャラクター特徴だけが与えられています:
 「{f}」
 この特徴に合う固有のキャラクター名を character_name として考えてください。
 - 名前の作り方: {nameStyle}。読みやすさを保ち、ありふれた日本人の姓名には寄せない。
 - features はこの内容を尊重し、意味を大きく変えずに自然で読みやすい文章へ整えて返す（性格・口調・話し方は書かず、見た目と技で個性を出す）。
-バリエーション種: {nonce}";
+バリエーション種: {nonce}" };
             }
 
             // 両方あり → 素材として尊重しつつ、技生成に使いやすい魅力的な原案へ整える
             if (hasN && hasF)
             {
-                return
+                return new ConceptPrompt { text =
 $@"プレイヤーが次の素材を入力しました。これを最優先で尊重し、より魅力的で技生成に使いやすい原案へ整えてください。
 - 名前: {n}
 - 特徴: {f}
 名前の意図は保ちつつ、features を自然で読みやすい紹介文に磨いてください（性格・口調・話し方は書かず、見た目と技で個性を出す）。
-バリエーション種: {nonce}";
+バリエーション種: {nonce}" };
             }
 
             // 両方空 → 完全新規。ランダムなテーマ種で多様性を確保する（性格・口調は使わない）。
             // モチーフ・役割に加えて武器・体格・性能傾向も種として与え、生成結果の型が偏らないようにする。
-            string motif     = Pick(ConceptMotifs);
-            string motif2    = Pick(ConceptMotifs);
-            string archetype = Pick(ConceptArchetypes);
-            string style     = Pick(ConceptStyles);
-            string weapon    = Pick(ConceptWeapons);
-            string build     = Pick(ConceptBuilds);
-            string statBias  = Pick(ConceptStatBiases);
+            string motif     = MotifDeck.Next();
+            string motif2    = MotifDeck.Next();
+            string archetype = ArchetypeDeck.Next();
+            string style     = StyleDeck.Next();
+            string weapon    = WeaponDeck.Next();
+            string build     = BuildDeck.Next();
+            string statBias  = StatBiasDeck.Next();
+            string visualDirection = VisualDirectionDeck.Next();
+            string combatHook = CombatHookDeck.Next();
+            string recentAvoidance = BuildRecentAvoidance();
+            string profile = $"モチーフ={motif}/{motif2}; 役割={archetype}; 武器={weapon}; 体格={build}; 戦法={style}; 性能={statBias}";
 
-            return
+            return new ConceptPrompt { noveltyProfile = profile, text =
 $@"個性的な2D格闘ゲームのキャラクターを1体、新しく考案してください。
-発想のテーマ種（必ずしも全部使わなくてよいが、ありきたりにせず意外性のある組み合わせにする）:
+次のテーマ種は**全項目を必ず設定へ採用**してください。言い換えは可能ですが、無視・一般的な剣士や魔法使いへの置換は禁止です。
 - モチーフ: {motif} / {motif2}
 - 役割: {archetype}
 - 体格・姿: {build}
 - 武器・攻撃手段: {weapon}
 - 戦い方: {style}
 - 性能の傾向: {statBias}
+- 見た目の方向: {visualDirection}
+- 戦闘上の仕掛け: {combatHook}
 - 名前の作り方: {nameStyle}（このタイプの名前にする。読みやすさは保つ）
 バリエーション種: {nonce}
+{recentAvoidance}
 
 個性は『見た目』と『技・戦い方』で出す（性格・口調・話し方は書かない）。
 features には見た目・武器・戦い方・性能の傾向の4要素を必ず入れること。
-character_name と features を出力してください。前回までと毎回まったく違うタイプにすること。";
+character_name と features を出力してください。テーマ種の語をそのまま列挙せず、自然な紹介文に統合してください。" };
+        }
+
+        static string BuildRecentAvoidance()
+        {
+            if (RecentConceptProfiles.Count == 0) return "直近の生成履歴はありません。";
+            return "直近の生成テーマ（これらと同じ中核の組み合わせは避ける）:\n- " +
+                   string.Join("\n- ", RecentConceptProfiles);
+        }
+
+        static void RememberConceptProfile(string profile)
+        {
+            if (string.IsNullOrEmpty(profile)) return;
+            RecentConceptProfiles.Enqueue(profile);
+            while (RecentConceptProfiles.Count > RecentConceptProfileLimit)
+                RecentConceptProfiles.Dequeue();
         }
 
         static string BuildConceptSystemPrompt() =>
@@ -339,9 +405,9 @@ $@"あなたは2D格闘ゲームのキャラクター原案を生み出す、発
 出力形式:
 {{ ""character_name"": ""..."", ""features"": ""..."" }}
 
-- character_name: 声に出して読める固有名。読みやすさは保ちつつ、**毎回いろいろなタイプの名前**にする（カタカナ名／和風名／二つ名・異名／モチーフ由来のニックネーム／英語風の通称 などを偏りなく使い分ける）。**日本人のありふれた人名（姓＋名のような名前）ばかりに偏らせない**。キャラの見た目・モチーフが伝わる名前だと良い（例：炎使いなら「フレア」「紅蓮のガロ」「火喰い鳥」のように、カタカナ・二つ名・通称など様々な形で）。ただし難読漢字・無理な当て字・記号や奇抜な文字の詰め込み（例：「ヴェル毒羅」「伽藍ノヰ」のような読みにくい表記）と、肩書きの盛りすぎは避ける。全体で4〜14字程度。
+- character_name: 声に出して読める固有名。読みやすさは保ちつつ、カタカナ名／和風名／二つ名・異名／モチーフ由来のニックネーム／英語風の通称を偏りなく使い分ける。日本人のありふれた姓＋名ばかりに偏らせない。難読漢字・無理な当て字・記号や奇抜な文字の詰め込みと、肩書きの盛りすぎは避ける。全体で4〜14字程度。
 - features: そのキャラを友達に紹介するような、平易で読みやすい日本語の文章（100〜180字・2〜4文）。**個性は『見た目』と『技・戦い方』だけで表現する**。次の4要素を**必ず全部**入れる:
-  ①見た目（体格・色・服装・モチーフ） ②武器または攻撃手段（何で攻撃するか） ③戦い方（間合い・戦術。近距離/遠距離/設置/突進など） ④性能の傾向（速さ・重さ・耐久・パワーのトレードオフ。例:「動きは速いが打たれ弱い」）。
+  ①見た目（体格・色・服装・モチーフ） ②武器または攻撃手段（何で攻撃するか） ③戦い方（間合い・戦術） ④性能の傾向（速さ・重さ・耐久・パワーのトレードオフ）。
   後でこの文章を素材に技とステータスを自動生成するので、4要素を具体的に書く。
 - **性格・口調・話し方・内面の描写は書かない**（例：『気取った話し方をする』『人を見下す』『冷酷な性格』などは不要）。
 - features の文章作法（重要。次の『悪い例』のような文体にしない）:
@@ -349,9 +415,7 @@ $@"あなたは2D格闘ゲームのキャラクター原案を生み出す、発
   ・1文に情報を詰め込みすぎない。短めの文を2〜4文に分け、読点でだらだらと長くつながない。
   ・『見た目：』のようなラベル列挙や箇条書きにしない。普通の紹介文にする。
   ・同じ語尾の繰り返しや、指示文・入力に出てくる語（戦法名・ステータス表現・テーマ種など）をそのまま貼り付けるのを避ける。
-  ・悪い例1（こう書かない）：「乳白色の霧をたなびかせる法衣の僧で、痩身ながら指先だけ異様に素早く、薄霧に紛れて間合いをずらしつつ掌打と膝を細かく連ねて逃げ道を塞ぐ。」＝難語と修飾を詰め込んだ長い一文。
-  ・悪い例2（こう書かない）：「気取っていて人を見下した話し方をする。」＝性格・口調・話し方の描写。
-  ・良い例（こう書く）：「霧をまとった細身の僧侶。両手の鉄の爪で連続して切りつける。霧に隠れて間合いを詰め、近づいて一気にラッシュをかける戦い方が得意。動きはとても速いが、体は丈夫ではない。」＝見た目・武器・戦い方・性能の4要素を平易な言葉で具体的に。
+  ・固定の例文・固有名・モチーフを繰り返し使わない。与えられたテーマ種から毎回新しい紹介文を組み立てる。
 - 技名（固有の必殺技名）は出力しない。技は名前ではなく『どんな技か』を内容で説明する。
 - 毎回まったく異なるタイプのキャラにするが、奇抜さや凝った表現より『分かりやすさ・読みやすさ』を優先する。";
 
