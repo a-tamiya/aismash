@@ -74,6 +74,10 @@ namespace PromptFighters.GameFlow
                 voiceProfile = new CharacterVoiceProfile
                 {
                     preset = src.voiceProfile?.preset,
+                    voiceGender = src.voiceProfile?.voiceGender,
+                    voiceAge = src.voiceProfile?.voiceAge,
+                    voicePitch = src.voiceProfile?.voicePitch,
+                    qualityVersion = src.voiceProfile?.qualityVersion ?? 0,
                     instructions = src.voiceProfile?.instructions,
                     introLine = src.voiceProfile?.introLine,
                     skillLines = src.voiceProfile?.skillLines != null

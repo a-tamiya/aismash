@@ -28,6 +28,10 @@ namespace PromptFighters.Battle.Skills.Json
     public class CharacterVoiceJsonRaw
     {
         public string preset;
+        public string voice_gender;
+        public string voice_age;
+        public string voice_pitch;
+        public int quality_version;
         public string instructions;
         public string intro_line;
         public string[] skill_lines;

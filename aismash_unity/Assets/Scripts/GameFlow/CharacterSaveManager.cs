@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using UnityEngine;
+using PromptFighters.AI;
 using PromptFighters.Battle.Skills;
 using PromptFighters.Battle.Skills.Json;
 using PromptFighters.Utils;
@@ -17,6 +18,7 @@ namespace PromptFighters.GameFlow
         static string SaveDir => Path.Combine(Application.persistentDataPath, "SavedChars");
         static readonly object SaveStampLock = new object();
         static long _lastSaveStamp;
+        static readonly string[] VoiceFilenames = { "intro", "attack_a", "attack_b", "attack_c", "smash_side" };
 
         static readonly (CharacterSpriteId id, string filename)[] SpriteEntries =
         {
@@ -227,8 +229,10 @@ namespace PromptFighters.GameFlow
 
                     string id        = Path.GetFileNameWithoutExtension(path);
                     string spriteDir = Path.Combine(SaveDir, id, "sprites");
+                    string voiceDir  = Path.Combine(SaveDir, id, "voices");
+                    RecoverInterruptedVoiceSwap(voiceDir);
                     data.spriteDir   = spriteDir;
-                    data.voiceDir    = Path.Combine(SaveDir, id, "voices");
+                    data.voiceDir    = voiceDir;
 
                     // Idle1をプレビュー用にロード
                     string idle1 = Path.Combine(spriteDir, "idle1.png");
@@ -243,6 +247,115 @@ namespace PromptFighters.GameFlow
                 }
             }
             return results;
+        }
+
+        // ボイス一括差し替え中にアプリが終了しても、次回ロード時に完全な旧セットまたは
+        // 完全な新セットを復旧する。5件未満のディレクトリは採用しない。
+        static void RecoverInterruptedVoiceSwap(string targetDir)
+        {
+            try
+            {
+                string parentDir = Path.GetDirectoryName(targetDir);
+                if (string.IsNullOrEmpty(parentDir) || !Directory.Exists(parentDir)) return;
+
+                string[] backups = Directory.GetDirectories(parentDir, "voices_backup_*");
+                string[] pending = Directory.GetDirectories(parentDir, "voices_pending_*");
+
+                bool targetComplete = HasCompleteVoiceSet(targetDir);
+                if (!targetComplete)
+                {
+                    string candidate = NewestCompleteDirectory(backups) ?? NewestCompleteDirectory(pending);
+                    if (!string.IsNullOrEmpty(candidate))
+                    {
+                        string displaced = null;
+                        if (Directory.Exists(targetDir))
+                        {
+                            displaced = Path.Combine(parentDir, "voices_incomplete_" + Guid.NewGuid().ToString("N"));
+                            Directory.Move(targetDir, displaced);
+                        }
+
+                        try
+                        {
+                            Directory.Move(candidate, targetDir);
+                            targetComplete = true;
+                            Debug.LogWarning("[Save] 中断されたボイス差し替えを復旧しました: " + targetDir);
+                        }
+                        catch
+                        {
+                            if (!Directory.Exists(targetDir) && !string.IsNullOrEmpty(displaced) && Directory.Exists(displaced))
+                                Directory.Move(displaced, targetDir);
+                            throw;
+                        }
+                    }
+                }
+
+                // 完全なtargetを確保できた場合だけ、残った作業ディレクトリを掃除する。
+                if (!targetComplete) return;
+                CleanupVoiceWorkDirectories(Directory.GetDirectories(parentDir, "voices_backup_*"), targetDir);
+                CleanupVoiceWorkDirectories(Directory.GetDirectories(parentDir, "voices_pending_*"), targetDir);
+                CleanupVoiceWorkDirectories(Directory.GetDirectories(parentDir, "voices_incomplete_*"), targetDir);
+            }
+            catch (Exception e)
+            {
+                // 復旧に失敗してもキャラ本体のロードは継続し、残ったbackupを次回再試行に残す。
+                Debug.LogWarning("[Save] ボイス差し替え復旧失敗: " + e.Message);
+            }
+        }
+
+        static bool HasCompleteVoiceSet(string directory)
+        {
+            if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory)) return false;
+            foreach (string filename in VoiceFilenames)
+                if (!IsValidVoiceWav(Path.Combine(directory, filename + ".wav"))) return false;
+            return true;
+        }
+
+        static bool IsValidVoiceWav(string path)
+        {
+            try
+            {
+                var info = new FileInfo(path);
+                if (!info.Exists || info.Length <= 44) return false;
+                using var stream = File.OpenRead(path);
+                var header = new byte[12];
+                if (stream.Read(header, 0, header.Length) != header.Length) return false;
+                if (header[0] != 'R' || header[1] != 'I' || header[2] != 'F' || header[3] != 'F' ||
+                    header[8] != 'W' || header[9] != 'A' || header[10] != 'V' || header[11] != 'E') return false;
+                uint declaredRiffSize = BitConverter.ToUInt32(header, 4);
+                return declaredRiffSize >= 36 && (ulong)declaredRiffSize + 8UL <= (ulong)info.Length;
+            }
+            catch { return false; }
+        }
+
+        static string NewestCompleteDirectory(string[] directories)
+        {
+            string newest = null;
+            DateTime newestTime = DateTime.MinValue;
+            if (directories == null) return null;
+            foreach (string directory in directories)
+            {
+                if (CharacterVoiceGenerator.IsActiveWorkDirectory(directory)) continue;
+                if (!HasCompleteVoiceSet(directory)) continue;
+                DateTime modified = Directory.GetLastWriteTimeUtc(directory);
+                if (newest == null || modified > newestTime)
+                {
+                    newest = directory;
+                    newestTime = modified;
+                }
+            }
+            return newest;
+        }
+
+        static void CleanupVoiceWorkDirectories(string[] directories, string targetDir)
+        {
+            if (directories == null) return;
+            foreach (string directory in directories)
+            {
+                if (string.Equals(directory, targetDir, StringComparison.OrdinalIgnoreCase) ||
+                    !Directory.Exists(directory) || CharacterVoiceGenerator.IsActiveWorkDirectory(directory)) continue;
+                try { Directory.Delete(directory, true); }
+                catch (Exception e) { Debug.LogWarning("[Save] ボイス作業フォルダ削除失敗: " + e.Message); }
+            }
         }
 
         // 保存IDの末尾 "_<unixSeconds>" を作成順の並べ替えキーとして取り出す。
@@ -368,6 +481,10 @@ namespace PromptFighters.GameFlow
             d.voiceProfile.FillDefaults(d);
             sb.AppendLine("  \"voice_profile\": {");
             sb.AppendLine($"    \"preset\": {Q(d.voiceProfile.preset)},");
+            sb.AppendLine($"    \"voice_gender\": {Q(d.voiceProfile.voiceGender)},");
+            sb.AppendLine($"    \"voice_age\": {Q(d.voiceProfile.voiceAge)},");
+            sb.AppendLine($"    \"voice_pitch\": {Q(d.voiceProfile.voicePitch)},");
+            sb.AppendLine($"    \"quality_version\": {d.voiceProfile.qualityVersion},");
             sb.AppendLine($"    \"instructions\": {Q(d.voiceProfile.instructions)},");
             sb.AppendLine($"    \"intro_line\": {Q(d.voiceProfile.introLine)},");
             sb.AppendLine($"    \"skill_lines\": [{Q(d.voiceProfile.skillLines[0])}, {Q(d.voiceProfile.skillLines[1])}, {Q(d.voiceProfile.skillLines[2])}, {Q(d.voiceProfile.skillLines[3])}],");

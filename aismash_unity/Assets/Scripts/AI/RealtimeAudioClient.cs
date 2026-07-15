@@ -11,7 +11,7 @@ namespace PromptFighters.AI
 {
     // OpenAI Realtime API (WebSocket) を使った音声機能クライアント。
     // APIキーの権限変更で whisper-1 / gpt-4o-mini-tts が使えなくなったため、
-    // キーで利用可能な gpt-realtime-2 / gpt-realtime-whisper を代替として使う。
+    // キーで利用可能な gpt-realtime-1.5 / gpt-realtime-whisper を代替として使う。
     //  ・Transcribe : 録音済みWAVを送って文字起こし（whisper-1 RESTの代替）
     //  ・Synthesize : セリフを演技指示付きで読み上げてAudioClip化（表現付きTTSの代替）
     public static class RealtimeAudioClient
@@ -24,6 +24,8 @@ namespace PromptFighters.AI
         // セッション設定で拒否された場合は近い性別の旧声へフォールバックする。
         public const string MaleVoice   = "cedar";
         public const string FemaleVoice = "marin";
+        static readonly ConcurrentDictionary<string, string> RejectedVoiceFallbacks =
+            new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         const int InputRate = 24000; // Realtime APIの audio/pcm 入出力レート
 
@@ -137,8 +139,11 @@ namespace PromptFighters.AI
                 : styleInstructions;
 
             // 指定の声が拒否されたら、近い性別の旧声で再試行する
-            string fallbackVoice = voice == FemaleVoice ? "shimmer" : "ash";
-            string[] voices = { voice, fallbackVoice };
+            string fallbackVoice = voice == FemaleVoice
+                ? "shimmer"
+                : voice == MaleVoice ? "ash" : "sage";
+            bool hasCachedFallback = RejectedVoiceFallbacks.TryGetValue(voice, out string cachedVoice);
+            string[] voices = hasCachedFallback ? new[] { cachedVoice } : new[] { voice, fallbackVoice };
             bool ready = false;
             string err = null;
             for (int v = 0; v < voices.Length && !ready; v++)
@@ -166,7 +171,11 @@ namespace PromptFighters.AI
                     yield return null;
                 }
                 // 声の指定エラーのみ次の声で再試行。それ以外は中断。
-                if (!ready && (err == null || !err.Contains("voice"))) break;
+                bool voiceRejected = !ready && err != null &&
+                    err.IndexOf("voice", StringComparison.OrdinalIgnoreCase) >= 0;
+                if (voiceRejected && !hasCachedFallback && voices[v] == voice)
+                    RejectedVoiceFallbacks[voice] = fallbackVoice;
+                if (!ready && !voiceRejected) break;
             }
             if (!ready)
             {
@@ -174,7 +183,9 @@ namespace PromptFighters.AI
                 yield break;
             }
 
-            string ask = "次のセリフを一言一句そのまま日本語で読み上げる。" +
+            // response.create.instructions はセッションのinstructionsをこの応答だけ上書きするため、
+            // 性別・年齢・ピッチ・演技指示も必ず応答側へ含める。
+            string ask = style + "\n次のセリフを一言一句そのまま日本語で読み上げる。" +
                          "前置き・相づち・言い直し・追加の言葉は一切入れない。セリフ：" + text;
             sock.SendJson($"{{\"type\":\"response.create\",\"response\":{{\"instructions\":\"{JsonEscape(ask)}\"}}}}");
 
@@ -185,25 +196,40 @@ namespace PromptFighters.AI
             {
                 while (sock.TryDequeue(out string msg))
                 {
-                    string t = EventType(msg);
-                    // GA名(response.output_audio.delta)と旧名(response.audio.delta)の両方を受ける
-                    if (t == "response.output_audio.delta" || t == "response.audio.delta")
+                    try
                     {
-                        string b64 = JsonUtility.FromJson<EvtDelta>(msg)?.delta;
-                        if (!string.IsNullOrEmpty(b64))
+                        string t = EventType(msg);
+                        // GA名(response.output_audio.delta)と旧名(response.audio.delta)の両方を受ける
+                        if (t == "response.output_audio.delta" || t == "response.audio.delta")
                         {
-                            byte[] bytes = Convert.FromBase64String(b64);
-                            pcmStream.Write(bytes, 0, bytes.Length);
+                            string b64 = JsonUtility.FromJson<EvtDelta>(msg)?.delta;
+                            if (!string.IsNullOrEmpty(b64))
+                            {
+                                byte[] bytes = Convert.FromBase64String(b64);
+                                pcmStream.Write(bytes, 0, bytes.Length);
+                            }
                         }
+                        else if (t == "response.done")
+                        {
+                            string status = JsonUtility.FromJson<EvtResponseDone>(msg)?.response?.status;
+                            if (status == "completed") done = true;
+                            else err = "Realtime応答が完了しませんでした: " + (status ?? "status不明");
+                            break;
+                        }
+                        else if (t == "error") { err = ErrorMessage(msg); break; }
                     }
-                    else if (t == "response.done") { done = true; break; }
-                    else if (t == "error") { err = ErrorMessage(msg); break; }
+                    catch (Exception e)
+                    {
+                        // 壊れたdelta等でコルーチンを例外終了させず、次の音声モデルへ確実にフォールバックする。
+                        err = "Realtime音声イベント解析失敗: " + e.Message;
+                        break;
+                    }
                 }
                 if (sock.FatalError != null) err ??= sock.FatalError;
                 yield return null;
             }
 
-            if (err != null || pcmStream.Length < 2)
+            if (err != null || !done || pcmStream.Length < 2)
             {
                 onErr?.Invoke("Realtime音声合成失敗: " + (err ?? (done ? "音声なし" : "タイムアウト")));
                 yield break;
@@ -319,6 +345,8 @@ namespace PromptFighters.AI
         [Serializable] class EvtHead       { public string type; }
         [Serializable] class EvtTranscript { public string type; public string transcript; }
         [Serializable] class EvtDelta      { public string type; public string delta; }
+        [Serializable] class EvtResponseDone { public string type; public EvtResponse response; }
+        [Serializable] class EvtResponse { public string status; }
         [Serializable] class EvtError      { public string type; public EvtErrorBody error; }
         [Serializable] class EvtErrorBody  { public string message; public string code; }
 

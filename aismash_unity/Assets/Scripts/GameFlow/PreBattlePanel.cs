@@ -52,6 +52,11 @@ namespace PromptFighters.GameFlow
         int _previewIdleFrame;
         Button _p1DeleteButton;
         Button _p2DeleteButton;
+        Button _p1VoiceRegenerateButton;
+        Button _p2VoiceRegenerateButton;
+        Button _p1VoiceGenderButton;
+        Button _p2VoiceGenderButton;
+        Coroutine _voiceRegenerationCoroutine;
         TMP_InputField _p1NameInput;
         TMP_InputField _p1FeatureInput;
         TMP_InputField _p2NameInput;
@@ -1603,6 +1608,21 @@ namespace PromptFighters.GameFlow
             if (isP1) _p1DeleteButton = deleteBtn;
             else _p2DeleteButton = deleteBtn;
 
+            // 旧品質の保存済みボイスも、キャラを削除せず安全に作り直せる。
+            var voiceBtn = MakeButton(parent, isP1 ? "P1VoiceRegenerateBtn" : "P2VoiceRegenerateBtn", "ボイス再生成",
+                new Vector2(cx + 330f, 312f), new Vector2(150f, 34f), () => RegenerateSelectedVoice(isP1),
+                PromptFighters.UI.UITheme.SteelLight);
+            SetButtonLabelStyle(voiceBtn, 14f, FontStyles.Bold, Color.white);
+            if (isP1) _p1VoiceRegenerateButton = voiceBtn;
+            else _p2VoiceRegenerateButton = voiceBtn;
+
+            var genderBtn = MakeButton(parent, isP1 ? "P1VoiceGenderBtn" : "P2VoiceGenderBtn", "声: 中性",
+                new Vector2(cx + 330f, 272f), new Vector2(150f, 34f), () => CycleSelectedVoiceGender(isP1),
+                PromptFighters.UI.UITheme.SteelLight);
+            SetButtonLabelStyle(genderBtn, 14f, FontStyles.Bold, Color.white);
+            if (isP1) _p1VoiceGenderButton = genderBtn;
+            else _p2VoiceGenderButton = genderBtn;
+
             // コントローラー接続状態（バッジ下）
             var gpLabel = MakeLabel(parent, isP1 ? "P1GpStatus" : "P2GpStatus",
                 "",
@@ -2369,6 +2389,7 @@ namespace PromptFighters.GameFlow
 
         void SelectPreset(bool isP1, int idx)
         {
+            if (_voiceRegenerationCoroutine != null) return;
             if (_presets == null || idx < 0 || idx >= _presets.Count) return;
             if (isP1)
             {
@@ -2593,6 +2614,11 @@ namespace PromptFighters.GameFlow
         {
             if (BattleManager.Instance == null) return;
             if (_presets == null || _presets.Count == 0) return;
+            if (_voiceRegenerationCoroutine != null)
+            {
+                Debug.LogWarning("[CharacterVoice] ボイス再生成の完了後に対戦を開始してください。");
+                return;
+            }
 
             var data1 = PromptCharacterFactory.Clone(GetPreset(true));
             var data2 = PromptCharacterFactory.Clone(GetPreset(false));
@@ -2605,6 +2631,11 @@ namespace PromptFighters.GameFlow
         {
             if (BattleManager.Instance == null) return;
             if (_presets == null || _presets.Count == 0) return;
+            if (_voiceRegenerationCoroutine != null)
+            {
+                Debug.LogWarning("[CharacterVoice] ボイス再生成中は新しいキャラクター生成を開始できません。");
+                return;
+            }
             if (_generationCoroutine != null)
             {
                 Debug.LogWarning("[PreBattle] キャラクター生成はすでに進行中です。");
@@ -3080,6 +3111,11 @@ namespace PromptFighters.GameFlow
         {
             if (BattleManager.Instance == null) return;
             if (_presets == null || _presets.Count == 0) return;
+            if (_voiceRegenerationCoroutine != null)
+            {
+                Debug.LogWarning("[CharacterVoice] ボイス再生成の完了後にトレーニングを開始してください。");
+                return;
+            }
 
             int p2Idx = _presets.Count > 1 ? _p2PresetIdx : _p1PresetIdx;
             var data1 = PromptCharacterFactory.Clone(GetPreset(true));
@@ -3179,6 +3215,20 @@ namespace PromptFighters.GameFlow
                 _p1DeleteButton.gameObject.SetActive(_p1PresetIdx >= _builtInPresetCount);
             if (_p2DeleteButton != null)
                 _p2DeleteButton.gameObject.SetActive(_p2PresetIdx >= _builtInPresetCount);
+            if (_p1VoiceRegenerateButton != null)
+                _p1VoiceRegenerateButton.gameObject.SetActive(_p1PresetIdx >= _builtInPresetCount);
+            if (_p2VoiceRegenerateButton != null)
+                _p2VoiceRegenerateButton.gameObject.SetActive(_p2PresetIdx >= _builtInPresetCount);
+            if (_p1VoiceGenderButton != null)
+            {
+                _p1VoiceGenderButton.gameObject.SetActive(_p1PresetIdx >= _builtInPresetCount);
+                UpdateVoiceGenderButtonText(_p1VoiceGenderButton, GetPreset(true));
+            }
+            if (_p2VoiceGenderButton != null)
+            {
+                _p2VoiceGenderButton.gameObject.SetActive(_p2PresetIdx >= _builtInPresetCount);
+                UpdateVoiceGenderButtonText(_p2VoiceGenderButton, GetPreset(false));
+            }
         }
 
         void ShowTrainingPanel()
@@ -3251,9 +3301,140 @@ namespace PromptFighters.GameFlow
                    $"{esc}    左スティック押し込み: 位置・HP・技状態をリセット";
         }
 
+        void RegenerateSelectedVoice(bool isP1)
+        {
+            if (_voiceRegenerationCoroutine != null || _generationCoroutine != null || _presets == null) return;
+            int idx = isP1 ? _p1PresetIdx : _p2PresetIdx;
+            if (idx < _builtInPresetCount || idx < 0 || idx >= _presets.Count) return;
+            if (!AIImageClient.HasConfiguredApiKey(out _))
+            {
+                Debug.LogWarning("[CharacterVoice] ボイス再生成にはAPIキーが必要です。");
+                return;
+            }
+
+            _voiceRegenerationCoroutine = StartCoroutine(RegenerateSelectedVoiceCoroutine(
+                _presets[idx], isP1 ? _p1VoiceRegenerateButton : _p2VoiceRegenerateButton));
+        }
+
+        void CycleSelectedVoiceGender(bool isP1)
+        {
+            if (_voiceRegenerationCoroutine != null || _generationCoroutine != null || _presets == null) return;
+            int idx = isP1 ? _p1PresetIdx : _p2PresetIdx;
+            if (idx < _builtInPresetCount || idx < 0 || idx >= _presets.Count) return;
+
+            CharacterData data = _presets[idx];
+            data.voiceProfile ??= new CharacterVoiceProfile();
+            data.voiceProfile.FillDefaults(data);
+            data.voiceProfile.voiceGender = data.voiceProfile.voiceGender switch
+            {
+                CharacterVoiceProfile.Male => CharacterVoiceProfile.Female,
+                CharacterVoiceProfile.Female => CharacterVoiceProfile.Neutral,
+                _ => CharacterVoiceProfile.Male,
+            };
+            // 旧プロファイルに逆性別の自由記述が残ると新しい指定と衝突するため、演技品質の共通指示へ戻す。
+            // WAVは全5件が安全に揃うまで旧セットを維持し、UIでは未反映であることを明示する。
+            data.voiceProfile.instructions = CharacterVoiceProfile.DefaultActingInstructions;
+            data.voiceProfile.qualityVersion = 0;
+            data.voiceProfile.generated = false;
+            data.voiceProfile.FillDefaults(data);
+            if (!CharacterSaveManager.Save(data))
+                Debug.LogWarning("[CharacterVoice] 声の性別設定を保存できませんでした。");
+            UpdateCategoryLabels();
+        }
+
+        static void UpdateVoiceGenderButtonText(Button button, CharacterData data)
+        {
+            if (button == null) return;
+            data?.voiceProfile?.FillDefaults(data);
+            string gender = data?.voiceProfile?.voiceGender switch
+            {
+                CharacterVoiceProfile.Male => "男性",
+                CharacterVoiceProfile.Female => "女性",
+                _ => "中性",
+            };
+            bool pending = data?.voiceProfile != null &&
+                data.voiceProfile.qualityVersion < CharacterVoiceProfile.CurrentQualityVersion;
+            SetVoiceRegenerateButtonText(button, "声: " + gender + (pending ? "（要再生成）" : ""));
+        }
+
+        IEnumerator RegenerateSelectedVoiceCoroutine(CharacterData data, Button activeButton)
+        {
+            if (_p1VoiceRegenerateButton != null) _p1VoiceRegenerateButton.interactable = false;
+            if (_p2VoiceRegenerateButton != null) _p2VoiceRegenerateButton.interactable = false;
+            if (_p1VoiceGenderButton != null) _p1VoiceGenderButton.interactable = false;
+            if (_p2VoiceGenderButton != null) _p2VoiceGenderButton.interactable = false;
+            if (_p1DeleteButton != null) _p1DeleteButton.interactable = false;
+            if (_p2DeleteButton != null) _p2DeleteButton.interactable = false;
+            SetVoiceRegenerateButtonText(activeButton, "生成中 0/5");
+
+            bool done = false;
+            bool succeeded = false;
+            int generatedCount = 0;
+            string error = null;
+            Coroutine regeneration = CharacterVoiceGenerator.RegenerateSetAtomically(this, data,
+                progress =>
+                {
+                    // 進捗文字列は "... n/5" を含むため、ボタン幅に収まる末尾だけを表示する。
+                    int slash = progress?.IndexOf('/') ?? -1;
+                    string count = slash > 0
+                        ? progress.Substring(Mathf.Max(0, slash - 1), Mathf.Min(3, progress.Length - Mathf.Max(0, slash - 1)))
+                        : "…";
+                    SetVoiceRegenerateButtonText(activeButton, "生成中 " + count);
+                },
+                (ok, count, err) =>
+                {
+                    succeeded = ok;
+                    generatedCount = count;
+                    error = err;
+                    done = true;
+                });
+            float watchdogDeadline = Time.realtimeSinceStartup + 520f;
+            while (!done && Time.realtimeSinceStartup < watchdogDeadline)
+                yield return null;
+            if (!done)
+            {
+                if (regeneration != null) StopCoroutine(regeneration);
+                error = "ボイス再生成が安全期限を超えました";
+                done = true;
+            }
+
+            if (succeeded)
+            {
+                bool saved = CharacterSaveManager.Save(data);
+                SetVoiceRegenerateButtonText(activeButton, saved ? "ボイス更新完了" : "更新済・保存注意");
+                if (!saved)
+                    Debug.LogWarning("[CharacterVoice] 音声は更新しましたがキャラJSONの保存に失敗しました。");
+                RefreshCharacterPreview();
+            }
+            else
+            {
+                SetVoiceRegenerateButtonText(activeButton, "失敗・旧音声維持");
+                Debug.LogWarning($"[CharacterVoice] ボイス再生成失敗（{generatedCount}/5）: {error}");
+            }
+
+            yield return new WaitForSecondsRealtime(2f);
+            SetVoiceRegenerateButtonText(_p1VoiceRegenerateButton, "ボイス再生成");
+            SetVoiceRegenerateButtonText(_p2VoiceRegenerateButton, "ボイス再生成");
+            if (_p1VoiceRegenerateButton != null) _p1VoiceRegenerateButton.interactable = true;
+            if (_p2VoiceRegenerateButton != null) _p2VoiceRegenerateButton.interactable = true;
+            if (_p1VoiceGenderButton != null) _p1VoiceGenderButton.interactable = true;
+            if (_p2VoiceGenderButton != null) _p2VoiceGenderButton.interactable = true;
+            if (_p1DeleteButton != null) _p1DeleteButton.interactable = true;
+            if (_p2DeleteButton != null) _p2DeleteButton.interactable = true;
+            _voiceRegenerationCoroutine = null;
+            UpdateCategoryLabels();
+        }
+
+        static void SetVoiceRegenerateButtonText(Button button, string text)
+        {
+            var label = button != null ? button.GetComponentInChildren<TextMeshProUGUI>(true) : null;
+            if (label != null) label.text = text;
+        }
+
         // 削除ボタン押下。誤削除防止のため即削除せず確認モーダルを開く。
         void RequestDeleteCharacter(bool isP1)
         {
+            if (_voiceRegenerationCoroutine != null) return;
             if (_presets == null) return;
             int idx = isP1 ? _p1PresetIdx : _p2PresetIdx;
             if (idx < _builtInPresetCount || idx < 0 || idx >= _presets.Count) return; // 初期キャラは削除不可

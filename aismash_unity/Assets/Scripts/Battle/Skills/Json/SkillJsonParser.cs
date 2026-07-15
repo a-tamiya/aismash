@@ -102,6 +102,10 @@ namespace PromptFighters.Battle.Skills.Json
             return new CharacterVoiceProfile
             {
                 preset = raw.preset,
+                voiceGender = raw.voice_gender,
+                voiceAge = raw.voice_age,
+                voicePitch = raw.voice_pitch,
+                qualityVersion = raw.quality_version,
                 instructions = raw.instructions,
                 introLine = raw.intro_line,
                 skillLines = raw.skill_lines,
