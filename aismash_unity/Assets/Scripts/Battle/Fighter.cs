@@ -794,15 +794,18 @@ namespace PromptFighters.Battle
             if (!blocking)
             {
                 _hitFlashTimer = 0.08f;
-                SimpleFX.HitSpark(transform.position + Vector3.up * (0.9f * CurrentSizeScale));
+                // 白の基礎フラッシュは控えめに（接触点の属性スパークはHitbox/Projectile側が出す）
+                SimpleFX.HitSpark(transform.position + Vector3.up * (0.9f * CurrentSizeScale), 0.7f);
             }
             // ダメージ量に応じたカメラ揺れ（小ヒットはごく僅か、大ダメージほど強く）
             if (!blocking && actual > 0f)
                 CameraShake.Shake(Mathf.Lerp(0.03f, 0.22f, Mathf.InverseLerp(4f, 30f, actual)), 0.16f);
             bool willDie = CurrentHP <= 0f;
-            // ヒットストップ（KO時は TriggerKOSlow が担当するためスキップ）
+            // ヒットストップ（KO時は TriggerKOSlow が担当するためスキップ）。
+            // 一律ではなくダメージ量でスケールさせ、重い一撃ほど「止まる」格ゲーの手応えにする。
             if (!blocking && actual > 0f && !willDie && BattleManager.Instance?.Phase == BattlePhase.Fighting)
-                BattleManager.Instance.TriggerHitStop(0.05f, 0.05f);
+                BattleManager.Instance.TriggerHitStop(
+                    Mathf.Lerp(0.04f, 0.11f, Mathf.InverseLerp(4f, 24f, actual)), 0.05f);
             if (willDie) KillOrDown();
         }
 

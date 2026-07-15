@@ -26,6 +26,8 @@ namespace PromptFighters.Battle.Skills
             var p  = skill.parameters;
             int si = (int)skill.slot;
             EnsureUsableActions(skill);
+            EnforceUnarmedHideEffect(skill);
+            bool bodyTech = IsBodyTechnique(skill);
 
             // ヒット数（上限を超えないよう）
             p.hit_count = Mathf.Clamp(p.hit_count, 1, 10);
@@ -36,6 +38,8 @@ namespace PromptFighters.Battle.Skills
 
             // ダメージ上限（多段ヒットは1ヒットあたりに按分）
             float totalMaxDmg = MaxDamage[si];
+            // 体術はリーチで武器持ちに劣るぶん、威力上限を高めて接近の見返りを作る
+            if (bodyTech) totalMaxDmg *= 1.15f;
             if (hasProjectile) totalMaxDmg = Mathf.Min(totalMaxDmg * 0.5f, si == 3 ? 10f : 6f);
             if (p.hit_count > 1) totalMaxDmg = Mathf.Min(totalMaxDmg, 6f);
             if (p.hit_count > 1)
@@ -65,6 +69,22 @@ namespace PromptFighters.Battle.Skills
             p.startup     = Mathf.Clamp(p.startup, 0f, MaxStartup[si]);
             p.active_time = Mathf.Max(0.05f, p.active_time);
             p.recovery    = Mathf.Max(MinRecovery[si], p.recovery);
+
+            // ── 体術（画像エフェクトに頼らない近接技）の底上げ ──
+            // 素手・体当たり系はリーチが短いぶん、持続を長く・後隙を軽くして
+            // 「発生が速く手数で押せる」格ゲーのインファイターらしい操作感にする。
+            if (bodyTech)
+            {
+                p.active_time = Mathf.Max(p.active_time, 0.18f);
+                if (skill.slot != SkillSlot.SmashSide)
+                    p.recovery = Mathf.Min(p.recovery, 0.40f);
+                if (p.range > 0f && p.range < 1.3f) p.range = 1.3f;
+                foreach (var a in skill.actions)
+                    if (a != null && a.range > 0f && a.range < 1.3f &&
+                        (a.type == "melee_hitbox" || a.type == "body_hitbox" ||
+                         a.type == "multi_hit" || a.type == "lifesteal"))
+                        a.range = 1.3f;
+            }
 
             if (HasAction(skill, "beam"))
                 p.startup = Mathf.Max(p.startup, BeamStartupSeconds);
@@ -379,6 +399,66 @@ namespace PromptFighters.Battle.Skills
             int hits = Mathf.Max(p.hit_count, MaxHitCount(skill));
             if (hits <= 1) return;
             p.active_time = Mathf.Clamp(Mathf.Max(p.active_time, 0.08f * hits), 0.05f, 0.6f);
+        }
+
+        // 体術技: 画像エフェクトを使わない近接技（body_hitbox / hide_effect付きmelee系 /
+        // uppercut / dive_attack）だけで攻撃が構成されている技。武器エフェクト持ちや飛び道具は対象外。
+        static bool IsBodyTechnique(SkillData skill)
+        {
+            if (skill?.actions == null) return false;
+            bool hasContact = false;
+            foreach (var a in skill.actions)
+            {
+                if (a == null) continue;
+                switch (a.type)
+                {
+                    case "projectile":
+                    case "beam":
+                    case "summon":
+                    case "trap_hitbox":
+                        return false;
+                    case "body_hitbox":
+                    case "uppercut":
+                    case "dive_attack":
+                        hasContact = true; break;
+                    case "melee_hitbox":
+                    case "multi_hit":
+                    case "dash+melee_hitbox":
+                    case "lifesteal":
+                        if (!a.hide_effect) return false;
+                        hasContact = true; break;
+                }
+            }
+            return hasContact;
+        }
+
+        static readonly string[] UnarmedKeywords =
+        {
+            "拳", "パンチ", "殴", "蹴", "キック", "肘", "膝", "頭突", "チョップ", "張り手",
+            "掌", "平手", "体当た", "タックル", "組み付", "締め", "ラリアット",
+            "ストレート", "アッパー", "フック", "正拳", "手刀",
+        };
+        static readonly string[] WeaponKeywords =
+        {
+            "剣", "刀", "斧", "槍", "鎌", "鞭", "杖", "弓", "銃", "砲", "ハンマー",
+            "ナイフ", "ブレード", "ソード", "ランス", "武器", "爪", "クロー", "尻尾", "テール",
+        };
+
+        // 体術キーワードを含む無属性・物理の近接技は、画像エフェクトを生成・表示しない
+        // （「素手のパンチなのに謎のエフェクト画像が出る」対策）。
+        // 属性まとい系（炎の拳など）は演出としてエフェクト画像を残す。
+        static void EnforceUnarmedHideEffect(SkillData skill)
+        {
+            if (skill.element != Element.Physical && skill.element != Element.None) return;
+            string text = (skill.skill_name ?? "") + (skill.description ?? "");
+            foreach (var w in WeaponKeywords) if (text.Contains(w)) return;
+            bool unarmed = false;
+            foreach (var k in UnarmedKeywords) if (text.Contains(k)) { unarmed = true; break; }
+            if (!unarmed) return;
+            foreach (var a in skill.actions)
+                if (a != null && (a.type == "melee_hitbox" || a.type == "multi_hit" ||
+                                  a.type == "dash+melee_hitbox" || a.type == "lifesteal"))
+                    a.hide_effect = true;
         }
 
         static bool HasAction(SkillData skill, string type)

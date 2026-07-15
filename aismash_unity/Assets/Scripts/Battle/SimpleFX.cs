@@ -26,11 +26,43 @@ namespace PromptFighters.Battle
             return s;
         }
 
+        // 組み込みエフェクト画像の公開アクセサ（衝撃波など、Hitboxの見た目に流用する）。
+        public static Sprite GetSprite(string name) => Fx(name);
+
         // ヒット火花。命中位置に一瞬パッと出る。
         public static void HitSpark(Vector3 pos, float scale = 1f)
         {
             var s = Fx("hit_spark"); if (s == null) return;
             Spawn(s, pos, 1.7f * scale, 0.6f, 1.6f, 0.28f, Color.white, 12, 0f);
+        }
+
+        // 属性色つきヒット火花。接触点に威力スケールで出す（格ゲーの手応え演出）。
+        public static void HitSpark(Vector3 pos, Color color, float scale = 1f)
+        {
+            var s = Fx("hit_spark"); if (s == null) return;
+            Color c = Color.Lerp(Color.white, color, 0.65f);
+            Spawn(s, pos, 1.7f * scale, 0.6f, 1.6f, 0.28f, c, 12, 0f);
+        }
+
+        // 体術・武器振りの「風切り」。画像エフェクトを持たない近接技の見た目を担う。
+        // 攻撃判定と同じ位置・幅で細長い光の帯を一瞬走らせ、前方へ流す。
+        public static void SwingArc(Vector3 pos, float dirSign, float length, float height, Color color)
+        {
+            Color c = Color.Lerp(Color.white, color, 0.45f); c.a = 0.6f;
+            StreakFx.Spawn(pos,
+                new Vector2(Mathf.Max(0.5f, length), Mathf.Max(0.25f, height * 0.55f)),
+                new Vector2(dirSign * 2.6f, 0f), 0.16f, c,
+                stretchX: 0.5f, squashY: 0.55f);
+        }
+
+        // 昇竜など上方向技の立ち上るストリーク。
+        public static void RisingStreak(Vector3 pos, Color color, float height = 2.4f)
+        {
+            Color c = Color.Lerp(Color.white, color, 0.55f); c.a = 0.7f;
+            StreakFx.Spawn(pos + Vector3.up * (height * 0.4f),
+                new Vector2(0.55f, height),
+                new Vector2(0f, 2.2f), 0.3f, c,
+                stretchX: -0.3f, squashY: -0.25f);
         }
 
         // ガードブレイク。盾が砕ける。
@@ -138,6 +170,56 @@ namespace PromptFighters.Battle
                 p.velocity  = new Vector2(Random.Range(-1.4f, 1.4f), Random.Range(0.4f, 1.2f)) * scale;
                 p.baseScale = Random.Range(0.18f, 0.30f) * scale;
             }
+        }
+    }
+
+    // 細長い光の帯（風切り・立ち上りストリーク）。非均一スケールで伸縮しつつ流れて消える。
+    public class StreakFx : MonoBehaviour
+    {
+        SpriteRenderer _sr;
+        Vector2 _baseSize;
+        Vector2 _drift;
+        Color   _c0;
+        float   _life = 0.16f, _t, _stretchX, _squashY;
+
+        // worldSize: 帯のワールドサイズ。stretchX/squashY: 寿命終端での伸び率・縮み率（負値で逆方向）。
+        public static void Spawn(Vector3 pos, Vector2 worldSize, Vector2 drift, float life, Color color,
+                                 float stretchX, float squashY)
+        {
+            var go = new GameObject("StreakFx");
+            go.transform.position = pos;
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = Skills.RuntimeSprite.Glow();
+            sr.sortingOrder = 11;
+            sr.color = color;
+            var fx = go.AddComponent<StreakFx>();
+            fx._sr = sr;
+            fx._baseSize = worldSize;
+            fx._drift = drift;
+            fx._life = Mathf.Max(0.05f, life);
+            fx._c0 = color;
+            fx._stretchX = stretchX;
+            fx._squashY = squashY;
+            fx.ApplyScale(0f);
+        }
+
+        void ApplyScale(float k)
+        {
+            Vector2 ss = _sr.sprite.bounds.size;
+            float w = _baseSize.x * (1f + _stretchX * k);
+            float h = _baseSize.y * (1f - _squashY * k);
+            transform.localScale = new Vector3(
+                w / Mathf.Max(0.01f, ss.x), h / Mathf.Max(0.01f, ss.y), 1f);
+        }
+
+        void Update()
+        {
+            _t += Time.deltaTime;
+            float k = _t / _life;
+            if (k >= 1f) { Destroy(gameObject); return; }
+            transform.position += (Vector3)(_drift * Time.deltaTime);
+            ApplyScale(k);
+            var c = _c0; c.a = _c0.a * (1f - k); _sr.color = c;
         }
     }
 

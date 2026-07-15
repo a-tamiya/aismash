@@ -459,6 +459,13 @@ namespace PromptFighters.Battle.Skills
             target.TakeDamage(Damage, Knockback, kb, StunTime, GuardDamage, !DamageIncludesOwnerBoost);
             if (GroundBounce) target.StartGroundBounce(Knockback * 0.75f);
 
+            // 属性色つきヒットスパークを「接触点」に出す（体の中心ではなく当たった場所で光らせる）
+            Vector3 contact = _col != null
+                ? _col.bounds.ClosestPoint(target.transform.position + Vector3.up * 0.9f)
+                : target.transform.position + Vector3.up * 0.9f;
+            Battle.SimpleFX.HitSpark(contact, SkillEnumParser.ElementColor(Element),
+                Mathf.Clamp(0.75f + Damage * 0.045f, 0.75f, 1.6f));
+
             if (IsSmashHit)
             {
                 Battle.BattleManager.Instance?.TriggerHitStop(0.20f, 0.05f);

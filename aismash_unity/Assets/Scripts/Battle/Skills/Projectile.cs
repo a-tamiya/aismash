@@ -581,6 +581,10 @@ namespace PromptFighters.Battle.Skills
             if (dir == 0f) dir = 1f;
             var kb = new Vector2(dir * KnockbackDir.x * Knockback, KnockbackDir.y * Knockback);
 
+            // 属性色つきヒットスパーク（着弾点で光らせる）
+            Battle.SimpleFX.HitSpark(transform.position, SkillEnumParser.ElementColor(Element),
+                Mathf.Clamp(0.7f + Damage * 0.045f, 0.7f, 1.4f));
+
             // 貫通弾: 当たっても消えず、1体につき1回だけヒットする
             if (Pierce && !IsBoomerang)
             {

@@ -368,7 +368,7 @@ namespace PromptFighters.Battle.Skills
             _actionHandlers = new Dictionary<string, Action<SkillData, SkillAction, float>>
             {
                 ["melee_hitbox"]       = SpawnMeleeHitbox,
-                ["body_hitbox"]        = SpawnBodyHitbox,
+                ["body_hitbox"]        = (skill, a, pm) => SpawnBodyHitbox(skill, a, pm),
                 ["area_hitbox"]        = SpawnAreaHitbox,
                 ["trap_hitbox"]        = SpawnTrapHitbox,
                 ["projectile"]         = SpawnProjectile,
@@ -435,13 +435,20 @@ namespace PromptFighters.Battle.Skills
                 }
                 else
                 {
-                    // 素手・体術: 拳・蹴りの高さに判定を合わせる
+                    // 素手・体術: 拳・蹴りの位置に判定を合わせ、「体の前端〜拳の少し先」の帯を張る。
+                    // AIのspawn_xが大きすぎて体から離れた空中に判定・エフェクトが出るのを防ぎ、
+                    // 同時にモーションの振り抜きぶんだけ拳より先へリーチを伸ばす。
                     offsetY = Mathf.Clamp(anchor.tip.y, 0.5f, 1.6f);
+                    float startX = Mathf.Max(anchor.bodyEdgeX * 0.5f, 0.15f);
+                    float endX   = Mathf.Max(anchor.tip.x + 0.35f, startX + Mathf.Min(range, 2.4f));
+                    endX    = Mathf.Min(endX, startX + 2.6f);
+                    range   = endX - startX;
+                    offsetX = (startX + endX) * 0.5f;
                 }
             }
 
-            // エフェクトなし（キャラ本体判定）は視覚補助がないぶんやや広めに
-            if (a.hide_effect) { range *= 1.2f; height *= 1.2f; }
+            // エフェクトなし（キャラ本体判定）は視覚補助がないぶん広めに
+            if (a.hide_effect) { range *= 1.3f; height *= 1.25f; }
             // キャラサイズに合わせてヒットボックスをスケール
             range   *= _sizeScale;
             height  *= _sizeScale;
@@ -474,9 +481,15 @@ namespace PromptFighters.Battle.Skills
             hb.IsSmashHit     = skill.slot == SkillSlot.SmashSide && powerMultiplier >= SkillConstants.SmashPowerThreshold;
             hb.LifestealRatio = Mathf.Clamp01(a.lifesteal_ratio);
             ApplyActionStatus(hb, a);
+
+            // 画像エフェクトを出さない体術は、代わりに判定位置へ風切りの光を走らせる
+            if (a.hide_effect)
+                Battle.SimpleFX.SwingArc(
+                    (Vector2)_fighter.transform.position + offset, dirSign,
+                    size.x, size.y, SkillEnumParser.ElementColor(skill.element));
         }
 
-        void SpawnBodyHitbox(SkillData skill, SkillAction a, float powerMultiplier)
+        void SpawnBodyHitbox(SkillData skill, SkillAction a, float powerMultiplier, bool swingFx = true)
         {
             float dirSign = _fighter.FacingRight ? 1f : -1f;
             // spawn_x=0 はキャラ中心（前方オフセットなし）。>0 で前方に張り出す
@@ -510,6 +523,12 @@ namespace PromptFighters.Battle.Skills
             hb.Element           = skill.element;
             hb.MaxHits           = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
             ApplyActionStatus(hb, a);
+
+            // 体術（本体判定）は画像エフェクトが無いため、風切りの光で振りを見せる
+            if (swingFx)
+                Battle.SimpleFX.SwingArc(
+                    (Vector2)_fighter.transform.position + new Vector2(dirSign * Mathf.Max(offsetX, width * 0.3f), offsetY),
+                    dirSign, width, height, SkillEnumParser.ElementColor(skill.element));
         }
 
         void SpawnAreaHitbox(SkillData skill, SkillAction a, float powerMultiplier)
@@ -929,7 +948,33 @@ namespace PromptFighters.Battle.Skills
             if (a.size_x   <= 0f) a.size_x   = 1.4f;
             if (a.size_y   <= 0f) a.size_y   = 2.4f;
             if (a.spawn_x  <= 0f) a.spawn_x  = 0.45f;
-            SpawnBodyHitbox(skill, a, powerMultiplier);
+            SpawnBodyHitbox(skill, a, powerMultiplier, swingFx: false);
+
+            // 昇竜の立ち上るストリーク＋踏み込みの土煙
+            Color ec = SkillEnumParser.ElementColor(skill.element);
+            Battle.SimpleFX.RisingStreak(
+                _fighter.transform.position + new Vector3(dirSign * 0.35f * _sizeScale, 0.3f, 0f),
+                ec, 2.6f * _sizeScale);
+            Battle.SimpleFX.Dust(_fighter.transform.position, 2, 1.1f);
+
+            // 生成済みのエフェクト画像（縦向きの昇り演出）があれば上昇経路に重ねて表示する
+            var fx = a.hide_effect ? null : _fighter.GetEffectSprite(skill);
+            if (fx != null)
+            {
+                var go = new GameObject("UppercutFx");
+                go.transform.position = _fighter.transform.position
+                    + new Vector3(dirSign * 0.3f * _sizeScale, 1.4f * _sizeScale, 0f);
+                var sr = go.AddComponent<SpriteRenderer>();
+                sr.sprite = fx;
+                sr.flipX = !_fighter.FacingRight;
+                sr.sortingOrder = 11;
+                Vector2 ss = fx.bounds.size;
+                float h = 3.0f * _sizeScale;
+                float w = Mathf.Min(h * (ss.x / Mathf.Max(0.01f, ss.y)), 2.2f * _sizeScale);
+                go.transform.localScale = new Vector3(
+                    w / Mathf.Max(0.01f, ss.x), h / Mathf.Max(0.01f, ss.y), 1f);
+                StartCoroutine(FadeAndDestroy(go, sr, 0.45f));
+            }
         }
 
         // dive_attack: 急降下攻撃。斜め下へ突っ込み、着地時に左右へ小さな衝撃波を出す。
@@ -958,7 +1003,7 @@ namespace PromptFighters.Battle.Skills
             if (a.duration <= 0f) a.duration = 0.45f;
             if (a.size_x   <= 0f) a.size_x   = 1.5f;
             if (a.size_y   <= 0f) a.size_y   = 1.8f;
-            SpawnBodyHitbox(skill, a, powerMultiplier);
+            SpawnBodyHitbox(skill, a, powerMultiplier, swingFx: false);
 
             // 着地したら左右に衝撃波（最大1秒待つ。落ち続けた場合は出さない）
             float t = 0f;
@@ -967,7 +1012,10 @@ namespace PromptFighters.Battle.Skills
             {
                 SpawnGroundWave(skill, a, powerMultiplier * 0.8f, +1f, 1.4f, 1.6f, 0.7f, 0.3f, 0.18f);
                 SpawnGroundWave(skill, a, powerMultiplier * 0.8f, -1f, 1.4f, 1.6f, 0.7f, 0.3f, 0.18f);
-                Battle.CameraShake.Shake(0.15f, 0.2f);
+                // 着地インパクト演出（衝撃波リング＋土煙＋画面揺れ）
+                Battle.SimpleFX.Shockwave(_fighter.transform.position, 1.3f * _sizeScale);
+                Battle.SimpleFX.Dust(_fighter.transform.position, 3, 1.2f);
+                Battle.CameraShake.Shake(0.2f, 0.22f);
             }
         }
 
@@ -1095,6 +1143,9 @@ namespace PromptFighters.Battle.Skills
             float life    = skill.parameters.active_time > 0f ? skill.parameters.active_time : 0.25f;
             SpawnGroundWave(skill, a, powerMultiplier, +1f, dist, width, height, groundY, life);
             SpawnGroundWave(skill, a, powerMultiplier, -1f, dist, width, height, groundY, life);
+            // 地面叩きつけの手応え（土煙＋軽い画面揺れ）
+            Battle.SimpleFX.Dust(_fighter.transform.position, 2, 1.1f);
+            Battle.CameraShake.Shake(0.12f, 0.15f);
         }
 
         void SpawnGroundWave(SkillData skill, SkillAction a, float powerMultiplier,
@@ -1117,7 +1168,11 @@ namespace PromptFighters.Battle.Skills
             hb.StunTime       = skill.parameters.stun_time;
             hb.GuardDamage    = skill.parameters.guard_damage;
             hb.Element        = skill.element;
-            hb.EffectSprite   = a.hide_effect ? null : _fighter.GetEffectSprite(skill);
+            // 技のエフェクト画像が無ければ組み込みの衝撃波スプライトで見せる
+            // （グロー玉フォールバックでは「衝撃波」に見えないため）。
+            Sprite waveFx = a.hide_effect ? null : _fighter.GetEffectSprite(skill);
+            if (waveFx == null && !a.hide_effect) waveFx = Battle.SimpleFX.GetSprite("shockwave");
+            hb.EffectSprite   = waveFx;
             hb.HideVisual     = a.hide_effect;
             hb.FlipEffectX    = side < 0f;
             hb.MaxHits        = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;

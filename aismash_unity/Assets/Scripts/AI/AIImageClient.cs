@@ -287,16 +287,8 @@ namespace PromptFighters.AI
 
                     if (NeedsSeparateEffect(skill))
                     {
-                        bool vertical = PrefersVerticalEffect(skill);
-                        string orientation = HasAction(skill, "summon")
-                            ? "summoned creature or minion sprite for a 2D fighting game skill, clear full body, transparent background"
-                            : HasAction(skill, "beam")
-                            ? "long horizontal 2D energy beam visual effect, bright core, transparent background, no rectangular block"
-                            : vertical
-                            ? "tall vertical 2D game visual effect, rising column or upward slash"
-                            : "wide horizontal 2D game visual effect, side slash, beam, wave, or projectile trail";
-                        string effectPrompt = $"{skill.skill_name} {orientation}, {EffectSuffix}";
-                        extraEffectEntries.Add((i, $"extra_effect_{i}", effectPrompt, vertical ? CharacterSize : EffectSize));
+                        var (effectPrompt, effectSize) = BuildEffectPrompt(skill);
+                        extraEffectEntries.Add((i, $"extra_effect_{i}", effectPrompt, effectSize));
                     }
                 }
             }
@@ -426,17 +418,41 @@ namespace PromptFighters.AI
                 return;
             }
 
-            bool vertical = PrefersVerticalEffect(skill);
-            string orientation = HasAction(skill, "summon")
-                ? "summoned creature or minion sprite for a 2D fighting game skill, clear full body, transparent background"
-                : HasAction(skill, "beam")
-                ? "long horizontal 2D energy beam visual effect, bright core, transparent background, no rectangular block"
-                : vertical
-                ? "tall vertical 2D game visual effect, rising column or upward slash"
-                : "wide horizontal 2D game visual effect, side slash, beam, wave, or projectile trail";
-            entries[index] = (id, filename, $"{skill.skill_name} {orientation}, {EffectSuffix}",
-                vertical ? CharacterSize : EffectSize);
+            var (prompt, size) = BuildEffectPrompt(skill);
+            entries[index] = (id, filename, prompt, size);
         }
+
+        // エフェクト画像プロンプトを技の内容から組み立てる。
+        // 「技種別ごとの形状」×「属性ごとの質感」の組み合わせで、技ごとに見た目のバリエーションを出す。
+        static (string prompt, string size) BuildEffectPrompt(SkillData skill)
+        {
+            bool vertical = PrefersVerticalEffect(skill);
+            string shape =
+                  HasAction(skill, "summon")      ? "summoned creature or minion sprite for a 2D fighting game skill, clear full body"
+                : HasAction(skill, "beam")        ? "long horizontal 2D energy beam visual effect, bright core, no rectangular block"
+                : HasAction(skill, "uppercut")    ? "tall rising uppercut streak effect, vertical swoosh with strong upward motion"
+                : HasAction(skill, "dive_attack") ? "ground impact shockwave effect bursting outward with dust and debris"
+                : HasAction(skill, "shockwave")   ? "low wide ground shockwave effect running along the floor"
+                : HasRingArea(skill)              ? "radial circular burst effect, expanding energy ring"
+                : HasExplosion(skill)             ? "round explosion burst effect with bright core and flying sparks"
+                : vertical                        ? "tall vertical 2D game visual effect, rising column or upward slash"
+                : "wide horizontal 2D game visual effect, side slash, wave, or projectile trail";
+            string prompt =
+                $"{skill.skill_name} ({skill.description}), {shape}, made of {ElementDescriptor(skill.element)}, {EffectSuffix}";
+            return (prompt, vertical ? CharacterSize : EffectSize);
+        }
+
+        // 属性→エフェクトの質感表現。物理でも毎回同じ見た目にならないよう技名・説明と組み合わせる。
+        static string ElementDescriptor(Element e) => e switch
+        {
+            Element.Fire      => "blazing fire, flames and embers",
+            Element.Ice       => "freezing ice crystals and frost shards",
+            Element.Lightning => "crackling electric lightning arcs",
+            Element.Dark      => "dark violet shadow energy and wisps",
+            Element.Wind      => "swirling wind blades and air currents",
+            Element.Physical  => "sharp white and steel-gray impact energy",
+            _                 => "bright colorful energy",
+        };
 
         static bool NeedsSeparateEffect(SkillData skill)
         {
@@ -448,7 +464,8 @@ namespace PromptFighters.AI
                     a.type == "summon" ||
                     a.type == "beam" ||
                     a.type == "melee_hitbox" || a.type == "jump_attack" ||
-                    a.type == "shockwave")
+                    a.type == "shockwave" ||
+                    a.type == "uppercut" || a.type == "dive_attack")
                     return true;
             }
             return false;
@@ -460,10 +477,26 @@ namespace PromptFighters.AI
             foreach (var a in skill.actions)
             {
                 if (a == null) continue;
-                if (a.type == "jump_attack") return true;
+                if (a.type == "jump_attack" || a.type == "uppercut") return true;
                 if (a.size_y > 0f && a.size_y > Mathf.Max(a.size_x, a.range) * 1.15f) return true;
                 if (a.knockback_y > 0.7f) return true;
             }
+            return false;
+        }
+
+        static bool HasRingArea(SkillData skill)
+        {
+            if (skill?.actions == null) return false;
+            foreach (var a in skill.actions)
+                if (a != null && a.type == "area_hitbox" && a.shape == "ring") return true;
+            return false;
+        }
+
+        static bool HasExplosion(SkillData skill)
+        {
+            if (skill?.actions == null) return false;
+            foreach (var a in skill.actions)
+                if (a != null && a.type == "projectile" && a.explosion_radius > 0f) return true;
             return false;
         }
 

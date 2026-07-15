@@ -542,7 +542,8 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
 - 重い・大型・遅い → startup大(0.16-0.32)・recovery大・damage大・knockback大・移動低め
 - 連続攻撃 → hit_count多(3-4)・damage/hit小。全段ヒット合計は最大6程度
 - 一撃必殺 → hit_count=1・damage大・startup大・recovery長
-- 格闘型・素手 → body_hitboxを使う。hide_effect=true・follow_owner=true
+- 格闘型・素手・体術 → body_hitbox、または hide_effect:true の melee_hitbox を使う。無属性・物理の体術は必ず hide_effect:true にする（パンチ・キックに謎の画像エフェクトが出るのを防ぐ。風切り・ヒットスパークはUnity側が自動で出す）。炎の拳・雷の蹴りなど属性まといの体術だけ hide_effect:false で属性エフェクトを出してよい
+- 体術のパラメータ目安: range 1.3〜2.6、active_time 0.2〜0.45（持続を長く）、recovery 0.10〜0.35（後隙軽く）、hit_count 2〜3のラッシュ攻撃も良い。体術はリーチが短いぶん威力を武器持ちより1〜2割高くしてよい（インファイターの見返り）
 - 補助・攪乱タイプ → buff_selfやteleportを使ってよい（status: speed/jump/transparent/damage）
 - 技4枠は同じ構造にしない。最低2枠は action構成・range・startup/recovery の傾向を変える
 - 【役割分担】4枠は役割を分ける: 主力（発生が早く低リスク・回転率で使う）/ 牽制・差し込み（間合いが違う）/ 個性技（そのキャラらしさを最大化する変わり技）/ 決め技(smash_side)。同じ間合い・同じ役割の技を2枠作らない
