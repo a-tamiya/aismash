@@ -1203,6 +1203,9 @@ namespace PromptFighters.Battle
         {
             if (State == FighterState.Dead) return;
             SetGuard(false);
+            // 掴みはカウンターに勝つ（格ゲーの相性）。掴まれた時点で構えを解除し、
+            // 直後の投げダメージ（TakeDamage経由）でカウンターが誤発動しないようにする。
+            _counterTimer = 0f;
             _grabbedBy = owner;
             State = FighterState.Grabbed;
             _rb.linearVelocity = Vector2.zero;
