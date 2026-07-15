@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using UnityEngine;
@@ -12,6 +13,7 @@ namespace PromptFighters.AI
 {
     // OpenAI Images API でキャラクタースプライトセットを生成する。
     // ベース画像(Idle1)を /v1/images/generations で生成後、残り14枚を /v1/images/edits で並列生成する。
+    // 複数キャラを同時生成しても全リクエストは共通レートリミッターを通り、瞬間的なバーストを防ぐ。
     public static class AIImageClient
     {
         const string GenerationsEndpoint = "https://api.openai.com/v1/images/generations";
@@ -24,8 +26,47 @@ namespace PromptFighters.AI
         const string Quality = "low";
         // 失敗時のリトライ上限（ハードキャップ）。料金が嵩むため絶対にこれ以上は呼ばない。
         const int    MaxImageAttempts = 3;
+        // gpt-image-2 Tier 5 の250 IPMに対して約20%の余裕を持たせ、最大約200 IPMで開始する。
+        // 生成完了数ではなくAPIリクエストの開始時刻を全キャラ共通で制御する。
+        const double ImageRequestIntervalSeconds = 0.30;
 
         static string _cachedApiKey;
+        static double _nextImageRequestTime;
+
+        static IEnumerator WaitForImageRequestSlot()
+        {
+            while (true)
+            {
+                double now = Time.realtimeSinceStartupAsDouble;
+                if (now >= _nextImageRequestTime)
+                {
+                    _nextImageRequestTime = now + ImageRequestIntervalSeconds;
+                    yield break;
+                }
+
+                yield return null;
+            }
+        }
+
+        static void ApplyRateLimitCooldown(UnityWebRequest req, int attempt)
+        {
+            if (req == null || req.responseCode != 429) return;
+
+            float delaySeconds;
+            string retryAfter = req.GetResponseHeader("Retry-After");
+            if (!float.TryParse(retryAfter, NumberStyles.Float, CultureInfo.InvariantCulture, out delaySeconds)
+                || delaySeconds <= 0f)
+            {
+                // Retry-Afterが無い場合は指数バックオフ＋jitter。同時に失敗した要求の再衝突を避ける。
+                delaySeconds = Mathf.Min(Mathf.Pow(2f, attempt), 30f) + UnityEngine.Random.Range(0.25f, 1.0f);
+            }
+
+            double resumeAt = Time.realtimeSinceStartupAsDouble + delaySeconds;
+            if (resumeAt > _nextImageRequestTime)
+                _nextImageRequestTime = resumeAt;
+
+            Debug.LogWarning($"[AIImage] レート制限を検出。画像リクエスト全体を{delaySeconds:F1}秒待機します");
+        }
 
         public static string ApiKey
         {
@@ -155,7 +196,7 @@ namespace PromptFighters.AI
                 TrySavePng(saveDir, "idle1", baseSprite);
             }
 
-            // Step 2: 残り14枚を並列生成 (images/edits)
+            // Step 2: 残り14枚を並列生成 (images/edits)。各Coroutineは共通レートリミッターで開始をずらす。
             onProgress?.Invoke($"バリエーション画像を並列生成中... (14枚)");
             var editEntries = BuildEditEntries(data);
             int pending = editEntries.Count;
@@ -538,12 +579,16 @@ namespace PromptFighters.AI
                         req.SetRequestHeader("Authorization", "Bearer " + key);
                         req.timeout = 90;
 
+                        yield return WaitForImageRequestSlot();
                         yield return req.SendWebRequest();
 
                         if (req.result == UnityWebRequest.Result.Success)
                             respText = req.downloadHandler.text;
                         else
+                        {
+                            ApplyRateLimitCooldown(req, attempt);
                             lastErr = $"{req.error}: {req.downloadHandler?.text}";
+                        }
                     }
                     if (respText == null)
                     {
@@ -633,6 +678,7 @@ namespace PromptFighters.AI
                 req.SetRequestHeader("Authorization", "Bearer " + key);
                 req.timeout = 180;
 
+                yield return WaitForImageRequestSlot();
                 yield return req.SendWebRequest();
 
                 if (req.result == UnityWebRequest.Result.Success)
@@ -642,6 +688,7 @@ namespace PromptFighters.AI
                     break;
                 }
 
+                ApplyRateLimitCooldown(req, attempt);
                 lastErr = $"{req.error}: {req.downloadHandler?.text}";
                 Debug.LogWarning($"[AIImage] エフェクト/ポーズ生成エラー({attempt}/{MaxImageAttempts}) {filename}: {lastErr}");
                 if (attempt < MaxImageAttempts) yield return new WaitForSeconds(1.5f);

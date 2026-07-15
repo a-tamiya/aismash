@@ -2786,10 +2786,15 @@ namespace PromptFighters.GameFlow
 
         IEnumerator GenerateImages(CharacterData data1, CharacterData data2, bool generateP1, bool generateP2)
         {
-            // P1 → P2 の順に直列生成（同時リクエストによるレート制限エラーを防ぐ）
-            if (generateP1 && data1 != null && !string.IsNullOrEmpty(data1.visualPrompt))
+            // P1/P2の生成ジョブは同時開始する。実際のImages API呼び出しはAIImageClient側の
+            // 全キャラ共通レートリミッターが0.30秒間隔で開始し、瞬間的なバーストを防ぐ。
+            bool shouldGenerateP1 = generateP1 && data1 != null && !string.IsNullOrEmpty(data1.visualPrompt);
+            bool shouldGenerateP2 = generateP2 && data2 != null && !string.IsNullOrEmpty(data2.visualPrompt);
+            bool img1Done = !shouldGenerateP1;
+            bool img2Done = !shouldGenerateP2;
+
+            if (shouldGenerateP1)
             {
-                bool img1Done = false;
                 AIImageClient.GenerateSpriteSet(this, data1,
                     msg =>
                     {
@@ -2811,12 +2816,10 @@ namespace PromptFighters.GameFlow
                         img1Done = true;
                     },
                     saveDir: data1.spriteDir);
-                yield return new WaitUntil(() => img1Done);
             }
 
-            if (generateP2 && data2 != null && !string.IsNullOrEmpty(data2.visualPrompt))
+            if (shouldGenerateP2)
             {
-                bool img2Done = false;
                 AIImageClient.GenerateSpriteSet(this, data2,
                     msg =>
                     {
@@ -2838,8 +2841,9 @@ namespace PromptFighters.GameFlow
                         img2Done = true;
                     },
                     saveDir: data2.spriteDir);
-                yield return new WaitUntil(() => img2Done);
             }
+
+            yield return new WaitUntil(() => img1Done && img2Done);
         }
 
         // 保存済みスプライトがある場合はフルロードする（バトル開始直前に呼ぶ）
