@@ -24,8 +24,11 @@ namespace PromptFighters.AI
         const string CharacterSize = "1024x1536";
         const string EffectSize = "1536x1024";
         const string Quality = "low";
-        // 失敗時のリトライ上限（ハードキャップ）。料金が嵩むため絶対にこれ以上は呼ばない。
+        // 正常応答後の解析・画像変換など、レート制限以外の処理失敗に対する再生成上限。
         const int    MaxImageAttempts = 3;
+        // 429・5xx・タイムアウトなど一時障害は通常の再生成回数に含めず、待機して再送する。
+        // 無限再送や料金暴走は避けるため、1画像・1モデルごとに上限を設ける。
+        const int    MaxTransientRetries = 8;
         // gpt-image-2 Tier 5 の250 IPMに対して約20%の余裕を持たせ、最大約200 IPMで開始する。
         // 生成完了数ではなくAPIリクエストの開始時刻を全キャラ共通で制御する。
         const double ImageRequestIntervalSeconds = 0.30;
@@ -48,24 +51,44 @@ namespace PromptFighters.AI
             }
         }
 
-        static void ApplyRateLimitCooldown(UnityWebRequest req, int attempt)
+        static bool IsTransientRequestFailure(UnityWebRequest req)
         {
-            if (req == null || req.responseCode != 429) return;
+            if (req == null) return true;
 
-            float delaySeconds;
-            string retryAfter = req.GetResponseHeader("Retry-After");
-            if (!float.TryParse(retryAfter, NumberStyles.Float, CultureInfo.InvariantCulture, out delaySeconds)
-                || delaySeconds <= 0f)
+            long code = req.responseCode;
+            if (code == 408 || code == 409 || code == 425 || code == 429 || code >= 500)
+                return true;
+
+            // responseCode=0 のタイムアウト・DNS・接続切断なども再送対象。
+            return code == 0 &&
+                   (req.result == UnityWebRequest.Result.ConnectionError ||
+                    req.result == UnityWebRequest.Result.DataProcessingError);
+        }
+
+        static void ApplyTransientCooldown(UnityWebRequest req, int retryCount)
+        {
+            float delaySeconds = 0f;
+            string retryAfter = req?.GetResponseHeader("Retry-After");
+            bool hasRetryAfter = req?.responseCode == 429 &&
+                float.TryParse(retryAfter, NumberStyles.Float, CultureInfo.InvariantCulture, out delaySeconds) &&
+                delaySeconds > 0f;
+            if (!hasRetryAfter)
             {
-                // Retry-Afterが無い場合は指数バックオフ＋jitter。同時に失敗した要求の再衝突を避ける。
-                delaySeconds = Mathf.Min(Mathf.Pow(2f, attempt), 30f) + UnityEngine.Random.Range(0.25f, 1.0f);
+                // 指示が無い場合は指数バックオフ＋jitter。同時に失敗した要求の再衝突を避ける。
+                delaySeconds = Mathf.Min(Mathf.Pow(2f, retryCount), 30f) +
+                               UnityEngine.Random.Range(0.25f, 1.0f);
             }
+
+            if (delaySeconds <= 0f)
+                delaySeconds = 1f;
 
             double resumeAt = Time.realtimeSinceStartupAsDouble + delaySeconds;
             if (resumeAt > _nextImageRequestTime)
                 _nextImageRequestTime = resumeAt;
 
-            Debug.LogWarning($"[AIImage] レート制限を検出。画像リクエスト全体を{delaySeconds:F1}秒待機します");
+            string reason = req?.responseCode == 429 ? "レート制限" : "一時的な通信/API障害";
+            Debug.LogWarning($"[AIImage] {reason}を検出。画像リクエスト全体を{delaySeconds:F1}秒待機して再送します " +
+                             $"({retryCount}/{MaxTransientRetries})");
         }
 
         public static string ApiKey
@@ -179,6 +202,7 @@ namespace PromptFighters.AI
             string usedModel = Model;   // ベースが成功したモデル（editsも同じモデルを使う）
 
             yield return GenerateBaseCoroutine(baseVisualPrompt, key,
+                message => onProgress?.Invoke(message),
                 (sprite, rawBytes, model) => { baseSprite = sprite; baseRawBytes = rawBytes; usedModel = model; },
                 err => baseError = err);
 
@@ -216,6 +240,7 @@ namespace PromptFighters.AI
                 string fullPrompt = baseVisualPrompt + ", " + editPrompt;
                 runner.StartCoroutine(GenerateEditCoroutine(
                     id, filename, fullPrompt, size, baseRawBytes, key, saveDir, usedModel,
+                    message => onProgress?.Invoke(message),
                     (spriteId, fname, sprite) =>
                     {
                         set.Set(spriteId, sprite);
@@ -234,7 +259,8 @@ namespace PromptFighters.AI
 
             // 各edit個別タイムアウト(180s)を超えても全コールバックが返らない異常時の保険。
             // これがないと pending が 0 にならず永久にハングする。
-            const float overallTimeout = 240f;
+            // 429時の共有クールダウン中も待てるよう、通常時より長い安全タイムアウトを取る。
+            const float overallTimeout = 600f;
             float elapsed = 0f;
             while (pending > 0 && elapsed < overallTimeout)
             {
@@ -295,6 +321,7 @@ namespace PromptFighters.AI
             string usedModel = Model;
 
             yield return GenerateBaseCoroutine(baseVisualPrompt, key,
+                message => onProgress?.Invoke(message),
                 (sprite, rawBytes, model) => { baseSprite = sprite; baseRawBytes = rawBytes; usedModel = model; },
                 err => baseError = err);
 
@@ -355,6 +382,7 @@ namespace PromptFighters.AI
                 string fullPrompt = baseVisualPrompt + ", " + editPrompt;
                 runner.StartCoroutine(GenerateEditCoroutine(
                     id, filename, fullPrompt, size, baseRawBytes, key, saveDir, usedModel,
+                    message => onProgress?.Invoke(message),
                     (spriteId, fname, sprite) =>
                     {
                         set.Set(spriteId, sprite);
@@ -375,6 +403,7 @@ namespace PromptFighters.AI
             {
                 runner.StartCoroutine(GenerateEditCoroutine(
                     CharacterSpriteId.Idle1, filename, prompt, size, baseRawBytes, key, saveDir, usedModel,
+                    message => onProgress?.Invoke(message),
                     (_, fname, sprite) =>
                     {
                         extraPoseSprites[idx] = sprite;
@@ -395,6 +424,7 @@ namespace PromptFighters.AI
             {
                 runner.StartCoroutine(GenerateEditCoroutine(
                     CharacterSpriteId.Idle1, filename, prompt, size, baseRawBytes, key, saveDir, usedModel,
+                    message => onProgress?.Invoke(message),
                     (_, fname, sprite) =>
                     {
                         extraEffectSprites[idx] = sprite;
@@ -411,7 +441,7 @@ namespace PromptFighters.AI
                     }));
             }
 
-            const float overallTimeout = 300f;
+            const float overallTimeout = 600f;
             float elapsed = 0f;
             while (pending > 0 && elapsed < overallTimeout)
             {
@@ -554,6 +584,7 @@ namespace PromptFighters.AI
         // 失敗もリトライ対象とし、主モデルが全滅したらフォールバックモデルでも試す。
         static IEnumerator GenerateBaseCoroutine(
             string basePrompt, string key,
+            Action<string> onRetry,
             Action<Sprite, byte[], string> onSuccess, Action<string> onError)
         {
             string safePrompt = OpenAIRequest.EscapeString(
@@ -568,9 +599,13 @@ namespace PromptFighters.AI
                     $"\"prompt\":\"{safePrompt}\"," +
                     $"\"n\":1,\"size\":\"{CharacterSize}\",\"quality\":\"{Quality}\"}}";
 
-                for (int attempt = 1; attempt <= MaxImageAttempts; attempt++)
+                int attempt = 0;
+                int transientRetries = 0;
+                while (attempt < MaxImageAttempts)
                 {
                     string respText = null;
+                    bool transientFailure = false;
+                    bool retryTransientFailure = false;
                     using (var req = new UnityWebRequest(GenerationsEndpoint, "POST"))
                     {
                         req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
@@ -586,16 +621,33 @@ namespace PromptFighters.AI
                             respText = req.downloadHandler.text;
                         else
                         {
-                            ApplyRateLimitCooldown(req, attempt);
                             lastErr = $"{req.error}: {req.downloadHandler?.text}";
+                            transientFailure = IsTransientRequestFailure(req);
+                            if (transientFailure && transientRetries < MaxTransientRetries)
+                            {
+                                transientRetries++;
+                                ApplyTransientCooldown(req, transientRetries);
+                                retryTransientFailure = true;
+                            }
                         }
                     }
                     if (respText == null)
                     {
-                        Debug.LogWarning($"[AIImage] ベース生成エラー({model} {attempt}/{MaxImageAttempts}): {lastErr}");
-                        if (attempt < MaxImageAttempts) yield return new WaitForSeconds(2f);
-                        continue;
+                        if (retryTransientFailure)
+                        {
+                            string retryMessage = $"一時エラーのためベース画像を自動リトライ中 " +
+                                                  $"({transientRetries}/{MaxTransientRetries})";
+                            onRetry?.Invoke(retryMessage);
+                            Debug.LogWarning($"[AIImage] {retryMessage} ({model}): {lastErr}");
+                            continue;
+                        }
+
+                        // 400系の恒久エラー、または一時障害の再送上限到達。別モデルへ移る。
+                        Debug.LogWarning($"[AIImage] ベース生成HTTPエラー({model}): {lastErr}");
+                        break;
                     }
+
+                    attempt++;
 
                     // try-catch の中に yield return は置けないため、レスポンス解析と URL DL を分離する
                     string imageUrl = null;
@@ -603,13 +655,27 @@ namespace PromptFighters.AI
                     bool parseOk = true;
                     try { ParseImageResponse(respText, out imageUrl, out imageBase64); }
                     catch (Exception e) { lastErr = "レスポンス解析失敗: " + e.Message; parseOk = false; }
-                    if (!parseOk) continue;
+                    if (!parseOk)
+                    {
+                        if (attempt < MaxImageAttempts) yield return new WaitForSeconds(2f);
+                        continue;
+                    }
 
                     byte[] rawBytes = null;
                     if (!string.IsNullOrEmpty(imageBase64))
                     {
+                        bool decodeOk = true;
                         try { rawBytes = Convert.FromBase64String(imageBase64); }
-                        catch (Exception e) { lastErr = "Base64デコード失敗: " + e.Message; continue; }
+                        catch (Exception e)
+                        {
+                            lastErr = "Base64デコード失敗: " + e.Message;
+                            decodeOk = false;
+                        }
+                        if (!decodeOk)
+                        {
+                            if (attempt < MaxImageAttempts) yield return new WaitForSeconds(2f);
+                            continue;
+                        }
                     }
                     else if (!string.IsNullOrEmpty(imageUrl))
                     {
@@ -621,6 +687,7 @@ namespace PromptFighters.AI
                         {
                             lastErr = "URL画像のダウンロード失敗: " + imgReq.error;
                             imgReq.Dispose();
+                            if (attempt < MaxImageAttempts) yield return new WaitForSeconds(2f);
                             continue;
                         }
                         var urlTex = DownloadHandlerTexture.GetContent(imgReq);
@@ -630,12 +697,23 @@ namespace PromptFighters.AI
                     else
                     {
                         lastErr = "レスポンスにurl/b64_jsonが見つかりません";
+                        if (attempt < MaxImageAttempts) yield return new WaitForSeconds(2f);
                         continue;
                     }
 
                     Sprite sprite = null;
+                    bool convertOk = true;
                     try { sprite = RawBytesToSprite(rawBytes); }
-                    catch (Exception e) { lastErr = "画像変換失敗: " + e.Message; continue; }
+                    catch (Exception e)
+                    {
+                        lastErr = "画像変換失敗: " + e.Message;
+                        convertOk = false;
+                    }
+                    if (!convertOk)
+                    {
+                        if (attempt < MaxImageAttempts) yield return new WaitForSeconds(2f);
+                        continue;
+                    }
 
                     onSuccess?.Invoke(sprite, rawBytes, model);
                     yield break;
@@ -652,16 +730,16 @@ namespace PromptFighters.AI
         static IEnumerator GenerateEditCoroutine(
             CharacterSpriteId id, string filename, string prompt,
             string size, byte[] basePngBytes, string key, string saveDir, string model,
+            Action<string> onRetry,
             Action<CharacterSpriteId, string, Sprite> onSuccess,
             Action<CharacterSpriteId, string> onError)
         {
             string sizeVal = string.IsNullOrEmpty(size) ? CharacterSize : size;
-            string respText = null;
             string lastErr  = null;
-            bool   ok       = false;
+            int processingAttempts = 0;
+            int transientRetries = 0;
 
-            // 失敗しても最大 MaxImageAttempts 回までしか呼ばない（料金暴走の防止）。
-            for (int attempt = 1; attempt <= MaxImageAttempts; attempt++)
+            while (processingAttempts < MaxImageAttempts)
             {
                 // multipartはリクエストごとに作り直す必要がある（uploadHandlerが消費されるため）
                 var form = new List<IMultipartFormSection>
@@ -681,46 +759,57 @@ namespace PromptFighters.AI
                 yield return WaitForImageRequestSlot();
                 yield return req.SendWebRequest();
 
-                if (req.result == UnityWebRequest.Result.Success)
+                if (req.result != UnityWebRequest.Result.Success)
                 {
-                    respText = req.downloadHandler.text;
-                    ok = true;
+                    lastErr = $"{req.error}: {req.downloadHandler?.text}";
+                    bool transientFailure = IsTransientRequestFailure(req);
+                    if (transientFailure && transientRetries < MaxTransientRetries)
+                    {
+                        transientRetries++;
+                        ApplyTransientCooldown(req, transientRetries);
+                        string retryMessage = $"一時エラーのため自動リトライ中: {filename} " +
+                                              $"({transientRetries}/{MaxTransientRetries})";
+                        onRetry?.Invoke(retryMessage);
+                        Debug.LogWarning($"[AIImage] {retryMessage}: {lastErr}");
+                        continue;
+                    }
+
+                    Debug.LogWarning($"[AIImage] エフェクト/ポーズ生成HTTPエラー {filename}: {lastErr}");
                     break;
                 }
 
-                ApplyRateLimitCooldown(req, attempt);
-                lastErr = $"{req.error}: {req.downloadHandler?.text}";
-                Debug.LogWarning($"[AIImage] エフェクト/ポーズ生成エラー({attempt}/{MaxImageAttempts}) {filename}: {lastErr}");
-                if (attempt < MaxImageAttempts) yield return new WaitForSeconds(1.5f);
-            }
-
-            if (!ok)
-            {
-                onError?.Invoke(id, lastErr ?? "画像生成に失敗");
-                yield break;
-            }
-
-            try
-            {
-                ParseImageResponse(respText, out string url, out string b64);
-                if (string.IsNullOrEmpty(b64))
+                processingAttempts++;
+                Sprite processedSprite = null;
+                try
                 {
-                    onError?.Invoke(id, "b64_jsonが見つかりません");
+                    ParseImageResponse(req.downloadHandler.text, out string url, out string b64);
+                    if (string.IsNullOrEmpty(b64))
+                        throw new Exception("b64_jsonが見つかりません");
+
+                    byte[] rawBytes = Convert.FromBase64String(b64);
+                    processedSprite = RawBytesToSprite(rawBytes);
+                }
+                catch (Exception e)
+                {
+                    lastErr = "画像処理失敗: " + e.Message;
+                }
+
+                if (processedSprite != null)
+                {
+                    if (saveDir != null)
+                        TrySavePng(saveDir, filename, processedSprite);
+
+                    onSuccess?.Invoke(id, filename, processedSprite);
                     yield break;
                 }
 
-                byte[] rawBytes = Convert.FromBase64String(b64);
-                var sprite = RawBytesToSprite(rawBytes);
-
-                if (saveDir != null)
-                    TrySavePng(saveDir, filename, sprite);
-
-                onSuccess?.Invoke(id, filename, sprite);
+                Debug.LogWarning($"[AIImage] 画像処理を再試行します({processingAttempts}/{MaxImageAttempts}) " +
+                                 $"{filename}: {lastErr}");
+                if (processingAttempts < MaxImageAttempts)
+                    yield return new WaitForSeconds(1.5f);
             }
-            catch (Exception e)
-            {
-                onError?.Invoke(id, "画像処理失敗: " + e.Message);
-            }
+
+            onError?.Invoke(id, lastErr ?? "画像生成に失敗");
         }
 
         // バイト列 → WhiteBackgroundRemover適用 → Sprite
