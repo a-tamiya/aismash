@@ -45,23 +45,31 @@ namespace PromptFighters.Battle
         }
 
         // 体術・武器振りの「風切り」。画像エフェクトを持たない近接技の見た目を担う。
-        // 攻撃判定と同じ位置・幅で細長い光の帯を一瞬走らせ、前方へ流す。
+        // 太い光の帯は「変な風の塊」に見えるため、アニメの効果線風の細いスピードライン3本を
+        // 一瞬（0.09秒）だけ前方へ走らせる。中央が長く、上下は短く控えめ。
         public static void SwingArc(Vector3 pos, float dirSign, float length, float height, Color color)
         {
-            Color c = Color.Lerp(Color.white, color, 0.45f); c.a = 0.6f;
-            StreakFx.Spawn(pos,
-                new Vector2(Mathf.Max(0.5f, length), Mathf.Max(0.25f, height * 0.55f)),
-                new Vector2(dirSign * 2.6f, 0f), 0.16f, c,
-                stretchX: 0.5f, squashY: 0.55f);
+            Color c = Color.Lerp(Color.white, color, 0.35f);
+            float w = Mathf.Max(0.6f, length * 0.85f);
+            for (int i = 0; i < 3; i++)
+            {
+                bool center = i == 1;
+                float yOff  = (i - 1) * Mathf.Max(0.12f, height * 0.22f);
+                Color lc = c; lc.a = center ? 0.5f : 0.3f;
+                StreakFx.Spawn(pos + new Vector3(dirSign * (center ? 0f : -0.12f), yOff, 0f),
+                    new Vector2(center ? w : w * 0.62f, 0.07f),
+                    new Vector2(dirSign * 5.5f, 0f), 0.09f, lc,
+                    stretchX: 0.35f, squashY: 0.4f);
+            }
         }
 
-        // 昇竜など上方向技の立ち上るストリーク。
+        // 昇竜など上方向技の立ち上るストリーク（細い縦の光線）。
         public static void RisingStreak(Vector3 pos, Color color, float height = 2.4f)
         {
-            Color c = Color.Lerp(Color.white, color, 0.55f); c.a = 0.7f;
+            Color c = Color.Lerp(Color.white, color, 0.55f); c.a = 0.55f;
             StreakFx.Spawn(pos + Vector3.up * (height * 0.4f),
-                new Vector2(0.55f, height),
-                new Vector2(0f, 2.2f), 0.3f, c,
+                new Vector2(0.28f, height),
+                new Vector2(0f, 2.2f), 0.24f, c,
                 stretchX: -0.3f, squashY: -0.25f);
         }
 
