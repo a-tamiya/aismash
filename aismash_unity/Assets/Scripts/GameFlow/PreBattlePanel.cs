@@ -56,6 +56,8 @@ namespace PromptFighters.GameFlow
         Button _p2VoiceRegenerateButton;
         Button _p1VoiceGenderButton;
         Button _p2VoiceGenderButton;
+        Button _p1VoiceStyleButton;
+        Button _p2VoiceStyleButton;
         Coroutine _voiceRegenerationCoroutine;
         TMP_InputField _p1NameInput;
         TMP_InputField _p1FeatureInput;
@@ -1616,12 +1618,20 @@ namespace PromptFighters.GameFlow
             if (isP1) _p1VoiceRegenerateButton = voiceBtn;
             else _p2VoiceRegenerateButton = voiceBtn;
 
-            var genderBtn = MakeButton(parent, isP1 ? "P1VoiceGenderBtn" : "P2VoiceGenderBtn", "声: 中性",
-                new Vector2(cx + 330f, 272f), new Vector2(150f, 34f), () => CycleSelectedVoiceGender(isP1),
+            // 既存の横幅内を性別と声質に分割し、下のステータス領域と重ねない。
+            var genderBtn = MakeButton(parent, isP1 ? "P1VoiceGenderBtn" : "P2VoiceGenderBtn", "性別:中",
+                new Vector2(cx + 290f, 272f), new Vector2(74f, 34f), () => CycleSelectedVoiceGender(isP1),
                 PromptFighters.UI.UITheme.SteelLight);
-            SetButtonLabelStyle(genderBtn, 14f, FontStyles.Bold, Color.white);
+            SetButtonLabelStyle(genderBtn, 12f, FontStyles.Bold, Color.white);
             if (isP1) _p1VoiceGenderButton = genderBtn;
             else _p2VoiceGenderButton = genderBtn;
+
+            var styleBtn = MakeButton(parent, isP1 ? "P1VoiceStyleBtn" : "P2VoiceStyleBtn", "声質:勇壮",
+                new Vector2(cx + 370f, 272f), new Vector2(74f, 34f), () => CycleSelectedVoiceStyle(isP1),
+                PromptFighters.UI.UITheme.SteelLight);
+            SetButtonLabelStyle(styleBtn, 12f, FontStyles.Bold, Color.white);
+            if (isP1) _p1VoiceStyleButton = styleBtn;
+            else _p2VoiceStyleButton = styleBtn;
 
             // コントローラー接続状態（バッジ下）
             var gpLabel = MakeLabel(parent, isP1 ? "P1GpStatus" : "P2GpStatus",
@@ -1771,6 +1781,7 @@ namespace PromptFighters.GameFlow
 
         void ChangeRosterPage(int delta)
         {
+            if (_voiceRegenerationCoroutine != null) return;
             if (_presets == null || _presets.Count == 0) return;
             int pageSize = RosterColumns * RosterRows;
             int maxPage = Mathf.Max(0, (_presets.Count - 1) / pageSize);
@@ -2367,6 +2378,7 @@ namespace PromptFighters.GameFlow
         // 1P/2Pカーソルをグリッド上で移動する（dx=左右, dy=上下）。
         void MoveRosterCursor(bool isP1, int dx, int dy)
         {
+            if (_voiceRegenerationCoroutine != null) return;
             if (_presets == null || _presets.Count == 0) return;
             int idx = isP1 ? _p1PresetIdx : _p2PresetIdx;
             int ni = idx + dx + dy * RosterColumns;
@@ -2378,6 +2390,7 @@ namespace PromptFighters.GameFlow
         // ランダムにキャラクターを選ぶ。複数いる場合は現在の選択と別のキャラを選ぶ。
         void SelectRandomPreset(bool isP1)
         {
+            if (_voiceRegenerationCoroutine != null) return;
             if (_presets == null || _presets.Count == 0) return;
             int cur = isP1 ? _p1PresetIdx : _p2PresetIdx;
             int idx = Random.Range(0, _presets.Count);
@@ -3216,9 +3229,17 @@ namespace PromptFighters.GameFlow
             if (_p2DeleteButton != null)
                 _p2DeleteButton.gameObject.SetActive(_p2PresetIdx >= _builtInPresetCount);
             if (_p1VoiceRegenerateButton != null)
+            {
                 _p1VoiceRegenerateButton.gameObject.SetActive(_p1PresetIdx >= _builtInPresetCount);
+                if (_voiceRegenerationCoroutine == null)
+                    UpdateVoiceRegenerateButtonText(_p1VoiceRegenerateButton, GetPreset(true));
+            }
             if (_p2VoiceRegenerateButton != null)
+            {
                 _p2VoiceRegenerateButton.gameObject.SetActive(_p2PresetIdx >= _builtInPresetCount);
+                if (_voiceRegenerationCoroutine == null)
+                    UpdateVoiceRegenerateButtonText(_p2VoiceRegenerateButton, GetPreset(false));
+            }
             if (_p1VoiceGenderButton != null)
             {
                 _p1VoiceGenderButton.gameObject.SetActive(_p1PresetIdx >= _builtInPresetCount);
@@ -3228,6 +3249,16 @@ namespace PromptFighters.GameFlow
             {
                 _p2VoiceGenderButton.gameObject.SetActive(_p2PresetIdx >= _builtInPresetCount);
                 UpdateVoiceGenderButtonText(_p2VoiceGenderButton, GetPreset(false));
+            }
+            if (_p1VoiceStyleButton != null)
+            {
+                _p1VoiceStyleButton.gameObject.SetActive(_p1PresetIdx >= _builtInPresetCount);
+                UpdateVoiceStyleButtonText(_p1VoiceStyleButton, GetPreset(true));
+            }
+            if (_p2VoiceStyleButton != null)
+            {
+                _p2VoiceStyleButton.gameObject.SetActive(_p2PresetIdx >= _builtInPresetCount);
+                UpdateVoiceStyleButtonText(_p2VoiceStyleButton, GetPreset(false));
             }
         }
 
@@ -3325,6 +3356,11 @@ namespace PromptFighters.GameFlow
             CharacterData data = _presets[idx];
             data.voiceProfile ??= new CharacterVoiceProfile();
             data.voiceProfile.FillDefaults(data);
+            string oldGender = data.voiceProfile.voiceGender;
+            string oldPreset = data.voiceProfile.preset;
+            string oldInstructions = data.voiceProfile.instructions;
+            int oldQualityVersion = data.voiceProfile.qualityVersion;
+            bool oldGenerated = data.voiceProfile.generated;
             data.voiceProfile.voiceGender = data.voiceProfile.voiceGender switch
             {
                 CharacterVoiceProfile.Male => CharacterVoiceProfile.Female,
@@ -3338,7 +3374,14 @@ namespace PromptFighters.GameFlow
             data.voiceProfile.generated = false;
             data.voiceProfile.FillDefaults(data);
             if (!CharacterSaveManager.Save(data))
+            {
+                data.voiceProfile.voiceGender = oldGender;
+                data.voiceProfile.preset = oldPreset;
+                data.voiceProfile.instructions = oldInstructions;
+                data.voiceProfile.qualityVersion = oldQualityVersion;
+                data.voiceProfile.generated = oldGenerated;
                 Debug.LogWarning("[CharacterVoice] 声の性別設定を保存できませんでした。");
+            }
             UpdateCategoryLabels();
         }
 
@@ -3352,77 +3395,125 @@ namespace PromptFighters.GameFlow
                 CharacterVoiceProfile.Female => "女性",
                 _ => "中性",
             };
-            bool pending = data?.voiceProfile != null &&
-                data.voiceProfile.qualityVersion < CharacterVoiceProfile.CurrentQualityVersion;
-            SetVoiceRegenerateButtonText(button, "声: " + gender + (pending ? "（要再生成）" : ""));
+            SetVoiceRegenerateButtonText(button, "性別:" + gender);
+        }
+
+        void CycleSelectedVoiceStyle(bool isP1)
+        {
+            if (_voiceRegenerationCoroutine != null || _generationCoroutine != null || _presets == null) return;
+            int idx = isP1 ? _p1PresetIdx : _p2PresetIdx;
+            if (idx < _builtInPresetCount || idx < 0 || idx >= _presets.Count) return;
+
+            CharacterData data = _presets[idx];
+            data.voiceProfile ??= new CharacterVoiceProfile();
+            data.voiceProfile.FillDefaults(data);
+            string oldStyle = data.voiceProfile.voiceStyle;
+            int oldQualityVersion = data.voiceProfile.qualityVersion;
+            bool oldGenerated = data.voiceProfile.generated;
+            data.voiceProfile.CycleVoiceStyle();
+            data.voiceProfile.qualityVersion = 0;
+            data.voiceProfile.generated = false;
+            if (!CharacterSaveManager.Save(data))
+            {
+                data.voiceProfile.voiceStyle = oldStyle;
+                data.voiceProfile.qualityVersion = oldQualityVersion;
+                data.voiceProfile.generated = oldGenerated;
+                Debug.LogWarning("[CharacterVoice] 声質設定を保存できませんでした。");
+            }
+            UpdateCategoryLabels();
+        }
+
+        static void UpdateVoiceStyleButtonText(Button button, CharacterData data)
+        {
+            if (button == null) return;
+            data?.voiceProfile?.FillDefaults(data);
+            SetVoiceRegenerateButtonText(button,
+                "声質:" + CharacterVoiceProfile.GetVoiceStyleLabel(data?.voiceProfile?.voiceStyle));
+        }
+
+        static void UpdateVoiceRegenerateButtonText(Button button, CharacterData data)
+        {
+            if (button == null) return;
+            data?.voiceProfile?.FillDefaults(data);
+            bool current = data?.voiceProfile?.generated == true &&
+                           data.voiceProfile.qualityVersion >= CharacterVoiceProfile.CurrentQualityVersion;
+            SetVoiceRegenerateButtonText(button, current ? "ボイス再生成" : "ボイス要再生成");
         }
 
         IEnumerator RegenerateSelectedVoiceCoroutine(CharacterData data, Button activeButton)
         {
-            if (_p1VoiceRegenerateButton != null) _p1VoiceRegenerateButton.interactable = false;
-            if (_p2VoiceRegenerateButton != null) _p2VoiceRegenerateButton.interactable = false;
-            if (_p1VoiceGenderButton != null) _p1VoiceGenderButton.interactable = false;
-            if (_p2VoiceGenderButton != null) _p2VoiceGenderButton.interactable = false;
-            if (_p1DeleteButton != null) _p1DeleteButton.interactable = false;
-            if (_p2DeleteButton != null) _p2DeleteButton.interactable = false;
-            SetVoiceRegenerateButtonText(activeButton, "生成中 0/5");
+            try
+            {
+                if (_p1VoiceRegenerateButton != null) _p1VoiceRegenerateButton.interactable = false;
+                if (_p2VoiceRegenerateButton != null) _p2VoiceRegenerateButton.interactable = false;
+                if (_p1VoiceGenderButton != null) _p1VoiceGenderButton.interactable = false;
+                if (_p2VoiceGenderButton != null) _p2VoiceGenderButton.interactable = false;
+                if (_p1VoiceStyleButton != null) _p1VoiceStyleButton.interactable = false;
+                if (_p2VoiceStyleButton != null) _p2VoiceStyleButton.interactable = false;
+                if (_p1DeleteButton != null) _p1DeleteButton.interactable = false;
+                if (_p2DeleteButton != null) _p2DeleteButton.interactable = false;
+                SetVoiceRegenerateButtonText(activeButton, "生成中 0/5");
 
-            bool done = false;
-            bool succeeded = false;
-            int generatedCount = 0;
-            string error = null;
-            Coroutine regeneration = CharacterVoiceGenerator.RegenerateSetAtomically(this, data,
-                progress =>
+                bool done = false;
+                bool succeeded = false;
+                int generatedCount = 0;
+                string error = null;
+                Coroutine regeneration = CharacterVoiceGenerator.RegenerateSetAtomically(this, data,
+                    progress =>
+                    {
+                        // 進捗文字列は "... n/5" を含むため、ボタン幅に収まる末尾だけを表示する。
+                        int slash = progress?.IndexOf('/') ?? -1;
+                        string count = slash > 0
+                            ? progress.Substring(Mathf.Max(0, slash - 1), Mathf.Min(3, progress.Length - Mathf.Max(0, slash - 1)))
+                            : "…";
+                        SetVoiceRegenerateButtonText(activeButton, "生成中 " + count);
+                    },
+                    () => CharacterSaveManager.Save(data),
+                    (ok, count, err) =>
+                    {
+                        succeeded = ok;
+                        generatedCount = count;
+                        error = err;
+                        done = true;
+                    });
+                float watchdogDeadline = Time.realtimeSinceStartup + 1240f;
+                while (!done && Time.realtimeSinceStartup < watchdogDeadline)
+                    yield return null;
+                if (!done)
                 {
-                    // 進捗文字列は "... n/5" を含むため、ボタン幅に収まる末尾だけを表示する。
-                    int slash = progress?.IndexOf('/') ?? -1;
-                    string count = slash > 0
-                        ? progress.Substring(Mathf.Max(0, slash - 1), Mathf.Min(3, progress.Length - Mathf.Max(0, slash - 1)))
-                        : "…";
-                    SetVoiceRegenerateButtonText(activeButton, "生成中 " + count);
-                },
-                (ok, count, err) =>
-                {
-                    succeeded = ok;
-                    generatedCount = count;
-                    error = err;
+                    if (regeneration != null) StopCoroutine(regeneration);
+                    error = "ボイス再生成が安全期限を超えました";
                     done = true;
-                });
-            float watchdogDeadline = Time.realtimeSinceStartup + 520f;
-            while (!done && Time.realtimeSinceStartup < watchdogDeadline)
-                yield return null;
-            if (!done)
-            {
-                if (regeneration != null) StopCoroutine(regeneration);
-                error = "ボイス再生成が安全期限を超えました";
-                done = true;
-            }
+                }
 
-            if (succeeded)
-            {
-                bool saved = CharacterSaveManager.Save(data);
-                SetVoiceRegenerateButtonText(activeButton, saved ? "ボイス更新完了" : "更新済・保存注意");
-                if (!saved)
-                    Debug.LogWarning("[CharacterVoice] 音声は更新しましたがキャラJSONの保存に失敗しました。");
-                RefreshCharacterPreview();
-            }
-            else
-            {
-                SetVoiceRegenerateButtonText(activeButton, "失敗・旧音声維持");
-                Debug.LogWarning($"[CharacterVoice] ボイス再生成失敗（{generatedCount}/5）: {error}");
-            }
+                if (succeeded)
+                {
+                    SetVoiceRegenerateButtonText(activeButton, "ボイス更新完了");
+                    RefreshCharacterPreview();
+                }
+                else
+                {
+                    SetVoiceRegenerateButtonText(activeButton, "失敗・再試行可");
+                    Debug.LogWarning($"[CharacterVoice] ボイス再生成失敗（{generatedCount}/5）: {error}");
+                }
 
-            yield return new WaitForSecondsRealtime(2f);
-            SetVoiceRegenerateButtonText(_p1VoiceRegenerateButton, "ボイス再生成");
-            SetVoiceRegenerateButtonText(_p2VoiceRegenerateButton, "ボイス再生成");
-            if (_p1VoiceRegenerateButton != null) _p1VoiceRegenerateButton.interactable = true;
-            if (_p2VoiceRegenerateButton != null) _p2VoiceRegenerateButton.interactable = true;
-            if (_p1VoiceGenderButton != null) _p1VoiceGenderButton.interactable = true;
-            if (_p2VoiceGenderButton != null) _p2VoiceGenderButton.interactable = true;
-            if (_p1DeleteButton != null) _p1DeleteButton.interactable = true;
-            if (_p2DeleteButton != null) _p2DeleteButton.interactable = true;
-            _voiceRegenerationCoroutine = null;
-            UpdateCategoryLabels();
+                yield return new WaitForSecondsRealtime(2f);
+            }
+            finally
+            {
+                SetVoiceRegenerateButtonText(_p1VoiceRegenerateButton, "ボイス再生成");
+                SetVoiceRegenerateButtonText(_p2VoiceRegenerateButton, "ボイス再生成");
+                if (_p1VoiceRegenerateButton != null) _p1VoiceRegenerateButton.interactable = true;
+                if (_p2VoiceRegenerateButton != null) _p2VoiceRegenerateButton.interactable = true;
+                if (_p1VoiceGenderButton != null) _p1VoiceGenderButton.interactable = true;
+                if (_p2VoiceGenderButton != null) _p2VoiceGenderButton.interactable = true;
+                if (_p1VoiceStyleButton != null) _p1VoiceStyleButton.interactable = true;
+                if (_p2VoiceStyleButton != null) _p2VoiceStyleButton.interactable = true;
+                if (_p1DeleteButton != null) _p1DeleteButton.interactable = true;
+                if (_p2DeleteButton != null) _p2DeleteButton.interactable = true;
+                _voiceRegenerationCoroutine = null;
+                UpdateCategoryLabels();
+            }
         }
 
         static void SetVoiceRegenerateButtonText(Button button, string text)

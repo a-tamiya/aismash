@@ -10,22 +10,24 @@ using UnityEngine;
 namespace PromptFighters.AI
 {
     // OpenAI Realtime API (WebSocket) を使った音声機能クライアント。
-    // APIキーの権限変更で whisper-1 / gpt-4o-mini-tts が使えなくなったため、
-    // キーで利用可能な gpt-realtime-1.5 / gpt-realtime-whisper を代替として使う。
+    // OpenAIの現行Realtimeモデルを優先し、利用権限や一時障害時は呼び出し側で1.5へフォールバックする。
     //  ・Transcribe : 録音済みWAVを送って文字起こし（whisper-1 RESTの代替）
     //  ・Synthesize : セリフを演技指示付きで読み上げてAudioClip化（表現付きTTSの代替）
     public static class RealtimeAudioClient
     {
         const string WsEndpoint = "wss://api.openai.com/v1/realtime";
+        // 公式が音声入出力の最高品質モデルとして案内している1.5を保存・即時音声の第一候補にする。
+        // 2.1は指示追従や雑音耐性に優れる第二候補として、同じvoiceを維持したまま使用する。
         public const string RealtimeModel   = "gpt-realtime-1.5";
+        public const string RealtimeFallbackModel = "gpt-realtime-2.1";
         public const string TranscribeModel = "gpt-realtime-whisper";
+        // 文字起こし経路は既存動作を変えず、検証済みの1.5会話セッションを維持する。
+        const string TranscriptionSessionModel = RealtimeModel;
         // 読み上げの声（Realtime世代で最も人間らしい2声）。
         //  ・cedar = 男性（実況用） / marin = 女性（ボイスボール用）
-        // セッション設定で拒否された場合は近い性別の旧声へフォールバックする。
+        // 別の物理voiceへ自動変換すると性別印象が変わり得るため、voice拒否時はモデル単位で失敗させる。
         public const string MaleVoice   = "cedar";
         public const string FemaleVoice = "marin";
-        static readonly ConcurrentDictionary<string, string> RejectedVoiceFallbacks =
-            new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         const int InputRate = 24000; // Realtime APIの audio/pcm 入出力レート
 
@@ -45,7 +47,7 @@ namespace PromptFighters.AI
             byte[] pcm = ToPcm16(Resample(samples, rate, InputRate));
 
             using var sock = new RealtimeSocket();
-            yield return sock.Connect($"{WsEndpoint}?model={RealtimeModel}", apiKey, 8f);
+            yield return sock.Connect($"{WsEndpoint}?model={TranscriptionSessionModel}", apiKey, 8f);
             if (!sock.IsOpen)
             {
                 onErr?.Invoke("Realtime接続失敗: " + (sock.FatalError ?? "不明"));
@@ -122,12 +124,13 @@ namespace PromptFighters.AI
         // Realtimeモデルに「このセリフをそのまま読む」よう指示して喋らせ、AudioClipにして返す。
         // styleInstructions で声の演技（実況調など）、voice で声（cedar=男性/marin=女性）を指定できる。
         public static IEnumerator Synthesize(string text, string styleInstructions, string apiKey,
-            Action<AudioClip> onClip, Action<string> onErr, string voice = MaleVoice)
+            Action<AudioClip> onClip, Action<string> onErr, string voice = MaleVoice, string model = RealtimeModel)
         {
             if (string.IsNullOrWhiteSpace(text)) { onErr?.Invoke("テキストが空"); yield break; }
 
+            model = SanitizeSynthesisModel(model);
             using var sock = new RealtimeSocket();
-            yield return sock.Connect($"{WsEndpoint}?model={RealtimeModel}", apiKey, 8f);
+            yield return sock.Connect($"{WsEndpoint}?model={model}", apiKey, 8f);
             if (!sock.IsOpen)
             {
                 onErr?.Invoke("Realtime接続失敗: " + (sock.FatalError ?? "不明"));
@@ -138,44 +141,28 @@ namespace PromptFighters.AI
                 ? "自然な日本語で読み上げる。"
                 : styleInstructions;
 
-            // 指定の声が拒否されたら、近い性別の旧声で再試行する
-            string fallbackVoice = voice == FemaleVoice
-                ? "shimmer"
-                : voice == MaleVoice ? "ash" : "sage";
-            bool hasCachedFallback = RejectedVoiceFallbacks.TryGetValue(voice, out string cachedVoice);
-            string[] voices = hasCachedFallback ? new[] { cachedVoice } : new[] { voice, fallbackVoice };
             bool ready = false;
             string err = null;
-            for (int v = 0; v < voices.Length && !ready; v++)
-            {
-                err = null;
-                string sessionJson =
-                    "{\"type\":\"session.update\",\"session\":{\"type\":\"realtime\"," +
-                    "\"output_modalities\":[\"audio\"]," +
-                    $"\"instructions\":\"{JsonEscape(style)}\"," +
-                    "\"audio\":{\"output\":{" +
-                    $"\"voice\":\"{voices[v]}\"," +
-                    "\"format\":{\"type\":\"audio/pcm\",\"rate\":24000}}}}}";
-                sock.SendJson(sessionJson);
+            string sessionJson =
+                "{\"type\":\"session.update\",\"session\":{\"type\":\"realtime\"," +
+                "\"output_modalities\":[\"audio\"]," +
+                $"\"instructions\":\"{JsonEscape(style)}\"," +
+                "\"audio\":{\"output\":{" +
+                $"\"voice\":\"{JsonEscape(voice)}\"," +
+                "\"format\":{\"type\":\"audio/pcm\",\"rate\":24000}}}}}";
+            sock.SendJson(sessionJson);
 
-                float dl = Time.realtimeSinceStartup + 8f;
-                while (Time.realtimeSinceStartup < dl && !ready && err == null)
+            float setupDeadline = Time.realtimeSinceStartup + 8f;
+            while (Time.realtimeSinceStartup < setupDeadline && !ready && err == null)
+            {
+                while (sock.TryDequeue(out string msg))
                 {
-                    while (sock.TryDequeue(out string msg))
-                    {
-                        string t = EventType(msg);
-                        if (t == "session.updated") { ready = true; break; }
-                        if (t == "error") { err = ErrorMessage(msg); break; }
-                    }
-                    if (sock.FatalError != null) err ??= sock.FatalError;
-                    yield return null;
+                    string t = EventType(msg);
+                    if (t == "session.updated") { ready = true; break; }
+                    if (t == "error") { err = ErrorMessage(msg); break; }
                 }
-                // 声の指定エラーのみ次の声で再試行。それ以外は中断。
-                bool voiceRejected = !ready && err != null &&
-                    err.IndexOf("voice", StringComparison.OrdinalIgnoreCase) >= 0;
-                if (voiceRejected && !hasCachedFallback && voices[v] == voice)
-                    RejectedVoiceFallbacks[voice] = fallbackVoice;
-                if (!ready && !voiceRejected) break;
+                if (sock.FatalError != null) err ??= sock.FatalError;
+                yield return null;
             }
             if (!ready)
             {
@@ -240,7 +227,166 @@ namespace PromptFighters.AI
             onClip?.Invoke(clip);
         }
 
+        // 1キャラクター分の複数台詞を同じRealtimeセッションで順番に生成する。
+        // voiceとセッションを固定することで、台詞ごとに接続し直す場合より人物の一貫性を高める。
+        public static IEnumerator SynthesizeBatch(string[] texts, string[] styleInstructions, string apiKey,
+            Action<AudioClip[]> onClips, Action<int> onProgress, Action<string> onErr,
+            string voice = MaleVoice, string model = RealtimeModel)
+        {
+            if (texts == null || texts.Length == 0)
+            {
+                onErr?.Invoke("台詞セットが空");
+                yield break;
+            }
+            if (styleInstructions == null || styleInstructions.Length != texts.Length)
+            {
+                onErr?.Invoke("台詞と演技指示の件数が不一致");
+                yield break;
+            }
+            for (int i = 0; i < texts.Length; i++)
+            {
+                if (!string.IsNullOrWhiteSpace(texts[i])) continue;
+                onErr?.Invoke($"{i + 1}件目の台詞が空");
+                yield break;
+            }
+
+            model = SanitizeSynthesisModel(model);
+            using var sock = new RealtimeSocket();
+            yield return sock.Connect($"{WsEndpoint}?model={model}", apiKey, 8f);
+            if (!sock.IsOpen)
+            {
+                onErr?.Invoke("Realtime接続失敗: " + (sock.FatalError ?? "不明"));
+                yield break;
+            }
+
+            string sessionStyle = string.IsNullOrWhiteSpace(styleInstructions[0])
+                ? "自然な日本語で読み上げる。"
+                : styleInstructions[0];
+            string sessionJson =
+                "{\"type\":\"session.update\",\"session\":{\"type\":\"realtime\"," +
+                "\"output_modalities\":[\"audio\"]," +
+                $"\"instructions\":\"{JsonEscape(sessionStyle)}\"," +
+                "\"audio\":{\"output\":{" +
+                $"\"voice\":\"{JsonEscape(voice)}\"," +
+                "\"format\":{\"type\":\"audio/pcm\",\"rate\":24000}}}}}";
+            sock.SendJson(sessionJson);
+
+            bool ready = false;
+            string err = null;
+            float setupDeadline = Time.realtimeSinceStartup + 8f;
+            while (Time.realtimeSinceStartup < setupDeadline && !ready && err == null)
+            {
+                while (sock.TryDequeue(out string msg))
+                {
+                    string type = EventType(msg);
+                    if (type == "session.updated") { ready = true; break; }
+                    if (type == "error") { err = ErrorMessage(msg); break; }
+                }
+                if (sock.FatalError != null) err ??= sock.FatalError;
+                yield return null;
+            }
+            if (!ready)
+            {
+                onErr?.Invoke("Realtimeセッション設定失敗: " + (err ?? "タイムアウト"));
+                yield break;
+            }
+
+            var clips = new AudioClip[texts.Length];
+            bool ownershipTransferred = false;
+            try
+            {
+                for (int i = 0; i < texts.Length; i++)
+                {
+                    onProgress?.Invoke(i);
+                    string style = string.IsNullOrWhiteSpace(styleInstructions[i])
+                        ? "自然な日本語で読み上げる。"
+                        : styleInstructions[i];
+                    string ask = style + "\n次のセリフを一言一句そのまま日本語で読み上げる。" +
+                                 "前置き・相づち・言い直し・追加の言葉は一切入れない。セリフ：" + texts[i];
+                    sock.SendJson($"{{\"type\":\"response.create\",\"response\":{{\"instructions\":\"{JsonEscape(ask)}\"}}}}");
+
+                    using var pcmStream = new System.IO.MemoryStream();
+                    bool done = false;
+                    err = null;
+                    float deadline = Time.realtimeSinceStartup + 30f;
+                    while (Time.realtimeSinceStartup < deadline && !done && err == null)
+                    {
+                        while (sock.TryDequeue(out string msg))
+                        {
+                            try
+                            {
+                                string type = EventType(msg);
+                                if (type == "response.output_audio.delta" || type == "response.audio.delta")
+                                {
+                                    string b64 = JsonUtility.FromJson<EvtDelta>(msg)?.delta;
+                                    if (!string.IsNullOrEmpty(b64))
+                                    {
+                                        byte[] bytes = Convert.FromBase64String(b64);
+                                        pcmStream.Write(bytes, 0, bytes.Length);
+                                    }
+                                }
+                                else if (type == "response.done")
+                                {
+                                    string status = JsonUtility.FromJson<EvtResponseDone>(msg)?.response?.status;
+                                    if (status == "completed") done = true;
+                                    else err = "Realtime応答が完了しませんでした: " + (status ?? "status不明");
+                                    break;
+                                }
+                                else if (type == "error")
+                                {
+                                    err = ErrorMessage(msg);
+                                    break;
+                                }
+                            }
+                            catch (Exception e)
+                            {
+                                err = "Realtime音声イベント解析失敗: " + e.Message;
+                                break;
+                            }
+                        }
+                        if (sock.FatalError != null) err ??= sock.FatalError;
+                        yield return null;
+                    }
+
+                    if (err != null || !done || pcmStream.Length < 2)
+                    {
+                        onErr?.Invoke($"Realtime音声セット{i + 1}/{texts.Length}生成失敗: " +
+                            (err ?? (done ? "音声なし" : "タイムアウト")));
+                        yield break;
+                    }
+
+                    clips[i] = Pcm16ToClip(pcmStream.ToArray(), InputRate, $"RealtimeTTS_{i}");
+                    if (clips[i] == null)
+                    {
+                        onErr?.Invoke($"Realtime音声セット{i + 1}/{texts.Length}のPCM変換失敗");
+                        yield break;
+                    }
+                }
+
+                onProgress?.Invoke(texts.Length);
+                onClips?.Invoke(clips);
+                ownershipTransferred = true;
+            }
+            finally
+            {
+                // 親コルーチンの期限停止や画面破棄でも、生成途中のネイティブAudioClipを残さない。
+                if (!ownershipTransferred) DestroyClips(clips);
+            }
+        }
+
         // ── 音声ユーティリティ ─────────────────────────────────────
+
+        static string SanitizeSynthesisModel(string model) =>
+            string.Equals(model, RealtimeFallbackModel, StringComparison.OrdinalIgnoreCase)
+                ? RealtimeFallbackModel
+                : RealtimeModel;
+
+        static void DestroyClips(AudioClip[] clips)
+        {
+            if (clips == null) return;
+            for (int i = 0; i < clips.Length; i++)
+                if (clips[i] != null) UnityEngine.Object.Destroy(clips[i]);
+        }
 
         // モノラルPCM16 WAV → float配列（レートはヘッダから読む）
         static float[] ParseWavMono(byte[] wav, out int sampleRate)
@@ -304,10 +450,18 @@ namespace PromptFighters.AI
         {
             try
             {
+                // 空音声・極端に短い応答・指示逸脱による異常な長尺を成功扱いにしない。
+                if (pcm == null || rate <= 0 || pcm.Length < rate * 2 / 10 || pcm.Length > rate * 2 * 30)
+                    return null;
                 int count = pcm.Length / 2;
                 var samples = new float[count];
+                float peak = 0f;
                 for (int i = 0; i < count; i++)
+                {
                     samples[i] = (short)(pcm[i * 2] | (pcm[i * 2 + 1] << 8)) / 32768f;
+                    peak = Mathf.Max(peak, Mathf.Abs(samples[i]));
+                }
+                if (peak < 0.002f) return null;
                 AITTSClient.NormalizeSamples(samples);
                 var clip = AudioClip.Create(name, count, 1, rate, false);
                 clip.SetData(samples, 0);
@@ -333,14 +487,18 @@ namespace PromptFighters.AI
             try
             {
                 var e = JsonUtility.FromJson<EvtError>(json);
-                if (!string.IsNullOrEmpty(e?.error?.message)) return e.error.message;
+                if (!string.IsNullOrEmpty(e?.error?.message))
+                    return string.IsNullOrEmpty(e.error.code)
+                        ? e.error.message
+                        : e.error.code + ": " + e.error.message;
             }
             catch { }
             return json.Length > 200 ? json.Substring(0, 200) : json;
         }
 
         static string JsonEscape(string s) =>
-            s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", " ").Replace("\r", " ");
+            s.Replace("\\", "\\\\").Replace("\"", "\\\"")
+             .Replace("\r\n", "\\n").Replace("\n", "\\n").Replace("\r", "\\n");
 
         [Serializable] class EvtHead       { public string type; }
         [Serializable] class EvtTranscript { public string type; public string transcript; }
@@ -359,6 +517,7 @@ namespace PromptFighters.AI
             readonly ConcurrentQueue<string> _inbox = new ConcurrentQueue<string>();
             readonly CancellationTokenSource _cts = new CancellationTokenSource();
             Task _sendChain = Task.CompletedTask;
+            Task _receiveTask = Task.CompletedTask;
             volatile string _fatalError;
 
             public string FatalError => _fatalError;
@@ -383,13 +542,13 @@ namespace PromptFighters.AI
                 if (!task.IsCompleted) { _fatalError = "接続タイムアウト"; yield break; }
                 if (task.IsFaulted)    { _fatalError = Flatten(task.Exception); yield break; }
 
-                _ = ReceiveLoop();
+                _receiveTask = ReceiveLoop();
             }
 
             async Task ReceiveLoop()
             {
                 var buf = new byte[16384];
-                var ms = new System.IO.MemoryStream();
+                using var ms = new System.IO.MemoryStream();
                 try
                 {
                     while (_ws.State == WebSocketState.Open && !_cts.IsCancellationRequested)
@@ -437,6 +596,10 @@ namespace PromptFighters.AI
             {
                 try { _cts.Cancel(); } catch { }
                 try { _ws.Dispose(); } catch { }
+                // Task内の例外は通常それぞれの処理内で捕捉するが、fault済みならここで必ず観測する。
+                if (_receiveTask.IsFaulted) _ = _receiveTask.Exception;
+                if (_sendChain.IsFaulted) _ = _sendChain.Exception;
+                _cts.Dispose();
             }
         }
     }

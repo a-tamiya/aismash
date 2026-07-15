@@ -47,13 +47,27 @@ namespace PromptFighters.Battle.Skills
     [System.Serializable]
     public class CharacterVoiceProfile
     {
-        public const int CurrentQualityVersion = 2;
+        public const int CurrentQualityVersion = 3;
         public const string Male = "male";
         public const string Female = "female";
         public const string Neutral = "neutral";
+        public const string StyleHeroic = "heroic";
+        public const string StyleFierce = "fierce";
+        public const string StyleCool = "cool";
+        public const string StyleMysterious = "mysterious";
+        public const string StyleCheerful = "cheerful";
+        public const string StyleElegant = "elegant";
+        public const string StyleEccentric = "eccentric";
+        public const string StyleOminous = "ominous";
         public const string DefaultActingInstructions =
             "日本語の対戦アクションゲームに出演するプロ声優として、キャラクター本人になりきる。" +
             "棒読みを避け、戦闘中の呼吸、感情の高まり、自然な間、声の強弱を使って臨場感豊かに演じる。";
+
+        static readonly string[] VoiceStyleOrder =
+        {
+            StyleHeroic, StyleFierce, StyleCool, StyleMysterious,
+            StyleCheerful, StyleElegant, StyleEccentric, StyleOminous,
+        };
 
         // presetはAIの自由選択を採用せず、voiceGenderからFillDefaultsで決定する。
         // cedar/marinは高品質な声、alloyは性別を限定しないキャラに使用する。
@@ -61,7 +75,13 @@ namespace PromptFighters.Battle.Skills
         public string voiceGender = "unspecified";
         public string voiceAge = "unspecified";
         public string voicePitch = "unspecified";
+        // provider固有のvoice名ではなく、モデルを替えても意味が変わらないキャラ固有の声質IDを保存する。
+        public string voiceStyle = null;
+        // 1〜64。声質内の響き・発音・抑揚の微差をキャラごとに固定し、再起動後も同じ演技特性を保つ。
+        public int voiceVariant;
         public int qualityVersion;
+        // WAVセットとcharacter.jsonが同じ確定世代かをクラッシュ復旧時に判定するID。
+        public string generationId;
         public string instructions = DefaultActingInstructions;
         public string introLine = "";
         public string[] skillLines = new string[4];
@@ -81,8 +101,10 @@ namespace PromptFighters.Battle.Skills
 
         public void FillDefaults(CharacterData owner)
         {
-            // 新JSONの構造化値を優先する。旧JSONで欠損した場合だけ、音声指示→入力特徴→外見説明の順に補完する。
-            // 特徴には召喚対象や攻撃名も含まれるため、単語推論で有効な構造化値を上書きしない。
+            string legacyPreset = preset;
+            // 新JSONの構造化値を優先する。旧JSONの声質は旧presetを移行ヒントにし、
+            // それもなければ安定ハッシュで決める。特徴文には敵・召喚対象・技名も含まれるため、
+            // 「魔王を倒す勇者」の魔王などを本人の声質として誤採用しない。
             string normalizedGender = NormalizeGender(voiceGender);
             if (normalizedGender != "unspecified")
                 voiceGender = normalizedGender;
@@ -107,6 +129,14 @@ namespace PromptFighters.Battle.Skills
             if (voicePitch == null)
                 voicePitch = InferPitch(instructions) ?? InferPitch(owner?.inputFeatures) ??
                     InferPitch(owner?.visualDescription) ?? "medium";
+
+            voiceStyle = NormalizeVoiceStyle(voiceStyle);
+            if (voiceStyle == null)
+            {
+                voiceStyle = InferLegacyPresetStyle(legacyPreset) ?? ChooseStableVoiceStyle(owner);
+            }
+            if (voiceVariant < 1 || voiceVariant > 64)
+                voiceVariant = 1 + (int)(StableVoiceHash(owner, voiceStyle) % 64u);
 
             // LLMが返したpresetや旧保存データのpresetに左右されず、性別を全台詞で固定する。
             preset = ResolvePreset(voiceGender);
@@ -157,9 +187,37 @@ namespace PromptFighters.Battle.Skills
                 "high" => "高めの基本ピッチ",
                 _ => "中程度の基本ピッチ",
             };
-            return $"音声アイデンティティ（最優先）: {genderDirection}{ageDirection}、{pitchDirection}。" +
-                   "感情が高ぶってもこの性別・年齢感・声の高さを崩さず、全台詞を同一人物の声で演じる。" +
-                   "それ以前の自由記述に性別・年齢・声の高さの矛盾があっても、必ずこの音声アイデンティティを優先する。";
+            return "【音声アイデンティティ・最優先】\n" +
+                   $"- {genderDirection}\n- {ageDirection}、{pitchDirection}。\n" +
+                   "- 感情が高ぶっても性別・年齢感・基本ピッチを崩さず、全台詞を同一人物の声で演じる。\n" +
+                   "【キャラクター固有の話者特性】\n" +
+                   $"- 声質: {VoiceStyleDirection(voiceStyle)}\n" +
+                   $"- 個体差: {VoiceVariantDirection(voiceVariant)}\n" +
+                   "- この話者特性を全台詞で一貫させる。実在人物の声真似はしない。\n" +
+                   "【競合時】\n" +
+                   "- それ以前の自由記述と矛盾する場合は、この音声アイデンティティと話者特性を必ず優先する。";
+        }
+
+        public void CycleVoiceStyle()
+        {
+            string normalized = NormalizeVoiceStyle(voiceStyle) ?? StyleHeroic;
+            int index = System.Array.IndexOf(VoiceStyleOrder, normalized);
+            voiceStyle = VoiceStyleOrder[(index + 1) % VoiceStyleOrder.Length];
+        }
+
+        public static string GetVoiceStyleLabel(string style)
+        {
+            return NormalizeVoiceStyle(style) switch
+            {
+                StyleFierce => "豪胆",
+                StyleCool => "冷静",
+                StyleMysterious => "神秘",
+                StyleCheerful => "快活",
+                StyleElegant => "優雅",
+                StyleEccentric => "奇抜",
+                StyleOminous => "威圧",
+                _ => "勇壮",
+            };
         }
 
         // AIの推測より、ユーザーが特徴欄で明示した本人の性別を優先する。
@@ -230,6 +288,99 @@ namespace PromptFighters.Battle.Skills
                 case "high": case "高": case "高い": case "高音": return "high";
                 default: return null;
             }
+        }
+
+        public static string NormalizeVoiceStyle(string value)
+        {
+            switch (value?.Trim().ToLowerInvariant())
+            {
+                case StyleHeroic: case "brave": case "勇壮": case "勇敢": return StyleHeroic;
+                case StyleFierce: case "powerful": case "wild": case "豪胆": case "荒々しい": return StyleFierce;
+                case StyleCool: case "stoic": case "calm": case "冷静": case "クール": return StyleCool;
+                case StyleMysterious: case "mystic": case "ethereal": case "神秘": case "神秘的": return StyleMysterious;
+                case StyleCheerful: case "bright": case "energetic": case "快活": case "陽気": return StyleCheerful;
+                case StyleElegant: case "noble": case "gentle": case "優雅": case "高貴": return StyleElegant;
+                case StyleEccentric: case "quirky": case "trickster": case "奇抜": case "風変わり": return StyleEccentric;
+                case StyleOminous: case "intimidating": case "dark": case "威圧": case "不気味": return StyleOminous;
+                default: return null;
+            }
+        }
+
+        static string InferLegacyPresetStyle(string value)
+        {
+            switch (value?.Trim().ToLowerInvariant())
+            {
+                case "ash": case "onyx": return StyleFierce;
+                case "echo": case "sage": return StyleCool;
+                case "ballad": case "fable": return StyleMysterious;
+                case "coral": case "nova": case "shimmer": return StyleCheerful;
+                case "verse": return StyleHeroic;
+                default: return null;
+            }
+        }
+
+        static string ChooseStableVoiceStyle(CharacterData owner)
+        {
+            uint hash = StableVoiceHash(owner, "style");
+            return VoiceStyleOrder[(int)(hash % (uint)VoiceStyleOrder.Length)];
+        }
+
+        static uint StableVoiceHash(CharacterData owner, string suffix)
+        {
+            string source = (owner?.characterName ?? "") + "|" + (owner?.inputFeatures ?? "") + "|" +
+                            (owner?.visualDescription ?? "") + "|" + (suffix ?? "");
+            unchecked
+            {
+                uint hash = 2166136261u;
+                for (int i = 0; i < source.Length; i++)
+                {
+                    hash ^= source[i];
+                    hash *= 16777619u;
+                }
+                return hash;
+            }
+        }
+
+        static string VoiceStyleDirection(string style)
+        {
+            return NormalizeVoiceStyle(style) switch
+            {
+                StyleFierce => "密度のある荒々しい響き。語頭を鋭く立て、短い台詞へ爆発力と獣のような気迫を込める。喉は潰さない。",
+                StyleCool => "熱を内側へ抑えた硬質で端正な響き。無駄な揺れを抑え、静かな緊張と決め所の鋭さを出す。",
+                StyleMysterious => "丸みとほのかな息を含む神秘的な響き。意味のある間と滑らかな抑揚で、超然とした余韻を残す。",
+                StyleCheerful => "前へよく抜ける明るい響き。軽快なテンポと弾む抑揚で、戦いを楽しむ生き生きした感情を出す。",
+                StyleElegant => "滑らかで磨かれた気品ある響き。明瞭な発音と優雅な間を保ち、力む瞬間も品格を失わない。",
+                StyleEccentric => "癖のある遊び心を持つ響き。予想外の間と抑揚の切り替えを使い、聞き取りやすさを保ったまま個性を際立たせる。",
+                StyleOminous => "陰影と圧のある重厚な響き。急がず言葉を置き、抑えた威圧から攻撃時だけ強烈な殺気を解放する。",
+                _ => "芯が通った開放的で勇壮な響き。明瞭な発音と大きな感情曲線で、覚悟と主人公らしい推進力を出す。",
+            };
+        }
+
+        static string VoiceVariantDirection(int variant)
+        {
+            int index = Mathf.Clamp(variant, 1, 64) - 1;
+            string resonance = (index % 4) switch
+            {
+                0 => "響きは厚く丸く",
+                1 => "響きは前方へ明瞭に抜き",
+                2 => "響きは乾いた硬質さを持たせ",
+                _ => "響きは柔らかく少量の息を混ぜ",
+            };
+            string articulation = ((index / 4) % 4) switch
+            {
+                0 => "子音を切れ味よく立てる",
+                1 => "母音を滑らかにつなぐ",
+                2 => "語尾を短く引き締める",
+                _ => "一語ごとの輪郭と余白を丁寧に作る",
+            };
+            string dynamics = ((index / 16) % 4) switch
+            {
+                0 => "静かな溜めから一気に解放する強弱",
+                1 => "芯の強さを保ちながら段階的に熱量を上げる強弱",
+                2 => "短い台詞の中でも大胆に振幅する強弱",
+                _ => "抑えた緊張を保ち、最後の要語だけ強く打つ強弱",
+            };
+            return $"{resonance}、{articulation}。{dynamics}を一貫した癖として使う。";
         }
 
         static string InferGender(string text)

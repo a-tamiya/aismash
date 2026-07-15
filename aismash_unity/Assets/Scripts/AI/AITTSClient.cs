@@ -12,6 +12,7 @@ namespace PromptFighters.AI
         public enum CharacterVoiceBackend
         {
             Realtime,
+            Realtime21,
             PremiumAudio,
             ExpressiveSpeech,
             HighDefinitionSpeech,
@@ -78,6 +79,76 @@ namespace PromptFighters.AI
             return runner.StartCoroutine(GenerateWavCoroutine(text, instructions, voice, backend, onSuccess, onError));
         }
 
+        // 保存用5台詞を1つのRealtimeセッションで生成し、同一人物の声色を保ったWAVセットとして返す。
+        public static Coroutine GenerateRealtimeWavSet(MonoBehaviour runner, string[] texts, string[] instructions,
+            string voice, string model, Action<int> onProgress, Action<byte[][]> onSuccess, Action<string> onError)
+        {
+            return runner.StartCoroutine(GenerateRealtimeWavSetCoroutine(
+                texts, instructions, voice, model, onProgress, onSuccess, onError));
+        }
+
+        static IEnumerator GenerateRealtimeWavSetCoroutine(string[] texts, string[] instructions,
+            string voice, string model, Action<int> onProgress, Action<byte[][]> onSuccess, Action<string> onError)
+        {
+            string key = AIImageClient.ApiKey;
+            if (!AIImageClient.IsConfiguredApiKey(key))
+            {
+                onError?.Invoke("APIキー未設定");
+                yield break;
+            }
+
+            string safeVoice = SanitizeCharacterVoice(voice);
+            string lastError = null;
+            for (int attempt = 1; attempt <= 2; attempt++)
+            {
+                AudioClip[] clips = null;
+                lastError = null;
+                byte[][] successfulWavs = null;
+                try
+                {
+                    yield return RealtimeAudioClient.SynthesizeBatch(texts, instructions, key,
+                        result => clips = result,
+                        onProgress,
+                        error => lastError = error,
+                        safeVoice,
+                        model);
+
+                    if (clips != null)
+                    {
+                        var wavs = new byte[clips.Length][];
+                        bool valid = clips.Length == texts.Length;
+                        if (valid)
+                        {
+                            for (int i = 0; i < clips.Length; i++)
+                            {
+                                wavs[i] = AudioClipToWav(clips[i]);
+                                if (!IsWav(wavs[i])) valid = false;
+                            }
+                        }
+                        if (valid) successfulWavs = wavs;
+                        else lastError = "Realtime音声セットのWAV変換または完全性検証に失敗";
+                    }
+                }
+                finally
+                {
+                    // nested IEnumeratorの再開境界で親が停止されても、受領済みclipを必ず破棄する。
+                    if (clips != null)
+                        for (int i = 0; i < clips.Length; i++)
+                            if (clips[i] != null) UnityEngine.Object.Destroy(clips[i]);
+                }
+                if (successfulWavs != null)
+                {
+                    onSuccess?.Invoke(successfulWavs);
+                    yield break;
+                }
+
+                if (attempt >= 2 || IsPermanentRealtimeError(lastError)) break;
+                yield return new WaitForSecondsRealtime(1.25f);
+            }
+
+            onError?.Invoke(lastError ?? "Realtime音声セット生成に失敗");
+        }
+
         static IEnumerator GenerateWavCoroutine(string text, string instructions, string voice,
             CharacterVoiceBackend backend, Action<byte[]> onSuccess, Action<string> onError)
         {
@@ -99,8 +170,11 @@ namespace PromptFighters.AI
             byte[] wavData = null;
             string lastError = null;
 
-            if (backend == CharacterVoiceBackend.Realtime)
+            if (backend == CharacterVoiceBackend.Realtime || backend == CharacterVoiceBackend.Realtime21)
             {
+                string realtimeModel = backend == CharacterVoiceBackend.Realtime21
+                    ? RealtimeAudioClient.RealtimeFallbackModel
+                    : RealtimeAudioClient.RealtimeModel;
                 AudioClip realtimeClip = null;
                 for (int attempt = 1; attempt <= 2 && realtimeClip == null; attempt++)
                 {
@@ -108,7 +182,8 @@ namespace PromptFighters.AI
                     yield return RealtimeAudioClient.Synthesize(text.Trim(), instructions, key,
                         clip => realtimeClip = clip,
                         error => lastError = error,
-                        safeVoice);
+                        safeVoice,
+                        realtimeModel);
                     if (realtimeClip == null && attempt < 2)
                         yield return new WaitForSecondsRealtime(1.25f);
                 }
@@ -142,7 +217,7 @@ namespace PromptFighters.AI
                           $"\"voice\":\"{safeVoice}\",\"instructions\":\"{safeInstructions}\"," +
                           $"\"response_format\":\"wav\"}}"
                         : $"{{\"model\":\"{(highDefinition ? HighDefinitionModel : Model)}\",\"input\":\"{safeText}\"," +
-                          $"\"voice\":\"{SanitizeLegacyVoice(safeVoice)}\"," +
+                          $"\"voice\":\"{safeVoice}\"," +
                           $"\"speed\":1.0,\"response_format\":\"wav\"}}";
                     for (int attempt = 1; attempt <= 2; attempt++)
                     {
@@ -193,9 +268,20 @@ namespace PromptFighters.AI
             {
                 AudioClip rtClip = null;
                 string rtErr = null;
-                yield return RealtimeAudioClient.Synthesize(text, instructions, key,
-                    c => rtClip = c, e => rtErr = e,
-                    realtimeVoice ?? RealtimeAudioClient.MaleVoice);
+                string[] realtimeModels =
+                {
+                    RealtimeAudioClient.RealtimeModel,
+                    RealtimeAudioClient.RealtimeFallbackModel,
+                };
+                for (int i = 0; i < realtimeModels.Length && rtClip == null; i++)
+                {
+                    rtErr = null;
+                    yield return RealtimeAudioClient.Synthesize(text, instructions, key,
+                        c => rtClip = c, e => rtErr = e,
+                        realtimeVoice ?? RealtimeAudioClient.MaleVoice,
+                        realtimeModels[i]);
+                    if (rtClip == null && IsPermanentRealtimeError(rtErr)) continue;
+                }
                 if (rtClip != null)
                 {
                     _realtimeTtsFailures = 0;
@@ -235,7 +321,7 @@ namespace PromptFighters.AI
             string standardBody =
                 $"{{\"model\":\"{Model}\"," +
                 $"\"input\":\"{safeText}\"," +
-                $"\"voice\":\"{SanitizeLegacyVoice(voice)}\"," +
+                $"\"voice\":\"{SanitizeCharacterVoice(voice)}\"," +
                 $"\"speed\":{clampedSpeed.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}," +
                 $"\"response_format\":\"wav\"}}";
 
@@ -301,16 +387,21 @@ namespace PromptFighters.AI
         // クリップを再生し、再生完了まで実時間で待って破棄する（発話中フラグも更新）。
         static IEnumerator PlayClip(AudioClip clip, AudioSource audioSource, float volume)
         {
-            if (audioSource != null)
+            try
             {
-                _speechEndTime = Mathf.Max(_speechEndTime, Time.unscaledTime + clip.length);
-                audioSource.PlayOneShot(clip, volume);
-                // 音声はスローモーション中も実時間で流れるため、待ちも実時間で行う
-                yield return new WaitForSecondsRealtime(clip.length);
+                if (audioSource != null)
+                {
+                    _speechEndTime = Mathf.Max(_speechEndTime, Time.unscaledTime + clip.length);
+                    audioSource.PlayOneShot(clip, volume);
+                    // 音声はスローモーション中も実時間で流れるため、待ちも実時間で行う
+                    yield return new WaitForSecondsRealtime(clip.length);
+                }
             }
-
-            // AudioClip.Createで確保したネイティブリソースはGC対象外。再生完了後に明示破棄してリークを防ぐ。
-            UnityEngine.Object.Destroy(clip);
+            finally
+            {
+                // StopCoroutineや画面破棄でもAudioClip.Create由来のネイティブ資源を必ず解放する。
+                if (clip != null) UnityEngine.Object.Destroy(clip);
+            }
         }
 
         static IEnumerator RequestPremiumWav(string text, string instructions, string voice, string key,
@@ -423,29 +514,25 @@ namespace PromptFighters.AI
             }
         }
 
-        // tts-1はmarin/cedar等の新しい声を受け付けないため、性別を維持した旧声へ変換する。
-        static string SanitizeLegacyVoice(string voice)
-        {
-            switch (voice?.Trim().ToLowerInvariant())
-            {
-                case "cedar": return "ash";
-                case "marin": return "shimmer";
-                case "ballad": case "verse": return "alloy";
-                case "alloy": case "ash": case "coral": case "echo": case "fable":
-                case "onyx": case "nova": case "sage": case "shimmer":
-                    return voice.Trim().ToLowerInvariant();
-                default: return "alloy";
-            }
-        }
-
         static string EscapeJson(string value) => (value ?? "")
-            .Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", " ").Replace("\n", " ");
+            .Replace("\\", "\\\\").Replace("\"", "\\\"")
+            .Replace("\r\n", "\\n").Replace("\n", "\\n").Replace("\r", "\\n");
 
         static bool IsTransient(UnityWebRequest req)
         {
             if (req == null) return true;
             long code = req.responseCode;
             return code == 0 || code == 408 || code == 409 || code == 425 || code == 429 || code >= 500;
+        }
+
+        static bool IsPermanentRealtimeError(string error)
+        {
+            if (string.IsNullOrWhiteSpace(error)) return false;
+            string value = error.ToLowerInvariant();
+            return value.Contains("not found") || value.Contains("does not exist") ||
+                   value.Contains("permission") || value.Contains("not have access") ||
+                   value.Contains("unsupported") || value.Contains("invalid api key") ||
+                   value.Contains("model_not_found");
         }
 
         static float RetryDelay(UnityWebRequest req, int attempt)
@@ -602,6 +689,7 @@ namespace PromptFighters.AI
         static readonly AITTSClient.CharacterVoiceBackend[] BackendOrder =
         {
             AITTSClient.CharacterVoiceBackend.Realtime,
+            AITTSClient.CharacterVoiceBackend.Realtime21,
             AITTSClient.CharacterVoiceBackend.PremiumAudio,
             AITTSClient.CharacterVoiceBackend.ExpressiveSpeech,
             AITTSClient.CharacterVoiceBackend.HighDefinitionSpeech,
@@ -610,14 +698,25 @@ namespace PromptFighters.AI
         static readonly object ActiveWorkDirectoryLock = new object();
         static readonly System.Collections.Generic.HashSet<string> ActiveWorkDirectories =
             new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        public const string VoiceSwapMarkerFilename = "voices_swap_pending";
         const float PerVoiceRequestTimeoutSeconds = 130f;
-        const float VoiceSetTimeoutSeconds = 480f;
-        const float AtomicGenerationWatchdogSeconds = 500f;
+        // 1接続は8秒+設定8秒+5台詞×30秒。2試行を丸ごと行える予算を各Realtimeモデルへ渡す。
+        const float RealtimeSetRequestTimeoutSeconds = 340f;
+        // 最後のtts-1（5件×最大約90秒）を必ず試せる時間を、上位モデルより先に予約する。
+        const float FinalStandardReserveSeconds = 480f;
+        const float VoiceSetTimeoutSeconds = 1200f;
+        const float AtomicGenerationWatchdogSeconds = 1220f;
 
         public static bool IsActiveWorkDirectory(string path)
         {
             if (string.IsNullOrEmpty(path)) return false;
             lock (ActiveWorkDirectoryLock) return ActiveWorkDirectories.Contains(Path.GetFullPath(path));
+        }
+
+        public static string GetVoiceSwapMarkerPath(string targetDir)
+        {
+            string parentDir = string.IsNullOrEmpty(targetDir) ? null : Path.GetDirectoryName(targetDir);
+            return string.IsNullOrEmpty(parentDir) ? null : Path.Combine(parentDir, VoiceSwapMarkerFilename);
         }
 
         static void SetWorkDirectoryActive(string path, bool active)
@@ -644,14 +743,17 @@ namespace PromptFighters.AI
         public static Coroutine RegenerateSetAtomically(MonoBehaviour runner,
             PromptFighters.Battle.Skills.CharacterData data,
             Action<string> onProgress,
+            Func<bool> commitMetadata,
             Action<bool, int, string> onComplete)
         {
-            return runner.StartCoroutine(RegenerateSetAtomicallyCoroutine(runner, data, onProgress, onComplete));
+            return runner.StartCoroutine(RegenerateSetAtomicallyCoroutine(
+                runner, data, onProgress, commitMetadata, onComplete));
         }
 
         static IEnumerator RegenerateSetAtomicallyCoroutine(MonoBehaviour runner,
             PromptFighters.Battle.Skills.CharacterData data,
             Action<string> onProgress,
+            Func<bool> commitMetadata,
             Action<bool, int, string> onComplete)
         {
             string targetDir = data?.voiceDir;
@@ -665,8 +767,11 @@ namespace PromptFighters.AI
             data.voiceProfile ??= new PromptFighters.Battle.Skills.CharacterVoiceProfile();
             bool oldGenerated = data.voiceProfile.generated;
             int oldQualityVersion = data.voiceProfile.qualityVersion;
+            string oldGenerationId = data.voiceProfile.generationId;
+            string newGenerationId = Guid.NewGuid().ToString("N");
             string tempDir = Path.Combine(parentDir, "voices_pending_" + Guid.NewGuid().ToString("N"));
             string backupDir = Path.Combine(parentDir, "voices_backup_" + Guid.NewGuid().ToString("N"));
+            string swapMarkerPath = GetVoiceSwapMarkerPath(targetDir);
 
             int generatedCount = 0;
             bool generationDone = false;
@@ -710,36 +815,92 @@ namespace PromptFighters.AI
             }
 
             bool movedOld = false;
+            bool movedNew = false;
+            bool transactionCommitted = false;
             try
             {
+                WriteVoiceSwapMarker(swapMarkerPath, newGenerationId);
                 if (Directory.Exists(targetDir))
                 {
                     Directory.Move(targetDir, backupDir);
                     movedOld = true;
                 }
                 Directory.Move(tempDir, targetDir);
+                movedNew = true;
 
-                // 新セットは既に有効。バックアップ削除だけ失敗しても再生成成功として扱う。
-                if (movedOld)
-                    TryDeleteDirectory(backupDir);
                 data.voiceProfile.generated = true;
                 data.voiceProfile.qualityVersion = PromptFighters.Battle.Skills.CharacterVoiceProfile.CurrentQualityVersion;
-                onComplete?.Invoke(true, generatedCount, null);
+                data.voiceProfile.generationId = newGenerationId;
+                // JSONも同じトランザクションとして確定する。失敗時は下のcatchで旧WAVと旧メタデータを戻す。
+                if (commitMetadata != null && !commitMetadata())
+                    throw new IOException("キャラクター設定JSONを保存できませんでした");
+
+                // JSONに新世代IDが確定した後でmarkerを消す。ここで終了してbackupが残っても、
+                // 次回ロードはJSONとmarkerの世代一致から新セットを正しく選べる。
+                TryDeleteFile(swapMarkerPath, "確定済みボイス差し替えマーカー");
+                // 音声とJSONがともに確定してから旧セットを破棄する。
+                if (movedOld)
+                    TryDeleteDirectory(backupDir);
+                transactionCommitted = true;
             }
             catch (Exception e)
             {
+                bool newSetRemoved = !movedNew || !Directory.Exists(targetDir);
+                if (movedNew && Directory.Exists(targetDir))
+                {
+                    try
+                    {
+                        // tempDirはtargetへ移動済みで空いているため、失敗した新セットの退避先として再利用する。
+                        Directory.Move(targetDir, tempDir);
+                        newSetRemoved = true;
+                    }
+                    catch (Exception removeNewError)
+                    {
+                        Debug.LogError("[CharacterVoice] 失敗した新ボイスの退避失敗: " + removeNewError.Message);
+                    }
+                }
+                bool oldSetRestored = !movedOld;
                 if (!Directory.Exists(targetDir) && movedOld && Directory.Exists(backupDir))
                 {
-                    try { Directory.Move(backupDir, targetDir); }
+                    try
+                    {
+                        Directory.Move(backupDir, targetDir);
+                        oldSetRestored = true;
+                    }
                     catch (Exception restoreError)
                     {
                         Debug.LogError("[CharacterVoice] 旧ボイス復元失敗: " + restoreError.Message);
                     }
                 }
                 TryDeleteDirectory(tempDir);
-                data.voiceProfile.generated = oldGenerated;
-                data.voiceProfile.qualityVersion = oldQualityVersion;
+                bool audioStateRestored = movedOld ? oldSetRestored : newSetRemoved;
+                data.voiceProfile.generated = audioStateRestored && oldGenerated;
+                data.voiceProfile.qualityVersion = audioStateRestored ? oldQualityVersion : 0;
+                data.voiceProfile.generationId = audioStateRestored ? oldGenerationId : null;
+                // 新メタデータの書込途中で失敗した場合にも、可能な限り旧状態を再保存する。
+                try
+                {
+                    if (commitMetadata != null && !commitMetadata())
+                        Debug.LogError("[CharacterVoice] 旧ボイス設定JSONの復元保存に失敗しました");
+                }
+                catch (Exception restoreMetadataError)
+                {
+                    Debug.LogError("[CharacterVoice] 旧ボイス設定JSONの復元保存で例外: " + restoreMetadataError.Message);
+                }
+                if (audioStateRestored)
+                    TryDeleteFile(swapMarkerPath, "rollback済みボイス差し替えマーカー");
                 onComplete?.Invoke(false, generatedCount, "ボイス差し替え失敗: " + e.Message);
+                yield break;
+            }
+
+            // トランザクション確定後のUI通知はrollback対象にしない。
+            if (transactionCommitted)
+            {
+                try { onComplete?.Invoke(true, generatedCount, null); }
+                catch (Exception callbackError)
+                {
+                    Debug.LogError("[CharacterVoice] 完了通知で例外: " + callbackError.Message);
+                }
             }
         }
 
@@ -748,6 +909,24 @@ namespace PromptFighters.AI
             if (string.IsNullOrEmpty(path) || !Directory.Exists(path)) return;
             try { Directory.Delete(path, true); }
             catch (Exception e) { Debug.LogWarning("[CharacterVoice] 一時フォルダ削除失敗: " + e.Message); }
+        }
+
+        static void WriteVoiceSwapMarker(string path, string generationId)
+        {
+            if (string.IsNullOrEmpty(path) || string.IsNullOrEmpty(generationId))
+                throw new IOException("ボイス差し替えマーカーの保存先がありません");
+            byte[] bytes = Encoding.UTF8.GetBytes(generationId);
+            using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None,
+                4096, FileOptions.WriteThrough);
+            stream.Write(bytes, 0, bytes.Length);
+            stream.Flush(true);
+        }
+
+        static void TryDeleteFile(string path, string label)
+        {
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+            try { File.Delete(path); }
+            catch (Exception e) { Debug.LogWarning($"[CharacterVoice] {label}削除失敗: {e.Message}"); }
         }
 
         static IEnumerator GenerateSetCoroutine(MonoBehaviour runner,
@@ -780,20 +959,132 @@ namespace PromptFighters.AI
             string[] lines = new string[5];
             lines[0] = data.voiceProfile.introLine;
             for (int i = 0; i < 4; i++) lines[i + 1] = data.voiceProfile.skillLines[i];
+            var actingDirections = new string[lines.Length];
+            for (int i = 0; i < actingDirections.Length; i++)
+            {
+                string momentDirection = i == 0
+                    ? "登場して相手と観客に存在感を示す瞬間。自信と覚悟を込め、台詞の後に余韻を残す。"
+                    : i == 4
+                        ? "必殺技を解き放つ最高潮の瞬間。腹から声を出し、全力の気迫と決着をつける覚悟を込める。"
+                        : "攻撃を繰り出す一瞬。戦闘中の呼吸と勢いを感じさせ、短く鋭く感情を爆発させる。";
+                // 自由記述より後ろに構造化された話者特性を置き、全台詞で同じ人物を固定する。
+                actingDirections[i] = baseInstructions + " " + momentDirection + " " + identityInstruction;
+            }
 
             int succeeded = 0;
             float startedAt = Time.realtimeSinceStartup;
+            float overallDeadline = startedAt + VoiceSetTimeoutSeconds;
+            float nonFinalDeadline = overallDeadline - FinalStandardReserveSeconds;
             bool timedOut = false;
             foreach (AITTSClient.CharacterVoiceBackend backend in BackendOrder)
             {
+                bool finalStandardBackend = backend == AITTSClient.CharacterVoiceBackend.StandardSpeech;
+                if (!finalStandardBackend && Time.realtimeSinceStartup >= nonFinalDeadline)
+                {
+                    Debug.LogWarning($"[CharacterVoice] 最終標準音声の再試行時間を確保するため{BackendLabel(backend)}をスキップします");
+                    continue;
+                }
+
                 ClearVoiceFiles(outputDir);
                 int backendSucceeded = 0;
-                for (int i = 0; i < lines.Length; i++)
+                bool realtimeBackend = backend == AITTSClient.CharacterVoiceBackend.Realtime ||
+                                       backend == AITTSClient.CharacterVoiceBackend.Realtime21;
+                if (realtimeBackend)
                 {
-                    if (Time.realtimeSinceStartup - startedAt > VoiceSetTimeoutSeconds)
+                    byte[][] realtimeWavs = null;
+                    string realtimeError = null;
+                    bool realtimeDone = false;
+                    Coroutine realtimeCoroutine = null;
+                    string realtimeModel = backend == AITTSClient.CharacterVoiceBackend.Realtime21
+                        ? RealtimeAudioClient.RealtimeFallbackModel
+                        : RealtimeAudioClient.RealtimeModel;
+                    try
+                    {
+                        realtimeCoroutine = AITTSClient.GenerateRealtimeWavSet(runner, lines, actingDirections,
+                            voicePreset, realtimeModel,
+                            step =>
+                            {
+                                if (step >= 0 && step < lines.Length)
+                                    onProgress?.Invoke($"{BackendLabel(backend)}でボイス作成中 {step + 1}/{lines.Length}: {lines[step]}");
+                            },
+                            wavs => { realtimeWavs = wavs; realtimeDone = true; },
+                            err => { realtimeError = err; realtimeDone = true; });
+                    }
+                    catch (Exception e)
+                    {
+                        realtimeError = "Realtime音声セット開始失敗: " + e.Message;
+                        realtimeDone = true;
+                    }
+
+                    float realtimeDeadline = Mathf.Min(
+                        Time.realtimeSinceStartup + RealtimeSetRequestTimeoutSeconds,
+                        nonFinalDeadline);
+                    try
+                    {
+                        while (!realtimeDone && Time.realtimeSinceStartup < realtimeDeadline)
+                            yield return null;
+                    }
+                    finally
+                    {
+                        if (!realtimeDone && realtimeCoroutine != null)
+                            runner.StopCoroutine(realtimeCoroutine);
+                    }
+                    if (!realtimeDone)
+                        realtimeError = "Realtime音声セットが安全期限を超えました";
+
+                    if (realtimeWavs != null && realtimeWavs.Length == Filenames.Length)
+                    {
+                        for (int i = 0; i < realtimeWavs.Length; i++)
+                        {
+                            try
+                            {
+                                WriteVoiceFileAtomically(Path.Combine(outputDir, Filenames[i] + ".wav"), realtimeWavs[i]);
+                                backendSucceeded++;
+                            }
+                            catch (Exception e)
+                            {
+                                realtimeError = $"{Filenames[i]}保存失敗: {e.Message}";
+                                break;
+                            }
+                        }
+                    }
+                    if (backendSucceeded != Filenames.Length)
+                        Debug.LogWarning($"[CharacterVoice] {BackendLabel(backend)}のセット生成失敗: {realtimeError}");
+                }
+
+                if (realtimeBackend)
+                {
+                    if (backendSucceeded == Filenames.Length)
+                    {
+                        succeeded = backendSucceeded;
+                        break;
+                    }
+                    ClearVoiceFiles(outputDir);
+                    if (Time.realtimeSinceStartup >= overallDeadline)
                     {
                         timedOut = true;
-                        Debug.LogWarning("[CharacterVoice] ボイス生成が8分を超えたため中止します");
+                        break;
+                    }
+                    Debug.LogWarning($"[CharacterVoice] {BackendLabel(backend)}では5件を統一できなかったため、次の音声モデルで全件を作り直します");
+                    continue;
+                }
+
+                bool backendBudgetExhausted = false;
+                float backendDeadline = finalStandardBackend ? overallDeadline : nonFinalDeadline;
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    if (Time.realtimeSinceStartup >= backendDeadline)
+                    {
+                        backendBudgetExhausted = true;
+                        if (finalStandardBackend)
+                        {
+                            timedOut = true;
+                            Debug.LogWarning("[CharacterVoice] ボイス生成が20分の安全期限を超えたため中止します");
+                        }
+                        else
+                        {
+                            Debug.LogWarning($"[CharacterVoice] 最終標準音声の再試行時間を確保するため{BackendLabel(backend)}を中止します");
+                        }
                         break;
                     }
 
@@ -801,17 +1092,10 @@ namespace PromptFighters.AI
                     byte[] wav = null;
                     string error = null;
                     bool done = false;
-                    string momentDirection = i == 0
-                        ? "登場して相手と観客に存在感を示す瞬間。自信と覚悟を込め、台詞の後に余韻を残す。"
-                        : i == 4
-                            ? "必殺技を解き放つ最高潮の瞬間。腹から声を出し、全力の気迫と決着をつける覚悟を込める。"
-                            : "攻撃を繰り出す一瞬。戦闘中の呼吸と勢いを感じさせ、短く鋭く感情を爆発させる。";
-                    // 自由記述に旧性別が残っていても、最後の最優先指示で現在の構造化属性を確定する。
-                    string actingDirection = baseInstructions + " " + momentDirection + " " + identityInstruction;
                     Coroutine requestCoroutine = null;
                     try
                     {
-                        requestCoroutine = AITTSClient.GenerateWav(runner, lines[i], actingDirection, voicePreset, backend,
+                        requestCoroutine = AITTSClient.GenerateWav(runner, lines[i], actingDirections[i], voicePreset, backend,
                             bytes => { wav = bytes; done = true; },
                             err => { error = err; done = true; });
                     }
@@ -823,7 +1107,7 @@ namespace PromptFighters.AI
 
                     float requestDeadline = Mathf.Min(
                         Time.realtimeSinceStartup + PerVoiceRequestTimeoutSeconds,
-                        startedAt + VoiceSetTimeoutSeconds);
+                        backendDeadline);
                     try
                     {
                         while (!done && Time.realtimeSinceStartup < requestDeadline)
@@ -839,6 +1123,11 @@ namespace PromptFighters.AI
                     {
                         error = "音声リクエストが安全期限を超えました";
                         done = true;
+                        if (Time.realtimeSinceStartup >= backendDeadline)
+                        {
+                            backendBudgetExhausted = true;
+                            if (finalStandardBackend) timedOut = true;
+                        }
                     }
 
                     if (wav == null)
@@ -867,12 +1156,16 @@ namespace PromptFighters.AI
 
                 ClearVoiceFiles(outputDir);
                 if (timedOut) break;
+                if (backendBudgetExhausted) continue;
                 Debug.LogWarning($"[CharacterVoice] {BackendLabel(backend)}では5件を統一できなかったため、次の音声モデルで全件を作り直します");
             }
 
             data.voiceProfile.generated = succeeded == Filenames.Length;
             if (data.voiceProfile.generated)
+            {
                 data.voiceProfile.qualityVersion = PromptFighters.Battle.Skills.CharacterVoiceProfile.CurrentQualityVersion;
+                data.voiceProfile.generationId = Guid.NewGuid().ToString("N");
+            }
             onComplete?.Invoke(succeeded);
         }
 
@@ -903,7 +1196,8 @@ namespace PromptFighters.AI
 
         static string BackendLabel(AITTSClient.CharacterVoiceBackend backend) => backend switch
         {
-            AITTSClient.CharacterVoiceBackend.Realtime => "Realtime高品質音声",
+            AITTSClient.CharacterVoiceBackend.Realtime => "Realtime 1.5最高品質音声",
+            AITTSClient.CharacterVoiceBackend.Realtime21 => "Realtime 2.1高品質音声",
             AITTSClient.CharacterVoiceBackend.PremiumAudio => "高品質音声",
             AITTSClient.CharacterVoiceBackend.ExpressiveSpeech => "表現付き音声",
             AITTSClient.CharacterVoiceBackend.HighDefinitionSpeech => "高精細標準音声",

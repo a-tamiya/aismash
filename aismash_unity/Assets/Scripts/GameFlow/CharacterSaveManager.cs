@@ -104,7 +104,7 @@ namespace PromptFighters.GameFlow
                 data.spriteDir = Path.Combine(SaveDir, id, "sprites");
                 data.voiceDir = Path.Combine(SaveDir, id, "voices");
                 string json = Serialize(data);
-                File.WriteAllText(path, json, Encoding.UTF8);
+                WriteTextAtomically(path, json);
                 PresetCharacterLoader.ClearCache();
                 Debug.Log($"[Save] 保存完了: {path}");
                 return true;
@@ -113,6 +113,31 @@ namespace PromptFighters.GameFlow
             {
                 Debug.LogWarning($"[Save] 保存失敗: {e.Message}");
                 return false;
+            }
+        }
+
+        static void WriteTextAtomically(string path, string contents)
+        {
+            string tempPath = path + ".tmp";
+            string backupPath = path + ".bak";
+            if (File.Exists(tempPath)) File.Delete(tempPath);
+            File.WriteAllText(tempPath, contents, Encoding.UTF8);
+            try
+            {
+                if (File.Exists(path))
+                {
+                    File.Replace(tempPath, path, backupPath, true);
+                    try { if (File.Exists(backupPath)) File.Delete(backupPath); }
+                    catch (Exception e) { Debug.LogWarning("[Save] JSONバックアップ削除失敗: " + e.Message); }
+                }
+                else
+                {
+                    File.Move(tempPath, path);
+                }
+            }
+            finally
+            {
+                if (File.Exists(tempPath)) File.Delete(tempPath);
             }
         }
 
@@ -230,7 +255,7 @@ namespace PromptFighters.GameFlow
                     string id        = Path.GetFileNameWithoutExtension(path);
                     string spriteDir = Path.Combine(SaveDir, id, "sprites");
                     string voiceDir  = Path.Combine(SaveDir, id, "voices");
-                    RecoverInterruptedVoiceSwap(voiceDir);
+                    RecoverInterruptedVoiceSwap(voiceDir, data.voiceProfile);
                     data.spriteDir   = spriteDir;
                     data.voiceDir    = voiceDir;
 
@@ -251,7 +276,7 @@ namespace PromptFighters.GameFlow
 
         // ボイス一括差し替え中にアプリが終了しても、次回ロード時に完全な旧セットまたは
         // 完全な新セットを復旧する。5件未満のディレクトリは採用しない。
-        static void RecoverInterruptedVoiceSwap(string targetDir)
+        static void RecoverInterruptedVoiceSwap(string targetDir, CharacterVoiceProfile persistedProfile)
         {
             try
             {
@@ -260,8 +285,44 @@ namespace PromptFighters.GameFlow
 
                 string[] backups = Directory.GetDirectories(parentDir, "voices_backup_*");
                 string[] pending = Directory.GetDirectories(parentDir, "voices_pending_*");
+                string swapMarkerPath = CharacterVoiceGenerator.GetVoiceSwapMarkerPath(targetDir);
+                bool hasSwapMarker = !string.IsNullOrEmpty(swapMarkerPath) && File.Exists(swapMarkerPath);
+                string pendingGenerationId = hasSwapMarker ? ReadVoiceSwapMarker(swapMarkerPath) : null;
 
                 bool targetComplete = HasCompleteVoiceSet(targetDir);
+                bool profileIsCurrent = persistedProfile != null && persistedProfile.generated &&
+                    persistedProfile.qualityVersion >= CharacterVoiceProfile.CurrentQualityVersion;
+                // markerが残る場合はq3フラグだけでなく今回の世代ID一致まで確認する。
+                // これによりq3→q3再生成でも、JSON保存前と保存後を区別できる。
+                bool metadataCommitted = hasSwapMarker
+                    ? profileIsCurrent && !string.IsNullOrEmpty(pendingGenerationId) &&
+                      string.Equals(persistedProfile.generationId, pendingGenerationId, StringComparison.Ordinal)
+                    : profileIsCurrent;
+
+                // 新セットをtargetへ移動した直後、q3 JSONの原子的保存より前に終了すると、
+                // targetと完全な旧backupが両方残る。JSONが未確定なら旧セットを優先して戻す。
+                if (targetComplete && !metadataCommitted)
+                {
+                    string oldSet = NewestCompleteDirectory(backups);
+                    if (!string.IsNullOrEmpty(oldSet))
+                    {
+                        string displaced = Path.Combine(parentDir, "voices_incomplete_" + Guid.NewGuid().ToString("N"));
+                        Directory.Move(targetDir, displaced);
+                        try
+                        {
+                            Directory.Move(oldSet, targetDir);
+                            Debug.LogWarning("[Save] JSON確定前に中断されたボイス差し替えから旧セットを復旧しました: " + targetDir);
+                        }
+                        catch
+                        {
+                            if (!Directory.Exists(targetDir) && Directory.Exists(displaced))
+                                Directory.Move(displaced, targetDir);
+                            throw;
+                        }
+                    }
+                }
+
+                targetComplete = HasCompleteVoiceSet(targetDir);
                 if (!targetComplete)
                 {
                     string candidate = NewestCompleteDirectory(backups) ?? NewestCompleteDirectory(pending);
@@ -294,11 +355,27 @@ namespace PromptFighters.GameFlow
                 CleanupVoiceWorkDirectories(Directory.GetDirectories(parentDir, "voices_backup_*"), targetDir);
                 CleanupVoiceWorkDirectories(Directory.GetDirectories(parentDir, "voices_pending_*"), targetDir);
                 CleanupVoiceWorkDirectories(Directory.GetDirectories(parentDir, "voices_incomplete_*"), targetDir);
+                if (hasSwapMarker)
+                {
+                    try { File.Delete(swapMarkerPath); }
+                    catch (Exception e) { Debug.LogWarning("[Save] ボイス差し替えマーカー削除失敗: " + e.Message); }
+                }
             }
             catch (Exception e)
             {
                 // 復旧に失敗してもキャラ本体のロードは継続し、残ったbackupを次回再試行に残す。
                 Debug.LogWarning("[Save] ボイス差し替え復旧失敗: " + e.Message);
+            }
+        }
+
+        static string ReadVoiceSwapMarker(string path)
+        {
+            try { return File.ReadAllText(path, Encoding.UTF8).Trim(); }
+            catch (Exception e)
+            {
+                // 読めないmarkerは未確定扱いにして、完全なbackupがあれば安全側の旧セットへ戻す。
+                Debug.LogWarning("[Save] ボイス差し替えマーカー読込失敗: " + e.Message);
+                return null;
             }
         }
 
@@ -484,7 +561,10 @@ namespace PromptFighters.GameFlow
             sb.AppendLine($"    \"voice_gender\": {Q(d.voiceProfile.voiceGender)},");
             sb.AppendLine($"    \"voice_age\": {Q(d.voiceProfile.voiceAge)},");
             sb.AppendLine($"    \"voice_pitch\": {Q(d.voiceProfile.voicePitch)},");
+            sb.AppendLine($"    \"voice_style\": {Q(d.voiceProfile.voiceStyle)},");
+            sb.AppendLine($"    \"voice_variant\": {d.voiceProfile.voiceVariant},");
             sb.AppendLine($"    \"quality_version\": {d.voiceProfile.qualityVersion},");
+            sb.AppendLine($"    \"voice_generation_id\": {Q(d.voiceProfile.generationId)},");
             sb.AppendLine($"    \"instructions\": {Q(d.voiceProfile.instructions)},");
             sb.AppendLine($"    \"intro_line\": {Q(d.voiceProfile.introLine)},");
             sb.AppendLine($"    \"skill_lines\": [{Q(d.voiceProfile.skillLines[0])}, {Q(d.voiceProfile.skillLines[1])}, {Q(d.voiceProfile.skillLines[2])}, {Q(d.voiceProfile.skillLines[3])}],");

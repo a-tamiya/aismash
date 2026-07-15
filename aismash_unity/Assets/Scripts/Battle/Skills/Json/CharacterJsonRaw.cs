@@ -31,7 +31,10 @@ namespace PromptFighters.Battle.Skills.Json
         public string voice_gender;
         public string voice_age;
         public string voice_pitch;
+        public string voice_style;
+        public int voice_variant;
         public int quality_version;
+        public string voice_generation_id;
         public string instructions;
         public string intro_line;
         public string[] skill_lines;

@@ -194,6 +194,11 @@ namespace PromptFighters.GameFlow
 
         void StartTutorial()
         {
+            if (_voiceRegenerationCoroutine != null)
+            {
+                Debug.LogWarning("[CharacterVoice] ボイス再生成の完了後にチュートリアルを開始してください。");
+                return;
+            }
             var bm = BattleManager.Instance;
             if (bm == null || _presets == null || _presets.Count == 0) return;
             if (_tutorialActive) return;
