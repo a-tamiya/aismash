@@ -9,8 +9,11 @@ namespace PromptFighters.AI
 {
     public static class AITTSClient
     {
-        const string Endpoint = "https://api.openai.com/v1/audio/speech";
+        const string SpeechEndpoint = "https://api.openai.com/v1/audio/speech";
+        const string ChatEndpoint   = "https://api.openai.com/v1/chat/completions";
         const string Model    = "tts-1";
+        // Chat Completionsの高品質音声出力モデル。感情・間・息遣いを含む演技が必要なキャラボイスに使う。
+        const string PremiumAudioModel = "gpt-audio-1.5";
         // 声の演技指示（instructions）に対応した表現力の高いTTSモデル。実況などの感情表現に使う。
         const string ExpressiveModel = "gpt-4o-mini-tts";
         public const string DefaultVoice    = "nova";
@@ -39,6 +42,7 @@ namespace PromptFighters.AI
         // 表現付きモデルがAPIキーの権限で使えない場合、初回失敗を記憶して以後は最初からtts-1を使う
         // （毎回失敗リクエストを挟む無駄なレイテンシとログを避ける）。
         static bool _expressiveUnavailable;
+        static bool _premiumAudioUnavailable;
 
         // Realtime API音声合成（最も人間らしい・演技指示対応）の連続失敗回数。
         // 2回連続で失敗したらこのセッションでは使わない（一時的な通信エラー1回では諦めない）。
@@ -83,6 +87,17 @@ namespace PromptFighters.AI
             string safeText = EscapeJson(text.Trim());
             string safeInstructions = EscapeJson(instructions ?? "");
             string safeVoice = SanitizeCharacterVoice(voice);
+            byte[] wavData = null;
+            string lastError = null;
+
+            // まず高品質なネイティブ音声モデルを使い、プロ声優として台詞を演じさせる。
+            if (!_premiumAudioUnavailable)
+            {
+                yield return RequestPremiumWav(text.Trim(), instructions, safeVoice, key,
+                    bytes => wavData = bytes,
+                    error => lastError = error);
+            }
+
             string expressiveBody =
                 $"{{\"model\":\"{ExpressiveModel}\"," +
                 $"\"input\":\"{safeText}\"," +
@@ -90,10 +105,8 @@ namespace PromptFighters.AI
                 $"\"instructions\":\"{safeInstructions}\"," +
                 $"\"response_format\":\"wav\"}}";
 
-            byte[] wavData = null;
-            string lastError = null;
             bool expressiveUnavailable = _expressiveUnavailable;
-            for (int attempt = 1; !expressiveUnavailable && attempt <= 2; attempt++)
+            for (int attempt = 1; !IsWav(wavData) && !expressiveUnavailable && attempt <= 2; attempt++)
             {
                 using var req = BuildRequest(expressiveBody, key);
                 req.timeout = 30;
@@ -184,6 +197,27 @@ namespace PromptFighters.AI
                     (_realtimeTtsFailures >= RealtimeTtsMaxFailures ? "（以後このセッションではHTTP TTSを使用）" : ""));
             }
 
+            // Realtimeが使えない場合も、高品質なgpt-audio音声を優先する。
+            if (!string.IsNullOrEmpty(instructions) && !_premiumAudioUnavailable)
+            {
+                byte[] premiumWav = null;
+                string premiumError = null;
+                yield return RequestPremiumWav(text, instructions, SanitizeVoice(voice), key,
+                    bytes => premiumWav = bytes,
+                    error => premiumError = error);
+                if (IsWav(premiumWav))
+                {
+                    AudioClip premiumClip = WavToAudioClip(premiumWav, "PremiumTTS");
+                    if (premiumClip != null)
+                    {
+                        yield return PlayClip(premiumClip, audioSource, volume);
+                        onComplete?.Invoke();
+                        yield break;
+                    }
+                }
+                Debug.LogWarning($"[TTS] {PremiumAudioModel}音声生成失敗（{premiumError}）。Speech APIへフォールバックします");
+            }
+
             string safeText = text
                 .Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", " ");
             float clampedSpeed = Mathf.Clamp(speed, 0.25f, 4f);
@@ -268,9 +302,80 @@ namespace PromptFighters.AI
             UnityEngine.Object.Destroy(clip);
         }
 
-        static UnityWebRequest BuildRequest(string body, string key)
+        static IEnumerator RequestPremiumWav(string text, string instructions, string voice, string key,
+            Action<byte[]> onSuccess, Action<string> onError)
         {
-            var req = new UnityWebRequest(Endpoint, "POST");
+            voice = SanitizePremiumVoice(voice);
+            string direction = string.IsNullOrWhiteSpace(instructions)
+                ? "自然な日本語で、キャラクター本人として感情を込めて演じる。"
+                : instructions.Trim();
+            string prompt =
+                "あなたは日本の対戦アクションゲームに出演するプロ声優です。" +
+                "次の台詞だけを一言一句そのまま発声してください。前置き、説明、相づち、言い直し、別の言葉は絶対に追加しません。" +
+                "棒読みを避け、感情の高まり、自然な間、息遣い、声の強弱を使い、実戦の瞬間として臨場感豊かに演じてください。" +
+                "\n演技指示: " + direction + "\n台詞: 「" + text.Trim() + "」";
+            string body =
+                $"{{\"model\":\"{PremiumAudioModel}\"," +
+                "\"modalities\":[\"text\",\"audio\"]," +
+                $"\"audio\":{{\"voice\":\"{EscapeJson(voice)}\",\"format\":\"wav\"}}," +
+                $"\"messages\":[{{\"role\":\"user\",\"content\":\"{EscapeJson(prompt)}\"}}]}}";
+
+            string lastError = null;
+            for (int attempt = 1; attempt <= 2; attempt++)
+            {
+                using var req = BuildRequest(body, key, ChatEndpoint);
+                req.timeout = 45;
+                yield return req.SendWebRequest();
+                if (req.result == UnityWebRequest.Result.Success)
+                {
+                    byte[] wav = ExtractPremiumWav(req.downloadHandler.text, out string parseError);
+                    if (IsWav(wav))
+                    {
+                        onSuccess?.Invoke(wav);
+                        yield break;
+                    }
+                    lastError = parseError;
+                    break;
+                }
+
+                lastError = $"{req.responseCode} {req.error}: {req.downloadHandler?.text}";
+                if (req.responseCode == 403 || req.responseCode == 404)
+                {
+                    _premiumAudioUnavailable = true;
+                    break;
+                }
+                if (!IsTransient(req) || attempt >= 2) break;
+                yield return new WaitForSecondsRealtime(RetryDelay(req, attempt));
+            }
+            onError?.Invoke(lastError ?? $"{PremiumAudioModel}音声生成に失敗");
+        }
+
+        static byte[] ExtractPremiumWav(string json, out string error)
+        {
+            error = null;
+            try
+            {
+                var response = JsonUtility.FromJson<AudioChatResponse>(json);
+                string data = response?.choices != null && response.choices.Length > 0
+                    ? response.choices[0]?.message?.audio?.data
+                    : null;
+                if (string.IsNullOrEmpty(data))
+                {
+                    error = "高品質音声レスポンスにaudio.dataがありません";
+                    return null;
+                }
+                return Convert.FromBase64String(data);
+            }
+            catch (Exception e)
+            {
+                error = "高品質音声レスポンス解析失敗: " + e.Message;
+                return null;
+            }
+        }
+
+        static UnityWebRequest BuildRequest(string body, string key, string endpoint = SpeechEndpoint)
+        {
+            var req = new UnityWebRequest(endpoint, "POST");
             req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
             req.downloadHandler = new DownloadHandlerBuffer();
             req.SetRequestHeader("Content-Type", "application/json");
@@ -290,6 +395,20 @@ namespace PromptFighters.AI
             return PromptFighters.Battle.Skills.CharacterVoiceProfile.IsSupportedPreset(value)
                 ? value
                 : "coral";
+        }
+
+        // gpt-audio系で共通利用できる声へ寄せる。旧TTS専用の声は近い印象の声に対応付ける。
+        static string SanitizePremiumVoice(string voice)
+        {
+            switch (voice?.Trim().ToLowerInvariant())
+            {
+                case "alloy": case "ash": case "coral": case "echo": case "sage": case "shimmer":
+                    return voice.Trim().ToLowerInvariant();
+                case "fable": return "sage";
+                case "onyx":  return "ash";
+                case "nova":  return "coral";
+                default:      return "coral";
+            }
         }
 
         static string EscapeJson(string value) => (value ?? "")
@@ -346,6 +465,8 @@ namespace PromptFighters.AI
                         : (wav[idx] - 128) / 128f;
                 }
 
+                NormalizeSamples(samples);
+
                 var clip = AudioClip.Create(clipName, sampleCount / channels, channels, sampleRate, false);
                 clip.SetData(samples, 0);
                 return clip;
@@ -356,6 +477,22 @@ namespace PromptFighters.AI
                 return null;
             }
         }
+
+        // AI音声の個体差で小さく聞こえる場合に備え、音割れを避けながら最大3倍まで持ち上げる。
+        public static void NormalizeSamples(float[] samples)
+        {
+            if (samples == null || samples.Length == 0) return;
+            float peak = 0f;
+            for (int i = 0; i < samples.Length; i++) peak = Mathf.Max(peak, Mathf.Abs(samples[i]));
+            if (peak < 0.001f || peak >= 0.92f) return;
+            float gain = Mathf.Min(0.92f / peak, 3f);
+            for (int i = 0; i < samples.Length; i++) samples[i] = Mathf.Clamp(samples[i] * gain, -1f, 1f);
+        }
+
+        [Serializable] class AudioChatResponse { public AudioChatChoice[] choices; }
+        [Serializable] class AudioChatChoice { public AudioChatMessage message; }
+        [Serializable] class AudioChatMessage { public AudioChatPayload audio; }
+        [Serializable] class AudioChatPayload { public string data; }
     }
 
     public static class CharacterVoiceGenerator
@@ -409,7 +546,13 @@ namespace PromptFighters.AI
                 byte[] wav = null;
                 string error = null;
                 bool done = false;
-                AITTSClient.GenerateWav(runner, lines[i], data.voiceProfile.instructions, data.voiceProfile.preset,
+                string momentDirection = i == 0
+                    ? "登場して相手と観客に存在感を示す瞬間。自信と覚悟を込め、台詞の後に余韻を残す。"
+                    : i == 4
+                        ? "必殺技を解き放つ最高潮の瞬間。腹から声を出し、全力の気迫と決着をつける覚悟を込める。"
+                        : "攻撃を繰り出す一瞬。戦闘中の呼吸と勢いを感じさせ、短く鋭く感情を爆発させる。";
+                string actingDirection = data.voiceProfile.instructions + " " + momentDirection;
+                AITTSClient.GenerateWav(runner, lines[i], actingDirection, data.voiceProfile.preset,
                     bytes => { wav = bytes; done = true; },
                     err => { error = err; done = true; });
                 yield return new WaitUntil(() => done);

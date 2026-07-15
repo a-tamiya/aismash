@@ -7,6 +7,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
 using TMPro;
 using PromptFighters.AI;
+using PromptFighters.Audio;
 using PromptFighters.Battle;
 using PromptFighters.Battle.Skills;
 using PromptFighters.UI;
@@ -148,6 +149,10 @@ namespace PromptFighters.GameFlow
         GameObject _controlsPanel;
         // 設定モーダル（試合前オプションをまとめる）
         GameObject _settingsPanel;
+        Slider _bgmVolumeSlider;
+        Slider _sfxVolumeSlider;
+        Slider _characterVolumeSlider;
+        Slider _commentaryVolumeSlider;
         TextMeshProUGUI _startBtnLabel;
         // 対戦中のEsc長押し中断用（誤爆防止のため長押し）
         float _matchEscHold;
@@ -810,8 +815,8 @@ namespace PromptFighters.GameFlow
 
             var box = CreateUIObject("SettingsBox", _settingsPanel.transform);
             var bRt = box.GetComponent<RectTransform>();
-            bRt.anchoredPosition = new Vector2(0f, 10f);
-            bRt.sizeDelta = new Vector2(960f, 820f);
+            bRt.anchoredPosition = Vector2.zero;
+            bRt.sizeDelta = new Vector2(960f, 1000f);
             var boxImg = box.AddComponent<Image>();
             boxImg.sprite = PromptFighters.UI.UITheme.VGradient;
             boxImg.type = Image.Type.Simple;
@@ -819,23 +824,23 @@ namespace PromptFighters.GameFlow
             boxImg.color = new Color(0.05f, 0.055f, 0.08f, 1f);
 
             var t = box.transform;
-            MakeSlantBar(t, "SetTop", new Vector2(0f, 408f), new Vector2(960f, 6f),
+            MakeSlantBar(t, "SetTop", new Vector2(0f, 498f), new Vector2(960f, 6f),
                 PromptFighters.UI.UITheme.Gold, 20f);
-            MakeSlantBar(t, "SetBottom", new Vector2(0f, -408f), new Vector2(960f, 6f),
+            MakeSlantBar(t, "SetBottom", new Vector2(0f, -498f), new Vector2(960f, 6f),
                 new Color(PromptFighters.UI.UITheme.Gold.r, PromptFighters.UI.UITheme.Gold.g, PromptFighters.UI.UITheme.Gold.b, 0.55f), -20f);
 
-            MakeSlantBar(t, "SetTitlePlate", new Vector2(0f, 340f), new Vector2(300f, 54f),
+            MakeSlantBar(t, "SetTitlePlate", new Vector2(0f, 430f), new Vector2(300f, 54f),
                 new Color(PromptFighters.UI.UITheme.GoldDim.r, PromptFighters.UI.UITheme.GoldDim.g, PromptFighters.UI.UITheme.GoldDim.b, 0.30f), 20f);
             MakeLabel(t, "SetTitle", "設定",
-                new Vector2(0f, 340f), new Vector2(400f, 54f), 34f, PromptFighters.UI.UITheme.Gold)
+                new Vector2(0f, 430f), new Vector2(400f, 54f), 34f, PromptFighters.UI.UITheme.Gold)
                 .fontStyle = FontStyles.Bold | FontStyles.Italic;
 
             const float ToggleFontSize = 19f;
 
             // ── バトルモード ──
-            MakeSettingHeading(t, "ModeHead", "バトルモード", 250f);
+            MakeSettingHeading(t, "ModeHead", "バトルモード", 330f);
             var versusBtn = MakeButton(t, "ModeVersusBtn", "1 vs 1 対戦",
-                new Vector2(30f, 250f), new Vector2(240f, 52f), OnSelectVersus, ToggleOnColor);
+                new Vector2(30f, 330f), new Vector2(240f, 52f), OnSelectVersus, ToggleOnColor);
             StyleArcadeButton(versusBtn, ToggleOnColor, 11f);
             _modeVersusBg    = versusBtn.GetComponent<Image>();
             _modeVersusLabel = versusBtn.GetComponentInChildren<TextMeshProUGUI>();
@@ -843,7 +848,7 @@ namespace PromptFighters.GameFlow
             _modeVersusLabel.fontSize = ToggleFontSize;
 
             var coopBtn = MakeButton(t, "ModeCoopBtn", "ボス討伐（協力）",
-                new Vector2(300f, 250f), new Vector2(260f, 52f), OnSelectCoop, ToggleOnColor);
+                new Vector2(300f, 330f), new Vector2(260f, 52f), OnSelectCoop, ToggleOnColor);
             StyleArcadeButton(coopBtn, ToggleOnColor, 11f);
             _modeCoopBg    = coopBtn.GetComponent<Image>();
             _modeCoopLabel = coopBtn.GetComponentInChildren<TextMeshProUGUI>();
@@ -851,12 +856,12 @@ namespace PromptFighters.GameFlow
             _modeCoopLabel.fontSize = ToggleFontSize;
 
             // ── 討伐ボス（協力モード時のみ表示） ──
-            BuildBossSelector(t, 170f);
+            BuildBossSelector(t, 250f);
 
             // ── AI実況 ──
-            MakeSettingHeading(t, "CommentaryHead", "AI実況", 80f);
+            MakeSettingHeading(t, "CommentaryHead", "AI実況", 160f);
             var commentaryBtn = MakeButton(t, "CommentaryToggle", CommentaryToggleText(),
-                new Vector2(30f, 80f), new Vector2(240f, 50f), OnCommentaryToggle, ToggleOnColor);
+                new Vector2(30f, 160f), new Vector2(240f, 50f), OnCommentaryToggle, ToggleOnColor);
             StyleArcadeButton(commentaryBtn, ToggleOnColor, 10f);
             _commentaryToggleBg    = commentaryBtn.GetComponent<Image>();
             _commentaryToggleLabel = commentaryBtn.GetComponentInChildren<TextMeshProUGUI>();
@@ -864,9 +869,9 @@ namespace PromptFighters.GameFlow
             _commentaryToggleLabel.fontSize = ToggleFontSize;
 
             // ── ボイスボール ──
-            MakeSettingHeading(t, "AngelHead", "ボイスボール", 0f);
+            MakeSettingHeading(t, "AngelHead", "ボイスボール", 90f);
             var angelBtn = MakeButton(t, "AngelToggle", AngelToggleText(),
-                new Vector2(30f, 0f), new Vector2(240f, 50f), OnAngelToggle, ToggleOnColor);
+                new Vector2(30f, 90f), new Vector2(240f, 50f), OnAngelToggle, ToggleOnColor);
             StyleArcadeButton(angelBtn, ToggleOnColor, 10f);
             _angelToggleBg    = angelBtn.GetComponent<Image>();
             _angelToggleLabel = angelBtn.GetComponentInChildren<TextMeshProUGUI>();
@@ -874,9 +879,9 @@ namespace PromptFighters.GameFlow
             _angelToggleLabel.fontSize = ToggleFontSize;
 
             // ── CPU対戦 ──
-            MakeSettingHeading(t, "CpuHead", "CPU対戦", -80f);
+            MakeSettingHeading(t, "CpuHead", "CPU対戦", 20f);
             var cpuBtn = MakeButton(t, "CpuToggle", CpuToggleText(),
-                new Vector2(30f, -80f), new Vector2(240f, 50f), OnCpuToggle, ToggleOnColor);
+                new Vector2(30f, 20f), new Vector2(240f, 50f), OnCpuToggle, ToggleOnColor);
             StyleArcadeButton(cpuBtn, ToggleOnColor, 10f);
             _cpuToggleBg    = cpuBtn.GetComponent<Image>();
             _cpuToggleLabel = cpuBtn.GetComponentInChildren<TextMeshProUGUI>();
@@ -884,26 +889,41 @@ namespace PromptFighters.GameFlow
             _cpuToggleLabel.fontSize = ToggleFontSize;
 
             var cpuSideBtn = MakeButton(t, "CpuSideToggle", CpuSideToggleText(),
-                new Vector2(300f, -80f), new Vector2(220f, 50f), OnCpuSideToggle, ToggleOnColor);
+                new Vector2(300f, 20f), new Vector2(220f, 50f), OnCpuSideToggle, ToggleOnColor);
             StyleArcadeButton(cpuSideBtn, ToggleOnColor, 10f);
             _cpuSideToggleBg    = cpuSideBtn.GetComponent<Image>();
             _cpuSideToggleLabel = cpuSideBtn.GetComponentInChildren<TextMeshProUGUI>();
             _cpuSideToggleLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
             _cpuSideToggleLabel.fontSize = ToggleFontSize;
 
-            // ── デバッグ（画像生成スキップ） ──
-            MakeOutline(t, "SetDivider", new Vector2(0f, -160f), new Vector2(860f, 2f),
+            // ── 音量ミキサー ──
+            MakeOutline(t, "SetDivider", new Vector2(0f, -40f), new Vector2(860f, 2f),
                 new Color(PromptFighters.UI.UITheme.Gold.r, PromptFighters.UI.UITheme.Gold.g, PromptFighters.UI.UITheme.Gold.b, 0.25f));
-            MakeSettingHeading(t, "DebugHead", "デバッグ", -220f);
+            var volumeTitle = MakeLabel(t, "VolumeTitle", "AUDIO MIXER",
+                new Vector2(-340f, -70f), new Vector2(220f, 28f), 17f, PromptFighters.UI.UITheme.Gold);
+            volumeTitle.fontStyle = FontStyles.Bold | FontStyles.Italic;
+            _bgmVolumeSlider = MakeVolumeSlider(t, "BgmVolume", "BGM", -110f,
+                GameVolumeSettings.BgmVolume, GameVolumeSettings.SetBgmVolume);
+            _sfxVolumeSlider = MakeVolumeSlider(t, "SfxVolume", "効果音", -165f,
+                GameVolumeSettings.SfxVolume, GameVolumeSettings.SetSfxVolume);
+            _characterVolumeSlider = MakeVolumeSlider(t, "CharacterVolume", "キャラボイス", -220f,
+                GameVolumeSettings.CharacterVolume, GameVolumeSettings.SetCharacterVolume);
+            _commentaryVolumeSlider = MakeVolumeSlider(t, "CommentaryVolume", "実況ボイス", -275f,
+                GameVolumeSettings.CommentaryVolume, GameVolumeSettings.SetCommentaryVolume);
+
+            // ── デバッグ（画像生成スキップ） ──
+            MakeOutline(t, "DebugDivider", new Vector2(0f, -315f), new Vector2(860f, 2f),
+                new Color(PromptFighters.UI.UITheme.Gold.r, PromptFighters.UI.UITheme.Gold.g, PromptFighters.UI.UITheme.Gold.b, 0.18f));
+            MakeSettingHeading(t, "DebugHead", "デバッグ", -355f);
             var debugBtn = MakeButton(t, "DebugSkipImageBtn", "",
-                new Vector2(80f, -220f), new Vector2(340f, 44f),
+                new Vector2(80f, -355f), new Vector2(340f, 44f),
                 ToggleSkipImageMode, new Color(0.08f, 0.12f, 0.08f, 1f));
             _debugSkipImageLabel = debugBtn.GetComponentInChildren<TextMeshProUGUI>();
             RefreshDebugSkipLabel();
 
             // ── 閉じる ──
             var closeBtn = MakeButton(t, "SettingsCloseBtn", "閉じる",
-                new Vector2(0f, -330f), new Vector2(260f, 64f), HideSettingsPanel,
+                new Vector2(0f, -445f), new Vector2(260f, 64f), HideSettingsPanel,
                 PromptFighters.UI.UITheme.Gold);
             StyleArcadeButton(closeBtn, PromptFighters.UI.UITheme.Gold, 14f);
             SetButtonLabelStyle(closeBtn, 22f, FontStyles.Bold | FontStyles.Italic, new Color(0.12f, 0.08f, 0f));
@@ -921,15 +941,80 @@ namespace PromptFighters.GameFlow
             return l;
         }
 
+        Slider MakeVolumeSlider(Transform parent, string name, string label, float y,
+            float initialValue, System.Action<float> onChanged)
+        {
+            MakeSettingHeading(parent, name + "Heading", label, y);
+
+            var track = CreateUIObject(name + "Slider", parent);
+            var trackRt = track.GetComponent<RectTransform>();
+            trackRt.anchoredPosition = new Vector2(90f, y);
+            trackRt.sizeDelta = new Vector2(360f, 22f);
+            var trackImage = track.AddComponent<Image>();
+            trackImage.color = new Color(0.035f, 0.04f, 0.065f, 1f);
+
+            var fill = CreateUIObject("Fill", track.transform);
+            var fillRt = fill.GetComponent<RectTransform>();
+            fillRt.anchorMin = new Vector2(0f, 0f);
+            fillRt.anchorMax = new Vector2(1f, 1f);
+            fillRt.offsetMin = new Vector2(3f, 3f);
+            fillRt.offsetMax = new Vector2(-3f, -3f);
+            var fillImage = fill.AddComponent<Image>();
+            fillImage.color = PromptFighters.UI.UITheme.Gold;
+
+            var handle = CreateUIObject("Handle", track.transform);
+            var handleRt = handle.GetComponent<RectTransform>();
+            handleRt.sizeDelta = new Vector2(24f, 36f);
+            var handleImage = handle.AddComponent<Image>();
+            handleImage.sprite = PromptFighters.UI.UITheme.VGradient;
+            handleImage.color = Color.white;
+
+            var slider = track.AddComponent<Slider>();
+            slider.minValue = 0f;
+            slider.maxValue = 1f;
+            slider.wholeNumbers = false;
+            slider.direction = Slider.Direction.LeftToRight;
+            slider.fillRect = fillRt;
+            slider.handleRect = handleRt;
+            slider.targetGraphic = handleImage;
+            slider.navigation = new Navigation { mode = Navigation.Mode.None };
+
+            var valueLabel = MakeLabel(parent, name + "Value", "",
+                new Vector2(365f, y), new Vector2(100f, 34f), 20f, PromptFighters.UI.UITheme.Gold);
+            valueLabel.alignment = TextAlignmentOptions.Left;
+            valueLabel.fontStyle = FontStyles.Bold;
+
+            void ApplyValue(float value)
+            {
+                valueLabel.text = Mathf.RoundToInt(value * 100f) + "%";
+                onChanged?.Invoke(value);
+            }
+
+            slider.SetValueWithoutNotify(Mathf.Clamp01(initialValue));
+            valueLabel.text = Mathf.RoundToInt(slider.value * 100f) + "%";
+            slider.onValueChanged.AddListener(ApplyValue);
+            return slider;
+        }
+
         void ShowSettingsPanel()
         {
             RefreshToggleVisuals();
+            RefreshVolumeSliders();
             if (_settingsPanel != null) _settingsPanel.SetActive(true);
         }
 
         void HideSettingsPanel()
         {
+            GameVolumeSettings.Save();
             if (_settingsPanel != null) _settingsPanel.SetActive(false);
+        }
+
+        void RefreshVolumeSliders()
+        {
+            _bgmVolumeSlider?.SetValueWithoutNotify(GameVolumeSettings.BgmVolume);
+            _sfxVolumeSlider?.SetValueWithoutNotify(GameVolumeSettings.SfxVolume);
+            _characterVolumeSlider?.SetValueWithoutNotify(GameVolumeSettings.CharacterVolume);
+            _commentaryVolumeSlider?.SetValueWithoutNotify(GameVolumeSettings.CommentaryVolume);
         }
 
         // 討伐ボスを選ぶ ◀ / ▶ 付きの選択行。協力モード時のみ表示。

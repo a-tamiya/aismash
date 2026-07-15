@@ -8,6 +8,32 @@ using PromptFighters.UI;
 
 namespace PromptFighters.Audio
 {
+    // 設定画面と各音声再生系で共有する永続音量設定。0〜1をそのままユーザー設定値として扱う。
+    public static class GameVolumeSettings
+    {
+        const string BgmKey        = "audio.volume.bgm";
+        const string SfxKey        = "audio.volume.sfx";
+        const string CharacterKey  = "audio.volume.character_voice";
+        const string CommentaryKey = "audio.volume.commentary";
+
+        public static float BgmVolume        => PlayerPrefs.GetFloat(BgmKey, 0.22f);
+        public static float SfxVolume        => PlayerPrefs.GetFloat(SfxKey, 0.82f);
+        public static float CharacterVolume  => PlayerPrefs.GetFloat(CharacterKey, 1.00f);
+        public static float CommentaryVolume => PlayerPrefs.GetFloat(CommentaryKey, 1.00f);
+
+        public static void SetBgmVolume(float value)        => Set(BgmKey, value, true);
+        public static void SetSfxVolume(float value)        => Set(SfxKey, value, true);
+        public static void SetCharacterVolume(float value)  => Set(CharacterKey, value, false);
+        public static void SetCommentaryVolume(float value) => Set(CommentaryKey, value, false);
+        public static void Save() => PlayerPrefs.Save();
+
+        static void Set(string key, float value, bool updateManager)
+        {
+            PlayerPrefs.SetFloat(key, Mathf.Clamp01(value));
+            if (updateManager) GameAudioManager.Instance?.ApplyVolumeSettings();
+        }
+    }
+
     public class GameAudioManager : MonoBehaviour
     {
         public static GameAudioManager Instance { get; private set; }
@@ -58,6 +84,7 @@ namespace PromptFighters.Audio
             Instance = this;
             EnsureSources();
             LoadClips();
+            ApplyVolumeSettings();
         }
 
         void Start()
@@ -114,6 +141,19 @@ namespace PromptFighters.Audio
             _moveSource.loop = true;
             _moveSource.playOnAwake = false;
             _moveSource.volume = sfxVolume * 0.24f;
+        }
+
+        public void ApplyVolumeSettings()
+        {
+            bgmVolume = GameVolumeSettings.BgmVolume;
+            sfxVolume = GameVolumeSettings.SfxVolume;
+
+            if (_bgmSource != null)
+                _bgmSource.volume = bgmVolume * (_bgmSource.clip == _lobbyBgm ? 0.85f : 1f);
+            if (_sfxSource != null)
+                _sfxSource.volume = sfxVolume;
+            if (_moveSource != null)
+                _moveSource.volume = sfxVolume * 0.24f;
         }
 
         void LoadClips()
@@ -303,7 +343,7 @@ namespace PromptFighters.Audio
         void PlayOneShot(AudioClip clip, float volumeScale)
         {
             if (clip == null || _sfxSource == null) return;
-            _sfxSource.PlayOneShot(clip, sfxVolume * volumeScale);
+            _sfxSource.PlayOneShot(clip, volumeScale);
         }
     }
 
@@ -345,7 +385,8 @@ namespace PromptFighters.Audio
         public float PlayIntro()
         {
             if (_clips[0] == null || _source == null) return 0f;
-            _source.PlayOneShot(_clips[0], 0.78f);
+            _source.volume = GameVolumeSettings.CharacterVolume;
+            _source.PlayOneShot(_clips[0], 1f);
             return _clips[0].length;
         }
 
@@ -355,7 +396,8 @@ namespace PromptFighters.Audio
             if (index < 1 || index >= _clips.Length || _clips[index] == null || _source == null) return;
             if (Time.unscaledTime < _nextSkillVoiceTime || _source.isPlaying) return;
 
-            _source.PlayOneShot(_clips[index], 0.72f);
+            _source.volume = GameVolumeSettings.CharacterVolume;
+            _source.PlayOneShot(_clips[index], 1f);
             _nextSkillVoiceTime = Time.unscaledTime + Mathf.Max(0.9f, _clips[index].length * 0.8f);
         }
 

@@ -17,7 +17,7 @@ namespace PromptFighters.AI
     public static class RealtimeAudioClient
     {
         const string WsEndpoint = "wss://api.openai.com/v1/realtime";
-        public const string RealtimeModel   = "gpt-realtime-2";
+        public const string RealtimeModel   = "gpt-realtime-1.5";
         public const string TranscribeModel = "gpt-realtime-whisper";
         // 読み上げの声（Realtime世代で最も人間らしい2声）。
         //  ・cedar = 男性（実況用） / marin = 女性（ボイスボール用）
@@ -282,6 +282,7 @@ namespace PromptFighters.AI
                 var samples = new float[count];
                 for (int i = 0; i < count; i++)
                     samples[i] = (short)(pcm[i * 2] | (pcm[i * 2 + 1] << 8)) / 32768f;
+                AITTSClient.NormalizeSamples(samples);
                 var clip = AudioClip.Create(name, count, 1, rate, false);
                 clip.SetData(samples, 0);
                 return clip;

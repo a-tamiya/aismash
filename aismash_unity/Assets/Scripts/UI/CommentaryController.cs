@@ -3,6 +3,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using PromptFighters.AI;
+using PromptFighters.Audio;
 using PromptFighters.Battle;
 
 namespace PromptFighters.UI
@@ -376,7 +377,7 @@ namespace PromptFighters.UI
                 onError: err => { Debug.LogWarning("[CommentaryTTS] " + err); ttsDone = true; },
                 voice: AITTSClient.CommentaryVoice,
                 speed: AITTSClient.CommentarySpeed,
-                volume: 2.2f,
+                volume: GameVolumeSettings.CommentaryVolume,
                 instructions: focus != null
                     ? AITTSClient.CommentaryInstructionsExcited
                     : AITTSClient.CommentaryInstructionsCalm,

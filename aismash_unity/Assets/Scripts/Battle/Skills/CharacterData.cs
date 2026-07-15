@@ -48,7 +48,7 @@ namespace PromptFighters.Battle.Skills
     public class CharacterVoiceProfile
     {
         public string preset = "coral";
-        public string instructions = "日本語のアニメ格闘ゲームキャラクターとして、短く力強く、自然な感情を込めて話す。";
+        public string instructions = "日本語の対戦アクションゲームに出演するプロ声優として、キャラクター本人になりきる。棒読みを避け、戦闘中の呼吸、感情の高まり、自然な間、声の強弱を使って臨場感豊かに演じる。";
         public string introLine = "";
         public string[] skillLines = new string[4];
         public bool generated;
@@ -57,7 +57,7 @@ namespace PromptFighters.Battle.Skills
         {
             if (!IsSupportedPreset(preset)) preset = "coral";
             if (string.IsNullOrWhiteSpace(instructions))
-                instructions = "日本語のアニメ格闘ゲームキャラクターとして、短く力強く、自然な感情を込めて話す。";
+                instructions = "日本語の対戦アクションゲームに出演するプロ声優として、キャラクター本人になりきる。棒読みを避け、戦闘中の呼吸、感情の高まり、自然な間、声の強弱を使って臨場感豊かに演じる。";
             if (string.IsNullOrWhiteSpace(introLine))
                 introLine = !string.IsNullOrWhiteSpace(owner?.catchCopy)
                     ? owner.catchCopy.Trim()
