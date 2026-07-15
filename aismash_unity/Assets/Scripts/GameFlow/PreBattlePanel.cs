@@ -2374,6 +2374,8 @@ namespace PromptFighters.GameFlow
                     string slot = i switch { 0 => "B", 1 => "A", 2 => "X", 3 => "スマッシュ", _ => "?" };
                     sb.AppendLine($"<color=#FFC72E>{slot}</color> {skill.skill_name}");
                 }
+            if (data.voiceProfile?.generated == true)
+                sb.AppendLine("<color=#7ED7FF>♪ ボイス：AI生成音声</color>");
             if (!string.IsNullOrWhiteSpace(data.inputFeatures))
             {
                 sb.AppendLine();
@@ -2699,6 +2701,20 @@ namespace PromptFighters.GameFlow
                 yield return new WaitForSeconds(1.0f);
             }
 
+            // 画像まで完成したAIキャラは、登場台詞＋4技のボイスを生成してローカル保存する。
+            // ボイス生成だけが失敗してもキャラクター本体は破棄せず、無音で利用可能にする。
+            bool genVoice1 = genP1 && aiOk1 &&
+                (DebugSettings.SkipImageGeneration || generatedData1?.characterSprite != null);
+            bool genVoice2 = genP2 && aiOk2 &&
+                (DebugSettings.SkipImageGeneration || generatedData2?.characterSprite != null);
+            if (genVoice1 || genVoice2)
+            {
+                UpdateGeneratingStatus("AI生成キャラボイスを作成中...");
+                if (genVoice1) SetGenProgress(0, 96);
+                if (genVoice2) SetGenProgress(1, 96);
+                yield return GenerateCharacterVoices(generatedData1, generatedData2, genVoice1, genVoice2);
+            }
+
             _generatingPanel?.SetActive(false);
 
             // 画像まで完成したキャラだけを保存してロスターへ追加する。
@@ -2723,6 +2739,41 @@ namespace PromptFighters.GameFlow
             yield return new WaitForSecondsRealtime(3f);
             ShowGenOverlay(false);
             _generationCoroutine = null;
+        }
+
+        IEnumerator GenerateCharacterVoices(CharacterData data1, CharacterData data2,
+            bool generateP1, bool generateP2)
+        {
+            bool done1 = !generateP1;
+            bool done2 = !generateP2;
+
+            if (generateP1)
+            {
+                CharacterVoiceGenerator.GenerateSet(this, data1,
+                    message => UpdateGeneratingStatus("1P " + message),
+                    count =>
+                    {
+                        if (count < 5)
+                            Debug.LogWarning($"[CharacterVoice] 1Pは{count}/5件のボイスを保存しました");
+                        SetGenProgress(0, 98);
+                        done1 = true;
+                    });
+            }
+
+            if (generateP2)
+            {
+                CharacterVoiceGenerator.GenerateSet(this, data2,
+                    message => UpdateGeneratingStatus("2P " + message),
+                    count =>
+                    {
+                        if (count < 5)
+                            Debug.LogWarning($"[CharacterVoice] 2Pは{count}/5件のボイスを保存しました");
+                        SetGenProgress(1, 98);
+                        done2 = true;
+                    });
+            }
+
+            yield return new WaitUntil(() => done1 && done2);
         }
 
         // AI生成が通信エラー等で失敗し、ローカル生成（PromptCharacterFactory.Create）に切り替わった

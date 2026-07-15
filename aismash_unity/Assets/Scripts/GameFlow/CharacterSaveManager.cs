@@ -43,11 +43,16 @@ namespace PromptFighters.GameFlow
         public static void PrepareDirectory(CharacterData data)
         {
             if (data == null || string.IsNullOrWhiteSpace(data.characterName)) return;
-            if (!string.IsNullOrEmpty(data.spriteDir)) return; // 確保済み
+            if (!string.IsNullOrEmpty(data.spriteDir))
+            {
+                data.voiceDir ??= VoiceDirFromSpriteDir(data.spriteDir);
+                return; // 確保済み
+            }
             try
             {
                 string id = SanitizeId(data.characterName) + "_" + NextSaveStamp();
                 data.spriteDir = Path.Combine(SaveDir, id, "sprites");
+                data.voiceDir = Path.Combine(SaveDir, id, "voices");
                 Directory.CreateDirectory(data.spriteDir);
             }
             catch (Exception e)
@@ -71,6 +76,7 @@ namespace PromptFighters.GameFlow
                 Debug.LogWarning($"[Save] 生成失敗キャラの破棄失敗: {e.Message}");
             }
             data.spriteDir = null;
+            data.voiceDir = null;
         }
 
         // JSONを保存し、data.spriteDir を設定する。
@@ -94,6 +100,7 @@ namespace PromptFighters.GameFlow
                 }
                 string path = Path.Combine(SaveDir, id + ".json");
                 data.spriteDir = Path.Combine(SaveDir, id, "sprites");
+                data.voiceDir = Path.Combine(SaveDir, id, "voices");
                 string json = Serialize(data);
                 File.WriteAllText(path, json, Encoding.UTF8);
                 PresetCharacterLoader.ClearCache();
@@ -180,6 +187,15 @@ namespace PromptFighters.GameFlow
                     foreach (var file in Directory.GetFiles(srcSpritesDir))
                         File.Copy(file, Path.Combine(destSpritesDir, Path.GetFileName(file)), overwrite: true);
 
+                    string srcVoicesDir = Path.Combine(srcRoot, id, "voices");
+                    if (Directory.Exists(srcVoicesDir))
+                    {
+                        string destVoicesDir = Path.Combine(SaveDir, id, "voices");
+                        Directory.CreateDirectory(destVoicesDir);
+                        foreach (var file in Directory.GetFiles(srcVoicesDir))
+                            File.Copy(file, Path.Combine(destVoicesDir, Path.GetFileName(file)), overwrite: true);
+                    }
+
                     Debug.Log($"[Save] 同梱デフォルトキャラをシードしました: {id}");
                 }
             }
@@ -212,6 +228,7 @@ namespace PromptFighters.GameFlow
                     string id        = Path.GetFileNameWithoutExtension(path);
                     string spriteDir = Path.Combine(SaveDir, id, "sprites");
                     data.spriteDir   = spriteDir;
+                    data.voiceDir    = Path.Combine(SaveDir, id, "voices");
 
                     // Idle1をプレビュー用にロード
                     string idle1 = Path.Combine(spriteDir, "idle1.png");
@@ -346,6 +363,16 @@ namespace PromptFighters.GameFlow
             sb.AppendLine($"  \"input_features\": {Q(d.inputFeatures)},");
             sb.AppendLine($"  \"base_visual_prompt\": {Q(d.visualPrompt)},");
             sb.AppendLine($"  \"visual_description\": {Q(d.visualDescription)},");
+            sb.AppendLine($"  \"catch_copy\": {Q(d.catchCopy)},");
+            d.voiceProfile ??= new CharacterVoiceProfile();
+            d.voiceProfile.FillDefaults(d);
+            sb.AppendLine("  \"voice_profile\": {");
+            sb.AppendLine($"    \"preset\": {Q(d.voiceProfile.preset)},");
+            sb.AppendLine($"    \"instructions\": {Q(d.voiceProfile.instructions)},");
+            sb.AppendLine($"    \"intro_line\": {Q(d.voiceProfile.introLine)},");
+            sb.AppendLine($"    \"skill_lines\": [{Q(d.voiceProfile.skillLines[0])}, {Q(d.voiceProfile.skillLines[1])}, {Q(d.voiceProfile.skillLines[2])}, {Q(d.voiceProfile.skillLines[3])}],");
+            sb.AppendLine($"    \"generated\": {(d.voiceProfile.generated ? "true" : "false")}");
+            sb.AppendLine("  },");
             sb.AppendLine($"  \"stats\": {{\"maxHP\": {d.stats.maxHP}, \"groundMoveSpeed\": {d.stats.groundMoveSpeed}, \"airMoveSpeed\": {d.stats.airMoveSpeed}, \"jumpForce\": {d.stats.jumpForce}, \"airJumpHeightMultiplier\": {d.stats.airJumpHeightMultiplier}, \"walkSpeedRatio\": {d.stats.walkSpeedRatio}, \"guardDurability\": {d.stats.guardDurability}, \"lightness\": {d.stats.lightness}, \"weight\": {d.stats.weight}, \"groundDodgeDistance\": {d.stats.groundDodgeDistance}, \"airDodgeDistance\": {d.stats.airDodgeDistance}}},");
             sb.AppendLine("  \"skills\": [");
 
@@ -379,6 +406,13 @@ namespace PromptFighters.GameFlow
             sb.AppendLine($"  \"throw_parameters\": {{\"front_damage\": {d.throwParameters.front_damage}, \"front_knockback\": {d.throwParameters.front_knockback}, \"back_damage\": {d.throwParameters.back_damage}, \"back_knockback\": {d.throwParameters.back_knockback}, \"up_damage\": {d.throwParameters.up_damage}, \"up_knockback\": {d.throwParameters.up_knockback}}}");
             sb.Append("}");
             return sb.ToString();
+        }
+
+        static string VoiceDirFromSpriteDir(string spriteDir)
+        {
+            if (string.IsNullOrEmpty(spriteDir)) return null;
+            string characterDir = Directory.GetParent(spriteDir)?.FullName;
+            return string.IsNullOrEmpty(characterDir) ? null : Path.Combine(characterDir, "voices");
         }
 
         static void AppendSkill(StringBuilder sb, SkillData s)

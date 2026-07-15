@@ -41,6 +41,7 @@ namespace PromptFighters.Battle.Skills.Json
                 visualPrompt      = !string.IsNullOrEmpty(raw.base_visual_prompt) ? raw.base_visual_prompt : (raw.visual_prompt ?? ""),
                 visualDescription = raw.visual_description ?? "",
                 catchCopy         = raw.catch_copy         ?? "",
+                voiceProfile      = ConvertVoiceProfile(raw.voice_profile),
                 stats             = raw.stats ?? new CharacterStats(),
                 grabParameters    = raw.grab_parameters ?? new GrabParameters(),
                 throwParameters   = raw.throw_parameters ?? new ThrowParameters(),
@@ -76,6 +77,7 @@ namespace PromptFighters.Battle.Skills.Json
             }
 
             data.skills = skillMap;
+            data.voiceProfile.FillDefaults(data);
 
             // ボス専用の追加技プール（slot重複チェックなし。4枠システムとは独立）
             if (raw.extra_skills != null)
@@ -92,6 +94,19 @@ namespace PromptFighters.Battle.Skills.Json
 
             data.sizeScale = CharacterSizeEstimator.Estimate(data);
             return data;
+        }
+
+        static CharacterVoiceProfile ConvertVoiceProfile(CharacterVoiceJsonRaw raw)
+        {
+            if (raw == null) return new CharacterVoiceProfile();
+            return new CharacterVoiceProfile
+            {
+                preset = raw.preset,
+                instructions = raw.instructions,
+                introLine = raw.intro_line,
+                skillLines = raw.skill_lines,
+                generated = raw.generated,
+            };
         }
 
         static void ClampStats(CharacterStats stats)

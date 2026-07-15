@@ -21,6 +21,7 @@ namespace PromptFighters.Battle.Skills
         const float FollowUpDamageMultiplier = SkillConstants.FollowUpDamageMultiplier;
 
         Fighter _fighter;
+        CharacterVoicePlayer _voicePlayer;
         // キャラ固有の基準サイズ（プリセット/ボス）。技生成時の実効サイズはギミックの巨大化/縮小化も乗算する。
         float _baseSizeScale = 1f;
         float _sizeScale => Mathf.Clamp(
@@ -50,6 +51,8 @@ namespace PromptFighters.Battle.Skills
         void Awake()
         {
             _fighter = GetComponent<Fighter>();
+            _voicePlayer = GetComponent<CharacterVoicePlayer>();
+            if (_voicePlayer == null) _voicePlayer = gameObject.AddComponent<CharacterVoicePlayer>();
             if (autoEquipSampleSkills && IsEmpty()) SampleSkillLibrary.EquipDefaults(this);
         }
 
@@ -78,6 +81,7 @@ namespace PromptFighters.Battle.Skills
                 skills[i] = i < n ? data.skills[i] : null;
             extraSkills = data.extraSkills != null ? new List<SkillData>(data.extraSkills) : new List<SkillData>();
             _baseSizeScale = Mathf.Clamp(data.sizeScale > 0f ? data.sizeScale : 1f, 0.5f, 2f);
+            _voicePlayer?.Configure(data);
             ResetSkillState();
             Debug.Log($"[SkillExecutor] キャラクター「{data.characterName}」の技をロードしました。(sizeScale={_sizeScale:F2})");
         }
@@ -233,6 +237,7 @@ namespace PromptFighters.Battle.Skills
         IEnumerator ExecuteSkill(SkillData skill, float powerMultiplier)
         {
             _isExecuting = true;
+            _voicePlayer?.PlaySkill(skill.slot);
             OnSkillExecuted?.Invoke(skill.slot);
             int serial = ++_skillSerial;
             _currentSkillHit = false;

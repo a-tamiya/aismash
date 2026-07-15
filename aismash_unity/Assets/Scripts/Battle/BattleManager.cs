@@ -4,6 +4,7 @@ using PromptFighters.Battle.Skills;
 using PromptFighters.Utils;
 using PromptFighters.UI;
 using PromptFighters.GameFlow;
+using PromptFighters.Audio;
 using System.Collections;
 using System.Collections.Generic;
 
@@ -401,6 +402,19 @@ namespace PromptFighters.Battle
             Phase     = BattlePhase.Countdown;
             Countdown = countdownLength;
             OnCountdownChanged?.Invoke(Countdown);
+            StartCoroutine(PlayCharacterIntros());
+        }
+
+        IEnumerator PlayCharacterIntros()
+        {
+            yield return null;
+            var p1Voice = fighter1 != null ? fighter1.GetComponent<CharacterVoicePlayer>() : null;
+            var p2Voice = fighter2 != null ? fighter2.GetComponent<CharacterVoicePlayer>() : null;
+
+            float p1Duration = p1Voice != null ? p1Voice.PlayIntro() : 0f;
+            if (p1Duration > 0f) yield return new WaitForSecondsRealtime(p1Duration + 0.1f);
+            float p2Duration = p2Voice != null ? p2Voice.PlayIntro() : 0f;
+            if (p2Duration > 0f) yield return new WaitForSecondsRealtime(p2Duration);
         }
 
         public void StartTraining(CharacterData data1, CharacterData data2)
@@ -760,6 +774,9 @@ namespace PromptFighters.Battle
             }
 
             StopAllCoroutines();
+            fighter1?.GetComponent<CharacterVoicePlayer>()?.StopVoice();
+            fighter2?.GetComponent<CharacterVoicePlayer>()?.StopVoice();
+            boss?.GetComponent<CharacterVoicePlayer>()?.StopVoice();
             // 試合を中断して戻る場合も実況・ボイスボールの音声とバナーを止める
             GetComponent<PromptFighters.UI.CommentaryController>()?.StopVoice();
             GetComponent<PromptFighters.UI.AngelController>()?.StopVoice();

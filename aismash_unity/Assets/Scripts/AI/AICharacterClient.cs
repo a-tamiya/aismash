@@ -486,7 +486,8 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
 - 【明示要素＝必須反映】特徴文に明示された武器・属性・戦法・固有技名・数量は、必ずいずれかの技/ステータスに反映する。省略・別物への置換は禁止（「弓使い」なのに全近接、「炎」なのにphysicalのみ、等は不可）。
 - 固有の技名・必殺技名が書かれていたら、その名前をそのまま skill_name に使う（必殺技は smash_side を優先）。挙動もその名前に合うように組む。
 - 数量・程度は数値に翻訳する。例:「3体の使い魔」→summonで複数/player_controlled、「二刀流」→2hitや多段、「最速」→移動stats上限付近、「超火力の一撃」→hit_count=1・damage大。
-- 口調・性格・世界観は catch_copy と各 description の語彙・トーンに反映する（戦闘挙動だけでなく雰囲気も「思い描いたキャラ」に寄せる）。
+- 口調・性格・世界観は catch_copy、各 description、voice_profile に反映する（戦闘挙動だけでなく雰囲気も「思い描いたキャラ」に寄せる）。
+- voice_profile は日本語の短い戦闘ボイスとして作る。intro_lineは登場台詞、skill_linesはattack_a/attack_b/attack_c/smash_sideの順で必ず4件。各台詞は2〜18文字程度で、技名を叫ぶだけでもよい。presetはalloy/ash/coral/echo/fable/onyx/nova/sage/shimmerから1つ選ぶ。
 - 【連想拡張は補助】明示が薄い・短い入力のときだけ、その語から連想を広げて4枠を肉付けする。明示要素を上書きしてはならない。
 - 例:「炎の剣を振るう剣士」→近接斬撃(melee_hitbox)＋fire属性＋burn、技名に炎/剣の語。「狙撃手」→charge付きprojectile/beamで遠距離。「3匹の使い魔を操る」→summonで複数体やplayer_controlled。
 
@@ -633,6 +634,12 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
   ""input_features"": ""[ユーザー指定の特徴をそのまま]"",
   ""input_coverage"": ""[特徴文から抜き出した明示要素を列挙し、各要素を『要素→反映先』形式で簡潔に書く（技生成より先に必ず埋める自己チェック欄）。例: 炎→全技fire属性+burn, 二刀流→attack_a二段斬り, 三日月斬り→smash_side技名, 3体の使い魔→attack_c summon。明示要素を取りこぼさないこと]"",
   ""catch_copy"": ""[このキャラクターを一言で表すキャッチコピー（日本語・15文字以内・感嘆符推奨。特徴文の口調や世界観を反映）。例: 最速の電撃剣士！、炎をまとう不死鳥！]"",
+  ""voice_profile"": {{
+    ""preset"": ""[alloy/ash/coral/echo/fable/onyx/nova/sage/shimmerのいずれか]"",
+    ""instructions"": ""[日本語で声質・年齢感・テンポ・感情を指定。実在人物の声真似は指定しない]"",
+    ""intro_line"": ""[登場時の短い決め台詞]"",
+    ""skill_lines"": [""[attack_a台詞]"", ""[attack_b台詞]"", ""[attack_c台詞]"", ""[smash_side台詞]""]
+  }},
   ""base_visual_prompt"": ""2D anime standing character, full body, [英語で外見を説明。髪色・服装・体格・特徴的なアイテムなど視覚的特徴を記述する]"",
   ""visual_description"": ""[日本語で外見説明]"",
   ""stats"": {{

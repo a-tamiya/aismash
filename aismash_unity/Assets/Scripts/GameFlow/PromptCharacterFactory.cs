@@ -49,6 +49,7 @@ namespace PromptFighters.GameFlow
                 data.skills[(int)SkillSlot.AttackC] = BuildTrapSkill(safeName, element);
             }
             data.skills[(int)SkillSlot.SmashSide] = BuildUltimateSkill(safeName, element);
+            data.voiceProfile.FillDefaults(data);
             data.sizeScale = CharacterSizeEstimator.Estimate(data);
             return data;
         }
@@ -68,6 +69,18 @@ namespace PromptFighters.GameFlow
                 inputFeatures = src.inputFeatures,
                 visualPrompt = src.visualPrompt,
                 visualDescription = src.visualDescription,
+                catchCopy = src.catchCopy,
+                voiceDir = src.voiceDir,
+                voiceProfile = new CharacterVoiceProfile
+                {
+                    preset = src.voiceProfile?.preset,
+                    instructions = src.voiceProfile?.instructions,
+                    introLine = src.voiceProfile?.introLine,
+                    skillLines = src.voiceProfile?.skillLines != null
+                        ? (string[])src.voiceProfile.skillLines.Clone()
+                        : new string[4],
+                    generated = src.voiceProfile?.generated ?? false,
+                },
                 spritePath = src.spritePath,
                 spriteDir = src.spriteDir,
                 characterSprite = src.characterSprite,
@@ -108,6 +121,7 @@ namespace PromptFighters.GameFlow
             clone.sizeScale = src.sizeScale;
             for (int i = 0; i < clone.skills.Length && i < src.skills.Length; i++)
                 clone.skills[i] = CloneSkill(src.skills[i]);
+            clone.voiceProfile.FillDefaults(clone);
 
             // ボス専用の追加技プール・専用スプライト（存在する場合のみ）
             if (src.extraSkills != null)

@@ -44,6 +44,56 @@ namespace PromptFighters.Battle.Skills
         }
     }
 
+    [System.Serializable]
+    public class CharacterVoiceProfile
+    {
+        public string preset = "coral";
+        public string instructions = "日本語のアニメ格闘ゲームキャラクターとして、短く力強く、自然な感情を込めて話す。";
+        public string introLine = "";
+        public string[] skillLines = new string[4];
+        public bool generated;
+
+        public void FillDefaults(CharacterData owner)
+        {
+            if (!IsSupportedPreset(preset)) preset = "coral";
+            if (string.IsNullOrWhiteSpace(instructions))
+                instructions = "日本語のアニメ格闘ゲームキャラクターとして、短く力強く、自然な感情を込めて話す。";
+            if (string.IsNullOrWhiteSpace(introLine))
+                introLine = !string.IsNullOrWhiteSpace(owner?.catchCopy)
+                    ? owner.catchCopy.Trim()
+                    : $"{owner?.characterName ?? "ファイター"}、参上！";
+
+            if (skillLines == null || skillLines.Length != 4)
+            {
+                var resized = new string[4];
+                if (skillLines != null)
+                    System.Array.Copy(skillLines, resized, System.Math.Min(skillLines.Length, resized.Length));
+                skillLines = resized;
+            }
+
+            for (int i = 0; i < skillLines.Length; i++)
+            {
+                if (!string.IsNullOrWhiteSpace(skillLines[i])) continue;
+                string skillName = owner?.skills != null && i < owner.skills.Length
+                    ? owner.skills[i]?.skill_name
+                    : null;
+                skillLines[i] = string.IsNullOrWhiteSpace(skillName) ? "いくぞ！" : skillName;
+            }
+        }
+
+        public static bool IsSupportedPreset(string value)
+        {
+            switch (value?.Trim().ToLowerInvariant())
+            {
+                case "alloy": case "ash": case "coral": case "echo": case "fable":
+                case "onyx": case "nova": case "sage": case "shimmer":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+    }
+
     // キャラクター1人分のランタイムデータ。
     // Phase 4でAI生成結果がここに入り、Phase 5でファイル保存される。
     public class CharacterData
@@ -53,6 +103,8 @@ namespace PromptFighters.Battle.Skills
         public string visualPrompt       = "";
         public string visualDescription  = "";
         public string catchCopy          = ""; // AIキャッチコピー
+        public CharacterVoiceProfile voiceProfile = new CharacterVoiceProfile();
+        public string voiceDir = null; // 保存済みキャラボイスWAVのディレクトリ（絶対パス）
 
         public SkillData[] skills = new SkillData[4]; // index = SkillSlot
         // ボス専用の追加技プール（4枠システムとは独立。数に制限なし）と、その専用ポーズ/エフェクト画像。

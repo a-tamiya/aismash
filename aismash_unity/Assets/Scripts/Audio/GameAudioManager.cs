@@ -1,5 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.IO;
+using PromptFighters.AI;
 using PromptFighters.Battle;
 using PromptFighters.Battle.Skills;
 using PromptFighters.UI;
@@ -303,5 +305,84 @@ namespace PromptFighters.Audio
             if (clip == null || _sfxSource == null) return;
             _sfxSource.PlayOneShot(clip, sfxVolume * volumeScale);
         }
+    }
+
+    // 保存済みAI生成ボイスをFighterごとに読み込み、登場・技発動時にローカル再生する。
+    [RequireComponent(typeof(Fighter))]
+    public class CharacterVoicePlayer : MonoBehaviour
+    {
+        static readonly string[] Filenames = { "intro", "attack_a", "attack_b", "attack_c", "smash_side" };
+        readonly AudioClip[] _clips = new AudioClip[5];
+        AudioSource _source;
+        float _nextSkillVoiceTime;
+
+        void Awake() => EnsureSource();
+
+        public void Configure(CharacterData data)
+        {
+            EnsureSource();
+            StopVoice();
+            ReleaseClips();
+            if (data?.voiceProfile?.generated != true || string.IsNullOrEmpty(data.voiceDir) ||
+                !Directory.Exists(data.voiceDir)) return;
+
+            for (int i = 0; i < Filenames.Length; i++)
+            {
+                string path = Path.Combine(data.voiceDir, Filenames[i] + ".wav");
+                if (!File.Exists(path)) continue;
+                try
+                {
+                    _clips[i] = AITTSClient.WavToAudioClip(File.ReadAllBytes(path),
+                        $"{data.characterName}_{Filenames[i]}");
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning($"[CharacterVoice] 読み込み失敗 ({path}): {e.Message}");
+                }
+            }
+        }
+
+        public float PlayIntro()
+        {
+            if (_clips[0] == null || _source == null) return 0f;
+            _source.PlayOneShot(_clips[0], 0.78f);
+            return _clips[0].length;
+        }
+
+        public void PlaySkill(SkillSlot slot)
+        {
+            int index = (int)slot + 1;
+            if (index < 1 || index >= _clips.Length || _clips[index] == null || _source == null) return;
+            if (Time.unscaledTime < _nextSkillVoiceTime || _source.isPlaying) return;
+
+            _source.PlayOneShot(_clips[index], 0.72f);
+            _nextSkillVoiceTime = Time.unscaledTime + Mathf.Max(0.9f, _clips[index].length * 0.8f);
+        }
+
+        public void StopVoice()
+        {
+            if (_source != null) _source.Stop();
+            _nextSkillVoiceTime = 0f;
+        }
+
+        void EnsureSource()
+        {
+            if (_source != null) return;
+            _source = gameObject.AddComponent<AudioSource>();
+            _source.playOnAwake = false;
+            _source.loop = false;
+            _source.spatialBlend = 0f;
+        }
+
+        void ReleaseClips()
+        {
+            for (int i = 0; i < _clips.Length; i++)
+            {
+                if (_clips[i] != null) Destroy(_clips[i]);
+                _clips[i] = null;
+            }
+        }
+
+        void OnDestroy() => ReleaseClips();
     }
 }
