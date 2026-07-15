@@ -151,6 +151,16 @@ namespace PromptFighters.Battle.Skills
                         a.explosion_radius = Mathf.Clamp(a.explosion_radius, 0f, 2.6f);
                         a.bounce_count     = Mathf.Clamp(a.bounce_count, 0, 4);
                         a.wave_amplitude   = Mathf.Clamp(a.wave_amplitude, 0f, 1.2f);
+                        // 分裂弾: 子弾数と広がり角
+                        if (a.split_count != 0) a.split_count = Mathf.Clamp(a.split_count, 2, 4);
+                        if (a.split_angle > 0f) a.split_angle = Mathf.Clamp(a.split_angle, 10f, 80f);
+                        // 衛星弾: 周回半径（range流用）を制限。爆発・分裂とは併用しない
+                        if (a.orbit)
+                        {
+                            if (a.range > 0f) a.range = Mathf.Clamp(a.range, 0.8f, 3f);
+                            a.explosion_radius = 0f;
+                            a.split_count      = 0;
+                        }
                         // 多発時は1発あたりダメージを按分
                         if (a.projectile_count > 1)
                         {
@@ -174,8 +184,17 @@ namespace PromptFighters.Battle.Skills
                     // dashのpowerに上限
                     if ((a.type == "dash" || a.type == "jump_attack" ||
                          a.type == "push_enemy" || a.type == "pull_enemy" ||
-                         a.type == "teleport") && a.power > 15f)
+                         a.type == "teleport" || a.type == "uppercut" ||
+                         a.type == "dive_attack") && a.power > 15f)
                         a.power = 15f;
+
+                    // uppercut / dive_attack: 移動を伴う攻撃。判定サイズをクランプ
+                    if (a.type == "uppercut" || a.type == "dive_attack")
+                    {
+                        if (a.size_x > 0f) a.size_x = Mathf.Clamp(a.size_x, 0.8f, 2.4f);
+                        if (a.size_y > 0f) a.size_y = Mathf.Clamp(a.size_y, 1.0f, 3.0f);
+                        if (a.duration > 0f) a.duration = Mathf.Clamp(a.duration, 0.2f, 0.6f);
+                    }
 
                     if (a.type == "counter")
                     {
@@ -287,6 +306,7 @@ namespace PromptFighters.Battle.Skills
         {
             "melee_hitbox", "body_hitbox", "projectile", "area_hitbox", "trap_hitbox", "beam",
             "jump_attack", "multi_hit", "dash+melee_hitbox", "shockwave", "lifesteal", "command_throw",
+            "uppercut", "dive_attack",
         };
 
         // counter / reflector / command_throw は発動後の処理を自前で完結するため、
@@ -351,7 +371,8 @@ namespace PromptFighters.Battle.Skills
             if (HasAction(skill, "trap_hitbox") || HasAction(skill, "summon")) return;
             bool contact = HasAction(skill, "melee_hitbox") || HasAction(skill, "body_hitbox")
                         || HasAction(skill, "area_hitbox") || HasAction(skill, "jump_attack")
-                        || HasAction(skill, "lifesteal") || HasAction(skill, "multi_hit");
+                        || HasAction(skill, "lifesteal") || HasAction(skill, "multi_hit")
+                        || HasAction(skill, "uppercut") || HasAction(skill, "dive_attack");
             if (!contact) return;
 
             var p = skill.parameters;
@@ -413,6 +434,8 @@ namespace PromptFighters.Battle.Skills
                     case "shockwave":
                     case "gravity_well":
                     case "lifesteal":
+                    case "uppercut":
+                    case "dive_attack":
                         return true;
                 }
             }

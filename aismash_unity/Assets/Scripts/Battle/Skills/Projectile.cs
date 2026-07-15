@@ -48,6 +48,14 @@ namespace PromptFighters.Battle.Skills
         public float WaveAmplitude;   // >0: 進行方向と垂直にうねりながら飛ぶ（波状弾）
         public bool  Pierce;          // true: 敵を貫通する（1体につき1ヒット）
 
+        // 分裂弾: 壁ヒット・寿命切れで進行方向を中心に扇状に子弾を放つ（子弾は威力半分・小型）
+        public int   SplitCount;      // 2〜4で有効
+        public float SplitAngle = 30f; // 子弾間の広がり角（度数）
+
+        // 衛星弾: オーナーの周囲を周回する。敵貫通（Pierce併用）・壁で消えない
+        public bool  OrbitOwner;
+        public float OrbitRadius = 1.6f;
+
         SpriteRenderer _debugSr;
         SpriteRenderer _sr;
         Rigidbody2D    _rb;
@@ -59,6 +67,8 @@ namespace PromptFighters.Battle.Skills
         bool  _cancelled;
         bool  _released;
         bool  _activated;
+        float _orbitAngle;
+        float _orbitDirSign = 1f;
 
         static readonly Stack<Projectile> s_pool = new Stack<Projectile>();
 
@@ -165,6 +175,12 @@ namespace PromptFighters.Battle.Skills
             BounceCount = 0;
             WaveAmplitude = 0f;
             Pierce = false;
+            SplitCount = 0;
+            SplitAngle = 30f;
+            OrbitOwner = false;
+            OrbitRadius = 1.6f;
+            _orbitAngle = 0f;
+            _orbitDirSign = 1f;
 
             transform.rotation = Quaternion.identity;
             if (_rb != null)
@@ -217,19 +233,44 @@ namespace PromptFighters.Battle.Skills
             }
 
             _spawnTime = Time.time;
-            if (GravityScale > 0f) _rb.gravityScale = GravityScale;
-            _rb.linearVelocity = Direction * Speed;
+            if (OrbitOwner && Owner != null)
+            {
+                // 衛星弾: 速度は使わず、毎フレームオーナー周囲の円軌道上に配置する
+                Vector2 center = (Vector2)Owner.transform.position + Vector2.up * 0.9f;
+                Vector2 rel = (Vector2)transform.position - center;
+                _orbitAngle = rel.sqrMagnitude > 0.001f ? Mathf.Atan2(rel.y, rel.x) : 0f;
+                _orbitDirSign = Owner.FacingRight ? 1f : -1f;
+                _rb.linearVelocity = Vector2.zero;
+            }
+            else
+            {
+                if (GravityScale > 0f) _rb.gravityScale = GravityScale;
+                _rb.linearVelocity = Direction * Speed;
+            }
             _activated = true;
 
             yield return new WaitForSeconds(Lifetime);
             // 爆発弾は寿命切れでもその場で爆発する（時限爆弾的な使い方ができる）
             if (ExplosionRadius > 0f && !_cancelled) Explode();
+            else if (SplitCount >= 2 && !_cancelled) SplitNow();
             Release();
         }
 
         void Update()
         {
             if (!_activated || _released) return;
+
+            // 衛星弾: オーナーの周囲を周回する（他の軌道機構とは併用しない）
+            if (OrbitOwner)
+            {
+                if (Owner == null || Owner.State == FighterState.Dead) { Release(); return; }
+                _orbitAngle += (Speed / Mathf.Max(OrbitRadius, 0.3f)) * _orbitDirSign * Time.deltaTime;
+                Vector2 center = (Vector2)Owner.transform.position + Vector2.up * 0.9f;
+                transform.position = center
+                    + new Vector2(Mathf.Cos(_orbitAngle), Mathf.Sin(_orbitAngle)) * OrbitRadius;
+                if (_rb != null) _rb.linearVelocity = Vector2.zero;
+                return;
+            }
 
             // ブーメラン: 寿命の半分で折り返す
             if (IsBoomerang && !_boomerangFlipped && Time.time - _spawnTime >= Lifetime * 0.5f)
@@ -331,6 +372,41 @@ namespace PromptFighters.Battle.Skills
             Battle.CameraShake.Shake(0.12f, 0.16f);
         }
 
+        // 分裂弾: 現在の進行方向を中心に扇状へ子弾を放つ。子弾は威力半分・小型で、再分裂しない。
+        void SplitNow()
+        {
+            if (SplitCount < 2) return;
+            int n = Mathf.Min(SplitCount, 4);
+            Vector2 baseDir = _rb != null && _rb.linearVelocity.sqrMagnitude > 0.01f
+                ? _rb.linearVelocity.normalized : Direction;
+            float baseAngle = Mathf.Atan2(baseDir.y, baseDir.x) * Mathf.Rad2Deg;
+            float step = SplitAngle > 0f ? SplitAngle : 30f;
+            float total = step * (n - 1);
+
+            for (int i = 0; i < n; i++)
+            {
+                float rad = (baseAngle - total * 0.5f + step * i) * Mathf.Deg2Rad;
+                Vector2 dir = new Vector2(Mathf.Cos(rad), Mathf.Sin(rad));
+                var c = Spawn(Owner, transform.position, dir, Mathf.Max(Speed, 5f), 0.6f);
+                c.Damage                   = Damage * 0.5f;
+                c.DamageIncludesOwnerBoost = DamageIncludesOwnerBoost;
+                c.Knockback                = Knockback * 0.6f;
+                c.KnockbackDir             = KnockbackDir;
+                c.FixedKnockbackDir        = FixedKnockbackDir;
+                c.StunTime                 = StunTime * 0.5f;
+                c.GuardDamage              = GuardDamage * 0.5f;
+                c.Status                   = Status;
+                c.StatusDuration           = StatusDuration;
+                c.StatusChance             = StatusChance * 0.5f;
+                c.Element                  = Element;
+                c.EffectSprite             = EffectSprite;
+                c.HideVisual               = HideVisual;
+                c.FlipEffectX              = FlipEffectX;
+                c.DesiredWorldSize         = DesiredWorldSize * 0.6f;
+                c.GravityScale             = GravityScale;
+            }
+        }
+
         // 跳弾: 地面なら上方向へ、壁なら左右反転して跳ね返る。
         void DoBounce(Collider2D surface)
         {
@@ -421,7 +497,7 @@ namespace PromptFighters.Battle.Skills
             if (voiceItem != null)
             {
                 voiceItem.TakeHit(Damage, Owner);
-                if (!IsBoomerang) Release();
+                if (!IsBoomerang && !OrbitOwner) Release();
                 return;
             }
 
@@ -430,7 +506,7 @@ namespace PromptFighters.Battle.Skills
             if (summon != null && summon.Owner != Owner)
             {
                 summon.TakeHit(Damage);
-                if (!IsBoomerang) Release();
+                if (!IsBoomerang && !OrbitOwner) Release();
                 return;
             }
 
@@ -439,14 +515,17 @@ namespace PromptFighters.Battle.Skills
             if (destructible != null)
             {
                 destructible.TakeHit(Damage, Owner);
-                if (!IsBoomerang) Release();
+                if (!IsBoomerang && !OrbitOwner) Release();
                 return;
             }
 
             var target = other.GetComponentInParent<Fighter>();
             if (target == null)
             {
-                // 壁・地面に当たった場合: ブーメランは貫通、跳弾は反射、爆発弾は爆発、通常弾は消える。
+                // 衛星弾はオーナー周回中に壁・地面へ触れても消えない
+                if (OrbitOwner) return;
+                // 壁・地面に当たった場合: ブーメランは貫通、跳弾は反射、爆発弾は爆発、
+                // 分裂弾は分裂、通常弾は消える。
                 // 跳弾は「地面レイヤー」ならレイヤー番号に関わらず必ず跳ねる
                 // （ステージによって床がDefaultレイヤーでも取りこぼさない）。
                 bool groundish = Owner != null &&
@@ -459,6 +538,7 @@ namespace PromptFighters.Battle.Skills
                 if (!IsBoomerang && other.gameObject.layer != 0)
                 {
                     if (ExplosionRadius > 0f) Explode();
+                    else if (SplitCount >= 2) SplitNow();
                     Release();
                 }
                 return;

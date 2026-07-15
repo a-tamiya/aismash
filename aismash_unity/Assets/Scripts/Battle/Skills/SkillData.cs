@@ -98,6 +98,13 @@ namespace PromptFighters.Battle.Skills
         public float  wave_amplitude;    // >0で上下にうねって飛ぶ（波状弾）
         public bool   pierce;            // trueで敵を貫通（1体につき1ヒット）
 
+        // projectile: 分裂弾（壁ヒット・寿命切れで扇状に子弾へ分裂。花火・クラスター弾）
+        public int    split_count;       // 2〜4で有効。子弾は威力半分・小型
+        public float  split_angle;       // 子弾間の広がり角（度数）。省略時30
+
+        // projectile: 衛星弾（自分の周囲を周回するビット・ファンネル。敵貫通・壁で消えない）
+        public bool   orbit;             // trueで周回モード。rangeが周回半径、projectile_speedが周回速度
+
         // 発生位置: trueで相手の現在位置に発生する。
         // area_hitboxは0.4秒の警告表示つき、trap_hitboxは相手の足元、projectileは相手の頭上から落下。
         public bool   spawn_at_enemy;

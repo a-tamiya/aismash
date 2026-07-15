@@ -529,6 +529,11 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
   ・砲撃/狙撃: charge付きprojectile/beam＋落下弾(spawn_y高め)＋牽制trap
   ・重量/パワー: 単発高威力body_hitbox/area_hitbox(cone)＋knockback大＋startup大
   ・空中/機動: jump_attack＋空中移動性能高め＋diagonal_up/upノックバック
+  ・対空/切り返し: uppercut（昇竜技）で打ち上げ＋空中で追撃できる技構成
+  ・急襲/ヒット&アウェイ: dive_attack（急降下攻撃）＋dash技で出入りする
+  ・ビット/オールレンジ: orbit弾（周回する衛星弾）で身を守りつつ、別枠の攻め技で崩す
+  ・花火/クラスター: split_count付き分裂弾で弾幕の面白さを出す
+- 【時間差・合体アクションを活用】1つの技のactionsに同種actionをtimeをずらして複数並べてよい。例: projectile3連射(time 0.1/0.25/0.4)、上空からの時間差落下弾の雨、teleport(behind_enemy)→melee_hitboxの奇襲、dash→uppercutの突進アッパー。「連射」「弾幕」「雨」「乱舞」などの語があれば積極的に使う
 - element も physical に偏らせない。特徴に色（炎・氷・雷・闇・風）があれば対応する属性と状態異常・機構を必ず結びつける。
 - 技名・キャッチコピー・description はテンプレ語（「○○斬り」「○○弾」）の使い回しを避け、そのキャラ固有の語彙で命名する。
 
@@ -547,14 +552,14 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
 - キャラの個性に応じて積極的に新機能を使うこと: ブーメラン使い→boomerang:true、追尾魔法→homing:true、散弾銃→projectile_count:3、ビーム→beam、スパイクコンボ→knockback_direction:""spike""、ジャグル→knockback_direction:""up""
 - stats範囲: maxHP 250〜350(基準300。耐久型ほど高く、紙耐久・速攻型ほど低く)、groundMoveSpeed 2.5〜9.5、airMoveSpeed 2.0〜8.5、jumpForce 7〜19、airJumpHeightMultiplier 0.3〜0.6、walkSpeedRatio 0.2〜0.5、guardDurability 40〜90、lightness 0.45〜2.0、weight 0.45〜2.0、groundDodgeDistance 1.2〜3.8、airDodgeDistance 0.8〜3.2
 - damage範囲: attack_a/bは4〜12、attack_cは3〜10、smash_sideは14〜26。多段技は1hit1〜2程度で全段最大6
-- smash_side（横スマッシュ）は必ず攻撃技（melee_hitbox/body_hitbox/projectile/beam/jump_attack）にすること。counter/reflector/buff_self/summonをsmash_sideに入れない
+- smash_side（横スマッシュ）は必ず攻撃技（melee_hitbox/body_hitbox/projectile/beam/jump_attack/uppercut/dive_attack/shockwave）にすること。counter/reflector/buff_self/summonをsmash_sideに入れない
 - startup範囲: attack_a 0.02〜0.12、attack_b 0.03〜0.18、attack_c 0.04〜0.22、smash_side 0.08〜0.32
 - recovery範囲: attack_a 0.10〜0.45、attack_b 0.12〜0.65、attack_c 0.12〜0.55、smash_side 0.18〜0.62。操作感が重すぎない範囲にする
 - trap_hitbox設置技のrecoveryは特に0.10〜0.35とし、極端な後隙を避ける
 - range: 近距離hitbox 0.7〜3.6、遠距離弾 5〜22
 - knockback: attack_a/b 2〜10、attack_c 3〜12、smash_side 7〜16
 - guard_damage: attack_a 0.5〜2.0、attack_b 0.8〜2.6、attack_c 0.8〜2.8、smash_side 2.0〜5.0
-- action type: melee_hitbox/body_hitbox/projectile/area_hitbox/trap_hitbox/beam/dash/jump_attack/push_enemy/pull_enemy/apply_status/buff_self/teleport/delay/summon/counter/reflector/command_throw/shockwave/gravity_well/lifesteal/heal_self/barrier
+- action type: melee_hitbox/body_hitbox/projectile/area_hitbox/trap_hitbox/beam/dash/jump_attack/uppercut/dive_attack/push_enemy/pull_enemy/apply_status/buff_self/teleport/delay/summon/counter/reflector/command_throw/shockwave/gravity_well/lifesteal/heal_self/barrier
 - 各技のactionsは空にしない。attack_a/attack_b/attack_c/smash_sideは必ず1つ以上、実際に攻撃・接触・召喚・防御反応などゲーム内効果が起きるactionを入れる
 - delay単体、dash単体、teleport単体、apply_status単体、push_enemy単体、pull_enemy単体だけの技は禁止。使う場合はmelee_hitbox/body_hitbox/projectile/area_hitbox/trap_hitbox/beam/jump_attack/summon/counter/reflectorのいずれかと組み合わせる
 - body_hitbox: キャラ自身に判定。follow_owner/hide_effect自動。spawn_x=0でキャラ中心(スピン・全身)、spawn_x>0で前方張り出し。size_y 1.4〜2.2で全身カバー
@@ -576,6 +581,8 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
   bounce_count: 1〜4=地面や壁で跳ね返る跳弾（ボール・岩・ゴム系。gravity_scale 1〜2と相性が良い）
   wave_amplitude: 0.3〜1.2=上下にうねって飛ぶ波状弾（蛇・波・音波・リボン系）
   pierce: true=敵を貫通する弾（槍・レーザー・矢など。1体につき1ヒット）
+  split_count: 2〜4=壁ヒット・寿命切れで扇状に分裂する弾（花火・クラスター弾・種まき系。子弾は威力半分）。split_angle: 子弾間の広がり角(10〜80、省略時30)。山なり弾(gravity_scale)と相性が良い
+  orbit: true=自分の周囲を周回する衛星弾（ビット・ファンネル・お守り・回転する刃系）。rangeが周回半径(0.8〜3)、projectile_speedが周回速度、projectile_lifetimeが持続。敵を貫通し壁で消えない。接近拒否・自衛向けでdamageは控えめにする
 - 【相手の位置に発生 spawn_at_enemy】area_hitbox / trap_hitbox / projectile に spawn_at_enemy: true を付けると相手の現在位置に発生する:
   area_hitbox＋spawn_at_enemy → 0.4秒の警告マーカーの後に相手の足元で発動（落雷・地割れ・間欠泉・爆発陣）
   trap_hitbox＋spawn_at_enemy → 相手の足元に罠を設置
@@ -616,7 +623,9 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
   lifesteal: 与えたダメージの一部を自分のHPに回復する近接技。melee_hitboxと同じパラメータ＋lifesteal_ratio(0.2〜0.4、与ダメージの回復割合。未指定なら0.3)。吸血鬼・闇属性・持久キャラ向け。dark属性と相性良い。
   heal_self: 自分のHPを回復する。power=回復HP量(未指定なら最大HPの5%)。攻撃判定なし。持久・回復役キャラ向け。startup/recoveryは長めにして隙を作る。
   barrier: 自己バフ。一定量のダメージを吸収するシールドを張る。power=吸収量(未指定10)、duration=持続秒(未指定3)。攻撃判定なし・発動後すぐ動ける防御技。recoveryは通常攻撃並み(0.12〜0.35)にして連発できないよう注意。防御・タンク型キャラ向け。
-  ※ command_throw/heal_self/barrier/gravity_well は攻撃判定が無い/特殊なので、smash_sideには入れない（smash_sideは必ず直接攻撃技）。lifesteal/shockwaveはsmash_sideに使ってよい。
+  uppercut: 昇竜系の対空技。power=上昇力(6〜12)。上昇しながら体に追従する判定で相手を巻き込み、真上へ打ち上げる（knockback_direction省略時""up""）。打ち上げからの追撃コンボの起点や、接近された時の切り返しに使う。startupは小さめ(0.04〜0.10)・外した時のrecoveryは長め(0.35〜0.55)にして昇竜らしいリスクリターンを作る。竜・拳法家・炎系と相性が良い。
+  dive_attack: 急降下攻撃。power=降下力(6〜14)。斜め前下方向へ突っ込み、着地の瞬間に左右へ小さな衝撃波が出る。地上で使うと小さく跳び上がってから急降下する。鳥・隕石・ヒーロー着地・重量級の奇襲に使う。smash_sideに使ってもよい。
+  ※ command_throw/heal_self/barrier/gravity_well は攻撃判定が無い/特殊なので、smash_sideには入れない（smash_sideは必ず直接攻撃技）。lifesteal/shockwave/uppercut/dive_attackはsmash_sideに使ってよい。
 
 {{
   ""character_name"": ""[ユーザー指定のキャラクター名をそのまま]"",

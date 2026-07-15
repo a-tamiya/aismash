@@ -341,7 +341,8 @@ namespace PromptFighters.Battle.Skills
                 var a = skill.actions[i];
                 if (a == null) continue;
                 bool melee = a.type == "melee_hitbox" || a.type == "body_hitbox" ||
-                              a.type == "area_hitbox" || a.type == "jump_attack" || a.type == "beam";
+                              a.type == "area_hitbox" || a.type == "jump_attack" || a.type == "beam" ||
+                              a.type == "uppercut"    || a.type == "dive_attack";
                 if (!melee) continue;
                 hasMelee = true;
                 float duration = a.duration > 0f ? a.duration : Mathf.Max(skill.parameters.active_time, 0.08f);
@@ -373,6 +374,8 @@ namespace PromptFighters.Battle.Skills
                 ["projectile"]         = SpawnProjectile,
                 ["beam"]               = SpawnBeam,
                 ["jump_attack"]        = DoJumpAttack,
+                ["uppercut"]           = DoUppercut,
+                ["dive_attack"]        = DoDiveAttack,
                 ["dash+melee_hitbox"]  = (skill, a, pm) => { DoDash(a); SpawnMeleeHitbox(skill, a, pm); },
                 ["multi_hit"]          = SpawnMeleeHitbox,
                 ["dash"]               = (skill, a, pm) => DoDash(a),
@@ -762,6 +765,15 @@ namespace PromptFighters.Battle.Skills
                 p.BounceCount              = a.bounce_count;
                 p.WaveAmplitude            = a.wave_amplitude;
                 p.Pierce                   = a.pierce;
+                p.SplitCount               = a.split_count;
+                p.SplitAngle               = a.split_angle > 0f ? a.split_angle : 30f;
+                if (a.orbit)
+                {
+                    // 衛星弾: 周回半径=range、周回速度=projectile_speed。敵は貫通扱いで1体1ヒット
+                    p.OrbitOwner  = true;
+                    p.OrbitRadius = Mathf.Clamp(a.range > 0f ? a.range : 1.6f, 0.8f, 3f) * _sizeScale;
+                    p.Pierce      = true;
+                }
                 if ((a.homing || a.homing_strength > 0f) && _fighter.Opponent != null)
                 {
                     p.HomingTarget   = _fighter.Opponent.transform;
@@ -904,6 +916,59 @@ namespace PromptFighters.Battle.Skills
             float lift = a.power > 0f ? a.power : 5f;
             _fighter.ApplyImpulse(new Vector2(0f, lift));
             SpawnAreaHitbox(skill, a, powerMultiplier);
+        }
+
+        // uppercut: 昇竜系の対空技。上昇しながら体に追従する判定で相手を巻き込み、打ち上げる。
+        void DoUppercut(SkillData skill, SkillAction a, float powerMultiplier)
+        {
+            float dirSign = _fighter.FacingRight ? 1f : -1f;
+            float lift = Mathf.Clamp(a.power > 0f ? a.power : 9f, 5f, 13f);
+            _fighter.ApplyImpulse(new Vector2(dirSign * lift * 0.22f, lift), 0.28f);
+            if (string.IsNullOrEmpty(a.knockback_direction)) a.knockback_direction = "up";
+            if (a.duration <= 0f) a.duration = 0.38f; // 上昇中ずっと巻き込む
+            if (a.size_x   <= 0f) a.size_x   = 1.4f;
+            if (a.size_y   <= 0f) a.size_y   = 2.4f;
+            if (a.spawn_x  <= 0f) a.spawn_x  = 0.45f;
+            SpawnBodyHitbox(skill, a, powerMultiplier);
+        }
+
+        // dive_attack: 急降下攻撃。斜め下へ突っ込み、着地時に左右へ小さな衝撃波を出す。
+        // 地上発動時は小さく跳んでから急降下する（地上でも技として成立させる）。
+        void DoDiveAttack(SkillData skill, SkillAction a, float powerMultiplier)
+        {
+            StartCoroutine(DiveRoutine(skill, a, powerMultiplier));
+        }
+
+        IEnumerator DiveRoutine(SkillData skill, SkillAction a, float powerMultiplier)
+        {
+            float dirSign = _fighter.FacingRight ? 1f : -1f;
+            float power = Mathf.Clamp(a.power > 0f ? a.power : 10f, 6f, 15f);
+
+            if (_fighter.IsGrounded)
+            {
+                _fighter.ApplyImpulse(new Vector2(dirSign * 1.5f, 8.5f), 0.15f);
+                yield return new WaitForSeconds(0.24f);
+                if (_fighter.State == FighterState.Dead) yield break;
+            }
+
+            _fighter.ApplyImpulse(new Vector2(dirSign * power * 0.45f, -power), 0.3f);
+
+            // 降下中の巻き込み判定（体に追従）
+            if (string.IsNullOrEmpty(a.knockback_direction)) a.knockback_direction = "diagonal_up";
+            if (a.duration <= 0f) a.duration = 0.45f;
+            if (a.size_x   <= 0f) a.size_x   = 1.5f;
+            if (a.size_y   <= 0f) a.size_y   = 1.8f;
+            SpawnBodyHitbox(skill, a, powerMultiplier);
+
+            // 着地したら左右に衝撃波（最大1秒待つ。落ち続けた場合は出さない）
+            float t = 0f;
+            while (!_fighter.IsGrounded && t < 1.0f) { t += Time.deltaTime; yield return null; }
+            if (_fighter.IsGrounded && _fighter.State != FighterState.Dead)
+            {
+                SpawnGroundWave(skill, a, powerMultiplier * 0.8f, +1f, 1.4f, 1.6f, 0.7f, 0.3f, 0.18f);
+                SpawnGroundWave(skill, a, powerMultiplier * 0.8f, -1f, 1.4f, 1.6f, 0.7f, 0.3f, 0.18f);
+                Battle.CameraShake.Shake(0.15f, 0.2f);
+            }
         }
 
         void PushOrPullOpponent(SkillAction a, bool push)
