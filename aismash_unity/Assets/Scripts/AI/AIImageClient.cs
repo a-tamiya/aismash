@@ -607,10 +607,16 @@ namespace PromptFighters.AI
             string shape =
                   HasAction(skill, "summon")      ? "summoned creature or minion sprite for a 2D fighting game skill, clear full body"
                 : HasAction(skill, "beam")        ? "long horizontal 2D energy beam visual effect, bright core, no rectangular block"
+                : HasAction(skill, "gravity_well")? "large radial vortex and gravity well visual effect, deep spiral center with inward energy flow"
                 : HasAction(skill, "uppercut")    ? "tall rising uppercut streak effect, vertical swoosh with strong upward motion"
                 : HasAction(skill, "dive_attack") ? "ground impact shockwave effect bursting outward with dust and debris"
                 : HasAction(skill, "shockwave")   ? "low wide ground shockwave effect running along the floor"
-                : HasRingArea(skill)              ? "radial circular burst effect, expanding energy ring"
+                : HasEffectShape(skill, "cross")  ? "cross-shaped energy burst with four clearly readable arms"
+                : HasEffectShape(skill, "cone")   ? "forward-facing fan or cone-shaped energy wave with a clear origin and widening edge"
+                : HasEffectShape(skill, "arc")    ? "curved crescent arc effect with a clearly readable inner and outer edge"
+                : HasEffectShape(skill, "column") ? "tall narrow energy column with a clear base and strong vertical motion"
+                : HasEffectShape(skill, "line")   ? "long narrow directional energy streak with a clear start and end"
+                : HasRadialArea(skill)             ? "radial circular burst effect, expanding energy ring or annular wave"
                 : HasExplosion(skill)             ? "round explosion burst effect with bright core and flying sparks"
                 : vertical                        ? "tall vertical 2D game visual effect, rising column or upward slash"
                 : "wide horizontal 2D game visual effect, side slash, wave, or projectile trail";
@@ -633,25 +639,24 @@ namespace PromptFighters.AI
 
         static bool NeedsSeparateEffect(SkillData skill)
         {
-            if (skill.actions == null || skill.actions.Count == 0) return false;
-            foreach (var a in skill.actions)
-            {
-                if (a == null || a.hide_effect) continue;
-                if (a.type == "projectile" || a.type == "area_hitbox" || a.type == "trap_hitbox" ||
-                    a.type == "summon" ||
-                    a.type == "beam" ||
-                    a.type == "melee_hitbox" || a.type == "jump_attack" ||
-                    a.type == "shockwave" ||
-                    a.type == "uppercut" || a.type == "dive_attack")
-                    return true;
-            }
+            foreach (var a in EnumerateActions(skill))
+                if (ActionUsesSeparateEffect(a)) return true;
             return false;
+        }
+
+        static bool ActionUsesSeparateEffect(SkillAction a)
+        {
+            if (a == null || a.hide_effect) return false;
+            return a.type == "projectile" || a.type == "area_hitbox" || a.type == "trap_hitbox" ||
+                   a.type == "summon" || a.type == "beam" || a.type == "melee_hitbox" ||
+                   a.type == "jump_attack" || a.type == "dash+melee_hitbox" || a.type == "multi_hit" ||
+                   a.type == "gravity_well" || a.type == "lifesteal" || a.type == "shockwave" ||
+                   a.type == "uppercut" || a.type == "dive_attack";
         }
 
         static bool PrefersVerticalEffect(SkillData skill)
         {
-            if (skill.actions == null) return false;
-            foreach (var a in skill.actions)
+            foreach (var a in EnumerateActions(skill))
             {
                 if (a == null) continue;
                 if (a.type == "jump_attack" || a.type == "uppercut") return true;
@@ -661,28 +666,40 @@ namespace PromptFighters.AI
             return false;
         }
 
-        static bool HasRingArea(SkillData skill)
+        static bool HasRadialArea(SkillData skill)
         {
-            if (skill?.actions == null) return false;
-            foreach (var a in skill.actions)
-                if (a != null && a.type == "area_hitbox" && a.shape == "ring") return true;
+            return HasEffectShape(skill, "ring") || HasEffectShape(skill, "annulus");
+        }
+
+        static bool HasEffectShape(SkillData skill, string shape)
+        {
+            if (string.IsNullOrEmpty(shape)) return false;
+            foreach (var a in EnumerateActions(skill))
+                if (ActionUsesSeparateEffect(a) && a.shape == shape) return true;
             return false;
         }
 
         static bool HasExplosion(SkillData skill)
         {
-            if (skill?.actions == null) return false;
-            foreach (var a in skill.actions)
-                if (a != null && a.type == "projectile" && a.explosion_radius > 0f) return true;
+            foreach (var a in EnumerateActions(skill))
+                if (ActionUsesSeparateEffect(a) && a.type == "projectile" && a.explosion_radius > 0f)
+                    return true;
             return false;
         }
 
         static bool HasAction(SkillData skill, string type)
         {
-            if (skill?.actions == null) return false;
-            foreach (var a in skill.actions)
+            foreach (var a in EnumerateActions(skill))
                 if (a != null && a.type == type) return true;
             return false;
+        }
+
+        static IEnumerable<SkillAction> EnumerateActions(SkillData skill)
+        {
+            if (skill?.actions != null)
+                foreach (var action in skill.actions) yield return action;
+            if (skill?.follow_up_actions != null)
+                foreach (var action in skill.follow_up_actions) yield return action;
         }
 
         // /v1/images/generations でベース画像を生成し、(Sprite, rawBytes, 使用モデル) を返す。

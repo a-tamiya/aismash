@@ -666,25 +666,7 @@ namespace PromptFighters.Battle
             {
                 CharacterSaveManager.LoadExtraSprites(data.spriteDir, data.extraPoseSprites, data.extraEffectSprites);
             }
-
-            if (HasPoseAndEffectSprites(data.spriteSet)) return;
-            if (string.IsNullOrEmpty(data.spriteDir)) return;
-
-            var loaded = CharacterSaveManager.LoadSpriteSet(data.spriteDir);
-            if (loaded == null) return;
-
-            data.spriteSet = loaded;
-            if (data.characterSprite == null)
-                data.characterSprite = loaded.Get(CharacterSpriteId.Idle1);
-        }
-
-        // pose/effect スプライト（Jump 以降 = index 3..）が1枚でもあるか。idle1/2/3 は対象外。
-        static bool HasPoseAndEffectSprites(CharacterSpriteSet spriteSet)
-        {
-            if (spriteSet?.sprites == null) return false;
-            for (int i = (int)CharacterSpriteId.Jump; i < spriteSet.sprites.Length; i++)
-                if (spriteSet.sprites[i] != null) return true;
-            return false;
+            CharacterSaveManager.LoadMissingSprites(data);
         }
 
         // ボス用のキャラデータを用意する。選択済みがあればそれを、無ければプリセット先頭、最後に素のデータを返す。
@@ -725,6 +707,10 @@ namespace PromptFighters.Battle
         static void ApplySprite(Fighter fighter, CharacterData data)
         {
             if (fighter == null || data == null) return;
+
+            // PreBattlePanel以外から直接トレーニング/対戦を開始しても、保存済みの技画像を
+            // Fighterへ渡し損ねないよう、ここを最終防衛線として不足分を補完する。
+            CharacterSaveManager.LoadMissingSprites(data);
 
             // ボス専用の追加技プール・専用スプライト（通常キャラは空リストのまま＝無影響）
             fighter.SetExtraSkillSprites(data.extraPoseSprites, data.extraEffectSprites);

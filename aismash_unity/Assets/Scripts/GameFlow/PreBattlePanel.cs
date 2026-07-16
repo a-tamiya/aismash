@@ -96,7 +96,10 @@ namespace PromptFighters.GameFlow
         TextMeshProUGUI _deleteConfirmNameText;
         bool _deletePendingIsP1;
         Coroutine _generationCoroutine;
+        Coroutine _generationVoiceCoroutine;
+        readonly Coroutine[] _generationVoiceJobs = new Coroutine[2];
         bool _generationTrainingActive;
+        const float GenerationVoiceWatchdogSeconds = 1225f;
         TextMeshProUGUI _debugSkipImageLabel;
 
         // 生成進捗オーバーレイ（生成中も自由にプレイできるよう、生成画面に移行せず常時表示する）。
@@ -2694,10 +2697,26 @@ namespace PromptFighters.GameFlow
                 StopCoroutine(_generationCoroutine);
                 _generationCoroutine = null;
             }
+            StopGenerationVoiceJobs();
+            if (_generationVoiceCoroutine != null)
+            {
+                StopCoroutine(_generationVoiceCoroutine);
+                _generationVoiceCoroutine = null;
+            }
             _generationTrainingActive = false;
             _generatingPanel?.SetActive(false);
             ShowGenOverlay(false);
             ShowPanel();
+        }
+
+        void StopGenerationVoiceJobs()
+        {
+            for (int i = 0; i < _generationVoiceJobs.Length; i++)
+            {
+                if (_generationVoiceJobs[i] != null)
+                    StopCoroutine(_generationVoiceJobs[i]);
+                _generationVoiceJobs[i] = null;
+            }
         }
 
         IEnumerator GenerateBothChars(CharacterData preset1, CharacterData preset2,
@@ -2798,6 +2817,17 @@ namespace PromptFighters.GameFlow
                 usedFallback2 = true; // 同上（genP2=trueかつAI生成失敗時のみ）
             }
 
+            // キャラ設定が揃った時点でボイス生成を開始し、この後の画像21枚生成と並走させる。
+            // voices/とsprites/は別ディレクトリなので競合せず、最終JSON保存だけは両方の完了後に行う。
+            bool genVoice1 = genP1 && aiOk1;
+            bool genVoice2 = genP2 && aiOk2;
+            if (genVoice1 || genVoice2)
+            {
+                UpdateGeneratingStatus("キャラクター画像とボイスを並行生成中...");
+                _generationVoiceCoroutine = StartCoroutine(
+                    GenerateCharacterVoices(generatedData1, generatedData2, genVoice1, genVoice2));
+            }
+
             // 画像生成はAIキャラ生成が成功した側だけ行う。
             // 画像はローカル生成できないため、キャラ生成が失敗（API不通）した側で
             // 画像生成を試みても無駄に長時間ハングするだけなのでスキップする。
@@ -2832,18 +2862,17 @@ namespace PromptFighters.GameFlow
                 yield return new WaitForSeconds(1.0f);
             }
 
-            // 画像まで完成したAIキャラは、登場台詞＋4技のボイスを生成してローカル保存する。
-            // ボイス生成だけが失敗してもキャラクター本体は破棄せず、無音で利用可能にする。
-            bool genVoice1 = genP1 && aiOk1 &&
-                (DebugSettings.SkipImageGeneration || generatedData1?.characterSprite != null);
-            bool genVoice2 = genP2 && aiOk2 &&
-                (DebugSettings.SkipImageGeneration || generatedData2?.characterSprite != null);
-            if (genVoice1 || genVoice2)
+            // 画像と並走していたボイスを保存前に合流する。音声だけが失敗した場合は
+            // generated=falseのままキャラ本体を保存し、後から個別再生成できるようにする。
+            if (_generationVoiceCoroutine != null)
             {
-                UpdateGeneratingStatus("AI生成キャラボイスを作成中...");
-                if (genVoice1) SetGenProgress(0, 96);
-                if (genVoice2) SetGenProgress(1, 96);
-                yield return GenerateCharacterVoices(generatedData1, generatedData2, genVoice1, genVoice2);
+                UpdateGeneratingStatus("画像生成完了・キャラボイスの完了待ち...");
+                yield return _generationVoiceCoroutine;
+                _generationVoiceCoroutine = null;
+                if (genVoice1 && _genPercent[0] >= 0)
+                    SetGenProgress(0, Mathf.Max(_genPercent[0], 98));
+                if (genVoice2 && _genPercent[1] >= 0)
+                    SetGenProgress(1, Mathf.Max(_genPercent[1], 98));
             }
 
             _generatingPanel?.SetActive(false);
@@ -2877,34 +2906,79 @@ namespace PromptFighters.GameFlow
         {
             bool done1 = !generateP1;
             bool done2 = !generateP2;
+            _generationVoiceJobs[0] = null;
+            _generationVoiceJobs[1] = null;
 
             if (generateP1)
             {
-                CharacterVoiceGenerator.GenerateSet(this, data1,
+                Coroutine startedJob = CharacterVoiceGenerator.GenerateSet(this, data1,
                     message => UpdateGeneratingStatus("1P " + message),
                     count =>
                     {
                         if (count < 5)
                             Debug.LogWarning($"[CharacterVoice] 1Pは{count}/5件のボイスを保存しました");
-                        SetGenProgress(0, 98);
                         done1 = true;
+                        _generationVoiceJobs[0] = null;
                     });
+                // APIキー未設定等では開始呼び出し内で同期完了するため、完了済みhandleを残さない。
+                if (!done1) _generationVoiceJobs[0] = startedJob;
             }
 
             if (generateP2)
             {
-                CharacterVoiceGenerator.GenerateSet(this, data2,
+                Coroutine startedJob = CharacterVoiceGenerator.GenerateSet(this, data2,
                     message => UpdateGeneratingStatus("2P " + message),
                     count =>
                     {
                         if (count < 5)
                             Debug.LogWarning($"[CharacterVoice] 2Pは{count}/5件のボイスを保存しました");
-                        SetGenProgress(1, 98);
                         done2 = true;
+                        _generationVoiceJobs[1] = null;
                     });
+                if (!done2) _generationVoiceJobs[1] = startedJob;
             }
 
-            yield return new WaitUntil(() => done1 && done2);
+            float deadline = Time.realtimeSinceStartup + GenerationVoiceWatchdogSeconds;
+            try
+            {
+                while ((!done1 || !done2) && Time.realtimeSinceStartup < deadline)
+                    yield return null;
+
+                if (!done1)
+                {
+                    if (_generationVoiceJobs[0] != null) StopCoroutine(_generationVoiceJobs[0]);
+                    _generationVoiceJobs[0] = null;
+                    if (data1?.voiceProfile != null)
+                    {
+                        data1.voiceProfile.generated = false;
+                        data1.voiceProfile.qualityVersion = 0;
+                        data1.voiceProfile.generationId = null;
+                    }
+                    done1 = true;
+                    Debug.LogWarning("[CharacterVoice] 1Pボイス生成が安全期限を超えたため、無音で保存を続行します");
+                }
+                if (!done2)
+                {
+                    if (_generationVoiceJobs[1] != null) StopCoroutine(_generationVoiceJobs[1]);
+                    _generationVoiceJobs[1] = null;
+                    if (data2?.voiceProfile != null)
+                    {
+                        data2.voiceProfile.generated = false;
+                        data2.voiceProfile.qualityVersion = 0;
+                        data2.voiceProfile.generationId = null;
+                    }
+                    done2 = true;
+                    Debug.LogWarning("[CharacterVoice] 2Pボイス生成が安全期限を超えたため、無音で保存を続行します");
+                }
+            }
+            finally
+            {
+                // 親のキャラ生成がキャンセルされた場合も、音声API通信だけを残さない。
+                if (!done1 && _generationVoiceJobs[0] != null) StopCoroutine(_generationVoiceJobs[0]);
+                if (!done2 && _generationVoiceJobs[1] != null) StopCoroutine(_generationVoiceJobs[1]);
+                if (!done1) _generationVoiceJobs[0] = null;
+                if (!done2) _generationVoiceJobs[1] = null;
+            }
         }
 
         // AI生成が通信エラー等で失敗し、ローカル生成（PromptCharacterFactory.Create）に切り替わった
@@ -3040,27 +3114,7 @@ namespace PromptFighters.GameFlow
         static void EnsureSpriteSet(CharacterData data)
         {
             if (data == null) return;
-            if (HasPoseAndEffectSprites(data.spriteSet)) return;
-            if (string.IsNullOrEmpty(data.spriteDir)) return;
-
-            var loaded = CharacterSaveManager.LoadSpriteSet(data.spriteDir);
-            if (loaded == null) return;
-
-            data.spriteSet = loaded;
-            if (data.characterSprite == null)
-                data.characterSprite = loaded.Get(CharacterSpriteId.Idle1);
-        }
-
-        // pose/effect スプライト（Jump 以降 = index 3..）が1枚でもあるか。
-        // idle1/2/3(index 0..2) は対象外。戦闘開始時の完全ロード判定に使う。
-        static bool HasPoseAndEffectSprites(CharacterSpriteSet spriteSet)
-        {
-            if (spriteSet?.sprites == null) return false;
-            for (int i = (int)CharacterSpriteId.Jump; i < spriteSet.sprites.Length; i++)
-            {
-                if (spriteSet.sprites[i] != null) return true;
-            }
-            return false;
+            CharacterSaveManager.LoadMissingSprites(data);
         }
 
         CharacterData GetPreset(bool isP1)

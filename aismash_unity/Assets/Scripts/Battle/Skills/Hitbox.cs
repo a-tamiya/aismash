@@ -274,7 +274,7 @@ namespace PromptFighters.Battle.Skills
             _activated = true;
             _visualBaseScale = transform.localScale;
             UpdateSpatialOutline();
-            if (UsesOutlineOnlyVisual() && _sr != null) _sr.enabled = false;
+            if (UsesProceduralFallbackVisual() && _sr != null) _sr.enabled = false;
 
             // 設置技: アーム時間中は判定を無効化（密着で即当たる置き逃げを防ぎ、「設置した」感を出す）
             float armed = 0f;
@@ -319,9 +319,10 @@ namespace PromptFighters.Battle.Skills
             if (_debugSr == null) return;
             bool show = DebugSettings.ShowHitboxes;
             _debugSr.enabled = show;
-            if (_shapeOutlineA != null) _shapeOutlineA.enabled = !show && !HideVisual && UsesProceduralShapeOutline();
+            if (_shapeOutlineA != null)
+                _shapeOutlineA.enabled = !show && !HideVisual && UsesProceduralFallbackVisual();
             if (_shapeOutlineB != null) _shapeOutlineB.enabled = !show && !HideVisual &&
-                SpatialShape == "annulus" && SpatialInnerRadius > 0f;
+                UsesProceduralFallbackVisual() && SpatialShape == "annulus" && SpatialInnerRadius > 0f;
             if (show && _col != null)
             {
                 Vector2 size = DesiredWorldSize;
@@ -334,7 +335,7 @@ namespace PromptFighters.Battle.Skills
 
             // デバッグ中はエフェクトスプライトを非表示にしてブロックのみ見せる
             if (!HideVisual && _sr != null)
-                _sr.enabled = !show && !UsesOutlineOnlyVisual();
+                _sr.enabled = !show && !UsesProceduralFallbackVisual();
         }
 
         // プールへ返却する
@@ -356,17 +357,16 @@ namespace PromptFighters.Battle.Skills
             if (_shapeOutlineB != null) Destroy(_shapeOutlineB.gameObject);
         }
 
-        bool UsesProceduralShapeOutline()
-            => SpatialShape == "annulus" || SpatialShape == "arc" || SpatialShape == "cross" ||
-               SpatialShape == "cone" || SpatialShape == "line" || SpatialShape == "column";
-
-        bool UsesOutlineOnlyVisual()
-            => SpatialShape == "annulus" || SpatialShape == "arc" || SpatialShape == "cross" ||
-               SpatialShape == "cone";
+        // 生成済みの技エフェクト画像を最優先する。空間形状の輪郭は画像が無い場合だけ使い、
+        // annulus/arc/cross/cone等を指定しただけで既存・生成済みPNGを置換しない。
+        bool UsesProceduralFallbackVisual()
+            => EffectSprite == null &&
+               (SpatialShape == "annulus" || SpatialShape == "arc" || SpatialShape == "cross" ||
+                SpatialShape == "cone" || SpatialShape == "line" || SpatialShape == "column");
 
         void UpdateSpatialOutline()
         {
-            if (!UsesProceduralShapeOutline() || HideVisual)
+            if (!UsesProceduralFallbackVisual() || HideVisual)
             {
                 if (_shapeOutlineA != null) _shapeOutlineA.enabled = false;
                 if (_shapeOutlineB != null) _shapeOutlineB.enabled = false;

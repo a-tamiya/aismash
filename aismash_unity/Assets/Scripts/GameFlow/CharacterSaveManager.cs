@@ -573,6 +573,72 @@ namespace PromptFighters.GameFlow
             return anyLoaded ? set : null;
         }
 
+        // 選択画面ではidleだけを遅延ロードするため、戦闘開始時にディスク上に存在する
+        // pose/effectのうち未ロードのものだけを補完する。生成済みのメモリ上スプライトは上書きしない。
+        public static bool LoadMissingSprites(CharacterData data)
+        {
+            if (data == null) return false;
+
+            data.spriteSet ??= new CharacterSpriteSet();
+            data.spriteSet.EnsureCapacity();
+            bool anyLoaded = false;
+            if (data.characterSprite != null &&
+                data.spriteSet.Get(CharacterSpriteId.Idle1, null, fallbackToPrimary: false) == null)
+            {
+                data.spriteSet.Set(CharacterSpriteId.Idle1, data.characterSprite);
+                anyLoaded = true;
+            }
+            if (!HasUnloadedSpriteFiles(data)) return anyLoaded;
+
+            foreach (var (id, filename) in SpriteEntries)
+            {
+                int index = (int)id;
+                if (data.spriteSet.sprites[index] != null) continue;
+
+                string path = Path.Combine(data.spriteDir, filename + ".png");
+                if (!File.Exists(path)) continue;
+                Sprite sprite = SpriteLoader.LoadDirect(path, IsEffectSprite(id));
+                if (sprite == null) continue;
+                data.spriteSet.Set(id, sprite);
+                anyLoaded = true;
+            }
+
+            if (data.characterSprite == null)
+            {
+                data.characterSprite = data.spriteSet.Get(
+                    CharacterSpriteId.Idle1, null, fallbackToPrimary: false);
+                if (data.characterSprite == null)
+                {
+                    string idlePath = Path.Combine(data.spriteDir, "idle1.png");
+                    if (File.Exists(idlePath))
+                    {
+                        data.characterSprite = SpriteLoader.LoadDirect(idlePath);
+                        if (data.characterSprite != null)
+                            data.spriteSet.Set(CharacterSpriteId.Idle1, data.characterSprite);
+                    }
+                }
+            }
+            return anyLoaded;
+        }
+
+        public static bool HasUnloadedSpriteFiles(CharacterData data)
+        {
+            if (data == null || string.IsNullOrEmpty(data.spriteDir) || !Directory.Exists(data.spriteDir))
+                return false;
+            Sprite[] sprites = data.spriteSet?.sprites;
+            foreach (var (id, filename) in SpriteEntries)
+            {
+                if (id == CharacterSpriteId.Idle1 && data.characterSprite != null) continue;
+                string path = Path.Combine(data.spriteDir, filename + ".png");
+                if (!File.Exists(path)) continue;
+
+                int index = (int)id;
+                if (sprites == null || index >= sprites.Length || sprites[index] == null)
+                    return true;
+            }
+            return false;
+        }
+
         // スプライトセットを1枚ずつフレーム分割で非同期ロードし、data へ反映する。
         // SpriteEntries の並び順（idle1/2/3 が先頭）により待機モーションが最優先で揃う。
         // 1フレームに大量の同期デコードが集中して起きるヒッチを防ぐ。
