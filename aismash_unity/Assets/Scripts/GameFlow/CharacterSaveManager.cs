@@ -18,6 +18,7 @@ namespace PromptFighters.GameFlow
         static string SaveDir => Path.Combine(Application.persistentDataPath, "SavedChars");
         static readonly object SaveStampLock = new object();
         static long _lastSaveStamp;
+        static string _lastRecoveredSpriteDir;
         static readonly string[] VoiceFilenames = { "intro", "attack_a", "attack_b", "attack_c", "smash_side" };
 
         static readonly (CharacterSpriteId id, string filename)[] SpriteEntries =
@@ -116,6 +117,7 @@ namespace PromptFighters.GameFlow
                 data.spriteDir = Path.Combine(SaveDir, id, "sprites");
                 data.voiceDir = Path.Combine(SaveDir, id, "voices");
                 string json = Serialize(data);
+                ValidateSerializedJson(json, data.characterName);
                 WriteTextAtomically(path, json);
                 PresetCharacterLoader.ClearCache();
                 Debug.Log($"[Save] 保存完了: {path}");
@@ -126,6 +128,31 @@ namespace PromptFighters.GameFlow
                 Debug.LogWarning($"[Save] 保存失敗: {e.Message}");
                 return false;
             }
+        }
+
+        static void ValidateSerializedJson(string json, string expectedName)
+        {
+            CharacterJsonRaw raw;
+            try
+            {
+                // SkillJsonParserの旧データ補正を通さず、保存内容そのものを厳密に再読込する。
+                raw = JsonUtility.FromJson<CharacterJsonRaw>(json);
+            }
+            catch (Exception e)
+            {
+                throw new InvalidDataException("保存JSONの再読込検証に失敗しました", e);
+            }
+            if (raw == null || string.IsNullOrWhiteSpace(raw.character_name) ||
+                !string.Equals(raw.character_name, expectedName, StringComparison.Ordinal))
+                throw new InvalidDataException("保存JSONのキャラクター名を再読込できませんでした");
+        }
+
+        // 旧形式の不正改行を復旧したキャラを、起動直後に一度だけロスターで見せるための通知。
+        public static string ConsumeLastRecoveredSpriteDir()
+        {
+            string result = _lastRecoveredSpriteDir;
+            _lastRecoveredSpriteDir = null;
+            return result;
         }
 
         static void WriteTextAtomically(string path, string contents)
@@ -261,7 +288,9 @@ namespace PromptFighters.GameFlow
             {
                 try
                 {
-                    string json = File.ReadAllText(path, Encoding.UTF8);
+                    string originalJson = File.ReadAllText(path, Encoding.UTF8);
+                    string json = SkillJsonParser.RepairRawControlCharactersInStrings(
+                        originalJson, out bool repairedLegacyControls);
                     var data    = SkillJsonParser.Parse(json);
                     if (data == null) continue;
 
@@ -271,6 +300,24 @@ namespace PromptFighters.GameFlow
                     RecoverInterruptedVoiceSwap(voiceDir, data.voiceProfile);
                     data.spriteDir   = spriteDir;
                     data.voiceDir    = voiceDir;
+
+                    // 旧保存処理がCRLFのCRを文字列内へ生で残したJSONは、解析成功後に同じIDへ
+                    // 原子的に書き直す。画像・ボイス用ディレクトリはそのまま保持する。
+                    if (repairedLegacyControls)
+                    {
+                        try
+                        {
+                            ValidateSerializedJson(json, data.characterName);
+                            WriteTextAtomically(path, json);
+                            _lastRecoveredSpriteDir = spriteDir;
+                            Debug.Log($"[Save] 旧保存JSONの改行を修復: {Path.GetFileName(path)}");
+                        }
+                        catch (Exception repairError)
+                        {
+                            Debug.LogWarning($"[Save] 旧保存JSONの修復保存に失敗 ({Path.GetFileName(path)}): " +
+                                repairError.Message);
+                        }
+                    }
 
                     // Idle1をプレビュー用にロード
                     string idle1 = Path.Combine(spriteDir, "idle1.png");
@@ -735,7 +782,36 @@ namespace PromptFighters.GameFlow
             sb.Append("}");
         }
 
-        static string Q(string s) => s == null ? "\"\"" : $"\"{s.Replace("\\","\\\\").Replace("\"","\\\"").Replace("\n","\\n")}\"";
+        static string Q(string s)
+        {
+            if (s == null) return "\"\"";
+            var escaped = new StringBuilder(s.Length + 8);
+            escaped.Append('"');
+            for (int i = 0; i < s.Length; i++)
+            {
+                char c = s[i];
+                switch (c)
+                {
+                    case '"':  escaped.Append("\\\""); break;
+                    case '\\': escaped.Append("\\\\"); break;
+                    case '\b': escaped.Append("\\b"); break;
+                    case '\f': escaped.Append("\\f"); break;
+                    case '\n': escaped.Append("\\n"); break;
+                    case '\r': escaped.Append("\\r"); break;
+                    case '\t': escaped.Append("\\t"); break;
+                    default:
+                        if (c < 0x20)
+                        {
+                            escaped.Append("\\u");
+                            escaped.Append(((int)c).ToString("x4"));
+                        }
+                        else escaped.Append(c);
+                        break;
+                }
+            }
+            escaped.Append('"');
+            return escaped.ToString();
+        }
 
         static string SlotStr(SkillSlot s) => s switch {
             SkillSlot.AttackA   => "attack_a",

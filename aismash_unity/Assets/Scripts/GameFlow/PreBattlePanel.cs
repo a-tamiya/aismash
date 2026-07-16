@@ -182,6 +182,7 @@ namespace PromptFighters.GameFlow
             _presets.AddRange(CharacterSaveManager.LoadAll());
             ExcludeFixedBossFromPresets();
             BuildBossPresets();
+            FocusRecoveredCharacterIfAny();
             if (_presets.Count < 2) _p2PresetIdx = 0;
             BuildTitlePanel();
             BuildPanel();
@@ -2935,6 +2936,7 @@ namespace PromptFighters.GameFlow
             {
                 CharacterSaveManager.DiscardPrepared(data);
                 _genPercent[slot] = -1; // オーバーレイに失敗表示
+                _genResultText[slot] = "画像生成に失敗（保存されませんでした）";
                 Debug.LogWarning($"[PreBattle] 「{data.characterName}」は画像生成に失敗したため保存しませんでした");
                 return false;
             }
@@ -2943,6 +2945,7 @@ namespace PromptFighters.GameFlow
             {
                 CharacterSaveManager.DiscardPrepared(data);
                 _genPercent[slot] = -1;
+                _genResultText[slot] = "画像保存に失敗（一覧へ追加されませんでした）";
                 Debug.LogWarning($"[PreBattle] 「{data.characterName}」は画像ファイルの保存に失敗したため完成扱いにしませんでした");
                 return false;
             }
@@ -2951,12 +2954,18 @@ namespace PromptFighters.GameFlow
             {
                 CharacterSaveManager.DiscardPrepared(data);
                 _genPercent[slot] = -1;
+                _genResultText[slot] = "キャラ保存に失敗（一覧へ追加されませんでした）";
                 Debug.LogWarning($"[PreBattle] 「{data.characterName}」は保存に失敗したため完成扱いにしませんでした");
                 return false;
             }
             if (!_presets.Contains(data)) _presets.Add(data);
-            if (isP1) _p1PresetIdx = _presets.IndexOf(data);
-            else      _p2PresetIdx = _presets.IndexOf(data);
+            int newIndex = _presets.IndexOf(data);
+            if (isP1) _p1PresetIdx = newIndex;
+            else      _p2PresetIdx = newIndex;
+            // 一覧は24件単位のページ制。追加後に現在ページを据え置くと、保存件数が多い環境で
+            // 「完了したのに一覧にいない」ように見えるため、新キャラのページへ追従する。
+            if (newIndex >= 0)
+                _rosterPage = newIndex / (RosterColumns * RosterRows);
             if (!string.IsNullOrWhiteSpace(data.characterName))
                 _newCharNames.Add(data.characterName);
             // 完成披露の演出キューへ（安全な画面に戻ったタイミングで再生される）
@@ -3107,17 +3116,18 @@ namespace PromptFighters.GameFlow
             return null;
         }
 
-        // 生成進捗メッセージから画像枚数を解析して "N/15" 表示に変換する（Feature E）
+        // 生成進捗メッセージから画像枚数を解析して "N/全枚数" 表示に変換する（Feature E）
         static string FormatImageProgress(string msg)
         {
+            int total = CharacterSpriteSet.SpriteCount;
             if (msg.Contains("残り") && msg.Contains("枚"))
             {
                 var m = System.Text.RegularExpressions.Regex.Match(msg, @"残り\s*(\d+)\s*枚");
                 if (m.Success && int.TryParse(m.Groups[1].Value, out int rem))
-                    return $"画像生成中 {15 - rem}/15 完了";
+                    return $"画像生成中 {Mathf.Clamp(total - rem, 0, total)}/{total} 完了";
             }
-            if (msg.Contains("バリエーション")) return "画像生成中 1/15 完了";
-            if (msg.Contains("ベース画像"))    return "画像生成中 0/15 完了";
+            if (msg.Contains("バリエーション")) return $"画像生成中 1/{total} 完了";
+            if (msg.Contains("ベース画像"))    return $"画像生成中 0/{total} 完了";
             return msg;
         }
 
@@ -3221,6 +3231,20 @@ namespace PromptFighters.GameFlow
 
             return _presets.FindIndex(c => c != null &&
                 c.characterName == target.characterName && c.spritePath == target.spritePath);
+        }
+
+        void FocusRecoveredCharacterIfAny()
+        {
+            string recoveredSpriteDir = CharacterSaveManager.ConsumeLastRecoveredSpriteDir();
+            if (string.IsNullOrEmpty(recoveredSpriteDir) || _presets == null) return;
+            int index = _presets.FindIndex(c => c != null &&
+                string.Equals(c.spriteDir, recoveredSpriteDir, System.StringComparison.OrdinalIgnoreCase));
+            if (index < 0) return;
+
+            _p1PresetIdx = index;
+            _rosterPage = index / (RosterColumns * RosterRows);
+            if (!string.IsNullOrWhiteSpace(_presets[index].characterName))
+                _newCharNames.Add(_presets[index].characterName);
         }
 
         void UpdateCategoryLabels()

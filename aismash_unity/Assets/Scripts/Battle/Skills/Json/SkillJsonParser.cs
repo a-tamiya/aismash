@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text;
 using System.Text.RegularExpressions;
 using UnityEngine;
 
@@ -201,9 +202,71 @@ namespace PromptFighters.Battle.Skills.Json
         static string NormalizeJsonForUnity(string json)
         {
             if (string.IsNullOrEmpty(json)) return json;
+            json = RepairRawControlCharactersInStrings(json, out _);
             json = Regex.Replace(json, "\\\"chargeable\\\"\\s*:\\s*\\\"true\\\"", "\"chargeable\": true", RegexOptions.IgnoreCase);
             json = Regex.Replace(json, "\\\"chargeable\\\"\\s*:\\s*\\\"false\\\"", "\"chargeable\": false", RegexOptions.IgnoreCase);
             return json;
+        }
+
+        // 旧保存処理がWindows改行のCRを文字列内へ生のまま残したJSONを復旧する。
+        // JSON文字列の外側にある整形用改行は保持し、文字列内のU+0000〜U+001Fだけをescapeする。
+        public static string RepairRawControlCharactersInStrings(string json, out bool repaired)
+        {
+            repaired = false;
+            if (string.IsNullOrEmpty(json)) return json;
+
+            var sb = new StringBuilder(json.Length + 16);
+            bool inString = false;
+            bool escaped = false;
+            for (int i = 0; i < json.Length; i++)
+            {
+                char c = json[i];
+                if (!inString)
+                {
+                    sb.Append(c);
+                    if (c == '"') inString = true;
+                    continue;
+                }
+
+                if (escaped)
+                {
+                    sb.Append(c);
+                    escaped = false;
+                    continue;
+                }
+                if (c == '\\')
+                {
+                    sb.Append(c);
+                    escaped = true;
+                    continue;
+                }
+                if (c == '"')
+                {
+                    sb.Append(c);
+                    inString = false;
+                    continue;
+                }
+                if (c >= 0x20)
+                {
+                    sb.Append(c);
+                    continue;
+                }
+
+                repaired = true;
+                switch (c)
+                {
+                    case '\b': sb.Append("\\b"); break;
+                    case '\f': sb.Append("\\f"); break;
+                    case '\n': sb.Append("\\n"); break;
+                    case '\r': sb.Append("\\r"); break;
+                    case '\t': sb.Append("\\t"); break;
+                    default:
+                        sb.Append("\\u");
+                        sb.Append(((int)c).ToString("x4"));
+                        break;
+                }
+            }
+            return sb.ToString();
         }
     }
 }
