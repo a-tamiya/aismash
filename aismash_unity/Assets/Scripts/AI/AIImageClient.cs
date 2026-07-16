@@ -12,7 +12,8 @@ using PromptFighters.Utils;
 namespace PromptFighters.AI
 {
     // OpenAI Images API でキャラクタースプライトセットを生成する。
-    // ベース画像(Idle1)を /v1/images/generations で生成後、残り14枚を /v1/images/edits で並列生成する。
+    // ベース画像(Idle1)を /v1/images/generations で生成後、残りのポーズ/エフェクトを
+    // /v1/images/edits で並列生成する。
     // 複数キャラを同時生成しても全リクエストは共通レートリミッターを通り、瞬間的なバーストを防ぐ。
     public static class AIImageClient
     {
@@ -136,23 +137,43 @@ namespace PromptFighters.AI
         const string CharSuffix   = "facing right, single character only, one character, complete full body from head to toe not cropped, flat chroma key green background (#00FF00), no text, no watermark, no shadow, no duplicate. Anime-style character with sharp, bold lines. Highly saturated and energetic color palette.";
         const string EffectSuffix = "2D game visual effect only, no character figure, no text, flat chroma key green background (#00FF00), bright energetic colors, centered in frame";
 
-        // (id, filename, editPrompt) — ベース画像を参照して生成する14枚のバリエーション
+        // 追加ポーズはIdle1を直接参照するeditとして生成する。外見説明を再解釈して別人化しないよう、
+        // 同一性・全身・基準位置・一時的な技エフェクトを描かないことを強く固定する。
+        const string IdentityLockedPoseSuffix =
+            "STRICT REFERENCE-IMAGE EDIT. Preserve the exact same character identity from the supplied image: " +
+            "identical face, eyes, skin tone, hairstyle silhouette and colors, body proportions, outfit layers, " +
+            "patterns and colors, footwear, accessories, weapon design, and weapon hand. Change the pose only. " +
+            "Do not redesign, add, remove, or replace any costume piece, accessory, limb, or weapon. " +
+            "Keep the pelvis/root at the same horizontal canvas position and keep exactly the same apparent body scale. " +
+            "For a grounded pose, keep the lowest planted foot on the same bottom baseline as the reference. " +
+            "Show one complete full body from head to toe with every limb and the entire weapon visible, generous margins, " +
+            "never cropped, never duplicated, facing right. Character pose only: no projectile, beam, summoned creature, " +
+            "detached visual effect, aura, impact burst, motion trail, text, watermark, or shadow. " +
+            "Flat chroma key green background (#00FF00). Match the reference line art, shading, rendering style, and palette exactly.";
+
+        // (id, filename, editPrompt) — ベース画像を参照して生成するバリエーション
         static readonly (CharacterSpriteId id, string filename, string prompt, string size)[] BaseEditEntries =
         {
-            (CharacterSpriteId.Idle2,      "idle2",       $"slightly different weight shift idle pose, same character, {CharSuffix}", CharacterSize),
-            (CharacterSpriteId.Idle3,      "idle3",       $"lively idle pose with slight arm movement, same character, {CharSuffix}", CharacterSize),
-            (CharacterSpriteId.Jump,       "jump",        $"jumping airborne pose feet off ground, same character, {CharSuffix}", CharacterSize),
-            (CharacterSpriteId.Damage,     "damage",      $"hurt recoil reaction flinching backward, same character, {CharSuffix}", CharacterSize),
-            (CharacterSpriteId.Grab,       "grab",        $"grabbing grappling reach-out pose arms extended forward right, same character, {CharSuffix}", CharacterSize),
-            (CharacterSpriteId.Dash,       "dash",        $"fast dashing sprint pose leaning forward to the right, same character, {CharSuffix}", CharacterSize),
-            (CharacterSpriteId.AttackA,    "attack_a",    $"attack A punching or slashing to the right, same character, {CharSuffix}", CharacterSize),
-            (CharacterSpriteId.AttackB,    "attack_b",    $"attack B projectile launch aiming to the right, same character, {CharSuffix}", CharacterSize),
-            (CharacterSpriteId.AttackC,    "attack_c",    $"attack C special technique toward the right, same character, {CharSuffix}", CharacterSize),
-            (CharacterSpriteId.SmashSide,  "smash_side",  $"powerful side smash heavy swing to the right, same character, {CharSuffix}", CharacterSize),
+            (CharacterSpriteId.Idle2,      "idle2",       $"subtle second idle animation keyframe, a small readable weight shift only, {IdentityLockedPoseSuffix}", CharacterSize),
+            (CharacterSpriteId.Idle3,      "idle3",       $"subtle third idle animation keyframe that loops naturally back to the reference stance, {IdentityLockedPoseSuffix}", CharacterSize),
+            (CharacterSpriteId.Jump,       "jump",        $"dynamic ascending jump pose, both feet clearly off the ground and the complete figure safely inside frame, {IdentityLockedPoseSuffix}", CharacterSize),
+            (CharacterSpriteId.Damage,     "damage",      $"taking a hit and recoiling backward with a clear hurt silhouette, {IdentityLockedPoseSuffix}", CharacterSize),
+            (CharacterSpriteId.Grab,       "grab",        $"reaching forward with both arms or the free hand to grab an opponent, existing weapon retained and fully visible, {IdentityLockedPoseSuffix}", CharacterSize),
+            (CharacterSpriteId.Dash,       "dash",        $"fast running or dashing to the right with a readable forward lean, {IdentityLockedPoseSuffix}", CharacterSize),
+            (CharacterSpriteId.AttackA,    "attack_a",    $"active impact keyframe for attack A toward the right, {IdentityLockedPoseSuffix}", CharacterSize),
+            (CharacterSpriteId.AttackB,    "attack_b",    $"active impact keyframe for attack B toward the right, {IdentityLockedPoseSuffix}", CharacterSize),
+            (CharacterSpriteId.AttackC,    "attack_c",    $"active impact keyframe for special attack C toward the right, {IdentityLockedPoseSuffix}", CharacterSize),
+            (CharacterSpriteId.SmashSide,  "smash_side",  $"active impact keyframe for a powerful heavy side smash toward the right, {IdentityLockedPoseSuffix}", CharacterSize),
             (CharacterSpriteId.EffectA,    "effect_a",    $"attack A visual effect, {EffectSuffix}", EffectSize),
             (CharacterSpriteId.EffectB,    "effect_b",    $"projectile visual effect, {EffectSuffix}", EffectSize),
             (CharacterSpriteId.EffectC,    "effect_c",    $"special attack visual effect, {EffectSuffix}", EffectSize),
             (CharacterSpriteId.EffectSmash,"effect_smash",$"large powerful smash effect, {EffectSuffix}", EffectSize),
+            (CharacterSpriteId.Guard,      "guard",       $"grounded defensive guard pose, knees bent and weight braced, forearms or the existing weapon protecting the torso, both feet firmly planted on the reference baseline, do not draw a shield or barrier, {IdentityLockedPoseSuffix}", CharacterSize),
+            (CharacterSpriteId.Fall,       "fall",        $"descending airborne pose just after the jump apex, gravity pulling the body downward, legs below the torso and arms or clothing trailing slightly upward, both feet visibly off the ground, keep the complete figure safely inside the canvas, {IdentityLockedPoseSuffix}", CharacterSize),
+            (CharacterSpriteId.AttackA_Windup, "attack_a_windup", $"clear anticipation pose immediately before attack A, weight loaded away from the attack direction, no attack released yet, {IdentityLockedPoseSuffix}", CharacterSize),
+            (CharacterSpriteId.AttackB_Windup, "attack_b_windup", $"clear anticipation pose immediately before attack B, weapon or hands drawn back to prepare the technique, no attack released yet, {IdentityLockedPoseSuffix}", CharacterSize),
+            (CharacterSpriteId.AttackC_Windup, "attack_c_windup", $"clear anticipation pose immediately before attack C, visibly preparing the special technique, no attack released yet, {IdentityLockedPoseSuffix}", CharacterSize),
+            (CharacterSpriteId.Smash_Windup,   "smash_windup",    $"strong exaggerated anticipation pose immediately before a heavy side smash to the right, hips and shoulders wound back, weight planted, no attack released yet, {IdentityLockedPoseSuffix}", CharacterSize),
         };
 
         public static Coroutine GenerateSpriteSet(MonoBehaviour runner,
@@ -220,9 +241,9 @@ namespace PromptFighters.AI
                 TrySavePng(saveDir, "idle1", baseSprite);
             }
 
-            // Step 2: 残り14枚を並列生成 (images/edits)。各Coroutineは共通レートリミッターで開始をずらす。
-            onProgress?.Invoke($"バリエーション画像を並列生成中... (14枚)");
+            // Step 2: 残りの画像を並列生成 (images/edits)。各Coroutineは共通レートリミッターで開始をずらす。
             var editEntries = BuildEditEntries(data);
+            onProgress?.Invoke($"バリエーション画像を並列生成中... ({editEntries.Count}枚)");
             int pending = editEntries.Count;
             int failedCount = 0;
             var failedIds = new List<CharacterSpriteId>();
@@ -236,10 +257,11 @@ namespace PromptFighters.AI
                     pending--;
                     continue;
                 }
-                // baseVisualPrompt（外見説明）+ ポーズ指示（CharSuffixを既に含む）
+                // baseVisualPrompt（外見説明）+ 同一性固定済みのポーズ指示
                 string fullPrompt = baseVisualPrompt + ", " + editPrompt;
                 runner.StartCoroutine(GenerateEditCoroutine(
                     id, filename, fullPrompt, size, baseRawBytes, key, saveDir, usedModel,
+                    IsEffectSprite(id),
                     message => onProgress?.Invoke(message),
                     (spriteId, fname, sprite) =>
                     {
@@ -249,8 +271,13 @@ namespace PromptFighters.AI
                     },
                     (spriteId, err) =>
                     {
-                        Debug.LogWarning($"[AIImage] {spriteId} 生成失敗（Idle1で代替）: {err}");
-                        set.Set(spriteId, baseSprite);
+                        // 追加ポーズは全並列ジョブ完了後、対応する意味的に近いポーズへ代替する。
+                        // 先にIdle1を入れると、後からJump/Attackが成功しても適切な代替へ更新できない。
+                        if (IsAdditionalPose(spriteId) || IsEffectSprite(spriteId))
+                            set.Set(spriteId, null);
+                        else
+                            set.Set(spriteId, baseSprite);
+                        Debug.LogWarning($"[AIImage] {spriteId} 生成失敗（フォールバック予定）: {err}");
                         failedCount++;
                         failedIds.Add(spriteId);
                         pending--;
@@ -269,23 +296,25 @@ namespace PromptFighters.AI
             }
             if (pending > 0)
             {
-                Debug.LogWarning($"[AIImage] 画像生成が{overallTimeout:F0}秒以内に完了しませんでした（残り{pending}枚をIdle1で代替）");
-                onProgress?.Invoke($"⚠ 画像生成タイムアウト（残り{pending}枚をIdle1で代替）");
+                Debug.LogWarning($"[AIImage] 画像生成が{overallTimeout:F0}秒以内に完了しませんでした（残り{pending}枚を代替）");
+                onProgress?.Invoke($"⚠ 画像生成タイムアウト（残り{pending}枚を代替）");
                 failedCount += pending;
                 pending = 0;
             }
 
+            EnsureAdditionalPoseFallbacks(set, baseSprite);
+
             if (failedCount > 0)
             {
                 string failedList = string.Join(", ", failedIds);
-                Debug.LogWarning($"[AIImage] {failedCount}枚の画像生成に失敗しIdle1で代替しました: {failedList}");
-                onProgress?.Invoke($"⚠ {failedCount}枚の画像生成に失敗（Idle1で代替）: {failedList}");
+                Debug.LogWarning($"[AIImage] {failedCount}枚の画像生成に失敗し代替ポーズを使用します: {failedList}");
+                onProgress?.Invoke($"⚠ {failedCount}枚の画像生成に失敗（代替ポーズを使用）: {failedList}");
             }
 
             onSuccess?.Invoke(set);
         }
 
-        // ボス専用: 通常15枚に加えて、追加技プール(data.extraSkills)の各技に専用のポーズ・エフェクト画像を生成する。
+        // ボス専用: 通常スプライト一式に加えて、追加技プール(data.extraSkills)の各技に専用のポーズ・エフェクト画像を生成する。
         // 既存のGenerateSpriteSet/BuildEditEntries/呼び出し元(PreBattlePanel)には一切触れない、完全に独立した経路。
         public static Coroutine GenerateBossSpriteSet(MonoBehaviour runner,
             CharacterData data,
@@ -335,7 +364,7 @@ namespace PromptFighters.AI
             set.Set(CharacterSpriteId.Idle1, baseSprite);
             if (saveDir != null) TrySavePng(saveDir, "idle1", baseSprite);
 
-            // 通常14枚（既存ロジックを完全再利用）
+            // 通常バリエーション（既存ロジックを完全再利用）
             var editEntries = BuildEditEntries(data);
 
             // 追加技プール分のポーズ・エフェクトエントリを組み立てる
@@ -350,7 +379,9 @@ namespace PromptFighters.AI
                     var skill = data.extraSkills[i];
                     if (skill == null) continue;
 
-                    string posePrompt = $"{baseVisualPrompt}, action pose performing '{skill.skill_name}' ({skill.description}), same character, {CharSuffix}";
+                    string posePrompt =
+                        $"active animation keyframe performing '{skill.skill_name}' ({skill.description}), " +
+                        IdentityLockedPoseSuffix;
                     extraPoseEntries.Add((i, $"extra_pose_{i}", posePrompt, CharacterSize));
 
                     if (NeedsSeparateEffect(skill))
@@ -382,6 +413,7 @@ namespace PromptFighters.AI
                 string fullPrompt = baseVisualPrompt + ", " + editPrompt;
                 runner.StartCoroutine(GenerateEditCoroutine(
                     id, filename, fullPrompt, size, baseRawBytes, key, saveDir, usedModel,
+                    IsEffectSprite(id),
                     message => onProgress?.Invoke(message),
                     (spriteId, fname, sprite) =>
                     {
@@ -391,8 +423,11 @@ namespace PromptFighters.AI
                     },
                     (spriteId, err) =>
                     {
-                        Debug.LogWarning($"[AIImage] {spriteId} 生成失敗（Idle1で代替）: {err}");
-                        set.Set(spriteId, baseSprite);
+                        if (IsAdditionalPose(spriteId) || IsEffectSprite(spriteId))
+                            set.Set(spriteId, null);
+                        else
+                            set.Set(spriteId, baseSprite);
+                        Debug.LogWarning($"[AIImage] {spriteId} 生成失敗（フォールバック予定）: {err}");
                         failedCount++;
                         failedNames.Add(spriteId.ToString());
                         pending--;
@@ -403,6 +438,7 @@ namespace PromptFighters.AI
             {
                 runner.StartCoroutine(GenerateEditCoroutine(
                     CharacterSpriteId.Idle1, filename, prompt, size, baseRawBytes, key, saveDir, usedModel,
+                    false,
                     message => onProgress?.Invoke(message),
                     (_, fname, sprite) =>
                     {
@@ -424,6 +460,7 @@ namespace PromptFighters.AI
             {
                 runner.StartCoroutine(GenerateEditCoroutine(
                     CharacterSpriteId.Idle1, filename, prompt, size, baseRawBytes, key, saveDir, usedModel,
+                    true,
                     message => onProgress?.Invoke(message),
                     (_, fname, sprite) =>
                     {
@@ -456,6 +493,8 @@ namespace PromptFighters.AI
                 pending = 0;
             }
 
+            EnsureAdditionalPoseFallbacks(set, baseSprite);
+
             if (failedCount > 0)
             {
                 string failedList = string.Join(", ", failedNames);
@@ -471,11 +510,78 @@ namespace PromptFighters.AI
             var entries = new List<(CharacterSpriteId id, string filename, string prompt, string size)>(BaseEditEntries);
             if (data?.skills == null) return entries;
 
+            ConfigureActivePose(entries, data.GetSkill(SkillSlot.AttackA), CharacterSpriteId.AttackA, "attack_a");
+            ConfigureActivePose(entries, data.GetSkill(SkillSlot.AttackB), CharacterSpriteId.AttackB, "attack_b");
+            ConfigureActivePose(entries, data.GetSkill(SkillSlot.AttackC), CharacterSpriteId.AttackC, "attack_c");
+            ConfigureActivePose(entries, data.GetSkill(SkillSlot.SmashSide), CharacterSpriteId.SmashSide, "smash_side");
+            ConfigureWindup(entries, data.GetSkill(SkillSlot.AttackA), CharacterSpriteId.AttackA_Windup, "attack_a_windup");
+            ConfigureWindup(entries, data.GetSkill(SkillSlot.AttackB), CharacterSpriteId.AttackB_Windup, "attack_b_windup");
+            ConfigureWindup(entries, data.GetSkill(SkillSlot.AttackC), CharacterSpriteId.AttackC_Windup, "attack_c_windup");
+            ConfigureWindup(entries, data.GetSkill(SkillSlot.SmashSide), CharacterSpriteId.Smash_Windup, "smash_windup");
             ConfigureEffect(entries, data.GetSkill(SkillSlot.AttackA), CharacterSpriteId.EffectA, "effect_a");
             ConfigureEffect(entries, data.GetSkill(SkillSlot.AttackB), CharacterSpriteId.EffectB, "effect_b");
             ConfigureEffect(entries, data.GetSkill(SkillSlot.AttackC), CharacterSpriteId.EffectC, "effect_c");
             ConfigureEffect(entries, data.GetSkill(SkillSlot.SmashSide), CharacterSpriteId.EffectSmash, "effect_smash");
             return entries;
+        }
+
+        static void ConfigureActivePose(
+            List<(CharacterSpriteId id, string filename, string prompt, string size)> entries,
+            SkillData skill, CharacterSpriteId id, string filename)
+        {
+            int index = entries.FindIndex(e => e.id == id);
+            if (index < 0 || skill == null) return;
+
+            string action;
+            if (HasAction(skill, "beam"))
+                action = "the exact instant the beam is released from the existing weapon or hands, without drawing the beam itself";
+            else if (HasAction(skill, "projectile"))
+                action = "the exact instant a projectile is released or thrown, without drawing the projectile itself";
+            else if (HasAction(skill, "uppercut"))
+                action = "the rising strike at maximum extension, body driving upward";
+            else if (HasAction(skill, "dive_attack"))
+                action = "a committed forward-downward diving strike, entire body still safely inside frame";
+            else if (HasAction(skill, "summon"))
+                action = "the completed summoning gesture, without drawing the summoned being or magic effect";
+            else if (HasAction(skill, "counter") || HasAction(skill, "reflector") || HasAction(skill, "barrier"))
+                action = "a strong completed defensive technique stance, without drawing a shield, aura, or barrier";
+            else
+                action = "the strike at maximum readable extension toward the right, with clear body mechanics and silhouette";
+
+            string weight = skill.slot == SkillSlot.SmashSide
+                ? "Make the follow-through feel especially heavy and decisive."
+                : "Make it read clearly as the active frame following the anticipation pose.";
+            entries[index] = (id, filename,
+                $"active animation keyframe for '{skill.skill_name}' ({skill.description}): {action}. {weight} " +
+                IdentityLockedPoseSuffix,
+                CharacterSize);
+        }
+
+        static void ConfigureWindup(
+            List<(CharacterSpriteId id, string filename, string prompt, string size)> entries,
+            SkillData skill, CharacterSpriteId id, string filename)
+        {
+            int index = entries.FindIndex(e => e.id == id);
+            if (index < 0 || skill == null) return;
+
+            string preparation;
+            if (HasAction(skill, "projectile") || HasAction(skill, "beam"))
+                preparation = "aiming or gathering power before release, with the projectile or beam not created yet";
+            else if (HasAction(skill, "summon"))
+                preparation = "beginning the summoning gesture before any creature or object appears";
+            else if (HasAction(skill, "counter") || HasAction(skill, "reflector") ||
+                     HasAction(skill, "barrier") || HasAction(skill, "buff_self"))
+                preparation = "entering the technique stance before its defensive or empowering effect appears";
+            else
+                preparation = "loading the striking limb or existing weapon backward, with the hit not released yet";
+
+            string emphasis = skill.slot == SkillSlot.SmashSide
+                ? "Use an exaggerated, heavy anticipation with firmly planted weight and shoulders wound back."
+                : "Use a clear, readable anticipation silhouette that naturally leads into the attack to the right.";
+            string prompt =
+                $"animation wind-up frame immediately BEFORE performing '{skill.skill_name}' ({skill.description}), " +
+                $"{preparation}. {emphasis} {IdentityLockedPoseSuffix}";
+            entries[index] = (id, filename, prompt, CharacterSize);
         }
 
         static void ConfigureEffect(List<(CharacterSpriteId id, string filename, string prompt, string size)> entries,
@@ -730,6 +836,7 @@ namespace PromptFighters.AI
         static IEnumerator GenerateEditCoroutine(
             CharacterSpriteId id, string filename, string prompt,
             string size, byte[] basePngBytes, string key, string saveDir, string model,
+            bool centerPivot,
             Action<string> onRetry,
             Action<CharacterSpriteId, string, Sprite> onSuccess,
             Action<CharacterSpriteId, string> onError)
@@ -787,7 +894,7 @@ namespace PromptFighters.AI
                         throw new Exception("b64_jsonが見つかりません");
 
                     byte[] rawBytes = Convert.FromBase64String(b64);
-                    processedSprite = RawBytesToSprite(rawBytes);
+                    processedSprite = RawBytesToSprite(rawBytes, centerPivot);
                 }
                 catch (Exception e)
                 {
@@ -814,7 +921,7 @@ namespace PromptFighters.AI
 
         // バイト列 → WhiteBackgroundRemover適用 → Sprite
         // threshold=0.94: 純白に近い画素のみ除去。キャラの肌・明るい服は保護される。
-        static Sprite RawBytesToSprite(byte[] rawBytes)
+        static Sprite RawBytesToSprite(byte[] rawBytes, bool centerPivot = false)
         {
             var raw = new Texture2D(2, 2, TextureFormat.RGBA32, false);
             if (!ImageConversion.LoadImage(raw, rawBytes))
@@ -826,7 +933,7 @@ namespace PromptFighters.AI
             return Sprite.Create(
                 processed,
                 new Rect(0, 0, processed.width, processed.height),
-                new Vector2(0.5f, 0f),
+                centerPivot ? new Vector2(0.5f, 0.5f) : new Vector2(0.5f, 0f),
                 processed.height / 2f);
         }
 
@@ -860,6 +967,34 @@ namespace PromptFighters.AI
             b64Json = resp.data[0].b64_json;
             if (string.IsNullOrEmpty(url) && string.IsNullOrEmpty(b64Json))
                 throw new Exception("data[0].url / data[0].b64_json が見つかりません");
+        }
+
+        static bool IsAdditionalPose(CharacterSpriteId id) =>
+            id == CharacterSpriteId.Guard ||
+            id == CharacterSpriteId.Fall ||
+            id == CharacterSpriteId.AttackA_Windup ||
+            id == CharacterSpriteId.AttackB_Windup ||
+            id == CharacterSpriteId.AttackC_Windup ||
+            id == CharacterSpriteId.Smash_Windup;
+
+        // 追加画像が失敗・タイムアウト・旧保存データ由来で欠けていても、ポーズの意味を保つ。
+        // GetのIdle1自動フォールバックを使わず、生の有無を確認してから対応ポーズを割り当てる。
+        static void EnsureAdditionalPoseFallbacks(CharacterSpriteSet set, Sprite idle1)
+        {
+            if (set == null) return;
+            Sprite Raw(CharacterSpriteId id) => set.Get(id, null, fallbackToPrimary: false);
+            void Fill(CharacterSpriteId id, CharacterSpriteId fallbackId)
+            {
+                if (Raw(id) != null) return;
+                set.Set(id, Raw(fallbackId) ?? idle1);
+            }
+
+            Fill(CharacterSpriteId.Guard, CharacterSpriteId.Idle1);
+            Fill(CharacterSpriteId.Fall, CharacterSpriteId.Jump);
+            Fill(CharacterSpriteId.AttackA_Windup, CharacterSpriteId.AttackA);
+            Fill(CharacterSpriteId.AttackB_Windup, CharacterSpriteId.AttackB);
+            Fill(CharacterSpriteId.AttackC_Windup, CharacterSpriteId.AttackC);
+            Fill(CharacterSpriteId.Smash_Windup, CharacterSpriteId.SmashSide);
         }
 
         static bool IsEffectSprite(CharacterSpriteId id) =>

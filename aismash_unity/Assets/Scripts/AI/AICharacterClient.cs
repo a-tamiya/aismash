@@ -597,6 +597,8 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
 - teleport の direction: ""behind_enemy"" で相手の背後へ回り込む（忍者・暗殺者向け。直後の melee_hitbox と組み合わせて奇襲技にする）
 - 【ノックバック方向】knockback_direction:
   ""away""=通常(default)、""up""=真上(ジャグル)、""spike""=真下(スパイク)、""toward""=引き寄せ(コンボ)、""diagonal_up""=斜め上(遠くへ)、""ground_bounce""=下方向に叩きつけ地面バウンド（コンボ延長）
+  ""vector""=符号付きknockback_x/knockback_yのベクトル、""along_attack""=回転後の攻撃・弾道方向、""from_origin""=各発生中心から外向き、""toward_origin""=各発生中心へ内向き
+  斜めビーム・方向弾はalong_attack、放射/収束/中空円はfrom_origin/toward_originを優先し、見た目の方向と吹き飛びを一致させる
 - 【新アクション types】
   status:""stun"" を使う場合、duration または status_duration は必ず0.4〜0.7秒にする
   counter: duration=カウンター受付秒(1.0〜1.5)、damage_override=カウンター反撃ダメージ。発動中に攻撃を受けると自動で反撃。黄色く光る。
@@ -604,8 +606,27 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
   reflector: duration=反射受付秒(1.0〜3.0)。発動中は相手の飛び道具を速度・威力1.2倍で逆方向に反射する。攻撃判定は一切なし・反射のみ。ピンク色に光る。
     ★ reflector技のactionsにはreflectorアクション1つだけを入れること。melee_hitboxやprojectileと混在させない
   summon: duration=召喚体の寿命(1〜6)、power=移動速度(0.5〜5)、spawn_x/y=出現位置、damage_override=接触ダメージ。召喚するものの見た目はその技スロットのeffect画像として生成される前提で、skill_name/descriptionに召喚物の名前や形状を明確に含める。directionで移動方向を指定できる（forward/backward/left/right/toward_enemy/away_enemy/stationary/diagonal/hover）。diagonal=斜めに往復（跳ねる系・機動兵器向け）、hover=上下にホバリングしながら緩やかに横移動（幽霊・浮遊物向け）。player_controlled:trueならプレイヤーの左右入力で操縦。homing:trueなら敵を上下左右とも追尾する（鳥・使い魔・誘導ミサイル向け）。knockback_directionとstatus/status_duration/chanceも接触時に有効。recovery 0.10〜0.35（召喚直後すぐ動ける）
-- 【area_hitbox の形状】area_hitboxにshapeフィールドを追加可能:
-  shape: ""box""(default/四角)、""cone""(前方扇形・幅広)、""ring""(自分の周囲円形)
+- 【判定形状】shapeは判定とエフェクトの両方に同じ幾何形状として適用される:
+  ""box""(四角/default)、""cone""(前方扇)、""ring""(塗りつぶし円)、""annulus""(ドーナツ。inner_radius=安全な内径)、""arc""(円弧。arc_angle=15〜330度)、""line""(方向つき直線)、""cross""(十字。inner_radius=腕の太さ)、""column""(縦柱)
+  annulus/arcの外径はsize_x（なければrange）。見た目だけ広く判定だけ狭い指定は禁止。同じsize・回転で一致させること
+- 【発生位置と方向】必要な技でactions[]に以下を追加し、従来の4技枠の中で空間的な個性を作る:
+  spawn_origin: ""owner""(自分/default)/""enemy""(相手)/""midpoint""(2人の中点)/""stage_center""/""left_edge""/""right_edge""
+  spawn_anchor: ""auto""/""body""/""feet""/""head""/""weapon_tip""。剣・銃・杖から出す弾/斬撃はweapon_tip、地面技はfeetを優先
+  spawn_x/spawn_y: origin+anchorからのローカルオフセット。spawn_originを指定した場合は負のspawn_xも有効（背後・左側を表現可能）
+  aim_mode: ""facing""(向いている方向/default)/""enemy""/""away_enemy""/""stage_center""/""vector""/""radial_out""/""radial_in""
+  aim_mode:""vector""ではvector_x/vector_y(-1〜1)を必須。rotation_angle(-180〜180度)で判定・エフェクト・弾道をまとめて追加回転できる
+- 【配置パターン】projectile/area_hitbox/trap_hitbox/beamにpatternを使える:
+  ""single""/""fan""(扇射)/""parallel""(平行)/""radial""(外向き円周)/""inward""(円周から中心へ)/""mirrored""(左右対称)/""line""(一直線に複数配置)
+  pattern_countはprojectileなら1〜8、area/trap/beamなら1〜4。pattern_spacing 0.2〜3、pattern_radius 0.5〜6、burst_interval 0〜0.5秒
+  複数配置は同じ1回の技として扱われ、重なった判定で同じ相手へ不自然な多重ヒットを起こさない。多段にしたい場合だけhit_countを使う
+- 【予告と公平性】enemy/midpoint/stage_center/edge起点の攻撃はtelegraph_timeを0.4〜1.2秒指定する。予告は実際の位置・形・角度・範囲と完全一致するため、広い技ほど長くする
+- 【空間技の作例】キャラ性に合うものだけ選び、4枠すべてを多発弾にしない:
+  足元から真上の柱→spawn_anchor:""feet"", shape:""column"", aim_mode:""vector"", vector_y:1
+  相手の周囲だけ危険な包囲輪→spawn_origin:""enemy"", shape:""annulus"", inner_radius:1.0, size_x:2.8, telegraph_time:0.65
+  四方から中心へ収束する弾→spawn_origin:""midpoint"", pattern:""inward"", pattern_count:4, pattern_radius:5, telegraph_time:0.6
+  前後同時の斬撃→spawn_origin:""owner"", pattern:""mirrored"", spawn_anchor:""weapon_tip""
+  斜めビーム→beam + aim_mode:""vector"", vector_x:1, vector_y:0.5。見た目と当たり判定も同じ角度になる
+  地面に順番に並ぶ罠→trap_hitbox + spawn_anchor:""feet"", pattern:""line"", pattern_count:4, pattern_spacing:1.2, burst_interval:0.12
 - 【派生技 follow_up_actions】必要な技だけスキルJSON最上位に追加:
   follow_up_actions: [...actionリスト...]  ← 同じボタンの追加入力で発動する派生アクション
   follow_up_window: 0.3〜1.0  ← 受付時間(秒)。迷う場合は0.6

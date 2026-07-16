@@ -67,6 +67,28 @@ namespace PromptFighters.Battle.Skills
         public float  knockback_y;
         public bool   hide_effect;
 
+        // 空間指定（未指定なら従来挙動）。spawn_origin を指定した新形式では
+        // spawn_x / spawn_y を符号付きの明示オフセットとして扱う。
+        public string spawn_origin;   // "owner" / "enemy" / "midpoint" / "stage_center" / "left_edge" / "right_edge"
+        public string spawn_anchor;   // "auto" / "body" / "feet" / "head" / "weapon_tip"
+        public string aim_mode;       // "facing" / "enemy" / "away_enemy" / "stage_center" / "vector" / "radial_out" / "radial_in"
+        public float  vector_x;       // aim_mode="vector" の方向ベクトル
+        public float  vector_y;
+        public float  rotation_angle; // 判定・エフェクトの追加回転（度）
+
+        // 同じ action を規則的に展開する配置パターン。
+        public string pattern;        // "single" / "fan" / "parallel" / "radial" / "inward" / "mirrored" / "line"
+        public int    pattern_count;   // 0=旧 projectile_count またはパターン既定値
+        public float  pattern_spacing;
+        public float  pattern_radius;
+        public float  burst_interval; // 各要素の発生間隔（秒）
+        public float  telegraph_time;  // 0=相手基準技の従来値0.4秒
+
+        // shape の追加幾何パラメータ。annulus は inner_radius より内側が安全地帯、
+        // arc は arc_angle の角度内だけ有効。cross では inner_radius を腕の太さに使う。
+        public float  inner_radius;
+        public float  arc_angle;
+
         // dash / buff_self
         public float  power;
         public string direction;  // "forward" / "backward"
@@ -109,10 +131,11 @@ namespace PromptFighters.Battle.Skills
         // area_hitboxは0.4秒の警告表示つき、trap_hitboxは相手の足元、projectileは相手の頭上から落下。
         public bool   spawn_at_enemy;
 
-        // ノックバック方向: "away"(default)/"up"/"spike"/"toward"/"diagonal_up"/"ground_bounce"
+        // ノックバック方向: 旧away/up/spike/toward/diagonal_up/ground_bounceに加え、
+        // vector（符号付きknockback_x/y）/along_attack/from_origin/toward_origin。
         public string knockback_direction;
 
-        // area_hitbox: 形状 "box"(default) / "cone"（前方扇形近似） / "ring"（周囲円形）
+        // 判定形状: box / cone / ring / annulus / arc / line / cross / column
         public string shape;
 
         // apply_status / buff_self

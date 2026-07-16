@@ -19,15 +19,42 @@ namespace PromptFighters.Battle.Skills
         EffectB = 12,
         EffectC = 13,
         EffectSmash = 14,
+        // 既存15枚のIDは保存済みキャラクターとの互換性のため変更しない。
+        // 追加ポーズは必ず末尾へ足す。
+        Guard = 15,
+        Fall = 16,
+        AttackA_Windup = 17,
+        AttackB_Windup = 18,
+        AttackC_Windup = 19,
+        Smash_Windup = 20,
     }
 
     [System.Serializable]
     public class CharacterSpriteSet
     {
-        public Sprite[] sprites = new Sprite[15];
+        public const int SpriteCount = (int)CharacterSpriteId.Smash_Windup + 1;
+
+        public Sprite[] sprites = new Sprite[SpriteCount];
+
+        // Unityのデシリアライズでは旧保存データの15要素配列がそのまま復元される。
+        // Set時に配列を作り直すと既存15枚を失うため、内容を保持したまま拡張する。
+        public void EnsureCapacity()
+        {
+            if (sprites == null)
+            {
+                sprites = new Sprite[SpriteCount];
+                return;
+            }
+            if (sprites.Length >= SpriteCount) return;
+
+            var expanded = new Sprite[SpriteCount];
+            System.Array.Copy(sprites, expanded, sprites.Length);
+            sprites = expanded;
+        }
 
         public Sprite Get(CharacterSpriteId id, Sprite fallback = null, bool fallbackToPrimary = true)
         {
+            EnsureCapacity();
             int index = (int)id;
             if (sprites != null && index >= 0 && index < sprites.Length && sprites[index] != null)
                 return sprites[index];
@@ -38,8 +65,7 @@ namespace PromptFighters.Battle.Skills
 
         public void Set(CharacterSpriteId id, Sprite sprite)
         {
-            if (sprites == null || sprites.Length != 15)
-                sprites = new Sprite[15];
+            EnsureCapacity();
             sprites[(int)id] = sprite;
         }
     }

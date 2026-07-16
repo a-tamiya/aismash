@@ -28,11 +28,25 @@ namespace PromptFighters.Battle.Skills
         public Vector2      OwnerLocalOffset;
         public Vector2      DesiredWorldSize;
         public bool         FixedKnockbackDir; // trueのとき KnockbackDir.x の符号をそのまま使う
+        public string       SpatialKnockbackMode;
+        public Vector2      SpatialKnockbackOrigin;
         public bool         GroundBounce;     // ヒット時に地面バウンドさせる
         public bool         IsSmashHit;       // 最大チャージスマッシュヒット時のスロー演出用
         public float        LifestealRatio;   // ヒット時に与ダメージ×この割合だけ owner を回復
         public bool         IsTrap;           // 設置技。アーム時間・待機脈動・触発時の爆発演出を付ける
         public float        ArmTime;          // 設置からアーム完了（判定有効化）までの秒数
+
+        // SkillAction.pattern で展開された兄弟判定の重複ヒット防止。
+        public int          SharedCastId;
+        public int          SharedSourceId;
+        public float        SharedHitLockSeconds = 0.08f;
+
+        // broad-phase Collider の内側で追加判定する空間形状。
+        // box/line/column はCollider自体が正確な形状。annulus/arc/crossは下記パラメータで絞り込む。
+        public string       SpatialShape;
+        public float        SpatialInnerRadius;
+        public float        SpatialArcAngle = 360f;
+        public float        SpatialCrossThickness;
 
         Vector3 _visualBaseScale = Vector3.one;
         bool    _exhausted;
@@ -46,6 +60,9 @@ namespace PromptFighters.Battle.Skills
 
         // デバッグオーバーレイ（col.boundsに毎フレーム追従する独立オブジェクト。プール対象と一緒に再利用）
         SpriteRenderer _debugSr;
+        LineRenderer _shapeOutlineA;
+        LineRenderer _shapeOutlineB;
+        static Material s_shapeLineMaterial;
 
         bool _isCircle;
         bool _released;
@@ -187,13 +204,28 @@ namespace PromptFighters.Battle.Skills
             OwnerLocalOffset = Vector2.zero;
             DesiredWorldSize = Vector2.zero;
             FixedKnockbackDir = false;
+            SpatialKnockbackMode = null;
+            SpatialKnockbackOrigin = Vector2.zero;
             GroundBounce = false;
             IsSmashHit = false;
             LifestealRatio = 0f;
             IsTrap = false;
             ArmTime = 0f;
+            SharedCastId = 0;
+            SharedSourceId = 0;
+            SharedHitLockSeconds = 0.08f;
+            SpatialShape = null;
+            SpatialInnerRadius = 0f;
+            SpatialArcAngle = 360f;
+            SpatialCrossThickness = 0f;
             _exhausted = false;
             _visualBaseScale = Vector3.one;
+            if (_shapeOutlineA != null) _shapeOutlineA.enabled = false;
+            if (_shapeOutlineB != null) _shapeOutlineB.enabled = false;
+            if (_debugSr != null)
+                _debugSr.color = _isCircle
+                    ? new Color(0.3f, 1f, 0.3f, 0.6f)
+                    : new Color(1f, 0.35f, 0f, 0.6f);
 
             transform.rotation = Quaternion.identity;
             if (_col != null) _col.enabled = true;
@@ -241,6 +273,8 @@ namespace PromptFighters.Battle.Skills
 
             _activated = true;
             _visualBaseScale = transform.localScale;
+            UpdateSpatialOutline();
+            if (UsesOutlineOnlyVisual() && _sr != null) _sr.enabled = false;
 
             // 設置技: アーム時間中は判定を無効化（密着で即当たる置き逃げを防ぎ、「設置した」感を出す）
             float armed = 0f;
@@ -279,21 +313,28 @@ namespace PromptFighters.Battle.Skills
                 _sr.color = c;
             }
 
+            UpdateSpatialOutline();
+
             // デバッグオーバーレイをcol.boundsに追従
             if (_debugSr == null) return;
             bool show = DebugSettings.ShowHitboxes;
             _debugSr.enabled = show;
+            if (_shapeOutlineA != null) _shapeOutlineA.enabled = !show && !HideVisual && UsesProceduralShapeOutline();
+            if (_shapeOutlineB != null) _shapeOutlineB.enabled = !show && !HideVisual &&
+                SpatialShape == "annulus" && SpatialInnerRadius > 0f;
             if (show && _col != null)
             {
-                var b = _col.bounds;
-                _debugSr.transform.position   = b.center;
-                _debugSr.transform.rotation   = Quaternion.identity;
-                _debugSr.transform.localScale = new Vector3(b.size.x, b.size.y, 1f);
+                Vector2 size = DesiredWorldSize;
+                if (size.x <= 0f || size.y <= 0f)
+                    size = _col.bounds.size;
+                _debugSr.transform.position   = transform.position;
+                _debugSr.transform.rotation   = transform.rotation;
+                _debugSr.transform.localScale = new Vector3(size.x, size.y, 1f);
             }
 
             // デバッグ中はエフェクトスプライトを非表示にしてブロックのみ見せる
             if (!HideVisual && _sr != null)
-                _sr.enabled = !show;
+                _sr.enabled = !show && !UsesOutlineOnlyVisual();
         }
 
         // プールへ返却する
@@ -311,6 +352,188 @@ namespace PromptFighters.Battle.Skills
         void OnDestroy()
         {
             if (_debugSr != null) Destroy(_debugSr.gameObject);
+            if (_shapeOutlineA != null) Destroy(_shapeOutlineA.gameObject);
+            if (_shapeOutlineB != null) Destroy(_shapeOutlineB.gameObject);
+        }
+
+        bool UsesProceduralShapeOutline()
+            => SpatialShape == "annulus" || SpatialShape == "arc" || SpatialShape == "cross" ||
+               SpatialShape == "cone" || SpatialShape == "line" || SpatialShape == "column";
+
+        bool UsesOutlineOnlyVisual()
+            => SpatialShape == "annulus" || SpatialShape == "arc" || SpatialShape == "cross" ||
+               SpatialShape == "cone";
+
+        void UpdateSpatialOutline()
+        {
+            if (!UsesProceduralShapeOutline() || HideVisual)
+            {
+                if (_shapeOutlineA != null) _shapeOutlineA.enabled = false;
+                if (_shapeOutlineB != null) _shapeOutlineB.enabled = false;
+                return;
+            }
+
+            EnsureShapeOutlines();
+            Color color = SkillEnumParser.ElementColor(Element);
+            color.a = 0.9f;
+            ConfigureLine(_shapeOutlineA, color);
+            ConfigureLine(_shapeOutlineB, color);
+
+            float width = Mathf.Max(0.05f, DesiredWorldSize.x);
+            float height = Mathf.Max(0.05f, DesiredWorldSize.y);
+            switch (SpatialShape)
+            {
+                case "annulus":
+                {
+                    float outer = Mathf.Min(width, height) * 0.5f;
+                    SetCircle(_shapeOutlineA, outer);
+                    if (SpatialInnerRadius > 0.01f)
+                    {
+                        SetCircle(_shapeOutlineB, Mathf.Min(SpatialInnerRadius, outer - 0.02f));
+                        _shapeOutlineB.enabled = true;
+                    }
+                    else _shapeOutlineB.enabled = false;
+                    break;
+                }
+                case "arc":
+                    SetArc(_shapeOutlineA, Mathf.Min(width, height) * 0.5f,
+                        Mathf.Max(0f, SpatialInnerRadius), SpatialArcAngle);
+                    _shapeOutlineB.enabled = false;
+                    break;
+                case "cross":
+                    SetCross(_shapeOutlineA, width, height,
+                        SpatialCrossThickness > 0f ? SpatialCrossThickness : Mathf.Min(width, height) * 0.3f);
+                    _shapeOutlineB.enabled = false;
+                    break;
+                case "cone":
+                    SetCone(_shapeOutlineA, width, height);
+                    _shapeOutlineB.enabled = false;
+                    break;
+                default:
+                    SetBox(_shapeOutlineA, width, height);
+                    _shapeOutlineB.enabled = false;
+                    break;
+            }
+        }
+
+        void EnsureShapeOutlines()
+        {
+            if (s_shapeLineMaterial == null)
+            {
+                Shader shader = Shader.Find("Sprites/Default");
+                if (shader != null) s_shapeLineMaterial = new Material(shader) { name = "SkillShapeOutline" };
+            }
+            if (_shapeOutlineA == null) _shapeOutlineA = CreateShapeOutline("ShapeOutlineA");
+            if (_shapeOutlineB == null) _shapeOutlineB = CreateShapeOutline("ShapeOutlineB");
+        }
+
+        LineRenderer CreateShapeOutline(string objectName)
+        {
+            var go = new GameObject(objectName);
+            go.transform.SetParent(transform, false);
+            var line = go.AddComponent<LineRenderer>();
+            line.useWorldSpace = true;
+            line.loop = true;
+            line.alignment = LineAlignment.View;
+            line.textureMode = LineTextureMode.Stretch;
+            line.sortingOrder = 11;
+            line.numCapVertices = 2;
+            if (s_shapeLineMaterial != null) line.sharedMaterial = s_shapeLineMaterial;
+            return line;
+        }
+
+        static void ConfigureLine(LineRenderer line, Color color)
+        {
+            if (line == null) return;
+            line.enabled = true;
+            line.startWidth = 0.055f;
+            line.endWidth = 0.055f;
+            line.startColor = color;
+            line.endColor = color;
+        }
+
+        Vector3 ShapePoint(float x, float y)
+        {
+            Vector3 localWorld = new Vector3(x, y, 0f);
+            return transform.position + transform.rotation * localWorld;
+        }
+
+        void SetCircle(LineRenderer line, float radius)
+        {
+            const int segments = 40;
+            line.loop = true;
+            line.positionCount = segments;
+            for (int i = 0; i < segments; i++)
+            {
+                float angle = i * Mathf.PI * 2f / segments;
+                line.SetPosition(i, ShapePoint(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius));
+            }
+        }
+
+        void SetArc(LineRenderer line, float outerRadius, float innerRadius, float arcDegrees)
+        {
+            const int segments = 24;
+            float half = Mathf.Clamp(arcDegrees > 0f ? arcDegrees : 90f, 1f, 360f) * 0.5f;
+            innerRadius = Mathf.Clamp(innerRadius, 0f, Mathf.Max(0f, outerRadius - 0.02f));
+            int innerPoints = innerRadius > 0.01f ? segments + 1 : 1;
+            line.loop = true;
+            line.positionCount = segments + 1 + innerPoints;
+            int index = 0;
+            for (int i = 0; i <= segments; i++)
+            {
+                float angle = Mathf.Lerp(-half, half, i / (float)segments) * Mathf.Deg2Rad;
+                line.SetPosition(index++, ShapePoint(Mathf.Cos(angle) * outerRadius, Mathf.Sin(angle) * outerRadius));
+            }
+            if (innerRadius > 0.01f)
+            {
+                for (int i = segments; i >= 0; i--)
+                {
+                    float angle = Mathf.Lerp(-half, half, i / (float)segments) * Mathf.Deg2Rad;
+                    line.SetPosition(index++, ShapePoint(Mathf.Cos(angle) * innerRadius, Mathf.Sin(angle) * innerRadius));
+                }
+            }
+            else line.SetPosition(index, ShapePoint(0f, 0f));
+        }
+
+        void SetCross(LineRenderer line, float width, float height, float thickness)
+        {
+            float hx = width * 0.5f;
+            float hy = height * 0.5f;
+            float t = Mathf.Clamp(thickness * 0.5f, 0.02f, Mathf.Min(hx, hy));
+            Vector2[] points =
+            {
+                new Vector2(-t, hy), new Vector2(t, hy), new Vector2(t, t),
+                new Vector2(hx, t), new Vector2(hx, -t), new Vector2(t, -t),
+                new Vector2(t, -hy), new Vector2(-t, -hy), new Vector2(-t, -t),
+                new Vector2(-hx, -t), new Vector2(-hx, t), new Vector2(-t, t),
+            };
+            line.loop = true;
+            line.positionCount = points.Length;
+            for (int i = 0; i < points.Length; i++)
+                line.SetPosition(i, ShapePoint(points[i].x, points[i].y));
+        }
+
+        void SetBox(LineRenderer line, float width, float height)
+        {
+            float hx = width * 0.5f;
+            float hy = height * 0.5f;
+            line.loop = true;
+            line.positionCount = 4;
+            line.SetPosition(0, ShapePoint(-hx, -hy));
+            line.SetPosition(1, ShapePoint(-hx, hy));
+            line.SetPosition(2, ShapePoint(hx, hy));
+            line.SetPosition(3, ShapePoint(hx, -hy));
+        }
+
+        void SetCone(LineRenderer line, float width, float height)
+        {
+            float hx = width * 0.5f;
+            float hy = height * 0.5f;
+            line.loop = true;
+            line.positionCount = 3;
+            line.SetPosition(0, ShapePoint(-hx, 0f));
+            line.SetPosition(1, ShapePoint(hx, hy));
+            line.SetPosition(2, ShapePoint(hx, -hy));
         }
 
         void FitColliderAndVisualToWorldSize(SpriteRenderer sr)
@@ -347,11 +570,13 @@ namespace PromptFighters.Battle.Skills
         {
             if (_released) return;
             if (_hitsLanded >= MaxHits) return;
+            if (!PassesSpatialFilter(other)) return;
 
             // 音声アイテムへのヒット（中立物：陣営問わず誰でも殴れる。最後に削った人が取得者）
             var voiceItem = other.GetComponentInParent<Battle.VoiceItem>();
             if (voiceItem != null && !_hitVoiceItems.Contains(voiceItem))
             {
+                if (!SkillCastHitRegistry.TryClaim(SharedCastId, voiceItem, this, SharedHitLockSeconds)) return;
                 _hitVoiceItems.Add(voiceItem);
                 voiceItem.TakeHit(Damage, Owner);
                 _hitsLanded++;
@@ -367,6 +592,7 @@ namespace PromptFighters.Battle.Skills
             var summon = other.GetComponentInParent<Battle.SummonEntity>();
             if (summon != null && summon.Owner != Owner && !_hitSummons.Contains(summon))
             {
+                if (!SkillCastHitRegistry.TryClaim(SharedCastId, summon, this, SharedHitLockSeconds)) return;
                 _hitSummons.Add(summon);
                 summon.TakeHit(Damage);
                 _hitsLanded++;
@@ -382,6 +608,7 @@ namespace PromptFighters.Battle.Skills
             var destructible = other.GetComponentInParent<Battle.DestructibleObstacle>();
             if (destructible != null && !_hitDestructibles.Contains(destructible))
             {
+                if (!SkillCastHitRegistry.TryClaim(SharedCastId, destructible, this, SharedHitLockSeconds)) return;
                 _hitDestructibles.Add(destructible);
                 destructible.TakeHit(Damage, Owner);
                 _hitsLanded++;
@@ -403,6 +630,7 @@ namespace PromptFighters.Battle.Skills
             if (MaxHits > 1 &&
                 _nextHitTimes.TryGetValue(target, out float nextTime) &&
                 Time.time < nextTime) return;
+            if (!SkillCastHitRegistry.TryClaim(SharedCastId, target, this, SharedHitLockSeconds)) return;
 
             _hitTargets.Add(target);
             ApplyHit(target);
@@ -416,6 +644,128 @@ namespace PromptFighters.Battle.Skills
                 // 設置技は「使用済みの罠が残って見える」と紛らわしいので、爆発演出を出して消す
                 if (IsTrap) TriggerTrapBurst();
             }
+        }
+
+        // annulus / arc / cross は大きなBoxColliderをbroad-phaseにし、実際の可視形状と同じ
+        // 数学的領域へここで絞り込む。line / column は回転済みBoxColliderそのものが最終形状。
+        bool PassesSpatialFilter(Collider2D other)
+        {
+            if (other == null || string.IsNullOrEmpty(SpatialShape)) return true;
+            string shape = SpatialShape;
+            if (shape == "box" || shape == "line" || shape == "column" || shape == "capsule")
+                return true;
+            if (shape != "annulus" && shape != "arc" && shape != "cross" && shape != "cone")
+                return true;
+
+            Bounds b = other.bounds;
+            if (shape == "annulus")
+                return BoundsIntersectsAnnulus(b);
+
+            Vector2 closest = other.ClosestPoint(transform.position);
+            Vector2[] samples =
+            {
+                b.center,
+                closest,
+                new Vector2(b.min.x, b.min.y),
+                new Vector2(b.min.x, b.max.y),
+                new Vector2(b.max.x, b.min.y),
+                new Vector2(b.max.x, b.max.y),
+            };
+
+            for (int i = 0; i < samples.Length; i++)
+                if (ContainsSpatialPoint(samples[i], shape))
+                    return true;
+
+            // 扇・十字・三角形の細い境界を大きなhurtboxが跨ぐ場合に、角だけの検査で
+            // 取りこぼさないようbounds各辺も細分して検査する。
+            for (int i = 1; i < 8; i++)
+            {
+                float t = i / 8f;
+                if (ContainsSpatialPoint(new Vector2(Mathf.Lerp(b.min.x, b.max.x, t), b.min.y), shape) ||
+                    ContainsSpatialPoint(new Vector2(Mathf.Lerp(b.min.x, b.max.x, t), b.max.y), shape) ||
+                    ContainsSpatialPoint(new Vector2(b.min.x, Mathf.Lerp(b.min.y, b.max.y, t)), shape) ||
+                    ContainsSpatialPoint(new Vector2(b.max.x, Mathf.Lerp(b.min.y, b.max.y, t)), shape))
+                    return true;
+            }
+            return false;
+        }
+
+        bool BoundsIntersectsAnnulus(Bounds bounds)
+        {
+            Vector2[] polygon =
+            {
+                ToShapeLocal(new Vector2(bounds.min.x, bounds.min.y)),
+                ToShapeLocal(new Vector2(bounds.min.x, bounds.max.y)),
+                ToShapeLocal(new Vector2(bounds.max.x, bounds.max.y)),
+                ToShapeLocal(new Vector2(bounds.max.x, bounds.min.y)),
+            };
+            float minDistance = bounds.Contains(transform.position) ? 0f : float.MaxValue;
+            float maxDistance = 0f;
+            for (int i = 0; i < polygon.Length; i++)
+            {
+                Vector2 a = polygon[i];
+                Vector2 b = polygon[(i + 1) % polygon.Length];
+                maxDistance = Mathf.Max(maxDistance, a.magnitude);
+                minDistance = Mathf.Min(minDistance, DistanceToSegment(Vector2.zero, a, b));
+            }
+
+            float outer = Mathf.Min(Mathf.Max(0.01f, DesiredWorldSize.x),
+                                    Mathf.Max(0.01f, DesiredWorldSize.y)) * 0.5f;
+            float inner = Mathf.Clamp(SpatialInnerRadius, 0f, Mathf.Max(0f, outer - 0.05f));
+            return minDistance <= outer && maxDistance >= inner;
+        }
+
+        Vector2 ToShapeLocal(Vector2 worldPoint)
+        {
+            Vector2 delta = worldPoint - (Vector2)transform.position;
+            float inverseAngle = -transform.eulerAngles.z * Mathf.Deg2Rad;
+            float cos = Mathf.Cos(inverseAngle);
+            float sin = Mathf.Sin(inverseAngle);
+            return new Vector2(delta.x * cos - delta.y * sin,
+                               delta.x * sin + delta.y * cos);
+        }
+
+        static float DistanceToSegment(Vector2 point, Vector2 a, Vector2 b)
+        {
+            Vector2 ab = b - a;
+            float denominator = ab.sqrMagnitude;
+            if (denominator <= 0.000001f) return Vector2.Distance(point, a);
+            float t = Mathf.Clamp01(Vector2.Dot(point - a, ab) / denominator);
+            return Vector2.Distance(point, a + ab * t);
+        }
+
+        bool ContainsSpatialPoint(Vector2 worldPoint, string shape)
+        {
+            Vector2 p = ToShapeLocal(worldPoint);
+
+            float width  = Mathf.Max(0.01f, DesiredWorldSize.x);
+            float height = Mathf.Max(0.01f, DesiredWorldSize.y);
+            if (shape == "cross")
+            {
+                float thickness = SpatialCrossThickness > 0f
+                    ? SpatialCrossThickness
+                    : Mathf.Min(width, height) * 0.3f;
+                bool horizontal = Mathf.Abs(p.x) <= width * 0.5f && Mathf.Abs(p.y) <= thickness * 0.5f;
+                bool vertical   = Mathf.Abs(p.y) <= height * 0.5f && Mathf.Abs(p.x) <= thickness * 0.5f;
+                return horizontal || vertical;
+            }
+            if (shape == "cone")
+            {
+                float along = p.x + width * 0.5f;
+                if (along < 0f || along > width) return false;
+                float halfHeight = height * 0.5f * (along / width);
+                return Mathf.Abs(p.y) <= halfHeight;
+            }
+
+            float outer = Mathf.Min(width, height) * 0.5f;
+            float radius = p.magnitude;
+            float inner = Mathf.Clamp(SpatialInnerRadius, 0f, Mathf.Max(0f, outer - 0.05f));
+            if (radius < inner || radius > outer) return false;
+            if (shape == "annulus") return true;
+
+            float halfArc = Mathf.Clamp(SpatialArcAngle > 0f ? SpatialArcAngle : 90f, 1f, 360f) * 0.5f;
+            float angle = Mathf.Abs(Mathf.Atan2(p.y, p.x) * Mathf.Rad2Deg);
+            return angle <= halfArc;
         }
 
         // 設置技の触発演出: 一瞬白く光って膨らみながら消える。
@@ -446,6 +796,24 @@ namespace PromptFighters.Battle.Skills
 
         void ApplyHit(Fighter target)
         {
+            Vector2 targetCenter = target.transform.position + Vector3.up * 0.8f;
+            if (SpatialKnockbackMode == "along_attack" || SpatialKnockbackMode == "along")
+            {
+                Vector2 along = transform.right;
+                if (along.sqrMagnitude < 0.001f) along = Vector2.right;
+                KnockbackDir = along.normalized;
+                FixedKnockbackDir = true;
+            }
+            else if (SpatialKnockbackMode == "from_origin" || SpatialKnockbackMode == "from" ||
+                     SpatialKnockbackMode == "toward_origin")
+            {
+                Vector2 radial = targetCenter - SpatialKnockbackOrigin;
+                if (SpatialKnockbackMode == "toward_origin") radial = -radial;
+                if (radial.sqrMagnitude < 0.001f) radial = transform.right;
+                KnockbackDir = radial.normalized;
+                FixedKnockbackDir = true;
+            }
+
             float dir;
             if (FixedKnockbackDir)
                 dir = 1f;

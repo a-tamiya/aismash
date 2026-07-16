@@ -600,20 +600,37 @@ namespace PromptFighters.Battle
             }
             else
             {
-                CharacterSpriteId id = State switch
+                if (State == FighterState.Guarding)
                 {
-                    FighterState.Moving => CharacterSpriteId.Dash,
-                    FighterState.Jumping => CharacterSpriteId.Jump,
-                    FighterState.Falling => CharacterSpriteId.Jump,
-                    FighterState.Stunned => CharacterSpriteId.Damage,
-                    FighterState.Grabbed => CharacterSpriteId.Damage,
-                    _ => CurrentIdleSpriteId(),
-                };
-                next = _spriteSet.Get(id, _sprite.sprite);
+                    next = SpriteWithFallback(CharacterSpriteId.Guard, CharacterSpriteId.Idle1, _sprite.sprite);
+                }
+                else if (State == FighterState.Falling)
+                {
+                    next = SpriteWithFallback(CharacterSpriteId.Fall, CharacterSpriteId.Jump, _sprite.sprite);
+                }
+                else
+                {
+                    CharacterSpriteId id = State switch
+                    {
+                        FighterState.Moving => CharacterSpriteId.Dash,
+                        FighterState.Jumping => CharacterSpriteId.Jump,
+                        FighterState.Stunned => CharacterSpriteId.Damage,
+                        FighterState.Grabbed => CharacterSpriteId.Damage,
+                        _ => CurrentIdleSpriteId(),
+                    };
+                    next = _spriteSet.Get(id, _sprite.sprite);
+                }
             }
 
             if (next != null && _sprite.sprite != next)
                 _sprite.sprite = next;
+        }
+
+        Sprite SpriteWithFallback(CharacterSpriteId primary, CharacterSpriteId fallback, Sprite finalFallback)
+        {
+            if (_spriteSet == null) return finalFallback;
+            return _spriteSet.Get(primary, null, fallbackToPrimary: false)
+                ?? _spriteSet.Get(fallback, finalFallback);
         }
 
         CharacterSpriteId CurrentIdleSpriteId()
@@ -908,15 +925,7 @@ namespace PromptFighters.Battle
 
         public void ShowSkillSprite(SkillSlot slot, float seconds)
         {
-            CharacterSpriteId id = slot switch
-            {
-                SkillSlot.AttackA => CharacterSpriteId.AttackA,
-                SkillSlot.AttackB => CharacterSpriteId.AttackB,
-                SkillSlot.AttackC => CharacterSpriteId.AttackC,
-                SkillSlot.SmashSide => CharacterSpriteId.SmashSide,
-                _ => CharacterSpriteId.Idle1,
-            };
-            ForceSprite(id, seconds);
+            ForceSprite(AttackPoseId(slot), seconds);
         }
 
         // ボス専用の追加技プール向けオーバーロード。専用ポーズ画像があればそれを、なければ既存4枠のslot絵にフォールバックする。
@@ -931,6 +940,55 @@ namespace PromptFighters.Battle
             }
             ShowSkillSprite(skill.slot, seconds);
         }
+
+        // 技開始時の予備動作。追加画像がない旧キャラでは対応する既存Attackポーズへ安全にフォールバックする。
+        // extraSkillsには専用Windupがないため、専用ポーズがあれば従来どおりそれを使用する。
+        public void ShowSkillWindup(SkillData skill, float seconds)
+        {
+            if (skill == null) return;
+            if (skill.extraSpriteIndex >= 0 && _extraPoseSprites != null &&
+                skill.extraSpriteIndex < _extraPoseSprites.Count && _extraPoseSprites[skill.extraSpriteIndex] != null)
+            {
+                ForceSprite(_extraPoseSprites[skill.extraSpriteIndex], seconds, replaceTimer: true);
+                return;
+            }
+
+            ForceSpriteWithFallback(
+                WindupPoseId(skill.slot), AttackPoseId(skill.slot), seconds, replaceTimer: true);
+        }
+
+        // 攻撃判定が出る時点でWindupから既存Attackポーズへ即時切替するAPI。
+        // SkillExecutor側は最初の攻撃アクション実行時に、技の残り表示時間をsecondsへ渡す。
+        public void ShowSkillImpact(SkillData skill, float seconds)
+        {
+            if (skill == null) return;
+            if (skill.extraSpriteIndex >= 0 && _extraPoseSprites != null &&
+                skill.extraSpriteIndex < _extraPoseSprites.Count && _extraPoseSprites[skill.extraSpriteIndex] != null)
+            {
+                ForceSprite(_extraPoseSprites[skill.extraSpriteIndex], seconds, replaceTimer: true);
+                return;
+            }
+
+            ForceSprite(AttackPoseId(skill.slot), seconds, replaceTimer: true);
+        }
+
+        static CharacterSpriteId AttackPoseId(SkillSlot slot) => slot switch
+        {
+            SkillSlot.AttackA => CharacterSpriteId.AttackA,
+            SkillSlot.AttackB => CharacterSpriteId.AttackB,
+            SkillSlot.AttackC => CharacterSpriteId.AttackC,
+            SkillSlot.SmashSide => CharacterSpriteId.SmashSide,
+            _ => CharacterSpriteId.Idle1,
+        };
+
+        static CharacterSpriteId WindupPoseId(SkillSlot slot) => slot switch
+        {
+            SkillSlot.AttackA => CharacterSpriteId.AttackA_Windup,
+            SkillSlot.AttackB => CharacterSpriteId.AttackB_Windup,
+            SkillSlot.AttackC => CharacterSpriteId.AttackC_Windup,
+            SkillSlot.SmashSide => CharacterSpriteId.Smash_Windup,
+            _ => CharacterSpriteId.Idle1,
+        };
 
         public void ShowGrabSprite(float seconds)
         {
@@ -1004,19 +1062,31 @@ namespace PromptFighters.Battle
             _extraEffectSprites = effects;
         }
 
-        void ForceSprite(CharacterSpriteId id, float seconds)
+        void ForceSpriteWithFallback(CharacterSpriteId primary, CharacterSpriteId fallback,
+                                     float seconds, bool replaceTimer = false)
+        {
+            CharacterSpriteId selected = _spriteSet != null &&
+                                         _spriteSet.Get(primary, null, fallbackToPrimary: false) != null
+                ? primary
+                : fallback;
+            ForceSprite(selected, seconds, replaceTimer);
+        }
+
+        void ForceSprite(CharacterSpriteId id, float seconds, bool replaceTimer = false)
         {
             _forcedSprite = id;
             _forcedRawSprite = null;
-            _forcedSpriteTimer = Mathf.Max(_forcedSpriteTimer, seconds);
+            float safeSeconds = Mathf.Max(0.05f, seconds);
+            _forcedSpriteTimer = replaceTimer ? safeSeconds : Mathf.Max(_forcedSpriteTimer, safeSeconds);
         }
 
         // ボス専用の追加技プール向け: CharacterSpriteSetを経由せず生のSpriteを直接強制表示する。
-        void ForceSprite(Sprite sprite, float seconds)
+        void ForceSprite(Sprite sprite, float seconds, bool replaceTimer = false)
         {
             _forcedSprite = null;
             _forcedRawSprite = sprite;
-            _forcedSpriteTimer = Mathf.Max(_forcedSpriteTimer, seconds);
+            float safeSeconds = Mathf.Max(0.05f, seconds);
+            _forcedSpriteTimer = replaceTimer ? safeSeconds : Mathf.Max(_forcedSpriteTimer, safeSeconds);
         }
 
         public void SetGrabThrowParameters(GrabParameters grab, ThrowParameters throwData)

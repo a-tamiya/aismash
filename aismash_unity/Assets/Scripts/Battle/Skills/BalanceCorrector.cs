@@ -20,6 +20,27 @@ namespace PromptFighters.Battle.Skills
         const float MaxKnockback = 18f;
         const float BeamStartupSeconds = 0.3f;
 
+        static readonly HashSet<string> SpatialOrigins = new HashSet<string>
+        {
+            "owner", "enemy", "midpoint", "stage_center", "left_edge", "right_edge",
+        };
+        static readonly HashSet<string> SpatialAnchors = new HashSet<string>
+        {
+            "auto", "body", "feet", "head", "weapon_tip",
+        };
+        static readonly HashSet<string> AimModes = new HashSet<string>
+        {
+            "facing", "enemy", "away_enemy", "stage_center", "vector", "radial_out", "radial_in",
+        };
+        static readonly HashSet<string> SpatialPatterns = new HashSet<string>
+        {
+            "single", "fan", "parallel", "radial", "inward", "inward_ring", "mirrored", "line",
+        };
+        static readonly HashSet<string> HitboxShapes = new HashSet<string>
+        {
+            "box", "cone", "ring", "annulus", "arc", "line", "cross", "column",
+        };
+
         public static void Apply(SkillData skill)
         {
             if (skill == null) return;
@@ -113,6 +134,7 @@ namespace PromptFighters.Battle.Skills
             {
                 foreach (var a in skill.actions)
                 {
+                    if (a == null) continue;
                     a.hit_count = Mathf.Clamp(a.hit_count, 0, 10);
                     if (a.hit_count > 1 && p.hit_count < a.hit_count)
                         p.hit_count = Mathf.Clamp(a.hit_count, 1, 10);
@@ -121,6 +143,8 @@ namespace PromptFighters.Battle.Skills
                         float maxOverride = totalMaxDmg / Mathf.Max(1, a.hit_count);
                         a.damage_override = Mathf.Clamp(a.damage_override, 0f, maxOverride);
                     }
+
+                    NormalizeSpatialAction(a);
 
                     if (a.type == "trap_hitbox")
                     {
@@ -294,6 +318,7 @@ namespace PromptFighters.Battle.Skills
                 foreach (var fa in skill.follow_up_actions)
                 {
                     if (fa == null) continue;
+                    NormalizeSpatialAction(fa);
                     fa.hit_count = 1;
                     if (fa.damage_override >= 0f)
                         fa.damage_override = Mathf.Clamp(fa.damage_override, 0f, totalMaxDmg * 0.35f);
@@ -319,6 +344,68 @@ namespace PromptFighters.Battle.Skills
                 skill.chargeable = false;
                 skill.max_charge_time = 0f;
             }
+        }
+
+        // 空間指定はAI生成値をそのまま実行せず、対応トークンとゲーム内で読める範囲に正規化する。
+        // とくに相手位置・ステージ遠隔起点の攻撃は必ず予告時間を持たせ、見て避けられるようにする。
+        static void NormalizeSpatialAction(SkillAction a)
+        {
+            a.spawn_origin = NormalizeToken(a.spawn_origin, SpatialOrigins);
+            a.spawn_anchor = NormalizeToken(a.spawn_anchor, SpatialAnchors);
+            a.aim_mode     = NormalizeToken(a.aim_mode, AimModes);
+            a.pattern      = NormalizeToken(a.pattern, SpatialPatterns);
+            a.shape        = NormalizeToken(a.shape, HitboxShapes);
+
+            a.vector_x = Mathf.Clamp(a.vector_x, -1f, 1f);
+            a.vector_y = Mathf.Clamp(a.vector_y, -1f, 1f);
+            if (a.aim_mode == "vector" && a.vector_x * a.vector_x + a.vector_y * a.vector_y < 0.01f)
+                a.aim_mode = "facing";
+
+            a.rotation_angle = Mathf.Repeat(a.rotation_angle + 180f, 360f) - 180f;
+            int maxPatternCount = a.type == "projectile" ? 8 : 4;
+            if (a.pattern_count != 0)
+                a.pattern_count = Mathf.Clamp(a.pattern_count, 1, maxPatternCount);
+            if (a.pattern_spacing > 0f)
+                a.pattern_spacing = Mathf.Clamp(a.pattern_spacing, 0.2f, 3f);
+            if (a.pattern_radius > 0f)
+                a.pattern_radius = Mathf.Clamp(a.pattern_radius, 0.5f, 6f);
+            a.burst_interval = Mathf.Clamp(a.burst_interval, 0f, 0.5f);
+            a.telegraph_time = Mathf.Clamp(a.telegraph_time, 0f, 2f);
+
+            float outerExtent = a.size_x > 0f ? a.size_x : a.range;
+            float outerRadius = (a.shape == "annulus" || a.shape == "arc" || a.shape == "ring")
+                ? outerExtent * 0.5f
+                : outerExtent;
+            float innerMax = outerRadius > 0f ? Mathf.Max(0f, outerRadius * 0.85f) : 5f;
+            a.inner_radius = Mathf.Clamp(a.inner_radius, 0f, innerMax);
+            if (a.shape == "ring")
+                a.inner_radius = 0f;
+            else if (a.shape == "annulus" && a.inner_radius <= 0f)
+                a.inner_radius = Mathf.Max(0.25f, outerRadius * 0.45f);
+            if (a.shape == "arc")
+                a.arc_angle = Mathf.Clamp(a.arc_angle > 0f ? a.arc_angle : 90f, 15f, 330f);
+            else if (a.arc_angle > 0f)
+                a.arc_angle = Mathf.Clamp(a.arc_angle, 15f, 360f);
+
+            bool remoteOrigin = a.spawn_at_enemy || a.spawn_origin == "enemy" ||
+                                a.spawn_origin == "midpoint" || a.spawn_origin == "stage_center" ||
+                                a.spawn_origin == "left_edge" || a.spawn_origin == "right_edge";
+            if (remoteOrigin && IsTelegraphedAttack(a.type))
+                a.telegraph_time = Mathf.Max(a.telegraph_time, 0.4f);
+        }
+
+        static bool IsTelegraphedAttack(string type)
+        {
+            return type == "melee_hitbox" || type == "body_hitbox" || type == "projectile" ||
+                   type == "area_hitbox" || type == "trap_hitbox" || type == "beam" ||
+                   type == "lifesteal" || type == "summon";
+        }
+
+        static string NormalizeToken(string value, HashSet<string> allowed)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return null;
+            string token = value.Trim().ToLowerInvariant();
+            return allowed.Contains(token) ? token : null;
         }
 
         // 直接攻撃としてゲーム内で判定が出るaction種。

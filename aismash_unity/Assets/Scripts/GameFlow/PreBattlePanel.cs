@@ -530,7 +530,7 @@ namespace PromptFighters.GameFlow
             }
         }
 
-        // 画像生成の進捗メッセージから完了枚数(0..15)を取り出す。取れなければ -1。
+        // 画像生成の進捗メッセージから完了枚数(0..SpriteCount)を取り出す。取れなければ -1。
         static int ParseImagesDone(string msg)
         {
             if (string.IsNullOrEmpty(msg)) return -1;
@@ -538,13 +538,14 @@ namespace PromptFighters.GameFlow
             if (msg.Contains("バリエーション")) return 1;
             var m = System.Text.RegularExpressions.Regex.Match(msg, @"残り\s*(\d+)\s*枚");
             if (m.Success && int.TryParse(m.Groups[1].Value, out int rem))
-                return Mathf.Clamp(15 - rem, 0, 15);
+                return Mathf.Clamp(CharacterSpriteSet.SpriteCount - rem, 0, CharacterSpriteSet.SpriteCount);
             return -1;
         }
 
         // 画像完了枚数 → 全体進行度%（テキスト生成完了の10%＋画像で最大98%まで）。
         static int ImagePercent(int done)
-            => done < 0 ? -1 : Mathf.Clamp(10 + Mathf.RoundToInt(done / 15f * 88f), 10, 98);
+            => done < 0 ? -1 : Mathf.Clamp(10 + Mathf.RoundToInt(
+                done / (float)CharacterSpriteSet.SpriteCount * 88f), 10, 98);
 
         void Update()
         {

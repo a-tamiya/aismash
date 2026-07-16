@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using PromptFighters.AI;
@@ -13,6 +14,8 @@ namespace PromptFighters.Battle
         // （ApplyPermanentX、ラウンドをまたいで保持・後勝ち上書き）。
         // 効果時間系（無敵・反射・カウンター・状態異常・障害物など）の継続時間はこの倍率で一括延長する。
         const float DurationScale = 2f;
+        const int MaxSpawnedGimmickObjects = 24;
+        const float SpatialWarningSeconds = 0.85f;
 
         // 発動者（音声アイテム取得者）。hp_set など「発動者自身に跳ね返る」ギミックで使う。
         // AngelController が Apply 直前にセットする。
@@ -34,7 +37,15 @@ namespace PromptFighters.Battle
 
         void RegisterObstacle(GameObject go)
         {
-            if (go != null) _persistentObstacles.Add(go);
+            if (go == null) return;
+            _persistentObstacles.RemoveAll(item => item == null);
+            while (_persistentObstacles.Count >= MaxSpawnedGimmickObjects)
+            {
+                var oldest = _persistentObstacles[0];
+                _persistentObstacles.RemoveAt(0);
+                if (oldest != null) Destroy(oldest);
+            }
+            _persistentObstacles.Add(go);
         }
 
         // マッチ（BO3）境界で全障害物を破棄。
@@ -51,17 +62,20 @@ namespace PromptFighters.Battle
 
             // hp_swap は両者同時処理が必要なので特別扱い
             if (data.gimmick == "hp_swap") { SwapHP(p1, p2); }
-            else ApplySingle(data.gimmick, data.target, data.value, data.duration, p1, p2);
+            else ApplySingle(data.gimmick, data.target, data.value, data.duration,
+                data.has_origin, data.origin, data.direction, data.shape, data.radius, data.count, p1, p2);
 
             if (!string.IsNullOrEmpty(data.gimmick2))
             {
                 if (data.gimmick2 == "hp_swap") SwapHP(p1, p2);
-                else ApplySingle(data.gimmick2, data.target2, data.value2, data.duration2, p1, p2);
+                else ApplySingle(data.gimmick2, data.target2, data.value2, data.duration2,
+                    data.has_origin2, data.origin2, data.direction2, data.shape2, data.radius2, data.count2, p1, p2);
             }
             if (!string.IsNullOrEmpty(data.gimmick3))
             {
                 if (data.gimmick3 == "hp_swap") SwapHP(p1, p2);
-                else ApplySingle(data.gimmick3, data.target3, data.value3, data.duration3, p1, p2);
+                else ApplySingle(data.gimmick3, data.target3, data.value3, data.duration3,
+                    data.has_origin3, data.origin3, data.direction3, data.shape3, data.radius3, data.count3, p1, p2);
             }
         }
 
@@ -75,12 +89,26 @@ namespace PromptFighters.Battle
             GameAudioManager.Instance?.PlayGimmickBuff();
         }
 
+        // 旧形式を残し、既存呼び出しは空間指定なしとして扱う。
         void ApplySingle(string gimmick, string targetKey, float value, float duration, Fighter p1, Fighter p2)
+            => ApplySingle(gimmick, targetKey, value, duration,
+                false, Vector2.zero, Vector2.zero, null, 0f, 0, p1, p2);
+
+        void ApplySingle(string gimmick, string targetKey, float value, float duration,
+            bool hasOrigin, Vector2 origin, Vector2 direction, string shape, float radius, int count,
+            Fighter p1, Fighter p2)
         {
+            // 非ゼロoriginを出した旧/不完全JSONはboolがなくても尊重する。has_originは
+            // 値がゼロの「舞台中央」を省略と区別するためにだけ必須。
+            hasOrigin = hasOrigin || origin.sqrMagnitude > 0.0001f;
             Fighter target1 = ResolveTarget(targetKey, p1, p2, primary: true);
             Fighter target2 = targetKey == "both"
                 ? ResolveTarget(targetKey, p1, p2, primary: false)
                 : null;
+            // random はこの効果の開始時に一度だけ抽選し、効果対象・省略origin・地形位置で
+            // 同じプレイヤーを使う。各ヘルパーで再抽選すると、対象と表示位置が食い違う。
+            if (targetKey == "random")
+                targetKey = target1 == p2 ? "player2" : "player1";
 
             switch (gimmick)
             {
@@ -193,11 +221,31 @@ namespace PromptFighters.Battle
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "obstacle_rain":
-                    SpawnRain(Mathf.Max((int)value, 2), Mathf.Max(duration, 8f) * DurationScale);
+                    SpawnDirectionalRain(count > 0 ? count : Mathf.Max((int)value, 2), duration,
+                        hasOrigin, origin, direction.sqrMagnitude > 0.01f ? direction : Vector2.down,
+                        radius, targetKey, p1, p2);
+                    GameAudioManager.Instance?.PlayGimmickDebuff();
+                    break;
+                case "obstacle_rain_directional":
+                case "directional_obstacle_rain":
+                    SpawnDirectionalRain(count > 0 ? count : Mathf.Max((int)value, 2), duration,
+                        hasOrigin, origin, direction, radius, targetKey, p1, p2);
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "obstacle_tilt":
                     SpawnTiltedPlatform(Mathf.Max(value, 1f), Mathf.Max(duration, 5f) * DurationScale, targetKey, p1, p2);
+                    GameAudioManager.Instance?.PlayGimmickBuff();
+                    break;
+                case "platform_line":
+                case "obstacle_platform_line":
+                    SpawnPlatformSequence(value, hasOrigin, origin, direction, count, false,
+                        targetKey, p1, p2);
+                    GameAudioManager.Instance?.PlayGimmickBuff();
+                    break;
+                case "platform_stairs":
+                case "obstacle_platform_stairs":
+                    SpawnPlatformSequence(value, hasOrigin, origin, direction, count, true,
+                        targetKey, p1, p2);
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "clear_obstacles":
@@ -223,8 +271,18 @@ namespace PromptFighters.Battle
                     break;
                 case "launch":
                     float lv = Mathf.Clamp(value, 0.5f, 5f);
-                    target1?.ApplyImpulse(new Vector2(Random.Range(-1f,1f) * lv * 4f, lv * 7f), 0.3f);
-                    target2?.ApplyImpulse(new Vector2(Random.Range(-1f,1f) * lv * 4f, lv * 7f), 0.3f);
+                    Vector2 legacyLaunch = direction.sqrMagnitude > 0.01f
+                        ? SafeDirection(direction, Vector2.up) * lv * 8f
+                        : new Vector2(Random.Range(-1f, 1f) * lv * 4f, lv * 7f);
+                    target1?.ApplyImpulse(legacyLaunch, 0.3f);
+                    target2?.ApplyImpulse(legacyLaunch, 0.3f);
+                    GameAudioManager.Instance?.PlayGimmickDebuff();
+                    break;
+                case "launch_vector":
+                    float vectorPower = Mathf.Clamp(Mathf.Abs(value) > 0.01f ? Mathf.Abs(value) : 2.5f, 0.5f, 5f);
+                    Vector2 launchVector = SafeDirection(direction, Vector2.up) * vectorPower * 8f;
+                    target1?.ApplyImpulse(launchVector, 0.3f);
+                    target2?.ApplyImpulse(launchVector, 0.3f);
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "slow":
@@ -306,26 +364,55 @@ namespace PromptFighters.Battle
                     GameAudioManager.Instance?.PlayGimmickBuff();
                     break;
                 case "wind":
-                    float windF = value != 0f ? Mathf.Clamp(value * 5f, 1f, 15f) : 4f;
-                    target1?.StartTemporaryWind(windF, Mathf.Max(duration, 4f) * DurationScale);
-                    target2?.StartTemporaryWind(windF, Mathf.Max(duration, 4f) * DurationScale);
-                    GameAudioManager.Instance?.PlayGimmickDebuff();
-                    break;
-                case "floor_lava":
-                    // 床の溶岩化は「床」の効果なので target に関係なく全員に適用。ダメージは従来の半分。
-                    float lavaRatio = Mathf.Clamp(value > 0f ? value : 0.1f, 0.05f, 0.5f) * 0.5f;
-                    float lavaDur   = Mathf.Max(duration, 5f) * DurationScale;
-                    var fighters = BattleManager.Instance?.Fighters;
-                    if (fighters != null && fighters.Count > 0)
+                    if (HasSpatialRequest(hasOrigin, origin, direction, shape, radius, count))
                     {
-                        for (int i = 0; i < fighters.Count; i++)
-                            fighters[i]?.StartTemporaryFloorLava(lavaRatio, lavaDur);
+                        SpawnSpatialZone(AngelSpatialEffect.DirectionalWind, targetKey, value, duration,
+                            hasOrigin, origin, direction, shape, radius, p1, p2);
                     }
                     else
                     {
-                        p1?.StartTemporaryFloorLava(lavaRatio, lavaDur);
-                        p2?.StartTemporaryFloorLava(lavaRatio, lavaDur);
+                        float windF = value != 0f ? Mathf.Clamp(value * 5f, -15f, 15f) : 4f;
+                        target1?.StartTemporaryWind(windF, Mathf.Max(duration, 4f) * DurationScale);
+                        target2?.StartTemporaryWind(windF, Mathf.Max(duration, 4f) * DurationScale);
                     }
+                    GameAudioManager.Instance?.PlayGimmickDebuff();
+                    break;
+                case "wind_directional":
+                case "directional_wind":
+                    SpawnSpatialZone(AngelSpatialEffect.DirectionalWind, targetKey, value, duration,
+                        hasOrigin, origin, direction, shape, radius, p1, p2);
+                    GameAudioManager.Instance?.PlayGimmickDebuff();
+                    break;
+                case "wind_radial":
+                case "radial_wind":
+                    SpawnSpatialZone(AngelSpatialEffect.RadialWind, targetKey, value, duration,
+                        hasOrigin, origin, direction, "circle", radius, p1, p2);
+                    GameAudioManager.Instance?.PlayGimmickDebuff();
+                    break;
+                case "gravity_zone":
+                case "local_gravity":
+                    SpawnSpatialZone(AngelSpatialEffect.Gravity, targetKey, value, duration,
+                        hasOrigin, origin, direction, shape, radius, p1, p2);
+                    GameAudioManager.Instance?.PlayGimmickDebuff();
+                    break;
+                case "floor_lava":
+                    // 全床を覆う旧効果も、範囲を可視化して発動前に必ず予告する。
+                    SpawnFullFloorLava(value, duration, p1, p2);
+                    GameAudioManager.Instance?.PlayGimmickDebuff();
+                    break;
+                case "lava_strip":
+                    SpawnSpatialZone(AngelSpatialEffect.Lava, targetKey, value, duration,
+                        hasOrigin, origin, direction, "line", radius, p1, p2);
+                    GameAudioManager.Instance?.PlayGimmickDebuff();
+                    break;
+                case "heal_zone":
+                    SpawnSpatialZone(AngelSpatialEffect.Heal, targetKey, value, duration,
+                        hasOrigin, origin, direction, shape, radius, p1, p2);
+                    GameAudioManager.Instance?.PlayGimmickHeal();
+                    break;
+                case "damage_zone":
+                    SpawnSpatialZone(AngelSpatialEffect.Damage, targetKey, value, duration,
+                        hasOrigin, origin, direction, shape, radius, p1, p2);
                     GameAudioManager.Instance?.PlayGimmickDebuff();
                     break;
                 case "guard_disable":
@@ -410,6 +497,184 @@ namespace PromptFighters.Battle
             f.transform.position = new Vector3(x, Mathf.Max(f.transform.position.y, 0.5f), 0f);
             PromptFighters.UI.DamagePopup.SpawnText(
                 f.transform.position + Vector3.up, "WARP!", new Color(0.8f, 0.3f, 1f), 1.5f);
+        }
+
+        static bool HasSpatialRequest(bool hasOrigin, Vector2 origin, Vector2 direction, string shape, float radius, int count)
+            => hasOrigin || origin.sqrMagnitude > 0.0001f || direction.sqrMagnitude > 0.0001f ||
+               !string.IsNullOrEmpty(shape) || radius > 0f || count > 0;
+
+        static Vector2 SafeDirection(Vector2 direction, Vector2 fallback)
+        {
+            if (direction.sqrMagnitude < 0.0001f) direction = fallback;
+            if (direction.sqrMagnitude < 0.0001f) direction = Vector2.right;
+            return direction.normalized;
+        }
+
+        Vector2 ResolveSpatialOrigin(Vector2 normalized, bool hasOrigin, string targetKey,
+            Fighter p1, Fighter p2, float defaultY)
+        {
+            var bm = BattleManager.Instance;
+            float minX = bm?.StageMinX ?? -5f;
+            float maxX = bm?.StageMaxX ??  5f;
+            float groundY = bm?.StageGroundY ?? -1.8f;
+
+            // JSONでoriginが省略された場合はVector2.zero。個別targetならその現在位置、
+            // both等なら舞台中央を既定位置にする。
+            if (!hasOrigin)
+            {
+                Fighter target = ResolveTarget(targetKey, p1, p2, primary: true);
+                if ((targetKey == "player1" || targetKey == "player2" ||
+                     targetKey == "weaker" || targetKey == "stronger") && target != null)
+                {
+                    return new Vector2(
+                        Mathf.Clamp(target.transform.position.x, minX + 0.5f, maxX - 0.5f),
+                        Mathf.Clamp(target.transform.position.y + 0.6f, groundY + 0.3f, groundY + 6f));
+                }
+                return new Vector2((minX + maxX) * 0.5f, defaultY);
+            }
+
+            float nx = Mathf.Clamp(normalized.x, -1f, 1f);
+            float ny = Mathf.Clamp(normalized.y, -1f, 1f);
+            return new Vector2(
+                Mathf.Lerp(minX + 0.5f, maxX - 0.5f, (nx + 1f) * 0.5f),
+                Mathf.Lerp(groundY + 0.3f, groundY + 6f, (ny + 1f) * 0.5f));
+        }
+
+        static Vector2 ClampSpatialCenter(Vector2 center, Vector2 size, float rotationDegrees = 0f)
+        {
+            var bm = BattleManager.Instance;
+            float minX = bm?.StageMinX ?? -5f;
+            float maxX = bm?.StageMaxX ??  5f;
+            float groundY = bm?.StageGroundY ?? -1.8f;
+            float radians = rotationDegrees * Mathf.Deg2Rad;
+            float c = Mathf.Abs(Mathf.Cos(radians));
+            float s = Mathf.Abs(Mathf.Sin(radians));
+            float halfX = Mathf.Max(0.01f, size.x) * 0.5f;
+            float halfY = Mathf.Max(0.01f, size.y) * 0.5f;
+            float extentX = c * halfX + s * halfY;
+            float extentY = s * halfX + c * halfY;
+            float lowX = minX + extentX;
+            float highX = maxX - extentX;
+            float lowY = groundY + extentY;
+            float highY = groundY + 8f - extentY;
+            center.x = lowX <= highX ? Mathf.Clamp(center.x, lowX, highX) : (minX + maxX) * 0.5f;
+            center.y = lowY <= highY ? Mathf.Clamp(center.y, lowY, highY) : groundY + 4f;
+            return center;
+        }
+
+        Fighter[] ResolveZoneTargets(string targetKey, Fighter p1, Fighter p2, bool allFighters = false)
+        {
+            var result = new List<Fighter>();
+            if (allFighters)
+            {
+                var fighters = BattleManager.Instance?.Fighters;
+                if (fighters != null)
+                {
+                    for (int i = 0; i < fighters.Count; i++)
+                        if (fighters[i] != null && !result.Contains(fighters[i])) result.Add(fighters[i]);
+                }
+            }
+            else
+            {
+                Fighter first = ResolveTarget(targetKey, p1, p2, primary: true);
+                if (first != null) result.Add(first);
+                if (targetKey == "both")
+                {
+                    Fighter second = ResolveTarget(targetKey, p1, p2, primary: false);
+                    if (second != null && !result.Contains(second)) result.Add(second);
+                }
+            }
+
+            if (result.Count == 0)
+            {
+                if (p1 != null) result.Add(p1);
+                if (p2 != null && p2 != p1) result.Add(p2);
+            }
+            return result.ToArray();
+        }
+
+        void SpawnSpatialZone(AngelSpatialEffect effect, string targetKey, float value, float duration,
+            bool hasOrigin, Vector2 origin, Vector2 direction, string shape, float radius, Fighter p1, Fighter p2)
+        {
+            var bm = BattleManager.Instance;
+            float groundY = bm?.StageGroundY ?? -1.8f;
+            float r = Mathf.Clamp(radius > 0f ? radius : 2.2f, 0.75f, 4f);
+            float zoneDuration = Mathf.Clamp(duration > 0f ? duration : 6f, 2f, 12f);
+            Vector2 dir = SafeDirection(direction,
+                effect == AngelSpatialEffect.Gravity ? Vector2.down : Vector2.right);
+            bool circle = shape == "circle" || effect == AngelSpatialEffect.RadialWind ||
+                          (string.IsNullOrEmpty(shape) && effect != AngelSpatialEffect.Lava);
+            Vector2 size;
+            if (effect == AngelSpatialEffect.Lava)
+                size = new Vector2(r * 2f, 0.65f);
+            else if (shape == "line")
+                size = new Vector2(r * 2f, Mathf.Max(0.65f, r * 0.45f));
+            else if (shape == "box")
+                size = new Vector2(r * 2f, Mathf.Max(1f, r * 1.35f));
+            else
+                size = Vector2.one * (r * 2f);
+
+            Vector2 center = ResolveSpatialOrigin(origin, hasOrigin, targetKey, p1, p2,
+                effect == AngelSpatialEffect.Lava ? groundY + 0.3f : groundY + 1.8f);
+            if (effect == AngelSpatialEffect.Lava) center.y = groundY + size.y * 0.5f;
+            bool rotatesWithDirection = !circle && effect != AngelSpatialEffect.Lava && size.x > size.y;
+            float zoneAngle = rotatesWithDirection
+                ? Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg
+                : 0f;
+            center = ClampSpatialCenter(center, size, zoneAngle);
+
+            float strength;
+            switch (effect)
+            {
+                case AngelSpatialEffect.DirectionalWind:
+                    if (value < 0f) dir = -dir;
+                    strength = Mathf.Clamp(Mathf.Abs(value) > 0.01f ? Mathf.Abs(value) * 5f : 5f, 1f, 15f);
+                    break;
+                case AngelSpatialEffect.RadialWind:
+                    float radialSign = value < 0f ? -1f : 1f;
+                    strength = radialSign * Mathf.Clamp(Mathf.Abs(value) > 0.01f ? Mathf.Abs(value) * 5f : 5f, 1f, 15f);
+                    break;
+                case AngelSpatialEffect.Gravity:
+                    if (value < 0f) dir = -dir;
+                    strength = Mathf.Clamp(Mathf.Abs(value) > 0.01f ? Mathf.Abs(value) : 7f, 2f, 18f);
+                    break;
+                case AngelSpatialEffect.Heal:
+                    strength = Mathf.Clamp(Mathf.Abs(value) > 0.001f ? Mathf.Abs(value) : 0.04f, 0.01f, 0.10f);
+                    break;
+                case AngelSpatialEffect.Damage:
+                    strength = Mathf.Clamp(Mathf.Abs(value) > 0.001f ? Mathf.Abs(value) : 0.035f, 0.01f, 0.08f);
+                    break;
+                default: // Lava
+                    strength = Mathf.Clamp(Mathf.Abs(value) > 0.001f ? Mathf.Abs(value) * 0.5f : 0.04f, 0.015f, 0.10f);
+                    break;
+            }
+
+            CreateSpatialZone(effect, center, size, circle, dir, strength, zoneDuration,
+                ResolveZoneTargets(targetKey, p1, p2));
+        }
+
+        void SpawnFullFloorLava(float value, float duration, Fighter p1, Fighter p2)
+        {
+            var bm = BattleManager.Instance;
+            float minX = bm?.StageMinX ?? -5f;
+            float maxX = bm?.StageMaxX ??  5f;
+            float groundY = bm?.StageGroundY ?? -1.8f;
+            Vector2 size = new Vector2(Mathf.Max(1f, maxX - minX - 0.2f), 0.65f);
+            Vector2 center = new Vector2((minX + maxX) * 0.5f, groundY + size.y * 0.5f);
+            float strength = Mathf.Clamp(value > 0f ? value * 0.5f : 0.04f, 0.015f, 0.10f);
+            float zoneDuration = Mathf.Clamp(Mathf.Max(duration, 5f) * DurationScale, 5f, 15f);
+            CreateSpatialZone(AngelSpatialEffect.Lava, center, size, false, Vector2.right,
+                strength, zoneDuration, ResolveZoneTargets("both", p1, p2, allFighters: true));
+        }
+
+        void CreateSpatialZone(AngelSpatialEffect effect, Vector2 center, Vector2 size, bool circle,
+            Vector2 direction, float strength, float duration, Fighter[] targets)
+        {
+            var go = new GameObject("AngelSpatial_" + effect);
+            go.transform.position = center;
+            var zone = go.AddComponent<AngelSpatialZone>();
+            zone.Init(effect, size, circle, direction, strength, duration, SpatialWarningSeconds, targets);
+            RegisterObstacle(go);
         }
 
         // ── 足場・地形生成 ───────────────────────────────────────────
@@ -693,6 +958,188 @@ namespace PromptFighters.Battle
             return found ? best : (bm != null ? bm.StageGroundY : -1.8f);
         }
 
+        void SpawnDirectionalRain(int requestedCount, float duration, bool hasOrigin, Vector2 origin,
+            Vector2 direction, float radius, string targetKey, Fighter p1, Fighter p2)
+        {
+            StartCoroutine(DirectionalRainRoutine(requestedCount, duration, hasOrigin, origin,
+                direction, radius, targetKey, p1, p2));
+        }
+
+        IEnumerator DirectionalRainRoutine(int requestedCount, float duration, bool hasOrigin, Vector2 origin,
+            Vector2 direction, float radius, string targetKey, Fighter p1, Fighter p2)
+        {
+            var bm = BattleManager.Instance;
+            float minX = bm?.StageMinX ?? -5f;
+            float maxX = bm?.StageMaxX ??  5f;
+            float groundY = bm?.StageGroundY ?? -1.8f;
+            int spawnCount = Mathf.Clamp(requestedCount > 0 ? requestedCount : 5, 2, 8);
+            float lifetime = Mathf.Clamp(duration > 0f ? duration : 8f, 3f, 12f);
+            Vector2 dir = SafeDirection(direction, Vector2.down);
+            Vector2 perpendicular = new Vector2(-dir.y, dir.x);
+            bool mostlyVertical = Mathf.Abs(dir.y) >= Mathf.Abs(dir.x);
+            float spread = Mathf.Clamp(radius > 0f ? radius : (mostlyVertical ? (maxX - minX) * 0.4f : 2.6f),
+                0.8f, mostlyVertical ? (maxX - minX) * 0.45f : 3.5f);
+            Vector2 center = ResolveSpatialOrigin(origin, hasOrigin, targetKey, p1, p2, groundY + 3f);
+            var starts = new List<Vector2>(spawnCount);
+            var ends = new List<Vector2>(spawnCount);
+            var sizes = new List<float>(spawnCount);
+
+            for (int i = 0; i < spawnCount; i++)
+            {
+                float laneT = spawnCount <= 1 ? 0f : i / (float)(spawnCount - 1) - 0.5f;
+                Vector2 lane = center + perpendicular * (laneT * spread * 2f);
+                float blockSize = Random.Range(0.55f, 1.05f);
+                // 回転した正方形のAABB半径ぶん内側を通し、移動中もCollider全体を舞台内に保つ。
+                float inset = blockSize * 0.5f * (Mathf.Abs(dir.x) + Mathf.Abs(dir.y)) + 0.02f;
+                float laneMinX = minX + inset;
+                float laneMaxX = maxX - inset;
+                float laneMinY = groundY + inset;
+                float laneMaxY = groundY + 6.3f - inset;
+                if (!TryClipLineToRect(lane, dir, laneMinX, laneMaxX, laneMinY, laneMaxY,
+                        out Vector2 start, out Vector2 end))
+                {
+                    // 端の平行レーンが矩形を外れた場合だけ最近傍へ寄せ、指定方向は変えない。
+                    lane = new Vector2(Mathf.Clamp(lane.x, laneMinX, laneMaxX),
+                        Mathf.Clamp(lane.y, laneMinY, laneMaxY));
+                    TryClipLineToRect(lane, dir, laneMinX, laneMaxX, laneMinY, laneMaxY,
+                        out start, out end);
+                }
+                starts.Add(start);
+                ends.Add(end);
+                sizes.Add(blockSize);
+                SpawnWarningLane(start, end, Mathf.Max(0.5f, blockSize), SpatialWarningSeconds);
+            }
+
+            yield return new WaitForSeconds(SpatialWarningSeconds);
+            if (bm != null && !bm.IsFighting) yield break;
+
+            for (int i = 0; i < starts.Count; i++)
+            {
+                Vector2 travelDir = SafeDirection(ends[i] - starts[i], dir);
+                var go = new GameObject("AngelDirectionalRain");
+                go.transform.position = starts[i];
+                // 正方形の一辺を進路に揃え、予告レーン幅と実Colliderの占有幅を一致させる。
+                go.transform.rotation = Quaternion.Euler(0f, 0f,
+                    Mathf.Atan2(travelDir.y, travelDir.x) * Mathf.Rad2Deg);
+                go.transform.localScale = Vector3.one * sizes[i];
+                var rb = go.AddComponent<Rigidbody2D>();
+                // 予告した直線から物理衝突で逸れないよう、進路を外力に左右されないKinematicにする。
+                // DynamicなFighterとは接触するため、障害物としての押し返しは維持される。
+                rb.bodyType = RigidbodyType2D.Kinematic;
+                rb.gravityScale = 0f;
+                rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+                rb.linearVelocity = travelDir * Random.Range(5.5f, 7.5f);
+                go.AddComponent<BoxCollider2D>().size = Vector2.one;
+                ApplyRainBlockVisual(go);
+                go.AddComponent<AngelTimedDestroy>().Init(lifetime);
+                RegisterObstacle(go);
+            }
+        }
+
+        // 無限直線 point+t*direction を矩形で切り取り、directionへ進む入口→出口を返す。
+        // 水平/垂直の特殊分岐を持たないため、斜め指定でも角度が変化しない。
+        static bool TryClipLineToRect(Vector2 point, Vector2 direction,
+            float minX, float maxX, float minY, float maxY, out Vector2 start, out Vector2 end)
+        {
+            start = point;
+            end = point;
+            float tMin = float.NegativeInfinity;
+            float tMax = float.PositiveInfinity;
+
+            bool ClipAxis(float p, float d, float low, float high)
+            {
+                if (Mathf.Abs(d) < 0.0001f) return p >= low && p <= high;
+                float t1 = (low - p) / d;
+                float t2 = (high - p) / d;
+                if (t1 > t2) (t1, t2) = (t2, t1);
+                tMin = Mathf.Max(tMin, t1);
+                tMax = Mathf.Min(tMax, t2);
+                return tMin <= tMax;
+            }
+
+            if (!ClipAxis(point.x, direction.x, minX, maxX) ||
+                !ClipAxis(point.y, direction.y, minY, maxY)) return false;
+            start = point + direction * tMin;
+            end = point + direction * tMax;
+            return true;
+        }
+
+        void SpawnWarningLane(Vector2 start, Vector2 end, float width, float duration)
+        {
+            Vector2 delta = end - start;
+            var go = new GameObject("AngelHazardWarning");
+            go.transform.position = (start + end) * 0.5f;
+            go.transform.rotation = Quaternion.Euler(0f, 0f,
+                Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg);
+            go.AddComponent<AngelTelegraph>().Init(
+                new Vector2(Mathf.Max(delta.magnitude, 0.5f), width),
+                new Color(1f, 0.22f, 0.08f, 0.42f), duration);
+            // 予告は自己消滅する一時表示。永続障害物の24件枠へ入れると、8本の予告だけで
+            // 既存足場をFIFO削除してしまうため登録しない。
+        }
+
+        void SpawnPlatformSequence(float widthScale, bool hasOrigin, Vector2 origin, Vector2 direction,
+            int requestedCount, bool stairs, string targetKey, Fighter p1, Fighter p2)
+        {
+            var bm = BattleManager.Instance;
+            float minX = bm?.StageMinX ?? -5f;
+            float maxX = bm?.StageMaxX ??  5f;
+            float groundY = bm?.StageGroundY ?? -1.8f;
+            int platformCount = Mathf.Clamp(requestedCount > 0 ? requestedCount : 4, 2, 6);
+            float width = Mathf.Clamp((widthScale > 0f ? widthScale : 1f) * 1.35f, 1f, 2.6f);
+            Vector2 dir = SafeDirection(direction, Vector2.right);
+            if (stairs)
+            {
+                float xSign = Mathf.Abs(dir.x) > 0.1f ? Mathf.Sign(dir.x) : 1f;
+                float ySign = direction.y < -0.1f ? -1f : 1f;
+                dir = new Vector2(xSign, 0.55f * ySign).normalized;
+            }
+            Vector2 center = ResolveSpatialOrigin(origin, hasOrigin, targetKey, p1, p2, groundY + 1.5f);
+            float stepDistance = width + 0.4f;
+            float minCenterX = minX + width * 0.5f;
+            float maxCenterX = maxX - width * 0.5f;
+            float minCenterY = groundY + 0.65f;
+            float maxCenterY = groundY + 5.5f;
+
+            // 端で各要素を個別clampすると複数足場が同じ座標へ潰れる。列全体が収まる個数へ
+            // 先に減らし、次に中心だけを平行移動して間隔を維持する。
+            if (Mathf.Abs(dir.x) > 0.001f)
+            {
+                int fitX = Mathf.FloorToInt((maxCenterX - minCenterX) /
+                    (Mathf.Abs(dir.x) * stepDistance)) + 1;
+                platformCount = Mathf.Min(platformCount, Mathf.Max(1, fitX));
+            }
+            if (Mathf.Abs(dir.y) > 0.001f)
+            {
+                int fitY = Mathf.FloorToInt((maxCenterY - minCenterY) /
+                    (Mathf.Abs(dir.y) * stepDistance)) + 1;
+                platformCount = Mathf.Min(platformCount, Mathf.Max(1, fitY));
+            }
+
+            float halfSpan = (platformCount - 1) * stepDistance * 0.5f;
+            float lowX = center.x - Mathf.Abs(dir.x) * halfSpan;
+            float highX = center.x + Mathf.Abs(dir.x) * halfSpan;
+            if (lowX < minCenterX) center.x += minCenterX - lowX;
+            else if (highX > maxCenterX) center.x -= highX - maxCenterX;
+            float lowY = center.y - Mathf.Abs(dir.y) * halfSpan;
+            float highY = center.y + Mathf.Abs(dir.y) * halfSpan;
+            if (lowY < minCenterY) center.y += minCenterY - lowY;
+            else if (highY > maxCenterY) center.y -= highY - maxCenterY;
+
+            for (int i = 0; i < platformCount; i++)
+            {
+                float offset = (i - (platformCount - 1) * 0.5f) * stepDistance;
+                Vector2 pos = center + dir * offset;
+                pos.x = Mathf.Clamp(pos.x, minCenterX, maxCenterX);
+                pos.y = Mathf.Clamp(pos.y, minCenterY, maxCenterY);
+                var go = BuildHorizontalPlatform(stairs ? "AngelPlatformStair" : "AngelPlatformLine",
+                    new Vector3(pos.x, pos.y, 0f), width, 0.35f,
+                    stairs ? new Color(0.35f, 0.9f, 1f, 0.93f) : new Color(1f, 0.85f, 0.1f, 0.93f),
+                    kinematic: false);
+                RegisterObstacle(go);
+            }
+        }
+
         void SpawnRain(int count, float duration)
         {
             var bm = BattleManager.Instance;
@@ -763,7 +1210,10 @@ namespace PromptFighters.Battle
                     if (p2 == null) return primary ? p1 : null;
                     return primary ? (p1.CurrentHP >= p2.CurrentHP ? p1 : p2) : null;
                 case "random":
-                    return primary ? (Random.value > 0.5f ? p1 : p2) : null;
+                    if (!primary) return null;
+                    if (p1 == null) return p2;
+                    if (p2 == null) return p1;
+                    return Random.value > 0.5f ? p1 : p2;
                 default:
                     return primary ? p1 : p2;
             }

@@ -13,17 +13,38 @@ namespace PromptFighters.AI
         public string target;
         public float  value;
         public float  duration;
+        // 空間ギミック用。origin は舞台中央=(0,0)、左右上下端=(-1..1)の正規化座標。
+        // direction は向きベクトル、shape は circle/box/line/stairs、radius/count は省略可。
+        // 既存JSONでは省略され、すべて既定値になるため後方互換。
+        public bool    has_origin; // (0,0)の明示とorigin省略を区別する
+        public Vector2 origin;
+        public Vector2 direction;
+        public string  shape;
+        public float   radius;
+        public int     count;
         public string message;
 
         public string gimmick2;
         public string target2;
         public float  value2;
         public float  duration2;
+        public bool    has_origin2;
+        public Vector2 origin2;
+        public Vector2 direction2;
+        public string  shape2;
+        public float   radius2;
+        public int     count2;
 
         public string gimmick3;
         public string target3;
         public float  value3;
         public float  duration3;
+        public bool    has_origin3;
+        public Vector2 origin3;
+        public Vector2 direction3;
+        public string  shape3;
+        public float   radius3;
+        public int     count3;
     }
 
     public static class AIAngelClient
@@ -98,8 +119,34 @@ namespace PromptFighters.AI
             message  = "ちょっと退屈だから…HP少しあげる♪"
         };
 
-        static string BuildSystemPrompt() =>
+        const string SpatialGimmickPrompt =
+            "【空間ギミック拡張】\n" +
+            "既存ギミックに加え、願いが場所・方向・形を含むときは次を使う。\n" +
+            "- wind_directional: direction方向の局所風。wind_radial: origin中心の放射風（value負なら吸引）。\n" +
+            "- gravity_zone: 局所重力（direction省略時は下）。lava_strip: 地面に沿う水平の帯状溶岩（directionは使わない）。\n" +
+            "- obstacle_rain_directional: direction方向へ飛ぶ予告付き障害物。\n" +
+            "- platform_line: 足場列。platform_stairs: 階段。\n" +
+            "- heal_zone: 回復領域。damage_zone: ダメージ領域。launch_vector: direction方向へ吹き飛ばす。\n" +
+            "各ギミックには任意で origin={x,y}, direction={x,y}, shape, radius, count を付ける。" +
+            "originを指定するときは必ずhas_origin=trueも出力し、origin省略時はfalseにする。" +
+            "これにより舞台中央origin={x:0,y:0}と未指定を区別する。" +
+            "gimmick2/3には has_origin2/3, origin2/3, direction2/3, shape2/3, radius2/3, count2/3 を使う。\n" +
+            "originは舞台中央=(0,0)、左右端x=-1/1、下上端y=-1/1の正規化座標。" +
+            "directionは右=(1,0)、左=(-1,0)、上=(0,1)、下=(0,-1)。\n" +
+            "shapeはcircle/box/line/stairs。radiusは0.75〜4、countは1〜8、durationは2〜12秒。" +
+            "舞台全域を長時間覆わず、不要フィールドは省略または0にする。\n" +
+            "例: 右から岩を降らせる→obstacle_rain_directional,direction={x:-1,y:0}。" +
+            "右上へ吹き飛ばす→launch_vector,direction={x:1,y:1}。\n" +
+            "JSON例: {\"gimmick\":\"gravity_zone\",\"target\":\"both\",\"value\":6," +
+            "\"duration\":6,\"has_origin\":true,\"origin\":{\"x\":0,\"y\":0},\"direction\":{\"x\":0,\"y\":-1}," +
+            "\"shape\":\"circle\",\"radius\":2,\"count\":0,\"message\":\"中央に重力場！\"}\n\n";
+
+        static string BuildLegacySystemPrompt() =>
             "あなたは2D格闘ゲームの「願いを叶える精霊」AIです。アイテム取得者の願いを聞き、その言葉に最も近いギミックを発動します。\n\n【最重要・絶対ルール】\n- 取得者の願いは必ず忠実に叶えること。言われた内容と無関係な効果を出してはいけない。\n- 願いの言葉から「効果の種類」を読み取り、下記一覧から最も意味の近いギミックを必ず選ぶ。\n- 効果の向き（誰に効くか）も願い通りにする。「相手を◯◯」ならtarget=相手、「自分を◯◯」ならtarget=取得者。\n- 強すぎる願い（即死・永続無敵など）は『効果の種類は守ったまま』value/durationを控えめにする。種類そのものを変えてはいけない（例：無敵の願い→無敵のまま短時間にする。回復に化けさせない）。\n- 願いが曖昧でも、最も近い1つを必ず選ぶ。「何もしない」は禁止。\n\n【願いの言葉→ギミック 解釈例】\n- 「風／風を吹かせて／突風／吹き荒れて」→ wind（継続的な横風）、「一発で吹き飛ばして／ぶっ飛ばして」→ launch\n- 「燃やして／火／炎／焼いて」→ burn、「床を溶岩に／地面が熱い」→ floor_lava\n- 「凍らせて／氷／止めて／動けなく」→ freeze\n- 「ガードできなく／防御封じ」→ guard_disable、「技を封じて／技を使えなく」→ skill_seal、「めっちゃ吹っ飛ぶ／ふっとびやすく」→ super_knockback\n- 「HP同じに／HP平等に」→ hp_equal、「HP共有」→ hp_share、「カウンター／反撃」→ counter_gimmick、「地面で跳ねる／トランポリン床」→ ground_bounce、「動く足場」→ obstacle_moving\n- 「回復／治して／HP回復」→ hp_recover（全部なら hp_full）\n- 「速く／スピードアップ」→ speed_boost、「遅く／鈍く」→ speed_down / slow\n- 「大きく／巨大化」→ size_up、「小さく」→ size_down\n- 「ジャンプ／跳ねたい」→ jump_boost\n- 「強く／パワーアップ／火力」→ damage_boost、「弱く」→ damage_down\n- 「無敵／ダメージ受けない」→ invincible\n- 「ふわふわ／浮かせて／重力下げ」→ gravity_down、「重く／重力上げ」→ gravity_up\n- 「雨／降らせて／たくさん落として」→ obstacle_rain、「壁」→ obstacle_wall、「足場／台」→ obstacle_platform、「跳ねる床」→ obstacle_bounce\n- 「障害物消して／足場消して／片付けて／更地に／きれいにして／全部消して」→ clear_obstacles\n- 「ワープ／瞬間移動」→ teleport、「入れ替え（位置）」→ position_swap、「HP入れ替え」→ hp_swap\n- 「混乱／操作反転」→ chaos、「ガード壊して」→ guard_break、「反射」→ reflect\n- 「防御を上げて／守りを固めて／硬くして」→ defense_up、「防御を下げて／守りを弱めて」→ defense_down\n- 「仲間を復活させて／味方を助けて／味方を生き返らせて」→ ally_revive（ボス戦（協力モード）専用。通常対戦では効果なし）\n\n【ギミック一覧】\nバフ: hp_recover（value=回復割合）, hp_full（全回復）, speed_boost（value=速度倍率）, jump_boost（value=ジャンプ倍率）, damage_boost（value=ダメージ倍率）, invincible（無敵）, gravity_down（浮遊 value=重力倍率0.1〜0.8）, defense_up（防御力アップ。食らうダメージ0.7倍固定）, reflect（ダメージ反射 duration=秒）\nデバフ: hp_drain（value=削減割合）, hp_set（HPを指定割合にする value=割合）, speed_down, jump_down, damage_down, defense_down（防御力ダウン。食らうダメージ1.3倍固定）, chaos（操作反転）, freeze（行動不能 duration=秒）, burn, guard_break, gravity_up（重力増 value=1.5〜5）, slow（スロー）, launch（吹き飛ばし value=強さ1〜5）\n追加デバフ: wind（横風 value=強さ0.2〜3 duration=秒）, floor_lava（床ダメージ value=割合 duration=秒）, guard_disable（ガード不可 duration=秒）, skill_seal（技封印 value=封印スロット1〜4 duration=秒）, super_knockback（被ノックバック増 duration=秒）\n特殊: hp_swap（HP入れ替え）, hp_equal（HP平均化）, hp_share（HP共有 duration=秒）, counter_gimmick（カウンター付与 duration=秒）, ground_bounce（着地で跳ねる value=強さ）, size_up, size_down, teleport（ランダム瞬間移動）, position_swap（P1とP2の位置入れ替え）, ally_revive（ボス戦専用。ダウン中の味方を1体復活）\n地形: obstacle_platform（横足場 value=幅）, obstacle_wall（縦壁 value=高さ）, obstacle_bounce（バウンスパッド）, obstacle_rain（落下物 value=個数）, obstacle_tilt（斜め足場）, obstacle_moving（動く足場 value=幅 duration=秒）, clear_obstacles（地形・障害物を全消去）\n※地形targetでplayer1=P1付近/player2=P2付近/その他=中央。\n- 願いが複数の効果を含む場合のみ gimmick2/gimmick3 を使う。単一の願いなら無理に複数効果にしない（願いを薄めないため）。\n\ntarget: player1 / player2 / both / weaker / stronger / random\n\nmessageは願いを叶える精霊のセリフ（日本語・30字以内・人格攻撃なし）\n\nJSONのみ出力（不要フィールドは空文字/0でOK）：\n{\"gimmick\":\"...\",\"target\":\"...\",\"value\":0.0,\"duration\":0.0,\"gimmick2\":\"\",\"target2\":\"\",\"value2\":0.0,\"duration2\":0.0,\"gimmick3\":\"\",\"target3\":\"\",\"value3\":0.0,\"duration3\":0.0,\"message\":\"...\"}";
+
+        // 旧仕様の制約を先に示し、空間拡張を末尾で上書き確認させる。
+        // これにより旧JSONテンプレートだけを模倣して空間フィールドを落とす確率を下げる。
+        static string BuildSystemPrompt() => BuildLegacySystemPrompt() + "\n\n" + SpatialGimmickPrompt;
 
         static string BuildUserPrompt(string voiceText, CommentaryBattleState s, string acquirerSlot)
         {

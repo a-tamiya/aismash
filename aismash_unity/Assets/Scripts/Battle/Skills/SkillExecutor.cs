@@ -19,6 +19,7 @@ namespace PromptFighters.Battle.Skills
         const float HitboxVisualScale = SkillConstants.HitboxVisualScale;
         const int MaxFollowUpCount = SkillConstants.MaxFollowUpCount;
         const float FollowUpDamageMultiplier = SkillConstants.FollowUpDamageMultiplier;
+        static Material s_telegraphLineMaterial;
 
         Fighter _fighter;
         CharacterVoicePlayer _voicePlayer;
@@ -29,6 +30,9 @@ namespace PromptFighters.Battle.Skills
         bool _isExecuting;
         bool _currentSkillHit;
         int _skillSerial;
+        int _impactShownSerial = -1;
+        float _currentSkillEndTime;
+        readonly List<GameObject> _activeTelegraphs = new List<GameObject>();
         // ヒット検知の購読先。協力モードではOpponentが毎フレーム変わるため、
         // 購読時の相手を保持して確実に解除する（リーク防止）。
         Fighter _skillHitSubscribedTo;
@@ -103,7 +107,21 @@ namespace PromptFighters.Battle.Skills
             _followUpSlot  = SkillSlot.AttackA;
             _followUpCount = 0;
             UnsubscribeCurrentSkillHit();
+            CleanupTelegraphs();
             StopAllCoroutines();
+        }
+
+        void OnDisable()
+        {
+            CleanupTelegraphs();
+        }
+
+        void CleanupTelegraphs()
+        {
+            for (int i = 0; i < _activeTelegraphs.Count; i++)
+                if (_activeTelegraphs[i] != null)
+                    Destroy(_activeTelegraphs[i]);
+            _activeTelegraphs.Clear();
         }
 
         public bool TryExecuteFollowUp()
@@ -244,11 +262,25 @@ namespace PromptFighters.Battle.Skills
             SubscribeCurrentSkillHit();
             float recovery = EffectiveRecovery(skill);
             float totalDuration = skill.parameters.startup + skill.parameters.active_time + recovery;
+            float deferredActionsCompleteAt = 0f;
             float firstBeamTime = FirstActionTime(skill, "beam");
             if (firstBeamTime > 0f)
                 totalDuration = Mathf.Max(totalDuration, firstBeamTime + skill.parameters.active_time + recovery);
+            if (skill.actions != null)
+            {
+                for (int i = 0; i < skill.actions.Count; i++)
+                {
+                    var spatialAction = skill.actions[i];
+                    if (spatialAction == null) continue;
+                    float deferred = DeferredImpactDelay(spatialAction);
+                    if (deferred <= 0f) continue;
+                    deferredActionsCompleteAt = Mathf.Max(deferredActionsCompleteAt, spatialAction.time + deferred);
+                    totalDuration = Mathf.Max(totalDuration,
+                        spatialAction.time + deferred + skill.parameters.active_time + recovery);
+                }
+            }
             _fighter.BeginSkillRecovery(totalDuration);
-            _fighter.ShowSkillSprite(skill, totalDuration);
+            _fighter.ShowSkillWindup(skill, totalDuration);
             // スマッシュのオーラは溜め中(Fighter.UpdateSmashAura)で表示するため、発動時には出さない。
             float whiffDelay = WhiffCheckDelay(skill);
             if (whiffDelay > 0f)
@@ -263,6 +295,7 @@ namespace PromptFighters.Battle.Skills
             }
 
             float t0 = Time.time;
+            _currentSkillEndTime = t0 + totalDuration;
 
             // アクションを time 昇順で順次実行（簡易: アクションは startup考慮済の time にスポーン）
             float elapsed = 0f;
@@ -290,6 +323,8 @@ namespace PromptFighters.Battle.Skills
                 var a = actions[actionIdx];
                 if (elapsed >= a.time)
                 {
+                    if (IsImpactAction(a) && !ActionDefersImpact(a))
+                        ShowImpactAtSpawn(skill);
                     ExecuteAction(skill, a, powerMultiplier);
                     actionIdx++;
                 }
@@ -299,6 +334,9 @@ namespace PromptFighters.Battle.Skills
                 }
             }
 
+            while (Time.time - t0 < deferredActionsCompleteAt)
+                yield return null;
+
             if (skill.follow_up_actions?.Count > 0)
                 OpenFollowUpWindow(skill, 0);
 
@@ -307,6 +345,73 @@ namespace PromptFighters.Battle.Skills
 
             _isExecuting = false;
             UnsubscribeCurrentSkillHit();
+        }
+
+        static bool IsImpactAction(SkillAction a)
+        {
+            if (a == null) return false;
+            return a.type == "melee_hitbox" || a.type == "body_hitbox" ||
+                   a.type == "area_hitbox" || a.type == "trap_hitbox" ||
+                   a.type == "projectile" || a.type == "beam" ||
+                   a.type == "jump_attack" || a.type == "uppercut" ||
+                   a.type == "dive_attack" || a.type == "dash+melee_hitbox" ||
+                   a.type == "multi_hit" || a.type == "summon" ||
+                   a.type == "counter" || a.type == "reflector" ||
+                   a.type == "command_throw" || a.type == "shockwave" ||
+                   a.type == "gravity_well" || a.type == "lifesteal";
+        }
+
+        static bool ActionDefersImpact(SkillAction a)
+        {
+            if (a == null || !IsImpactAction(a)) return false;
+            bool supportsTelegraph = a.type == "melee_hitbox" || a.type == "body_hitbox" ||
+                                     a.type == "area_hitbox" || a.type == "trap_hitbox" ||
+                                     a.type == "projectile" || a.type == "beam" ||
+                                     a.type == "lifesteal" || a.type == "summon";
+            if (supportsTelegraph && a.telegraph_time > 0f) return true;
+            bool remoteOrigin = !string.IsNullOrEmpty(a.spawn_origin) && a.spawn_origin != "owner";
+            if ((a.type == "melee_hitbox" || a.type == "body_hitbox" ||
+                 a.type == "area_hitbox" || a.type == "lifesteal" || a.type == "summon") && remoteOrigin)
+                return true;
+            return a.type == "area_hitbox" && a.spawn_at_enemy;
+        }
+
+        static int PatternCountForTiming(SkillAction a)
+        {
+            if (a == null) return 1;
+            int maxCount = a.type == "projectile" ? 8 : 4;
+            int requested;
+            if (a.pattern_count > 0) requested = a.pattern_count;
+            else if ((a.type == "projectile" || a.type == "beam") && a.projectile_count > 1)
+                requested = a.projectile_count;
+            else requested = a.pattern switch
+            {
+                "mirrored" => 2,
+                "parallel" => 3,
+                "line"     => 3,
+                "radial"   => 6,
+                "inward"   => 6,
+                "inward_ring" => 6,
+                _ => 1,
+            };
+            return Mathf.Clamp(requested, 1, maxCount);
+        }
+
+        static float DeferredImpactDelay(SkillAction a)
+        {
+            float delay = 0f;
+            if (ActionDefersImpact(a))
+                delay = a.telegraph_time > 0f ? Mathf.Clamp(a.telegraph_time, 0.05f, 1.5f) : 0.4f;
+            if (a != null && a.burst_interval > 0f)
+                delay += Mathf.Clamp(a.burst_interval, 0f, 0.5f) * Mathf.Max(0, PatternCountForTiming(a) - 1);
+            return delay;
+        }
+
+        void ShowImpactAtSpawn(SkillData skill)
+        {
+            if (_fighter == null || skill == null || _impactShownSerial == _skillSerial) return;
+            _impactShownSerial = _skillSerial;
+            _fighter.ShowSkillImpact(skill, Mathf.Max(0.05f, _currentSkillEndTime - Time.time));
         }
 
         void MarkCurrentSkillHit(float damage, bool wasBlocked)
@@ -351,7 +456,7 @@ namespace PromptFighters.Battle.Skills
                 if (!melee) continue;
                 hasMelee = true;
                 float duration = a.duration > 0f ? a.duration : Mathf.Max(skill.parameters.active_time, 0.08f);
-                latest = Mathf.Max(latest, a.time + duration);
+                latest = Mathf.Max(latest, a.time + DeferredImpactDelay(a) + duration);
             }
             return hasMelee ? latest + SkillConstants.WhiffCheckGrace : 0f;
         }
@@ -362,6 +467,387 @@ namespace PromptFighters.Battle.Skills
             return skill.slot == SkillSlot.SmashSide
                 ? Mathf.Clamp(skill.parameters.recovery, SkillConstants.SmashRecoveryMin, SkillConstants.SmashRecoveryMax)
                 : skill.parameters.recovery;
+        }
+
+        readonly struct SpatialSample
+        {
+            public readonly Vector2 position;
+            public readonly Vector2 direction;
+            public readonly float delay;
+
+            public SpatialSample(Vector2 position, Vector2 direction, float delay)
+            {
+                this.position = position;
+                this.direction = direction.sqrMagnitude > 0.0001f ? direction.normalized : Vector2.right;
+                this.delay = Mathf.Max(0f, delay);
+            }
+
+            public float Angle => Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+        }
+
+        bool HasExplicitSpatialOrigin(SkillAction a)
+            => a != null && (!string.IsNullOrEmpty(a.spawn_origin) ||
+                             !string.IsNullOrEmpty(a.spawn_anchor));
+
+        static bool HasNewPattern(SkillAction a)
+            => a != null && !string.IsNullOrEmpty(a.pattern) && a.pattern != "single";
+
+        static bool HasSpatialOrientation(SkillAction a)
+        {
+            if (a == null) return false;
+            if (!string.IsNullOrEmpty(a.aim_mode) || !Mathf.Approximately(a.rotation_angle, 0f) ||
+                !Mathf.Approximately(a.projectile_angle, 0f)) return true;
+            string shape = a.shape;
+            return shape == "annulus" || shape == "arc" || shape == "line" ||
+                   shape == "cross" || shape == "column" || shape == "cone";
+        }
+
+        Vector2 ResolveSpatialOrigin(SkillData skill, SkillAction a)
+        {
+            Vector2 ownerPos = _fighter != null ? (Vector2)_fighter.transform.position : Vector2.zero;
+            Vector2 enemyPos = _fighter?.Opponent != null
+                ? (Vector2)_fighter.Opponent.transform.position
+                : ownerPos;
+            var bm = Battle.BattleManager.Instance;
+            float groundY = bm != null ? bm.StageGroundY : ownerPos.y;
+            string origin = string.IsNullOrEmpty(a.spawn_origin) ? "owner" : a.spawn_origin;
+
+            Vector2 point = origin switch
+            {
+                "enemy"       => enemyPos,
+                "midpoint"    => (ownerPos + enemyPos) * 0.5f,
+                "stage_center"=> new Vector2(
+                    bm != null ? (bm.StageMinX + bm.StageMaxX) * 0.5f : 0f, groundY),
+                "left_edge"   => new Vector2(bm != null ? bm.StageMinX + 0.35f : -5f, groundY),
+                "right_edge"  => new Vector2(bm != null ? bm.StageMaxX - 0.35f : 5f, groundY),
+                _             => ownerPos,
+            };
+
+            string anchor = string.IsNullOrEmpty(a.spawn_anchor) ? "auto" : a.spawn_anchor;
+            float anchorScale = origin == "owner" ? _sizeScale : 1f;
+            var enemyBody = origin == "enemy" && _fighter?.Opponent != null
+                ? _fighter.Opponent.GetComponent<Collider2D>()
+                : null;
+            if (anchor == "body")
+            {
+                point.y = enemyBody != null ? enemyBody.bounds.center.y
+                                            : point.y + 0.85f * anchorScale;
+            }
+            else if (anchor == "head")
+            {
+                point.y = enemyBody != null ? enemyBody.bounds.max.y
+                                            : point.y + 1.65f * anchorScale;
+            }
+            else if (anchor == "weapon_tip" && origin == "owner")
+            {
+                var attackAnchor = AnchorFor(skill);
+                if (attackAnchor.valid)
+                {
+                    float facing = _fighter.FacingRight ? 1f : -1f;
+                    point += new Vector2(facing * attackAnchor.tip.x, attackAnchor.tip.y) * _sizeScale;
+                }
+            }
+            // feet/auto はFighterの足元ピボットそのもの。
+
+            float sign = _fighter != null && _fighter.FacingRight ? 1f : -1f;
+            point += new Vector2(sign * a.spawn_x * _sizeScale, a.spawn_y * _sizeScale);
+            if (bm != null)
+                point.x = Mathf.Clamp(point.x, bm.StageMinX + 0.15f, bm.StageMaxX - 0.15f);
+            return point;
+        }
+
+        Vector2 ResolveAimDirection(SkillAction a, Vector2 from, Vector2 fallback, float extraAngle = 0f)
+        {
+            Vector2 dir = fallback.sqrMagnitude > 0.0001f
+                ? fallback.normalized
+                : (_fighter != null && _fighter.FacingRight ? Vector2.right : Vector2.left);
+            string aim = string.IsNullOrEmpty(a.aim_mode) ? "facing" : a.aim_mode;
+            Vector2 enemyCenter = _fighter?.Opponent != null
+                ? (Vector2)_fighter.Opponent.transform.position + Vector2.up * 0.8f
+                : from + dir;
+            var battleManager = Battle.BattleManager.Instance;
+            Vector2 stageCenter = new Vector2(
+                battleManager != null ? (battleManager.StageMinX + battleManager.StageMaxX) * 0.5f : 0f,
+                battleManager != null ? battleManager.StageGroundY + 0.8f : from.y);
+
+            switch (aim)
+            {
+                case "facing":
+                    // 舞台端起点の既定方向は必ず舞台内側へ向ける。
+                    if (a.spawn_origin == "left_edge") dir = Vector2.right;
+                    else if (a.spawn_origin == "right_edge") dir = Vector2.left;
+                    break;
+                case "enemy":
+                    dir = enemyCenter - from;
+                    break;
+                case "away_enemy":
+                    dir = from - enemyCenter;
+                    break;
+                case "stage_center":
+                    dir = stageCenter - from;
+                    break;
+                case "vector":
+                    float sign = _fighter != null && _fighter.FacingRight ? 1f : -1f;
+                    dir = new Vector2(sign * a.vector_x, a.vector_y);
+                    break;
+                case "radial_out":
+                {
+                    Vector2 radialCenter = _fighter != null
+                        ? (Vector2)_fighter.transform.position + Vector2.up * 0.8f
+                        : stageCenter;
+                    dir = from - radialCenter;
+                    break;
+                }
+                case "radial_in":
+                {
+                    Vector2 radialCenter = _fighter != null
+                        ? (Vector2)_fighter.transform.position + Vector2.up * 0.8f
+                        : stageCenter;
+                    dir = radialCenter - from;
+                    break;
+                }
+            }
+
+            if (dir.sqrMagnitude < 0.0001f) dir = fallback.sqrMagnitude > 0.0001f ? fallback : Vector2.right;
+            return RotateVector(dir.normalized, a.rotation_angle + extraAngle);
+        }
+
+        static Vector2 RotateVector(Vector2 vector, float degrees)
+        {
+            if (Mathf.Approximately(degrees, 0f)) return vector;
+            float rad = degrees * Mathf.Deg2Rad;
+            float c = Mathf.Cos(rad);
+            float s = Mathf.Sin(rad);
+            return new Vector2(vector.x * c - vector.y * s, vector.x * s + vector.y * c);
+        }
+
+        List<SpatialSample> BuildSpatialSamples(SkillAction a, Vector2 center, Vector2 baseDirection,
+                                                bool projectile, int maxCount,
+                                                Vector2 worldFootprint = default)
+        {
+            string pattern = string.IsNullOrEmpty(a.pattern) ? "single" : a.pattern;
+            if (pattern == "inward_ring") pattern = "inward";
+            if (pattern == "single" && projectile && a.projectile_count > 1)
+                pattern = "fan"; // 旧 projectile_count の後方互換
+
+            int defaultCount = pattern switch
+            {
+                "mirrored" => 2,
+                "radial"   => 6,
+                "inward"   => 6,
+                "parallel" => 3,
+                "line"     => 3,
+                _          => projectile && a.projectile_count > 1 ? a.projectile_count : 1,
+            };
+            int requested = a.pattern_count > 0 ? a.pattern_count
+                          : projectile && a.projectile_count > 1 ? a.projectile_count
+                          : defaultCount;
+            int count = Mathf.Clamp(requested, 1, Mathf.Max(1, maxCount));
+            float spacing = Mathf.Clamp(a.pattern_spacing > 0f ? a.pattern_spacing : 0.8f, 0.2f, 3f) * _sizeScale;
+            float defaultRadius = pattern == "mirrored" ? 1.1f : 2.5f;
+            float radius = Mathf.Clamp(a.pattern_radius > 0f ? a.pattern_radius : defaultRadius, 0.5f, 6f) * _sizeScale;
+            float interval = Mathf.Clamp(a.burst_interval, 0f, 0.5f);
+            Vector2 direction = baseDirection.sqrMagnitude > 0.0001f ? baseDirection.normalized : Vector2.right;
+            Vector2 perpendicular = new Vector2(-direction.y, direction.x);
+            var samples = new List<SpatialSample>(count);
+
+            for (int i = 0; i < count; i++)
+            {
+                float delay = interval * i;
+                Vector2 position = center;
+                Vector2 sampleDir = direction;
+                switch (pattern)
+                {
+                    case "fan":
+                    {
+                        float step = a.spread_angle > 0f ? a.spread_angle : 15f;
+                        sampleDir = RotateVector(direction, -step * (count - 1) * 0.5f + step * i);
+                        break;
+                    }
+                    case "parallel":
+                        position += perpendicular * ((i - (count - 1) * 0.5f) * spacing);
+                        break;
+                    case "radial":
+                        sampleDir = RotateVector(direction, 360f * i / count);
+                        break;
+                    case "inward":
+                    {
+                        Vector2 radial = RotateVector(direction, 360f * i / count);
+                        position += radial * radius;
+                        sampleDir = -radial;
+                        break;
+                    }
+                    case "mirrored":
+                    {
+                        float side = count == 1 ? 0f : Mathf.Lerp(-1f, 1f, i / (float)(count - 1));
+                        position += Vector2.right * (side * radius);
+                        // mirrored は中心の左右から外向きへ放つ。中心へ収束する配置は inward が担当する。
+                        sampleDir = ResolveAimDirection(a, position, (position - center).normalized);
+                        break;
+                    }
+                    case "line":
+                        position += direction * ((i - (count - 1) * 0.5f) * spacing);
+                        break;
+                }
+                bool duplicate = false;
+                Vector2 normalizedDir = sampleDir.sqrMagnitude > 0.0001f ? sampleDir.normalized : direction;
+                if (worldFootprint.x > 0f && worldFootprint.y > 0f)
+                {
+                    float angle = Mathf.Atan2(normalizedDir.y, normalizedDir.x) * Mathf.Rad2Deg;
+                    position = ClampSpatialCenter(position, worldFootprint, angle);
+                }
+                else
+                {
+                    var bm = Battle.BattleManager.Instance;
+                    if (bm != null)
+                    {
+                        position.x = Mathf.Clamp(position.x, bm.StageMinX + 0.15f, bm.StageMaxX - 0.15f);
+                        position.y = Mathf.Clamp(position.y, bm.StageGroundY - 0.5f, bm.StageGroundY + 8f);
+                    }
+                }
+                for (int j = 0; j < samples.Count; j++)
+                {
+                    if ((samples[j].position - position).sqrMagnitude <= 0.0025f &&
+                        Vector2.Dot(samples[j].direction, normalizedDir) >= 0.985f)
+                    {
+                        duplicate = true;
+                        break;
+                    }
+                }
+                if (!duplicate)
+                    samples.Add(new SpatialSample(position, normalizedDir, delay));
+            }
+            return samples;
+        }
+
+        static Vector2 ClampSpatialCenter(Vector2 center, Vector2 worldSize, float rotationDegrees)
+        {
+            var bm = Battle.BattleManager.Instance;
+            if (bm == null) return center;
+            float radians = rotationDegrees * Mathf.Deg2Rad;
+            float c = Mathf.Abs(Mathf.Cos(radians));
+            float s = Mathf.Abs(Mathf.Sin(radians));
+            float hx = Mathf.Max(0.01f, worldSize.x) * 0.5f;
+            float hy = Mathf.Max(0.01f, worldSize.y) * 0.5f;
+            float extentX = c * hx + s * hy;
+            float extentY = s * hx + c * hy;
+            float minX = bm.StageMinX + extentX;
+            float maxX = bm.StageMaxX - extentX;
+            float minY = bm.StageGroundY - 0.5f + extentY;
+            float maxY = bm.StageGroundY + 8f - extentY;
+            center.x = minX <= maxX ? Mathf.Clamp(center.x, minX, maxX)
+                                    : (bm.StageMinX + bm.StageMaxX) * 0.5f;
+            center.y = minY <= maxY ? Mathf.Clamp(center.y, minY, maxY)
+                                    : bm.StageGroundY + 3.75f;
+            return center;
+        }
+
+        // ビームの根元を武器先/指定originへ固定したまま、舞台端までの距離に合わせて長さを縮める。
+        // 中心を単純clampすると根元が後方へずれるため、中心線の終点と必要なら太さだけを調整する。
+        static Vector2 FitBeamWorldSizeToStage(Vector2 origin, Vector2 direction, Vector2 desiredSize)
+        {
+            var bm = Battle.BattleManager.Instance;
+            if (bm == null) return desiredSize;
+            direction = direction.sqrMagnitude > 0.0001f ? direction.normalized : Vector2.right;
+            float minX = bm.StageMinX;
+            float maxX = bm.StageMaxX;
+            float minY = bm.StageGroundY - 0.5f;
+            float maxY = bm.StageGroundY + 8f;
+
+            // directionに直交する半幅が境界を越えない最大値。根元位置は動かさない。
+            float halfThickness = Mathf.Max(0.01f, desiredSize.y * 0.5f);
+            if (Mathf.Abs(direction.y) > 0.0001f)
+            {
+                halfThickness = Mathf.Min(halfThickness,
+                    Mathf.Max(0f, origin.x - minX) / Mathf.Abs(direction.y),
+                    Mathf.Max(0f, maxX - origin.x) / Mathf.Abs(direction.y));
+            }
+            if (Mathf.Abs(direction.x) > 0.0001f)
+            {
+                halfThickness = Mathf.Min(halfThickness,
+                    Mathf.Max(0f, origin.y - minY) / Mathf.Abs(direction.x),
+                    Mathf.Max(0f, maxY - origin.y) / Mathf.Abs(direction.x));
+            }
+            halfThickness = Mathf.Max(0.01f, halfThickness);
+            float fittedHeight = Mathf.Min(desiredSize.y, halfThickness * 2f);
+            float extentX = Mathf.Abs(direction.y) * fittedHeight * 0.5f;
+            float extentY = Mathf.Abs(direction.x) * fittedHeight * 0.5f;
+
+            float maxLength = Mathf.Max(0.05f, desiredSize.x);
+            if (direction.x > 0.0001f)
+                maxLength = Mathf.Min(maxLength, (maxX - extentX - origin.x) / direction.x);
+            else if (direction.x < -0.0001f)
+                maxLength = Mathf.Min(maxLength, (origin.x - (minX + extentX)) / -direction.x);
+            if (direction.y > 0.0001f)
+                maxLength = Mathf.Min(maxLength, (maxY - extentY - origin.y) / direction.y);
+            else if (direction.y < -0.0001f)
+                maxLength = Mathf.Min(maxLength, (origin.y - (minY + extentY)) / -direction.y);
+
+            return new Vector2(Mathf.Clamp(maxLength, 0.05f, desiredSize.x), fittedHeight);
+        }
+
+        static bool PatternNeedsSharedHitGroup(SkillAction a)
+        {
+            if (a == null || string.IsNullOrEmpty(a.pattern)) return false;
+            return a.pattern != "single";
+        }
+
+        int CreatePatternCastId(SkillAction a)
+            => PatternNeedsSharedHitGroup(a) ? SkillCastHitRegistry.NextCastId() : 0;
+
+        static float PatternHitLockSeconds(SkillAction a)
+        {
+            if (a == null) return 0.35f;
+            float projectileLifetime = a.type == "projectile"
+                ? (a.projectile_lifetime > 0f ? a.projectile_lifetime : 1.5f)
+                : 0f;
+            float implicitLifetime = a.type == "beam" ? 0.12f
+                : a.type == "projectile" ? projectileLifetime
+                : 0.75f; // melee/body/areaのactive_time上限(0.6s)＋余裕
+            float lifetime = Mathf.Max(implicitLifetime, a.duration, projectileLifetime);
+            float burstTail = Mathf.Clamp(a.burst_interval, 0f, 0.5f) *
+                              Mathf.Max(0, PatternCountForTiming(a) - 1);
+            return Mathf.Clamp(lifetime + burstTail + 0.15f, 0.35f, 6.5f);
+        }
+
+        void ConfigureSpatialHitbox(Hitbox hb, SkillAction a, Vector2 size, float directionAngle, int castId)
+        {
+            if (hb == null || a == null) return;
+            string shape = string.IsNullOrEmpty(a.shape) ? "box" : a.shape;
+            hb.DesiredWorldSize = size;
+            // ringは内径0のannulusとして扱い、塗りつぶし円判定＋スポークのない円周表示にする。
+            hb.SpatialShape = shape == "ring" ? "annulus" : shape;
+            hb.SpatialInnerRadius = shape == "ring"
+                ? 0f
+                : Mathf.Max(0f, a.inner_radius) * _sizeScale * HitboxVisualScale;
+            hb.SpatialArcAngle = shape == "ring" ? 360f
+                : a.arc_angle > 0f ? Mathf.Clamp(a.arc_angle, 1f, 360f) : 90f;
+            hb.SpatialCrossThickness = Mathf.Max(0f, a.inner_radius) * _sizeScale * HitboxVisualScale;
+            hb.SharedCastId = castId;
+            hb.SharedSourceId = castId != 0 ? SkillCastHitRegistry.NextSourceId() : 0;
+            hb.SharedHitLockSeconds = PatternHitLockSeconds(a);
+            hb.SpatialKnockbackMode = a.knockback_direction;
+            hb.SpatialKnockbackOrigin = hb.transform.position;
+
+            // beamは舞台端起点の既定facingでも左右が反転し得るため、常に実進行方向へ揃える。
+            if (a.type == "beam" || HasSpatialOrientation(a) || HasNewPattern(a))
+            {
+                hb.transform.rotation = Quaternion.Euler(0f, 0f, directionAngle);
+                hb.FlipEffectX = false;
+            }
+        }
+
+        void ScheduleSpatial(float delay, System.Action action)
+        {
+            if (delay <= 0f) action?.Invoke();
+            else StartCoroutine(InvokeSpatialAfter(delay, action));
+        }
+
+        IEnumerator InvokeSpatialAfter(float delay, System.Action action)
+        {
+            yield return new WaitForSeconds(delay);
+            if (_fighter != null && _fighter.State != FighterState.Dead)
+                action?.Invoke();
         }
 
         // アクション種 -> ハンドラのディスパッチ表。新しいアクションを足す際は
@@ -414,6 +900,7 @@ namespace PromptFighters.Battle.Skills
         void SpawnMeleeHitbox(SkillData skill, SkillAction a, float powerMultiplier)
         {
             float dirSign = _fighter.FacingRight ? 1f : -1f;
+            bool explicitOrigin = HasExplicitSpatialOrigin(a);
             float range   = a.range > 0f ? a.range : skill.parameters.range;
             if (range <= 0f) range = 1.2f;
 
@@ -425,7 +912,7 @@ namespace PromptFighters.Battle.Skills
             // 攻撃ポーズの得物（剣・槍・拳）の位置に判定を合わせる
             // （「剣を振っているのに判定が別の場所にある」対策）。
             var anchor = AnchorFor(skill);
-            if (anchor.valid)
+            if (anchor.valid && !explicitOrigin)
             {
                 if (anchor.weaponLength >= 0.35f)
                 {
@@ -461,42 +948,74 @@ namespace PromptFighters.Battle.Skills
             offsetY *= _sizeScale;
             Vector2 offset = new Vector2(dirSign * offsetX, offsetY);
             Vector2 size   = new Vector2(range * HitboxVisualScale, height * HitboxVisualScale);
+            Vector2 position = explicitOrigin
+                ? ResolveSpatialOrigin(skill, a)
+                : (Vector2)_fighter.transform.position + offset;
+            Vector2 attackDir = ResolveAimDirection(a, position, new Vector2(dirSign, 0f));
             float lifetime = skill.parameters.active_time > 0f ? skill.parameters.active_time : 0.12f;
             if (skill.slot == SkillSlot.SmashSide) lifetime = Mathf.Max(lifetime, 0.15f);
+            var samples = BuildSpatialSamples(a, position, attackDir, projectile: false, maxCount: 4,
+                worldFootprint: size);
+            int castId = CreatePatternCastId(a);
 
-            var hb = Hitbox.Spawn(_fighter, (Vector2)_fighter.transform.position + offset, size, lifetime);
-            hb.FollowOwner = a.follow_owner;
-            hb.OwnerLocalOffset = new Vector2(offsetX, offsetY);
-            float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) *
-                        powerMultiplier * _fighter.EffectiveDamageMultiplier;
-            hb.Damage         = dmg;
-            hb.DamageIncludesOwnerBoost = true;
-            hb.Knockback      = skill.parameters.knockback * powerMultiplier;
-            var (kbDir1, kbFixed1) = ComputeKnockback(a, 1f, 0.3f);
-            hb.KnockbackDir      = kbDir1;
-            hb.FixedKnockbackDir = kbFixed1;
-            hb.GroundBounce      = a.knockback_direction == "ground_bounce";
-            hb.StunTime       = skill.parameters.stun_time;
-            hb.GuardDamage    = skill.parameters.guard_damage;
-            hb.Element        = skill.element;
-            hb.EffectSprite   = a.hide_effect ? null : _fighter.GetEffectSprite(skill);
-            hb.HideVisual     = a.hide_effect;
-            hb.FlipEffectX    = !_fighter.FacingRight;
-            hb.MaxHits        = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
-            hb.IsSmashHit     = skill.slot == SkillSlot.SmashSide && powerMultiplier >= SkillConstants.SmashPowerThreshold;
-            hb.LifestealRatio = Mathf.Clamp01(a.lifesteal_ratio);
-            ApplyActionStatus(hb, a);
+            void SpawnNow(SpatialSample sample)
+            {
+                ShowImpactAtSpawn(skill);
+                var hb = Hitbox.Spawn(_fighter, sample.position, size, lifetime);
+                hb.FollowOwner = a.follow_owner && samples.Count == 1 &&
+                    (!explicitOrigin || string.IsNullOrEmpty(a.spawn_origin) || a.spawn_origin == "owner");
+                Vector2 ownerDelta = sample.position - (Vector2)_fighter.transform.position;
+                hb.OwnerLocalOffset = explicitOrigin
+                    ? new Vector2(dirSign * ownerDelta.x, ownerDelta.y)
+                    : new Vector2(offsetX, offsetY);
+                float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) *
+                            powerMultiplier * _fighter.EffectiveDamageMultiplier;
+                hb.Damage         = dmg;
+                hb.DamageIncludesOwnerBoost = true;
+                hb.Knockback      = skill.parameters.knockback * powerMultiplier;
+                var (kbDir1, kbFixed1) = ComputeKnockback(a, 1f, 0.3f);
+                hb.KnockbackDir      = kbDir1;
+                hb.FixedKnockbackDir = kbFixed1;
+                hb.GroundBounce      = a.knockback_direction == "ground_bounce";
+                hb.StunTime       = skill.parameters.stun_time;
+                hb.GuardDamage    = skill.parameters.guard_damage;
+                hb.Element        = skill.element;
+                hb.EffectSprite   = a.hide_effect ? null : _fighter.GetEffectSprite(skill);
+                hb.HideVisual     = a.hide_effect;
+                hb.FlipEffectX    = !_fighter.FacingRight;
+                hb.MaxHits        = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
+                hb.IsSmashHit     = skill.slot == SkillSlot.SmashSide && powerMultiplier >= SkillConstants.SmashPowerThreshold;
+                hb.LifestealRatio = Mathf.Clamp01(a.lifesteal_ratio);
+                ApplyActionStatus(hb, a);
+                ConfigureSpatialHitbox(hb, a, size, sample.Angle, castId);
 
-            // 画像エフェクトを出さない体術は、代わりに判定位置へ風切りの光を走らせる
-            if (a.hide_effect)
-                Battle.SimpleFX.SwingArc(
-                    (Vector2)_fighter.transform.position + offset, dirSign,
-                    size.x, size.y, SkillEnumParser.ElementColor(skill.element));
+                if (a.hide_effect)
+                    Battle.SimpleFX.SwingArc(sample.position, sample.direction, size.x, size.y,
+                        SkillEnumParser.ElementColor(skill.element));
+            }
+
+            bool remoteOrigin = explicitOrigin && !string.IsNullOrEmpty(a.spawn_origin) && a.spawn_origin != "owner";
+            for (int i = 0; i < samples.Count; i++)
+            {
+                SpatialSample sample = samples[i];
+                ScheduleSpatial(sample.delay, () =>
+                {
+                    if (remoteOrigin || a.telegraph_time > 0f)
+                        StartCoroutine(TelegraphThenSpawn(sample.position, size, sample.Angle,
+                            string.IsNullOrEmpty(a.shape) ? "box" : a.shape, skill.element,
+                            a.telegraph_time > 0f ? Mathf.Clamp(a.telegraph_time, 0.05f, 1.5f) : 0.4f,
+                            () => SpawnNow(sample),
+                            a.inner_radius * _sizeScale * HitboxVisualScale, a.arc_angle));
+                    else
+                        SpawnNow(sample);
+                });
+            }
         }
 
         void SpawnBodyHitbox(SkillData skill, SkillAction a, float powerMultiplier, bool swingFx = true)
         {
             float dirSign = _fighter.FacingRight ? 1f : -1f;
+            bool explicitOrigin = HasExplicitSpatialOrigin(a);
             // spawn_x=0 はキャラ中心（前方オフセットなし）。>0 で前方に張り出す
             float width   = a.size_x > 0f ? a.size_x : (a.range > 0f ? a.range : 1.9f);
             float height  = a.size_y > 0f ? a.size_y : 2.3f; // デフォルトは全身
@@ -507,33 +1026,63 @@ namespace PromptFighters.Battle.Skills
             float lifetime = a.duration > 0f ? a.duration
                            : (skill.parameters.active_time > 0f ? skill.parameters.active_time : 0.28f);
 
-            var hb = Hitbox.Spawn(_fighter,
-                (Vector2)_fighter.transform.position + new Vector2(dirSign * offsetX, offsetY),
-                new Vector2(width * HitboxVisualScale, height * HitboxVisualScale),
-                lifetime);
-            hb.FollowOwner       = true;
-            hb.OwnerLocalOffset  = new Vector2(offsetX, offsetY);
-            hb.HideVisual        = true;
-            float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage)
-                        * powerMultiplier * _fighter.EffectiveDamageMultiplier;
-            hb.Damage            = dmg;
-            hb.DamageIncludesOwnerBoost = true;
-            hb.Knockback         = skill.parameters.knockback * powerMultiplier;
-            var (kbDir, kbFixed) = ComputeKnockback(a, 1f, 0.3f);
-            hb.KnockbackDir      = kbDir;
-            hb.FixedKnockbackDir = kbFixed;
-            hb.GroundBounce      = a.knockback_direction == "ground_bounce";
-            hb.StunTime          = skill.parameters.stun_time;
-            hb.GuardDamage       = skill.parameters.guard_damage;
-            hb.Element           = skill.element;
-            hb.MaxHits           = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
-            ApplyActionStatus(hb, a);
+            Vector2 legacyPosition = (Vector2)_fighter.transform.position + new Vector2(dirSign * offsetX, offsetY);
+            Vector2 position = explicitOrigin ? ResolveSpatialOrigin(skill, a) : legacyPosition;
+            Vector2 attackDir = ResolveAimDirection(a, position, new Vector2(dirSign, 0f));
+            Vector2 worldSize = new Vector2(width * HitboxVisualScale, height * HitboxVisualScale);
+            var samples = BuildSpatialSamples(a, position, attackDir, projectile: false, maxCount: 4,
+                worldFootprint: worldSize);
+            int castId = CreatePatternCastId(a);
 
-            // 体術（本体判定）は画像エフェクトが無いため、風切りの光で振りを見せる
-            if (swingFx)
-                Battle.SimpleFX.SwingArc(
-                    (Vector2)_fighter.transform.position + new Vector2(dirSign * Mathf.Max(offsetX, width * 0.3f), offsetY),
-                    dirSign, width, height, SkillEnumParser.ElementColor(skill.element));
+            void SpawnNow(SpatialSample sample)
+            {
+                ShowImpactAtSpawn(skill);
+                var hb = Hitbox.Spawn(_fighter, sample.position, worldSize, lifetime);
+                hb.FollowOwner = samples.Count == 1 &&
+                    (!explicitOrigin || string.IsNullOrEmpty(a.spawn_origin) || a.spawn_origin == "owner");
+                Vector2 ownerDelta = sample.position - (Vector2)_fighter.transform.position;
+                hb.OwnerLocalOffset = explicitOrigin
+                    ? new Vector2(dirSign * ownerDelta.x, ownerDelta.y)
+                    : new Vector2(offsetX, offsetY);
+                hb.HideVisual = true;
+                float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage)
+                            * powerMultiplier * _fighter.EffectiveDamageMultiplier;
+                hb.Damage = dmg;
+                hb.DamageIncludesOwnerBoost = true;
+                hb.Knockback = skill.parameters.knockback * powerMultiplier;
+                var (kbDir, kbFixed) = ComputeKnockback(a, 1f, 0.3f);
+                hb.KnockbackDir = kbDir;
+                hb.FixedKnockbackDir = kbFixed;
+                hb.GroundBounce = a.knockback_direction == "ground_bounce";
+                hb.StunTime = skill.parameters.stun_time;
+                hb.GuardDamage = skill.parameters.guard_damage;
+                hb.Element = skill.element;
+                hb.MaxHits = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
+                ApplyActionStatus(hb, a);
+                ConfigureSpatialHitbox(hb, a, worldSize, sample.Angle, castId);
+
+                if (swingFx)
+                    Battle.SimpleFX.SwingArc(sample.position,
+                        sample.direction, worldSize.x, worldSize.y,
+                        SkillEnumParser.ElementColor(skill.element));
+            }
+
+            bool remoteOrigin = explicitOrigin && !string.IsNullOrEmpty(a.spawn_origin) && a.spawn_origin != "owner";
+            for (int i = 0; i < samples.Count; i++)
+            {
+                SpatialSample sample = samples[i];
+                ScheduleSpatial(sample.delay, () =>
+                {
+                    if (remoteOrigin || a.telegraph_time > 0f)
+                        StartCoroutine(TelegraphThenSpawn(sample.position, worldSize, sample.Angle,
+                            string.IsNullOrEmpty(a.shape) ? "box" : a.shape, skill.element,
+                            a.telegraph_time > 0f ? Mathf.Clamp(a.telegraph_time, 0.05f, 1.5f) : 0.4f,
+                            () => SpawnNow(sample),
+                            a.inner_radius * _sizeScale * HitboxVisualScale, a.arc_angle));
+                    else
+                        SpawnNow(sample);
+                });
+            }
         }
 
         void SpawnAreaHitbox(SkillData skill, SkillAction a, float powerMultiplier)
@@ -541,6 +1090,7 @@ namespace PromptFighters.Battle.Skills
             float dirSign  = _fighter.FacingRight ? 1f : -1f;
             float lifetime = a.duration > 0f ? a.duration : Mathf.Max(skill.parameters.active_time, 0.12f);
             string shape   = string.IsNullOrEmpty(a.shape) ? "box" : a.shape;
+            bool explicitOrigin = HasExplicitSpatialOrigin(a);
             // 相手の位置に発生（落雷・地割れ・間欠泉）。発動位置は今の相手位置で固定し、
             // 0.4秒の警告マーカーの後に判定を出す（移動すれば避けられる読み合いにする）。
             bool atEnemy = a.spawn_at_enemy && _fighter.Opponent != null;
@@ -548,39 +1098,41 @@ namespace PromptFighters.Battle.Skills
                 ? (Vector2)_fighter.Opponent.transform.position
                 : (Vector2)_fighter.transform.position;
 
-            if (shape == "ring")
-            {
-                float radius   = (a.size_x > 0f ? a.size_x : (a.range > 0f ? a.range : 2f)) * 0.5f * _sizeScale;
-                float offsetY  = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y * _sizeScale : 0.75f * _sizeScale;
-                Vector2 center = basePos + new Vector2(0f, offsetY);
-                void SpawnRingNow()
-                {
-                    var hb = Hitbox.SpawnCircle(_fighter, center, radius, lifetime);
-                    float dmg = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage) *
-                                powerMultiplier * _fighter.EffectiveDamageMultiplier;
-                    hb.Damage         = dmg;
-                    hb.DamageIncludesOwnerBoost = true;
-                    hb.Knockback      = skill.parameters.knockback * powerMultiplier;
-                    var (kbDirR, kbFixedR) = ComputeKnockback(a, 1f, 0.25f);
-                    hb.KnockbackDir      = kbDirR;
-                    hb.FixedKnockbackDir = kbFixedR;
-                    hb.GroundBounce      = a.knockback_direction == "ground_bounce";
-                    hb.StunTime      = skill.parameters.stun_time;
-                    hb.GuardDamage   = skill.parameters.guard_damage;
-                    hb.Element       = skill.element;
-                    hb.MaxHits       = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
-                    hb.FollowOwner   = !atEnemy && a.follow_owner;
-                    hb.OwnerLocalOffset = new Vector2(0f, offsetY / _sizeScale);
-                    ApplyActionStatus(hb, a);
-                }
-                if (atEnemy) StartCoroutine(TelegraphThenSpawn(center, radius * 2f, skill.element, 0.4f, SpawnRingNow));
-                else SpawnRingNow();
-                return;
-            }
-
-            // cone: 前方向に広く縦に薄い扇形近似
+            // ringは内径0のannulusとして可視アウトライン＋円形フィルタへ統一する。
+            // 各shapeのbroad-phase寸法。annulus/arc/crossはHitbox側の幾何フィルタで
+            // 可視領域と同じ形へ絞り込む。line/columnは回転BoxCollider自体が最終形状。
             float width, height, offsetX, offsetY2;
-            if (shape == "cone")
+            if (shape == "annulus" || shape == "arc" || shape == "ring")
+            {
+                float diameter = a.size_x > 0f ? a.size_x : (a.range > 0f ? a.range : 2f);
+                width = height = diameter;
+                offsetX = !Mathf.Approximately(a.spawn_x, 0f) ? a.spawn_x : 0f;
+                offsetY2 = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 0.75f;
+            }
+            else if (shape == "line")
+            {
+                width = a.size_x > 0f ? a.size_x : (a.range > 0f ? a.range : 3.2f);
+                height = a.size_y > 0f ? a.size_y : 0.35f;
+                offsetX = !Mathf.Approximately(a.spawn_x, 0f) ? a.spawn_x : width * 0.5f;
+                offsetY2 = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 0.8f;
+            }
+            else if (shape == "column")
+            {
+                // ローカルXを柱の長軸として照準方向へ向ける。size_x=太さ、size_y/range=長さ。
+                // これによりaim=(0,1)で縦柱、斜めaimで斜め柱になり、transform.rightも攻撃方向と一致する。
+                width = a.size_y > 0f ? a.size_y : (a.range > 0f ? a.range : 3.4f);
+                height = a.size_x > 0f ? a.size_x : 0.8f;
+                offsetX = !Mathf.Approximately(a.spawn_x, 0f) ? a.spawn_x : 1.8f;
+                offsetY2 = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 0f;
+            }
+            else if (shape == "cross")
+            {
+                width = a.size_x > 0f ? a.size_x : (a.range > 0f ? a.range : 3f);
+                height = a.size_y > 0f ? a.size_y : width;
+                offsetX = !Mathf.Approximately(a.spawn_x, 0f) ? a.spawn_x : 1.5f;
+                offsetY2 = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 0.9f;
+            }
+            else if (shape == "cone")
             {
                 width   = a.size_x > 0f ? a.size_x : (a.range > 0f ? a.range * 1.4f : 3.0f);
                 height  = a.size_y > 0f ? a.size_y : width * 0.45f;
@@ -600,25 +1152,60 @@ namespace PromptFighters.Battle.Skills
             offsetX  *= _sizeScale;
             offsetY2 *= _sizeScale;
 
-            // 相手位置発生では前方オフセットは意味を持たないため中心に出す
-            Vector2 pos = basePos + new Vector2(atEnemy ? 0f : dirSign * offsetX, offsetY2);
-            void SpawnBoxNow()
+            Vector2 center;
+            if (explicitOrigin)
+                center = ResolveSpatialOrigin(skill, a);
+            else
+                center = basePos + new Vector2(atEnemy ? 0f : dirSign * offsetX, offsetY2);
+            Vector2 fallbackDirection = shape == "column" ? Vector2.up : new Vector2(dirSign, 0f);
+            Vector2 baseDirection = ResolveAimDirection(a, center, fallbackDirection);
+            // columnのoriginは中心ではなく根元。長軸の半分だけ進めて、足元/発生点から伸ばす。
+            if (shape == "column") center += baseDirection * (width * 0.5f);
+            Vector2 hitboxSize = new Vector2(width, height);
+            Vector2 worldHitboxSize = hitboxSize * HitboxVisualScale;
+            var samples = BuildSpatialSamples(a, center, baseDirection, projectile: false, maxCount: 4,
+                worldFootprint: worldHitboxSize);
+            int castId = CreatePatternCastId(a);
+            bool warn = atEnemy || a.spawn_origin == "enemy" || a.telegraph_time > 0f;
+            float warningSeconds = a.telegraph_time > 0f ? Mathf.Clamp(a.telegraph_time, 0.05f, 1.5f) : 0.4f;
+
+            for (int i = 0; i < samples.Count; i++)
             {
-                var hbox = SpawnConfiguredHitbox(
-                    skill, a, powerMultiplier, pos, new Vector2(width, height), lifetime);
-                hbox.FollowOwner      = !atEnemy && a.follow_owner;
-                hbox.OwnerLocalOffset = new Vector2(offsetX, offsetY2);
-                if (shape == "cone")
-                    hbox.SetDebugColor(new Color(0.3f, 0.9f, 1f, 0.6f)); // 水色: コーン判定
+                SpatialSample sample = samples[i];
+                void SpawnNow()
+                {
+                    ShowImpactAtSpawn(skill);
+                    var hbox = SpawnConfiguredHitbox(
+                        skill, a, powerMultiplier, sample.position, hitboxSize, lifetime);
+                    bool ownerOrigin = string.IsNullOrEmpty(a.spawn_origin) || a.spawn_origin == "owner";
+                    hbox.FollowOwner = !atEnemy && ownerOrigin && a.follow_owner && samples.Count == 1;
+                    if (hbox.FollowOwner)
+                    {
+                        Vector2 delta = sample.position - (Vector2)_fighter.transform.position;
+                        hbox.OwnerLocalOffset = new Vector2(dirSign * delta.x, delta.y);
+                    }
+                    ConfigureSpatialHitbox(hbox, a, worldHitboxSize, sample.Angle, castId);
+                    if (shape == "cone" || shape == "arc")
+                        hbox.SetDebugColor(new Color(0.3f, 0.9f, 1f, 0.6f));
+                }
+
+                ScheduleSpatial(sample.delay, () =>
+                {
+                    if (warn)
+                        StartCoroutine(TelegraphThenSpawn(sample.position, worldHitboxSize, sample.Angle,
+                            shape, skill.element, warningSeconds, SpawnNow,
+                            a.inner_radius * _sizeScale * HitboxVisualScale, a.arc_angle));
+                    else
+                        SpawnNow();
+                });
             }
-            if (atEnemy) StartCoroutine(TelegraphThenSpawn(pos, Mathf.Max(width, height), skill.element, 0.4f, SpawnBoxNow));
-            else SpawnBoxNow();
         }
 
         // 相手の位置に発生する技の警告表示。属性色のマーカーを点滅させてから発動する。
         IEnumerator TelegraphThenSpawn(Vector2 pos, float diameter, Element element, float delay, System.Action spawnAction)
         {
             var go = new GameObject("SkillTelegraph");
+            _activeTelegraphs.Add(go);
             go.transform.position = pos;
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sprite = RuntimeSprite.Glow();
@@ -636,14 +1223,168 @@ namespace PromptFighters.Battle.Skills
                 sr.color = new Color(c.r, c.g, c.b, Mathf.Lerp(0.16f, 0.5f, blink));
                 yield return null;
             }
+            _activeTelegraphs.Remove(go);
             Destroy(go);
             if (_fighter != null && _fighter.State != FighterState.Dead)
                 spawnAction?.Invoke();
         }
 
+        IEnumerator TelegraphThenSpawn(Vector2 pos, Vector2 size, float rotation, string shape,
+                                       Element element, float delay, System.Action spawnAction,
+                                       float innerRadius = 0f, float arcAngle = 0f)
+        {
+            var go = new GameObject("SkillTelegraph");
+            _activeTelegraphs.Add(go);
+            go.transform.position = pos;
+            go.transform.rotation = Quaternion.Euler(0f, 0f, rotation);
+            Color c = SkillEnumParser.ElementColor(element);
+            SpriteRenderer sr = null;
+            var lines = new List<LineRenderer>(2);
+            bool outlineShape = shape == "annulus" || shape == "arc" || shape == "ring" ||
+                                shape == "cross" || shape == "cone";
+            if (!outlineShape)
+            {
+                sr = go.AddComponent<SpriteRenderer>();
+                sr.sprite = RuntimeSprite.Square();
+                sr.sortingOrder = 6;
+                Vector2 ss = sr.sprite.bounds.size;
+                if (ss.x > 0f && ss.y > 0f)
+                    go.transform.localScale = new Vector3(size.x / ss.x, size.y / ss.y, 1f);
+            }
+            else
+            {
+                LineRenderer outer = CreateTelegraphLine(go.transform, "OutlineA", c);
+                lines.Add(outer);
+                if (shape == "annulus" || shape == "ring")
+                {
+                    float outerRadius = Mathf.Min(size.x, size.y) * 0.5f;
+                    SetTelegraphCircle(outer, outerRadius);
+                    if (shape == "annulus" && innerRadius > 0.01f)
+                    {
+                        LineRenderer inner = CreateTelegraphLine(go.transform, "OutlineB", c);
+                        SetTelegraphCircle(inner, Mathf.Min(innerRadius, outerRadius - 0.02f));
+                        lines.Add(inner);
+                    }
+                }
+                else if (shape == "arc")
+                    SetTelegraphArc(outer, Mathf.Min(size.x, size.y) * 0.5f,
+                        innerRadius, arcAngle > 0f ? arcAngle : 90f);
+                else if (shape == "cross")
+                    SetTelegraphCross(outer, size.x, size.y,
+                        innerRadius > 0f ? innerRadius : Mathf.Min(size.x, size.y) * 0.3f);
+                else
+                    SetTelegraphCone(outer, size.x, size.y);
+            }
+
+            float t = 0f;
+            while (t < delay)
+            {
+                t += Time.deltaTime;
+                float blink = 0.5f + 0.5f * Mathf.Sin(t * 28f);
+                float alpha = Mathf.Lerp(0.18f, 0.72f, blink);
+                Color pulse = new Color(c.r, c.g, c.b, alpha);
+                if (sr != null) sr.color = new Color(c.r, c.g, c.b, alpha * 0.58f);
+                for (int i = 0; i < lines.Count; i++)
+                {
+                    lines[i].startColor = pulse;
+                    lines[i].endColor = pulse;
+                }
+                yield return null;
+            }
+            _activeTelegraphs.Remove(go);
+            Destroy(go);
+            if (_fighter != null && _fighter.State != FighterState.Dead)
+                spawnAction?.Invoke();
+        }
+
+        static LineRenderer CreateTelegraphLine(Transform parent, string objectName, Color color)
+        {
+            if (s_telegraphLineMaterial == null)
+            {
+                Shader shader = Shader.Find("Sprites/Default");
+                if (shader != null)
+                    s_telegraphLineMaterial = new Material(shader) { name = "SkillTelegraphOutline" };
+            }
+            var lineGo = new GameObject(objectName);
+            lineGo.transform.SetParent(parent, false);
+            var line = lineGo.AddComponent<LineRenderer>();
+            line.useWorldSpace = false;
+            line.loop = true;
+            line.alignment = LineAlignment.View;
+            line.sortingOrder = 6;
+            line.startWidth = 0.065f;
+            line.endWidth = 0.065f;
+            line.startColor = color;
+            line.endColor = color;
+            line.numCapVertices = 2;
+            if (s_telegraphLineMaterial != null) line.sharedMaterial = s_telegraphLineMaterial;
+            return line;
+        }
+
+        static void SetTelegraphCircle(LineRenderer line, float radius)
+        {
+            const int segments = 40;
+            line.positionCount = segments;
+            for (int i = 0; i < segments; i++)
+            {
+                float angle = i * Mathf.PI * 2f / segments;
+                line.SetPosition(i, new Vector3(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius, 0f));
+            }
+        }
+
+        static void SetTelegraphArc(LineRenderer line, float outerRadius, float innerRadius, float arcDegrees)
+        {
+            const int segments = 24;
+            float half = Mathf.Clamp(arcDegrees, 1f, 360f) * 0.5f;
+            innerRadius = Mathf.Clamp(innerRadius, 0f, Mathf.Max(0f, outerRadius - 0.02f));
+            int innerPoints = innerRadius > 0.01f ? segments + 1 : 1;
+            line.positionCount = segments + 1 + innerPoints;
+            int index = 0;
+            for (int i = 0; i <= segments; i++)
+            {
+                float angle = Mathf.Lerp(-half, half, i / (float)segments) * Mathf.Deg2Rad;
+                line.SetPosition(index++, new Vector3(Mathf.Cos(angle) * outerRadius, Mathf.Sin(angle) * outerRadius, 0f));
+            }
+            if (innerRadius > 0.01f)
+            {
+                for (int i = segments; i >= 0; i--)
+                {
+                    float angle = Mathf.Lerp(-half, half, i / (float)segments) * Mathf.Deg2Rad;
+                    line.SetPosition(index++, new Vector3(Mathf.Cos(angle) * innerRadius, Mathf.Sin(angle) * innerRadius, 0f));
+                }
+            }
+            else line.SetPosition(index, Vector3.zero);
+        }
+
+        static void SetTelegraphCross(LineRenderer line, float width, float height, float thickness)
+        {
+            float hx = width * 0.5f;
+            float hy = height * 0.5f;
+            float t = Mathf.Clamp(thickness * 0.5f, 0.02f, Mathf.Min(hx, hy));
+            Vector3[] points =
+            {
+                new Vector3(-t,hy,0f), new Vector3(t,hy,0f), new Vector3(t,t,0f), new Vector3(hx,t,0f),
+                new Vector3(hx,-t,0f), new Vector3(t,-t,0f), new Vector3(t,-hy,0f), new Vector3(-t,-hy,0f),
+                new Vector3(-t,-t,0f), new Vector3(-hx,-t,0f), new Vector3(-hx,t,0f), new Vector3(-t,t,0f),
+            };
+            line.positionCount = points.Length;
+            line.SetPositions(points);
+        }
+
+        static void SetTelegraphCone(LineRenderer line, float width, float height)
+        {
+            float hx = width * 0.5f;
+            float hy = height * 0.5f;
+            line.positionCount = 3;
+            line.SetPosition(0, new Vector3(-hx, 0f, 0f));
+            line.SetPosition(1, new Vector3(hx, hy, 0f));
+            line.SetPosition(2, new Vector3(hx, -hy, 0f));
+        }
+
         void SpawnTrapHitbox(SkillData skill, SkillAction a, float powerMultiplier)
         {
             float dirSign = _fighter.FacingRight ? 1f : -1f;
+            bool explicitOrigin = HasExplicitSpatialOrigin(a);
             float width = a.size_x > 0f ? a.size_x : Mathf.Max(0.8f, a.range > 0f ? a.range : skill.parameters.range);
             float height = a.size_y > 0f ? a.size_y : 0.9f;
             float offsetX = !Mathf.Approximately(a.spawn_x, 0f) ? a.spawn_x : width * 0.8f;
@@ -654,10 +1395,22 @@ namespace PromptFighters.Battle.Skills
 
             // 設置技は基本的に地面へ置く（空中に浮いた地雷を防ぐ）。
             // spawn_y が高い場合のみ「空中トラップ」としてAI指定を尊重する。
-            Vector2 pos;
-            if (offsetY >= 1.5f)
+            Vector2 center;
+            if (explicitOrigin)
             {
-                pos = (Vector2)_fighter.transform.position + new Vector2(dirSign * offsetX, offsetY);
+                center = ResolveSpatialOrigin(skill, a);
+                string anchorName = string.IsNullOrEmpty(a.spawn_anchor) ? "auto" : a.spawn_anchor;
+                if (a.spawn_y < 1.5f && (anchorName == "auto" || anchorName == "feet"))
+                {
+                    var floorHit = Physics2D.Raycast(center + Vector2.up * 0.8f,
+                        Vector2.down, 10f, _fighter.groundLayer);
+                    if (floorHit.collider != null)
+                        center.y = floorHit.point.y + height * HitboxVisualScale * 0.5f;
+                }
+            }
+            else if (offsetY >= 1.5f)
+            {
+                center = (Vector2)_fighter.transform.position + new Vector2(dirSign * offsetX, offsetY);
             }
             else
             {
@@ -672,17 +1425,39 @@ namespace PromptFighters.Battle.Skills
                     new Vector2(trapX, _fighter.transform.position.y + 0.6f),
                     Vector2.down, 10f, _fighter.groundLayer);
                 if (hit.collider != null) groundRef = hit.point.y;
-                pos = new Vector2(trapX, groundRef + height * HitboxVisualScale * 0.5f);
+                center = new Vector2(trapX, groundRef + height * HitboxVisualScale * 0.5f);
             }
 
-            var hb = SpawnConfiguredHitbox(
-                skill, a, powerMultiplier,
-                pos,
-                new Vector2(width, height),
-                lifetime);
-            // 設置技の性格付け: アーム時間＋待機脈動＋触発時の爆発演出
-            hb.IsTrap  = true;
-            hb.ArmTime = 0.25f;
+            Vector2 baseDirection = ResolveAimDirection(a, center, new Vector2(dirSign, 0f));
+            Vector2 hitboxSize = new Vector2(width, height);
+            Vector2 worldHitboxSize = hitboxSize * HitboxVisualScale;
+            var samples = BuildSpatialSamples(a, center, baseDirection, projectile: false, maxCount: 4,
+                worldFootprint: worldHitboxSize);
+            int castId = CreatePatternCastId(a);
+            for (int i = 0; i < samples.Count; i++)
+            {
+                SpatialSample sample = samples[i];
+                void SpawnNow()
+                {
+                    ShowImpactAtSpawn(skill);
+                    var hb = SpawnConfiguredHitbox(
+                        skill, a, powerMultiplier, sample.position, hitboxSize, lifetime);
+                    hb.IsTrap  = true;
+                    hb.ArmTime = 0.25f;
+                    ConfigureSpatialHitbox(hb, a, worldHitboxSize, sample.Angle, castId);
+                }
+
+                ScheduleSpatial(sample.delay, () =>
+                {
+                    if (a.telegraph_time > 0f)
+                        StartCoroutine(TelegraphThenSpawn(sample.position, worldHitboxSize, sample.Angle,
+                            string.IsNullOrEmpty(a.shape) ? "box" : a.shape, skill.element,
+                            Mathf.Clamp(a.telegraph_time, 0.05f, 1.5f), SpawnNow,
+                            a.inner_radius * _sizeScale * HitboxVisualScale, a.arc_angle));
+                    else
+                        SpawnNow();
+                });
+            }
         }
 
         Hitbox SpawnConfiguredHitbox(SkillData skill, SkillAction a, float powerMultiplier,
@@ -717,6 +1492,7 @@ namespace PromptFighters.Battle.Skills
         void SpawnProjectile(SkillData skill, SkillAction a, float powerMultiplier)
         {
             float dirSign = _fighter.FacingRight ? 1f : -1f;
+            bool explicitOrigin = HasExplicitSpatialOrigin(a);
             Vector2 baseOffset = DefaultProjectileOffset(skill.slot);
             float offsetX = a.spawn_x > 0f ? a.spawn_x : baseOffset.x;
             float offsetY = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : baseOffset.y;
@@ -727,7 +1503,7 @@ namespace PromptFighters.Battle.Skills
                                      || Mathf.Abs(a.projectile_angle) >= 30f
                                      || offsetY >= 2f;
             var anchor = AnchorFor(skill);
-            if (anchor.valid && !specialTrajectory)
+            if (anchor.valid && !specialTrajectory && !explicitOrigin)
             {
                 offsetX = Mathf.Max(anchor.tip.x + 0.12f, 0.35f);
                 offsetY = Mathf.Clamp(anchor.tip.y, 0.3f, 2.0f);
@@ -735,16 +1511,29 @@ namespace PromptFighters.Battle.Skills
             // キャラの表示サイズに合わせて発射点もスケール（巨大化/縮小時のずれ防止）
             offsetX *= _sizeScale;
             offsetY *= _sizeScale;
-            Vector2 spawn = (Vector2)_fighter.transform.position + new Vector2(dirSign * offsetX, offsetY);
+            Vector2 spawn = explicitOrigin
+                ? ResolveSpatialOrigin(skill, a)
+                : (Vector2)_fighter.transform.position + new Vector2(dirSign * offsetX, offsetY);
 
             // 相手の位置に発生（落雷・隕石）: 相手の頭上から落とす。水平角のままだと回避不能なので落下弾化する。
             float baseAngle = a.projectile_angle;
-            if (a.spawn_at_enemy && _fighter.Opponent != null)
+            if (!explicitOrigin && a.spawn_at_enemy && _fighter.Opponent != null)
             {
                 Vector2 ep = _fighter.Opponent.transform.position;
                 float dropH = Mathf.Clamp(offsetY < 2f ? 3.5f : offsetY, 2.5f, 6f);
                 spawn = new Vector2(ep.x, ep.y + dropH);
                 if (baseAngle > -30f) baseAngle = -90f;
+            }
+
+            Vector2 baseDirection;
+            if (!string.IsNullOrEmpty(a.aim_mode) || explicitOrigin || !Mathf.Approximately(a.rotation_angle, 0f))
+            {
+                baseDirection = ResolveAimDirection(a, spawn, new Vector2(dirSign, 0f), baseAngle);
+            }
+            else
+            {
+                float baseRad = baseAngle * Mathf.Deg2Rad;
+                baseDirection = new Vector2(dirSign * Mathf.Cos(baseRad), Mathf.Sin(baseRad)).normalized;
             }
 
             float speed    = a.projectile_speed    > 0f ? a.projectile_speed    : 9f;
@@ -756,59 +1545,76 @@ namespace PromptFighters.Battle.Skills
                 (a.size_y > 0f ? a.size_y : 1.05f) * HitboxVisualScale * _sizeScale);
             var (kbDir, kbFixed) = ComputeKnockback(a, 1f, 0.3f);
 
-            int count = a.projectile_count > 1 ? a.projectile_count : 1;
-            float spreadDeg = a.spread_angle > 0f ? a.spread_angle : 15f;
-            float totalSpread = count > 1 ? spreadDeg * (count - 1) : 0f;
-
-            for (int i = 0; i < count; i++)
+            var samples = BuildSpatialSamples(a, spawn, baseDirection, projectile: true, maxCount: 8,
+                worldFootprint: desiredSize);
+            int castId = CreatePatternCastId(a);
+            for (int i = 0; i < samples.Count; i++)
             {
-                float angleDeg = baseAngle + (count > 1 ? -totalSpread * 0.5f + spreadDeg * i : 0f);
-                float rad = angleDeg * Mathf.Deg2Rad;
-                Vector2 dir = new Vector2(dirSign * Mathf.Cos(rad), Mathf.Sin(rad)).normalized;
+                SpatialSample sample = samples[i];
+                void SpawnNow()
+                {
+                    ShowImpactAtSpawn(skill);
+                    var p = Projectile.Spawn(_fighter, sample.position, sample.direction, speed, lifetime);
+                    p.Damage                   = dmg;
+                    p.DamageIncludesOwnerBoost = true;
+                    p.Knockback                = skill.parameters.knockback * powerMultiplier;
+                    p.KnockbackDir             = kbDir;
+                    p.FixedKnockbackDir        = kbFixed;
+                    p.GroundBounce             = a.knockback_direction == "ground_bounce";
+                    p.StunTime                 = skill.parameters.stun_time;
+                    p.GuardDamage              = skill.parameters.guard_damage;
+                    p.Status                   = SkillEnumParser.ParseStatus(a.status);
+                    p.StatusDuration           = a.status_duration > 0f ? a.status_duration : a.duration;
+                    p.StatusChance             = Mathf.Clamp01(a.chance);
+                    p.Element                  = skill.element;
+                    p.EffectSprite             = a.hide_effect ? null : _fighter.GetEffectSprite(skill);
+                    p.HideVisual               = a.hide_effect;
+                    p.AlignToVelocity          = HasSpatialOrientation(a) || HasNewPattern(a) ||
+                                                 Mathf.Abs(sample.direction.y) > 0.001f;
+                    p.FlipEffectX              = !p.AlignToVelocity && !_fighter.FacingRight;
+                    p.DesiredWorldSize         = desiredSize;
+                    p.GravityScale             = a.gravity_scale;
+                    p.IsBoomerang              = a.boomerang;
+                    p.ExplosionRadius          = a.explosion_radius;
+                    p.BounceCount              = a.bounce_count;
+                    p.WaveAmplitude            = a.wave_amplitude;
+                    p.Pierce                   = a.pierce;
+                    p.SplitCount               = a.split_count;
+                    p.SplitAngle               = a.split_angle > 0f ? a.split_angle : 30f;
+                    p.SharedCastId             = castId;
+                    p.SharedSourceId           = castId != 0 ? SkillCastHitRegistry.NextSourceId() : 0;
+                    p.SharedHitLockSeconds     = PatternHitLockSeconds(a);
+                    p.SpatialKnockbackMode     = a.knockback_direction;
+                    p.SpatialKnockbackOrigin   = sample.position;
+                    if (a.orbit)
+                    {
+                        // 衛星弾: 周回半径=range、周回速度=projectile_speed。敵は貫通扱いで1体1ヒット
+                        p.OrbitOwner  = true;
+                        p.OrbitRadius = Mathf.Clamp(a.range > 0f ? a.range : 1.6f, 0.8f, 3f) * _sizeScale;
+                        p.Pierce      = true;
+                    }
+                    if ((a.homing || a.homing_strength > 0f) && _fighter.Opponent != null)
+                    {
+                        p.HomingTarget   = _fighter.Opponent.transform;
+                        p.HomingStrength = a.homing_strength > 0f ? a.homing_strength : 0.5f;
+                    }
+                }
 
-                var p = Projectile.Spawn(_fighter, spawn, dir, speed, lifetime);
-                p.Damage                   = dmg;
-                p.DamageIncludesOwnerBoost = true;
-                p.Knockback                = skill.parameters.knockback * powerMultiplier;
-                p.KnockbackDir             = kbDir;
-                p.FixedKnockbackDir        = kbFixed;
-                p.GroundBounce             = a.knockback_direction == "ground_bounce";
-                p.StunTime                 = skill.parameters.stun_time;
-                p.GuardDamage              = skill.parameters.guard_damage;
-                p.Status                   = SkillEnumParser.ParseStatus(a.status);
-                p.StatusDuration           = a.status_duration > 0f ? a.status_duration : a.duration;
-                p.StatusChance             = Mathf.Clamp01(a.chance);
-                p.Element                  = skill.element;
-                p.EffectSprite             = a.hide_effect ? null : _fighter.GetEffectSprite(skill);
-                p.HideVisual               = a.hide_effect;
-                p.FlipEffectX              = !_fighter.FacingRight;
-                p.DesiredWorldSize         = desiredSize;
-                p.GravityScale             = a.gravity_scale;
-                p.IsBoomerang              = a.boomerang;
-                p.ExplosionRadius          = a.explosion_radius;
-                p.BounceCount              = a.bounce_count;
-                p.WaveAmplitude            = a.wave_amplitude;
-                p.Pierce                   = a.pierce;
-                p.SplitCount               = a.split_count;
-                p.SplitAngle               = a.split_angle > 0f ? a.split_angle : 30f;
-                if (a.orbit)
+                ScheduleSpatial(sample.delay, () =>
                 {
-                    // 衛星弾: 周回半径=range、周回速度=projectile_speed。敵は貫通扱いで1体1ヒット
-                    p.OrbitOwner  = true;
-                    p.OrbitRadius = Mathf.Clamp(a.range > 0f ? a.range : 1.6f, 0.8f, 3f) * _sizeScale;
-                    p.Pierce      = true;
-                }
-                if ((a.homing || a.homing_strength > 0f) && _fighter.Opponent != null)
-                {
-                    p.HomingTarget   = _fighter.Opponent.transform;
-                    p.HomingStrength = a.homing_strength > 0f ? a.homing_strength : 0.5f;
-                }
+                    if (a.telegraph_time > 0f)
+                        StartCoroutine(TelegraphThenSpawn(sample.position, desiredSize, sample.Angle,
+                            "line", skill.element, Mathf.Clamp(a.telegraph_time, 0.05f, 1.5f), SpawnNow));
+                    else
+                        SpawnNow();
+                });
             }
         }
 
         void SpawnBeam(SkillData skill, SkillAction a, float powerMultiplier)
         {
             float dirSign = _fighter.FacingRight ? 1f : -1f;
+            bool explicitOrigin = HasExplicitSpatialOrigin(a);
             float width   = a.size_x > 0f ? a.size_x : (a.range > 0f ? a.range : 7f);
             float height  = a.size_y > 0f ? a.size_y : 0.5f;
             height = Mathf.Max(height, Mathf.Clamp(width * 0.1f, 0.55f, 1.2f));
@@ -817,31 +1623,58 @@ namespace PromptFighters.Battle.Skills
             // 従来は spawn_x をビーム中心として扱っていたため、幅が広いほど後ろ半分が
             // キャラの背後へはみ出していた（「ビームが自分の後ろから出る」の原因）。
             var anchor = AnchorFor(skill);
-            float originX, originY;
-            if (anchor.valid)
+            Vector2 origin;
+            if (explicitOrigin)
             {
-                originX = Mathf.Max(anchor.tip.x - 0.1f, 0.2f);
-                originY = Mathf.Clamp(anchor.tip.y, 0.4f, 1.8f);
+                origin = ResolveSpatialOrigin(skill, a);
+            }
+            else if (anchor.valid)
+            {
+                float originX = Mathf.Max(anchor.tip.x - 0.1f, 0.2f) * _sizeScale;
+                float originY = Mathf.Clamp(anchor.tip.y, 0.4f, 1.8f) * _sizeScale;
+                origin = (Vector2)_fighter.transform.position + new Vector2(dirSign * originX, originY);
             }
             else
             {
-                originX = a.spawn_x > 0f ? a.spawn_x : 0.55f;
-                originY = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 0.8f;
+                float originX = (a.spawn_x > 0f ? a.spawn_x : 0.55f) * _sizeScale;
+                float originY = (!Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 0.8f) * _sizeScale;
+                origin = (Vector2)_fighter.transform.position + new Vector2(dirSign * originX, originY);
             }
-            float offsetX = originX + width * 0.5f; // 中心＝起点＋半幅（起点より後ろに判定を出さない）
-            float offsetY = originY;
+
             width   *= _sizeScale;
             height  *= _sizeScale;
-            offsetX *= _sizeScale;
-            offsetY *= _sizeScale;
             float lifetime = a.duration > 0f ? a.duration : 0.07f;
+            Vector2 direction = ResolveAimDirection(a, origin, new Vector2(dirSign, 0f), a.projectile_angle);
+            var samples = BuildSpatialSamples(a, origin, direction, projectile: true, maxCount: 4);
+            int castId = CreatePatternCastId(a);
+            Vector2 beamSize = new Vector2(width, height);
+            Vector2 worldBeamSize = beamSize * HitboxVisualScale;
 
-            var hb = SpawnConfiguredHitbox(
-                skill, a, powerMultiplier,
-                (Vector2)_fighter.transform.position + new Vector2(dirSign * offsetX, offsetY),
-                new Vector2(width, height),
-                lifetime);
-            hb.MaxHits = a.hit_count > 1 ? a.hit_count : 5; // 貫通
+            for (int i = 0; i < samples.Count; i++)
+            {
+                SpatialSample sample = samples[i];
+                Vector2 fittedWorldBeamSize = FitBeamWorldSizeToStage(
+                    sample.position, sample.direction, worldBeamSize);
+                Vector2 fittedBeamSize = fittedWorldBeamSize / HitboxVisualScale;
+                Vector2 beamCenter = sample.position + sample.direction * (fittedWorldBeamSize.x * 0.5f);
+                void SpawnNow()
+                {
+                    ShowImpactAtSpawn(skill);
+                    var hb = SpawnConfiguredHitbox(
+                        skill, a, powerMultiplier, beamCenter, fittedBeamSize, lifetime);
+                    hb.MaxHits = a.hit_count > 1 ? a.hit_count : 5;
+                    ConfigureSpatialHitbox(hb, a, fittedWorldBeamSize, sample.Angle, castId);
+                }
+
+                ScheduleSpatial(sample.delay, () =>
+                {
+                    if (a.telegraph_time > 0f)
+                        StartCoroutine(TelegraphThenSpawn(beamCenter, fittedWorldBeamSize, sample.Angle,
+                            "line", skill.element, Mathf.Clamp(a.telegraph_time, 0.05f, 1.5f), SpawnNow));
+                    else
+                        SpawnNow();
+                });
+            }
         }
 
         float FirstActionTime(SkillData skill, string type)
@@ -900,8 +1733,19 @@ namespace PromptFighters.Battle.Skills
         void DoDash(SkillAction a)
         {
             float dirSign = _fighter.FacingRight ? 1f : -1f;
-            if (a.direction == "backward") dirSign = -dirSign;
             float power = a.power > 0f ? a.power : 5f;
+            bool spatialAim = !string.IsNullOrEmpty(a.aim_mode) || !Mathf.Approximately(a.rotation_angle, 0f);
+            if (spatialAim)
+            {
+                Vector2 direction = ResolveAimDirection(a, _fighter.transform.position,
+                    new Vector2(dirSign, 0f));
+                if (a.direction == "backward") direction = -direction;
+                _fighter.ApplyImpulse(direction * power);
+                _fighter.TriggerDashDust(Mathf.Sign(direction.x) == 0f ? dirSign : Mathf.Sign(direction.x));
+                return;
+            }
+
+            if (a.direction == "backward") dirSign = -dirSign;
             float up = a.knockback_y;
             _fighter.ApplyImpulse(new Vector2(dirSign * power, up));
             _fighter.TriggerDashDust(dirSign);
@@ -926,9 +1770,18 @@ namespace PromptFighters.Battle.Skills
             }
 
             float dirSign = _fighter.FacingRight ? 1f : -1f;
-            if (a.direction == "backward") dirSign = -dirSign;
             float distance = Mathf.Clamp(a.power > 0f ? a.power : 2.2f, 0.5f, 4f);
-            Vector3 pos = _fighter.transform.position + new Vector3(dirSign * distance, 0f, 0f);
+            Vector2 moveDirection;
+            if (!string.IsNullOrEmpty(a.aim_mode) || !Mathf.Approximately(a.rotation_angle, 0f))
+                moveDirection = ResolveAimDirection(a, _fighter.transform.position, new Vector2(dirSign, 0f));
+            else
+            {
+                if (a.direction == "backward") dirSign = -dirSign;
+                moveDirection = new Vector2(dirSign, 0f);
+            }
+            if (a.direction == "backward" && (!string.IsNullOrEmpty(a.aim_mode) || !Mathf.Approximately(a.rotation_angle, 0f)))
+                moveDirection = -moveDirection;
+            Vector3 pos = _fighter.transform.position + (Vector3)(moveDirection * distance);
             if (bm != null)
                 pos.x = Mathf.Clamp(pos.x, bm.StageMinX + 0.5f, bm.StageMaxX - 0.5f);
             _fighter.transform.position = pos;
@@ -938,7 +1791,10 @@ namespace PromptFighters.Battle.Skills
         void DoJumpAttack(SkillData skill, SkillAction a, float powerMultiplier)
         {
             float lift = a.power > 0f ? a.power : 5f;
-            _fighter.ApplyImpulse(new Vector2(0f, lift));
+            if (!string.IsNullOrEmpty(a.aim_mode) || !Mathf.Approximately(a.rotation_angle, 0f))
+                _fighter.ApplyImpulse(ResolveAimDirection(a, _fighter.transform.position, Vector2.up) * lift);
+            else
+                _fighter.ApplyImpulse(new Vector2(0f, lift));
             SpawnAreaHitbox(skill, a, powerMultiplier);
         }
 
@@ -1089,7 +1945,9 @@ namespace PromptFighters.Battle.Skills
             float dirSign  = _fighter.FacingRight ? 1f : -1f;
             float spawnX   = a.spawn_x > 0f ? a.spawn_x : 1.5f;
             float spawnY   = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 0f;
-            Vector2 pos    = (Vector2)_fighter.transform.position + new Vector2(dirSign * spawnX * _sizeScale, spawnY * _sizeScale);
+            Vector2 pos    = HasExplicitSpatialOrigin(a)
+                ? ResolveSpatialOrigin(skill, a)
+                : (Vector2)_fighter.transform.position + new Vector2(dirSign * spawnX * _sizeScale, spawnY * _sizeScale);
             // 壁際で使ってもステージ外に生まれないようにクランプ
             var bmSummon = PromptFighters.Battle.BattleManager.Instance;
             if (bmSummon != null)
@@ -1101,8 +1959,19 @@ namespace PromptFighters.Battle.Skills
             Vector2 desiredSize = new Vector2(
                 (a.size_x > 0f ? a.size_x : 1.3f) * _sizeScale,
                 (a.size_y > 0f ? a.size_y : 1.7f) * _sizeScale);
-            SummonEntity.Spawn(_fighter, pos, speed, lifetime, dmg, kb, skill.element,
-                a.hide_effect ? null : _fighter.GetEffectSprite(skill), desiredSize, a);
+            void SpawnNow()
+            {
+                ShowImpactAtSpawn(skill);
+                SummonEntity.Spawn(_fighter, pos, speed, lifetime, dmg, kb, skill.element,
+                    a.hide_effect ? null : _fighter.GetEffectSprite(skill), desiredSize, a);
+            }
+
+            bool remoteOrigin = HasExplicitSpatialOrigin(a) && !string.IsNullOrEmpty(a.spawn_origin) && a.spawn_origin != "owner";
+            if (remoteOrigin || a.telegraph_time > 0f)
+                StartCoroutine(TelegraphThenSpawn(pos, desiredSize, 0f, "box", skill.element,
+                    a.telegraph_time > 0f ? Mathf.Clamp(a.telegraph_time, 0.05f, 1.5f) : 0.4f, SpawnNow));
+            else
+                SpawnNow();
         }
 
         // heal_self: HP回復。power=回復量(HP)。未指定なら最大HPの5%。
@@ -1190,8 +2059,10 @@ namespace PromptFighters.Battle.Skills
             float dirSign = _fighter.FacingRight ? 1f : -1f;
             float spawnX  = !Mathf.Approximately(a.spawn_x, 0f) ? a.spawn_x : 2.5f;
             float spawnY  = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : 1.0f;
-            Vector2 center = (Vector2)_fighter.transform.position
-                           + new Vector2(dirSign * spawnX * _sizeScale, spawnY * _sizeScale);
+            Vector2 center = HasExplicitSpatialOrigin(a)
+                ? ResolveSpatialOrigin(skill, a)
+                : (Vector2)_fighter.transform.position
+                  + new Vector2(dirSign * spawnX * _sizeScale, spawnY * _sizeScale);
             float radius   = (a.range > 0f ? a.range : 3.5f) * _sizeScale;
             // 引き寄せ力を弱め、拘束時間も短くする（拘束される側が振り切って動けるように）。
             float force    = Mathf.Clamp(a.power > 0f ? a.power : 12f, 3f, 18f);
@@ -1244,8 +2115,10 @@ namespace PromptFighters.Battle.Skills
         (Vector2 kbDir, bool isFixed) ComputeKnockback(SkillAction a, float defaultX, float defaultY)
         {
             float facingSign = _fighter != null && _fighter.FacingRight ? 1f : -1f;
-            float x = !Mathf.Approximately(a.knockback_x, 0f) ? Mathf.Abs(a.knockback_x) : defaultX;
-            float y = !Mathf.Approximately(a.knockback_y, 0f) ? Mathf.Abs(a.knockback_y) : defaultY;
+            float rawX = !Mathf.Approximately(a.knockback_x, 0f) ? a.knockback_x : defaultX;
+            float rawY = !Mathf.Approximately(a.knockback_y, 0f) ? a.knockback_y : defaultY;
+            float x = Mathf.Abs(rawX);
+            float y = Mathf.Abs(rawY);
             return (string.IsNullOrEmpty(a.knockback_direction) ? "away" : a.knockback_direction) switch
             {
                 "up"           => (new Vector2(0f,                  1.5f), true),
@@ -1253,6 +2126,12 @@ namespace PromptFighters.Battle.Skills
                 "toward"       => (new Vector2(-facingSign * x,       y  ), true),
                 "diagonal_up"  => (new Vector2(facingSign * 0.4f,   1.2f), true),
                 "ground_bounce"=> (new Vector2(facingSign * 0.25f, -1.4f), true),
+                "vector"       => (new Vector2(facingSign * rawX, rawY), true),
+                "along_attack" => (new Vector2(facingSign, 0f), true),
+                "along"        => (new Vector2(facingSign, 0f), true),
+                "from_origin"  => (new Vector2(facingSign * x, y), true),
+                "from"         => (new Vector2(facingSign * x, y), true),
+                "toward_origin"=> (new Vector2(-facingSign * x, y), true),
                 _              => (new Vector2(x, y),                      false),
             };
         }

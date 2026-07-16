@@ -37,7 +37,19 @@ namespace PromptFighters.GameFlow
             (CharacterSpriteId.EffectB,    "effect_b"),
             (CharacterSpriteId.EffectC,    "effect_c"),
             (CharacterSpriteId.EffectSmash,"effect_smash"),
+            (CharacterSpriteId.Guard,      "guard"),
+            (CharacterSpriteId.Fall,       "fall"),
+            (CharacterSpriteId.AttackA_Windup, "attack_a_windup"),
+            (CharacterSpriteId.AttackB_Windup, "attack_b_windup"),
+            (CharacterSpriteId.AttackC_Windup, "attack_c_windup"),
+            (CharacterSpriteId.Smash_Windup,   "smash_windup"),
         };
+
+        static bool IsEffectSprite(CharacterSpriteId id) =>
+            id == CharacterSpriteId.EffectA ||
+            id == CharacterSpriteId.EffectB ||
+            id == CharacterSpriteId.EffectC ||
+            id == CharacterSpriteId.EffectSmash;
 
         // 画像生成の前にスプライト保存先ディレクトリだけを確保する。
         // character.json はまだ書かないため、ロスター（LoadAll）には現れない。
@@ -158,6 +170,7 @@ namespace PromptFighters.GameFlow
             try
             {
                 Directory.CreateDirectory(data.spriteDir);
+                data.spriteSet.EnsureCapacity();
                 foreach (var (id, filename) in SpriteEntries)
                 {
                     var sprite = data.spriteSet.sprites[(int)id];
@@ -488,7 +501,7 @@ namespace PromptFighters.GameFlow
                 poses.Add(SpriteLoader.LoadDirect(posePath));
 
                 string effectPath = Path.Combine(spriteDir, $"extra_effect_{i}.png");
-                effects.Add(File.Exists(effectPath) ? SpriteLoader.LoadDirect(effectPath) : null);
+                effects.Add(File.Exists(effectPath) ? SpriteLoader.LoadDirect(effectPath, centerPivot: true) : null);
             }
         }
 
@@ -504,7 +517,7 @@ namespace PromptFighters.GameFlow
             {
                 string path = Path.Combine(spriteDir, filename + ".png");
                 if (!File.Exists(path)) continue;
-                var sprite = SpriteLoader.LoadDirect(path);
+                var sprite = SpriteLoader.LoadDirect(path, IsEffectSprite(id));
                 if (sprite == null) continue;
                 set.Set(id, sprite);
                 anyLoaded = true;
@@ -536,7 +549,7 @@ namespace PromptFighters.GameFlow
                 if (!File.Exists(path)) continue;
 
                 Sprite sprite = null;
-                yield return SpriteLoader.LoadDirectAsync(path, s => sprite = s);
+                yield return SpriteLoader.LoadDirectAsync(path, s => sprite = s, IsEffectSprite(id));
                 if (sprite == null) continue;
 
                 set.Set(id, sprite);
@@ -668,7 +681,10 @@ namespace PromptFighters.GameFlow
             if (!string.IsNullOrEmpty(a.direction)) sb.Append($",\"direction\":{Q(a.direction)}");
             if (a.power > 0f)                        sb.Append($",\"power\":{a.power}");
             if (a.range > 0f)                        sb.Append($",\"range\":{a.range}");
-            if (a.spawn_x > 0f)                      sb.Append($",\"spawn_x\":{a.spawn_x}");
+            // 新しい空間形式では負方向・0も意味を持つ。未指定の旧形式は従来どおり正値だけを保存する。
+            bool explicitSpatial = !string.IsNullOrEmpty(a.spawn_origin) || !string.IsNullOrEmpty(a.spawn_anchor);
+            if (explicitSpatial || a.spawn_x > 0f)
+                                                        sb.Append($",\"spawn_x\":{a.spawn_x}");
             if (!Mathf.Approximately(a.spawn_y, 0f)) sb.Append($",\"spawn_y\":{a.spawn_y}");
             if (a.size_x > 0f)                       sb.Append($",\"size_x\":{a.size_x}");
             if (a.size_y > 0f)                       sb.Append($",\"size_y\":{a.size_y}");
@@ -679,6 +695,20 @@ namespace PromptFighters.GameFlow
             if (!Mathf.Approximately(a.knockback_x, 0f)) sb.Append($",\"knockback_x\":{a.knockback_x}");
             if (!Mathf.Approximately(a.knockback_y, 0f)) sb.Append($",\"knockback_y\":{a.knockback_y}");
             if (!string.IsNullOrEmpty(a.knockback_direction)) sb.Append($",\"knockback_direction\":{Q(a.knockback_direction)}");
+            if (!string.IsNullOrEmpty(a.spawn_origin)) sb.Append($",\"spawn_origin\":{Q(a.spawn_origin)}");
+            if (!string.IsNullOrEmpty(a.spawn_anchor)) sb.Append($",\"spawn_anchor\":{Q(a.spawn_anchor)}");
+            if (!string.IsNullOrEmpty(a.aim_mode))     sb.Append($",\"aim_mode\":{Q(a.aim_mode)}");
+            if (!Mathf.Approximately(a.vector_x, 0f))  sb.Append($",\"vector_x\":{a.vector_x}");
+            if (!Mathf.Approximately(a.vector_y, 0f))  sb.Append($",\"vector_y\":{a.vector_y}");
+            if (!Mathf.Approximately(a.rotation_angle, 0f)) sb.Append($",\"rotation_angle\":{a.rotation_angle}");
+            if (!string.IsNullOrEmpty(a.pattern))      sb.Append($",\"pattern\":{Q(a.pattern)}");
+            if (a.pattern_count > 0)                   sb.Append($",\"pattern_count\":{a.pattern_count}");
+            if (a.pattern_spacing > 0f)                sb.Append($",\"pattern_spacing\":{a.pattern_spacing}");
+            if (a.pattern_radius > 0f)                 sb.Append($",\"pattern_radius\":{a.pattern_radius}");
+            if (a.burst_interval > 0f)                 sb.Append($",\"burst_interval\":{a.burst_interval}");
+            if (a.telegraph_time > 0f)                 sb.Append($",\"telegraph_time\":{a.telegraph_time}");
+            if (a.inner_radius > 0f)                   sb.Append($",\"inner_radius\":{a.inner_radius}");
+            if (a.arc_angle > 0f)                      sb.Append($",\"arc_angle\":{a.arc_angle}");
             if (a.projectile_speed > 0f)             sb.Append($",\"projectile_speed\":{a.projectile_speed}");
             if (a.projectile_lifetime > 0f)          sb.Append($",\"projectile_lifetime\":{a.projectile_lifetime}");
             if (!Mathf.Approximately(a.projectile_angle, 0f)) sb.Append($",\"projectile_angle\":{a.projectile_angle}");
@@ -693,6 +723,9 @@ namespace PromptFighters.GameFlow
             if (a.bounce_count > 0)                   sb.Append($",\"bounce_count\":{a.bounce_count}");
             if (a.wave_amplitude > 0f)                sb.Append($",\"wave_amplitude\":{a.wave_amplitude}");
             if (a.pierce)                             sb.Append(",\"pierce\":true");
+            if (a.split_count > 0)                    sb.Append($",\"split_count\":{a.split_count}");
+            if (a.split_angle > 0f)                   sb.Append($",\"split_angle\":{a.split_angle}");
+            if (a.orbit)                              sb.Append(",\"orbit\":true");
             if (a.spawn_at_enemy)                     sb.Append(",\"spawn_at_enemy\":true");
             if (!string.IsNullOrEmpty(a.shape))       sb.Append($",\"shape\":{Q(a.shape)}");
             if (a.lifesteal_ratio > 0f)               sb.Append($",\"lifesteal_ratio\":{a.lifesteal_ratio}");

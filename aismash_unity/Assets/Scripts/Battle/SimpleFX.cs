@@ -47,8 +47,11 @@ namespace PromptFighters.Battle
         // 体術・武器振りの「風切り」。画像エフェクトを持たない近接技の見た目を担う。
         // 太い光の帯は「変な風の塊」に見えるため、アニメの効果線風の細いスピードライン3本を
         // 一瞬（0.09秒）だけ前方へ走らせる。中央が長く、上下は短く控えめ。
-        public static void SwingArc(Vector3 pos, float dirSign, float length, float height, Color color)
+        public static void SwingArc(Vector3 pos, Vector2 direction, float length, float height, Color color)
         {
+            direction = direction.sqrMagnitude > 0.0001f ? direction.normalized : Vector2.right;
+            Vector2 perpendicular = new Vector2(-direction.y, direction.x);
+            float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
             Color c = Color.Lerp(Color.white, color, 0.35f);
             float w = Mathf.Max(0.6f, length * 0.85f);
             for (int i = 0; i < 3; i++)
@@ -56,10 +59,11 @@ namespace PromptFighters.Battle
                 bool center = i == 1;
                 float yOff  = (i - 1) * Mathf.Max(0.12f, height * 0.22f);
                 Color lc = c; lc.a = center ? 0.5f : 0.3f;
-                StreakFx.Spawn(pos + new Vector3(dirSign * (center ? 0f : -0.12f), yOff, 0f),
+                Vector2 offset = perpendicular * yOff - direction * (center ? 0f : 0.12f);
+                StreakFx.Spawn(pos + (Vector3)offset,
                     new Vector2(center ? w : w * 0.62f, 0.07f),
-                    new Vector2(dirSign * 5.5f, 0f), 0.09f, lc,
-                    stretchX: 0.35f, squashY: 0.4f);
+                    direction * 5.5f, 0.09f, lc,
+                    stretchX: 0.35f, squashY: 0.4f, rotationDegrees: angle);
             }
         }
 
@@ -192,10 +196,11 @@ namespace PromptFighters.Battle
 
         // worldSize: 帯のワールドサイズ。stretchX/squashY: 寿命終端での伸び率・縮み率（負値で逆方向）。
         public static void Spawn(Vector3 pos, Vector2 worldSize, Vector2 drift, float life, Color color,
-                                 float stretchX, float squashY)
+                                 float stretchX, float squashY, float rotationDegrees = 0f)
         {
             var go = new GameObject("StreakFx");
             go.transform.position = pos;
+            go.transform.rotation = Quaternion.Euler(0f, 0f, rotationDegrees);
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sprite = Skills.RuntimeSprite.Glow();
             sr.sortingOrder = 11;

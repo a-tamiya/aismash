@@ -22,11 +22,11 @@ namespace PromptFighters.Utils
         }
 
         // 透過済みPNGをWhiteBackgroundRemoverなしで直接ロードする（保存済みスプライト用）
-        public static Sprite LoadDirect(string path)
+        public static Sprite LoadDirect(string path, bool centerPivot = false)
         {
             byte[] bytes = ReadAllBytesOrWarn(path);
             if (bytes == null) return null;
-            return BuildDirectSprite(bytes);
+            return BuildDirectSprite(bytes, centerPivot);
         }
 
         // バイト列から直接ロード（Phase 4 API連携用）
@@ -60,14 +60,15 @@ namespace PromptFighters.Utils
             onLoaded?.Invoke(bytes == null ? null : LoadFromBytesWithWhiteBgRemoved(bytes, threshold, fadeRange));
         }
 
-        public static IEnumerator LoadDirectAsync(string path, System.Action<Sprite> onLoaded)
+        public static IEnumerator LoadDirectAsync(string path, System.Action<Sprite> onLoaded,
+                                                  bool centerPivot = false)
         {
             byte[] bytes = null;
             yield return ReadAllBytesAsync(path, b => bytes = b);
-            onLoaded?.Invoke(bytes == null ? null : BuildDirectSprite(bytes));
+            onLoaded?.Invoke(bytes == null ? null : BuildDirectSprite(bytes, centerPivot));
         }
 
-        static Sprite BuildDirectSprite(byte[] bytes)
+        static Sprite BuildDirectSprite(byte[] bytes, bool centerPivot = false)
         {
             var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
             if (!ImageConversion.LoadImage(tex, bytes)) return null;
@@ -75,7 +76,7 @@ namespace PromptFighters.Utils
             return Sprite.Create(
                 tex,
                 new Rect(0, 0, tex.width, tex.height),
-                new Vector2(0.5f, 0f),
+                centerPivot ? new Vector2(0.5f, 0.5f) : new Vector2(0.5f, 0f),
                 tex.height / 2f);
         }
 

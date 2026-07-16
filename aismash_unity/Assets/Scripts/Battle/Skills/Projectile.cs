@@ -26,6 +26,12 @@ namespace PromptFighters.Battle.Skills
         public float      Lifetime  = 2f;
         public Vector2    Direction = Vector2.right;
         public Vector2    DesiredWorldSize = new Vector2(1.2f, 0.74f);
+        public bool       AlignToVelocity;
+
+        // 新しい配置パターンで同一点付近を複数弾が通る際の重複ヒット防止。
+        public int        SharedCastId;
+        public int        SharedSourceId;
+        public float      SharedHitLockSeconds = 0.08f;
 
         // 追尾
         public Transform HomingTarget;
@@ -41,6 +47,8 @@ namespace PromptFighters.Battle.Skills
         public Vector2   KnockbackDir = new Vector2(1f, 0.3f);
         public bool      FixedKnockbackDir;
         public bool      GroundBounce;
+        public string    SpatialKnockbackMode;
+        public Vector2   SpatialKnockbackOrigin;
 
         // 拡張バリエーション
         public float ExplosionRadius; // >0: 着弾・壁・寿命切れで爆発（範囲ダメージ。直撃は爆発に一本化）
@@ -164,6 +172,10 @@ namespace PromptFighters.Battle.Skills
             Lifetime = 2f;
             Direction = Vector2.right;
             DesiredWorldSize = new Vector2(1.2f, 0.74f);
+            AlignToVelocity = false;
+            SharedCastId = 0;
+            SharedSourceId = 0;
+            SharedHitLockSeconds = 0.08f;
             HomingTarget = null;
             HomingStrength = 0f;
             IsBoomerang = false;
@@ -171,6 +183,8 @@ namespace PromptFighters.Battle.Skills
             KnockbackDir = new Vector2(1f, 0.3f);
             FixedKnockbackDir = false;
             GroundBounce = false;
+            SpatialKnockbackMode = null;
+            SpatialKnockbackOrigin = Vector2.zero;
             ExplosionRadius = 0f;
             BounceCount = 0;
             WaveAmplitude = 0f;
@@ -247,6 +261,7 @@ namespace PromptFighters.Battle.Skills
                 if (GravityScale > 0f) _rb.gravityScale = GravityScale;
                 _rb.linearVelocity = Direction * Speed;
             }
+            AlignRotationToVelocity();
             _activated = true;
 
             yield return new WaitForSeconds(Lifetime);
@@ -320,14 +335,14 @@ namespace PromptFighters.Battle.Skills
         void LateUpdate()
         {
             if (_released || !_activated || _debugSr == null) return;
+            AlignRotationToVelocity();
             bool show = DebugSettings.ShowHitboxes;
             _debugSr.enabled = show;
             if (show && _col != null)
             {
-                var b = _col.bounds;
-                _debugSr.transform.position   = b.center;
-                _debugSr.transform.rotation   = Quaternion.identity;
-                _debugSr.transform.localScale  = new Vector3(b.size.x, b.size.y, 1f);
+                _debugSr.transform.position   = transform.position;
+                _debugSr.transform.rotation   = transform.rotation;
+                _debugSr.transform.localScale = new Vector3(DesiredWorldSize.x, DesiredWorldSize.y, 1f);
             }
             if (!HideVisual && _sr != null)
                 _sr.enabled = !show;
@@ -367,6 +382,11 @@ namespace PromptFighters.Battle.Skills
             hb.StatusDuration           = StatusDuration;
             hb.StatusChance             = StatusChance;
             hb.MaxHits                  = 2;
+            hb.SharedCastId             = SharedCastId;
+            hb.SharedSourceId           = SharedSourceId;
+            hb.SharedHitLockSeconds     = SharedHitLockSeconds;
+            hb.SpatialKnockbackMode     = SpatialKnockbackMode;
+            hb.SpatialKnockbackOrigin   = SpatialKnockbackOrigin;
 
             ExplosionFlash.Spawn(pos, ExplosionRadius * 2f, SkillEnumParser.ElementColor(Element));
             Battle.CameraShake.Shake(0.12f, 0.16f);
@@ -393,6 +413,8 @@ namespace PromptFighters.Battle.Skills
                 c.Knockback                = Knockback * 0.6f;
                 c.KnockbackDir             = KnockbackDir;
                 c.FixedKnockbackDir        = FixedKnockbackDir;
+                c.SpatialKnockbackMode     = SpatialKnockbackMode;
+                c.SpatialKnockbackOrigin   = SpatialKnockbackOrigin;
                 c.StunTime                 = StunTime * 0.5f;
                 c.GuardDamage              = GuardDamage * 0.5f;
                 c.Status                   = Status;
@@ -404,7 +426,24 @@ namespace PromptFighters.Battle.Skills
                 c.FlipEffectX              = FlipEffectX;
                 c.DesiredWorldSize         = DesiredWorldSize * 0.6f;
                 c.GravityScale             = GravityScale;
+                c.AlignToVelocity          = AlignToVelocity;
+                c.SharedCastId             = SharedCastId;
+                // 分裂後の子弾同士は別source。明示pattern由来の場合、同じ子弾の処理だけを
+                // 多段として許可し、兄弟子弾の重複ヒットは共有castで抑止する。
+                c.SharedSourceId           = SharedCastId != 0
+                    ? SkillCastHitRegistry.NextSourceId()
+                    : 0;
+                c.SharedHitLockSeconds     = SharedHitLockSeconds;
             }
+        }
+
+        void AlignRotationToVelocity()
+        {
+            if (!AlignToVelocity || _rb == null || _rb.linearVelocity.sqrMagnitude < 0.001f) return;
+            Vector2 velocity = _rb.linearVelocity;
+            float angle = Mathf.Atan2(velocity.y, velocity.x) * Mathf.Rad2Deg;
+            transform.rotation = Quaternion.Euler(0f, 0f, angle);
+            if (_sr != null) _sr.flipX = false;
         }
 
         // 跳弾: 地面なら上方向へ、壁なら左右反転して跳ね返る。
@@ -496,6 +535,7 @@ namespace PromptFighters.Battle.Skills
             var voiceItem = other.GetComponentInParent<Battle.VoiceItem>();
             if (voiceItem != null)
             {
+                if (!SkillCastHitRegistry.TryClaim(SharedCastId, voiceItem, this, SharedHitLockSeconds)) return;
                 voiceItem.TakeHit(Damage, Owner);
                 if (!IsBoomerang && !OrbitOwner) Release();
                 return;
@@ -505,6 +545,7 @@ namespace PromptFighters.Battle.Skills
             var summon = other.GetComponentInParent<Battle.SummonEntity>();
             if (summon != null && summon.Owner != Owner)
             {
+                if (!SkillCastHitRegistry.TryClaim(SharedCastId, summon, this, SharedHitLockSeconds)) return;
                 summon.TakeHit(Damage);
                 if (!IsBoomerang && !OrbitOwner) Release();
                 return;
@@ -514,6 +555,7 @@ namespace PromptFighters.Battle.Skills
             var destructible = other.GetComponentInParent<Battle.DestructibleObstacle>();
             if (destructible != null)
             {
+                if (!SkillCastHitRegistry.TryClaim(SharedCastId, destructible, this, SharedHitLockSeconds)) return;
                 destructible.TakeHit(Damage, Owner);
                 if (!IsBoomerang && !OrbitOwner) Release();
                 return;
@@ -577,9 +619,31 @@ namespace PromptFighters.Battle.Skills
                 return;
             }
 
-            float dir = FixedKnockbackDir ? 1f : Mathf.Sign(Direction.x);
+            if (!SkillCastHitRegistry.TryClaim(SharedCastId, target, this, SharedHitLockSeconds)) return;
+
+            Vector2 resolvedKnockback = KnockbackDir;
+            bool fixedDirection = FixedKnockbackDir;
+            if (SpatialKnockbackMode == "along_attack" || SpatialKnockbackMode == "along")
+            {
+                Vector2 velocity = _rb != null && _rb.linearVelocity.sqrMagnitude > 0.001f
+                    ? _rb.linearVelocity
+                    : Direction;
+                resolvedKnockback = velocity.normalized;
+                fixedDirection = true;
+            }
+            else if (SpatialKnockbackMode == "from_origin" || SpatialKnockbackMode == "from" ||
+                     SpatialKnockbackMode == "toward_origin")
+            {
+                Vector2 radial = (Vector2)target.transform.position + Vector2.up * 0.8f - SpatialKnockbackOrigin;
+                if (SpatialKnockbackMode == "toward_origin") radial = -radial;
+                if (radial.sqrMagnitude < 0.001f) radial = Direction;
+                resolvedKnockback = radial.normalized;
+                fixedDirection = true;
+            }
+
+            float dir = fixedDirection ? 1f : Mathf.Sign(Direction.x);
             if (dir == 0f) dir = 1f;
-            var kb = new Vector2(dir * KnockbackDir.x * Knockback, KnockbackDir.y * Knockback);
+            var kb = new Vector2(dir * resolvedKnockback.x * Knockback, resolvedKnockback.y * Knockback);
 
             // 属性色つきヒットスパーク（着弾点で光らせる）
             Battle.SimpleFX.HitSpark(transform.position, SkillEnumParser.ElementColor(Element),
