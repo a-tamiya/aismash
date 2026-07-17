@@ -1973,9 +1973,10 @@ namespace PromptFighters.Battle.Skills
             float speed    = a.power > 0f ? a.power : 2.5f;
             float dmg      = (a.damage_override >= 0f ? a.damage_override : skill.parameters.damage * 0.5f) * powerMultiplier;
             float kb       = skill.parameters.knockback * 0.6f * powerMultiplier;
-            Vector2 desiredSize = new Vector2(
-                (a.size_x > 0f ? a.size_x : 1.3f) * _sizeScale,
-                (a.size_y > 0f ? a.size_y : 1.7f) * _sizeScale);
+            Vector2 authoredSize = a.size_x > 0f || a.size_y > 0f
+                ? new Vector2(a.size_x > 0f ? a.size_x : 1.3f, a.size_y > 0f ? a.size_y : 1.7f)
+                : EstimateSummonSize(skill);
+            Vector2 desiredSize = authoredSize * _sizeScale;
             void SpawnNow()
             {
                 ShowImpactAtSpawn(skill);
@@ -1989,6 +1990,23 @@ namespace PromptFighters.Battle.Skills
                     a.telegraph_time > 0f ? Mathf.Clamp(a.telegraph_time, 0.05f, 1.5f) : 0.4f, SpawnNow));
             else
                 SpawnNow();
+        }
+
+        // 旧JSONなどでsize_x/yが無い場合も、召喚物の名称・説明から体格を決める。
+        // 新規生成はAIにsize_x/yを明示させるため、ここは後方互換の安全な補完経路。
+        static Vector2 EstimateSummonSize(SkillData skill)
+        {
+            string text = ((skill?.skill_name ?? "") + " " + (skill?.description ?? "")).ToLowerInvariant();
+            bool large = text.Contains("巨大") || text.Contains("超大型") || text.Contains("大型") ||
+                         text.Contains("ドラゴン") || text.Contains("竜") || text.Contains("ゴーレム") ||
+                         text.Contains("戦車") || text.Contains("巨人") || text.Contains("大型獣");
+            if (large) return new Vector2(2.8f, 3.6f);
+            bool small = text.Contains("小型") || text.Contains("ミニ") || text.Contains("妖精") ||
+                         text.Contains("ドローン") || text.Contains("子") || text.Contains("使い魔");
+            if (small) return new Vector2(0.85f, 1.15f);
+            bool longBody = text.Contains("蛇") || text.Contains("ヘビ") || text.Contains("列車") || text.Contains("隊列");
+            if (longBody) return new Vector2(2.6f, 1.25f);
+            return new Vector2(1.3f, 1.7f);
         }
 
         // wall: 通行を遮る、時間・耐久で消える設置壁。攻撃判定を持たないため理不尽な即時ダメージは発生しない。

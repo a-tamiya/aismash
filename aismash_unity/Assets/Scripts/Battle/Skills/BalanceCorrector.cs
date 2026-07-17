@@ -271,9 +271,10 @@ namespace PromptFighters.Battle.Skills
                         if (a.power > 0f) a.power = Mathf.Clamp(a.power, 0.5f, 5f);
                         if (a.damage_override >= 0f)
                             a.damage_override = Mathf.Clamp(a.damage_override, 0f, totalMaxDmg * 0.6f);
-                        // 召喚物が小さく圧縮されて見えないよう、見た目サイズの下限を確保する。
-                        if (a.size_x > 0f) a.size_x = Mathf.Clamp(a.size_x, 1.0f, 2.6f);
-                        if (a.size_y > 0f) a.size_y = Mathf.Clamp(a.size_y, 1.2f, 3.2f);
+                        // 召喚対象の体格を技ごとに表現する。極小使い魔〜大型獣まで許容しつつ、
+                        // 画面を不当に塞ぐほどの巨大化は防ぐ。
+                        if (a.size_x > 0f) a.size_x = Mathf.Clamp(a.size_x, 0.55f, 4.0f);
+                        if (a.size_y > 0f) a.size_y = Mathf.Clamp(a.size_y, 0.65f, 4.8f);
                     }
 
                     // wall: 地面に固定する破壊可能な壁。powerは耐久、durationは寿命。

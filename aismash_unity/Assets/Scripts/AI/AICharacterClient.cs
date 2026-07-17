@@ -605,7 +605,7 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
     ★ counter技のactionsにはcounterアクション1つだけを入れること。melee_hitboxやprojectileと混在させない（counterが反撃を自動処理するため不要）
   reflector: duration=反射受付秒(1.0〜3.0)。発動中は相手の飛び道具を速度・威力1.2倍で逆方向に反射する。攻撃判定は一切なし・反射のみ。ピンク色に光る。
     ★ reflector技のactionsにはreflectorアクション1つだけを入れること。melee_hitboxやprojectileと混在させない
-  summon: duration=召喚体の寿命(1〜6)、power=移動速度(0.5〜5)、spawn_x/y=出現位置、damage_override=接触ダメージ。召喚するものの見た目はその技スロットのeffect画像として生成される前提で、skill_name/descriptionに召喚物の名前や形状を明確に含める。directionで移動方向を指定できる（forward/backward/left/right/toward_enemy/away_enemy/stationary/diagonal/hover）。diagonal=斜めに往復（跳ねる系・機動兵器向け）、hover=上下にホバリングしながら緩やかに横移動（幽霊・浮遊物向け）。player_controlled:trueならプレイヤーの左右入力で操縦。homing:trueなら敵を上下左右とも追尾する（鳥・使い魔・誘導ミサイル向け）。knockback_directionとstatus/status_duration/chanceも接触時に有効。recovery 0.10〜0.35（召喚直後すぐ動ける）
+  summon: duration=召喚体の寿命(1〜6)、power=移動速度(0.5〜5)、spawn_x/y=出現位置、damage_override=接触ダメージ。size_xとsize_yは必須で、召喚物の実寸・当たり判定・表示サイズを同時に決める。小型使い魔/妖精/ドローン=0.55〜1.1×0.65〜1.4、通常の獣/兵士=1.2〜2.2×1.4〜2.8、大型獣/竜/ゴーレム=2.3〜4.0×2.8〜4.8。全召喚物を同じ大きさにしない。召喚するものの見た目はその技スロットのeffect画像として生成される前提で、skill_name/descriptionに召喚物の名前や形状を明確に含める。directionで移動方向を指定できる（forward/backward/left/right/toward_enemy/away_enemy/stationary/diagonal/hover）。diagonal=斜めに往復（跳ねる系・機動兵器向け）、hover=上下にホバリングしながら緩やかに横移動（幽霊・浮遊物向け）。player_controlled:trueならプレイヤーの左右入力で操縦。homing:trueなら敵を上下左右とも追尾する（鳥・使い魔・誘導ミサイル向け）。knockback_directionとstatus/status_duration/chanceも接触時に有効。recovery 0.10〜0.35（召喚直後すぐ動ける）
 - 【判定形状】shapeは判定とエフェクトの両方に同じ幾何形状として適用される:
   ""box""(四角/default)、""cone""(前方扇)、""ring""(塗りつぶし円)、""annulus""(ドーナツ。inner_radius=安全な内径)、""arc""(円弧。arc_angle=15〜330度)、""line""(方向つき直線)、""cross""(十字。inner_radius=腕の太さ)、""column""(縦柱)
   annulus/arcの外径はsize_x（なければrange）。見た目だけ広く判定だけ狭い指定は禁止。同じsize・回転で一致させること
