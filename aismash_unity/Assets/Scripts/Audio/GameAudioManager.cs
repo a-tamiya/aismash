@@ -352,6 +352,12 @@ namespace PromptFighters.Audio
     public class CharacterVoicePlayer : MonoBehaviour
     {
         static readonly string[] Filenames = { "intro", "attack_a", "attack_b", "attack_c", "smash_side" };
+        // AI生成ボイスはピークを揃えるだけでは小さく聞こえやすいため、再生前にピークの余裕を作り、
+        // 設定100%で安全に押し出せる音量へ整える。他の音声系には影響させない。
+        const float CharacterVoicePlaybackGain = 1.55f;
+        const float CharacterVoicePeakWithHeadroom = 0.62f;
+        const float CompressionThreshold = 0.18f;
+        const float CompressionRatio = 0.42f;
         readonly AudioClip[] _clips = new AudioClip[5];
         AudioSource _source;
         float _nextSkillVoiceTime;
@@ -374,6 +380,7 @@ namespace PromptFighters.Audio
                 {
                     _clips[i] = AITTSClient.WavToAudioClip(File.ReadAllBytes(path),
                         $"{data.characterName}_{Filenames[i]}");
+                    ConditionCharacterVoice(_clips[i]);
                 }
                 catch (System.Exception e)
                 {
@@ -385,8 +392,8 @@ namespace PromptFighters.Audio
         public float PlayIntro()
         {
             if (_clips[0] == null || _source == null) return 0f;
-            _source.volume = GameVolumeSettings.CharacterVolume;
-            _source.PlayOneShot(_clips[0], 1f);
+            _source.volume = 1f;
+            _source.PlayOneShot(_clips[0], CharacterPlaybackVolume());
             return _clips[0].length;
         }
 
@@ -396,8 +403,8 @@ namespace PromptFighters.Audio
             if (index < 1 || index >= _clips.Length || _clips[index] == null || _source == null) return;
             if (Time.unscaledTime < _nextSkillVoiceTime || _source.isPlaying) return;
 
-            _source.volume = GameVolumeSettings.CharacterVolume;
-            _source.PlayOneShot(_clips[index], 1f);
+            _source.volume = 1f;
+            _source.PlayOneShot(_clips[index], CharacterPlaybackVolume());
             _nextSkillVoiceTime = Time.unscaledTime + Mathf.Max(0.9f, _clips[index].length * 0.8f);
         }
 
@@ -414,6 +421,37 @@ namespace PromptFighters.Audio
             _source.playOnAwake = false;
             _source.loop = false;
             _source.spatialBlend = 0f;
+        }
+
+        static float CharacterPlaybackVolume() =>
+            GameVolumeSettings.CharacterVolume * CharacterVoicePlaybackGain;
+
+        static void ConditionCharacterVoice(AudioClip clip)
+        {
+            if (clip == null || clip.samples <= 0 || clip.channels <= 0) return;
+            var samples = new float[clip.samples * clip.channels];
+            if (!clip.GetData(samples, 0)) return;
+
+            float compressedPeak = 0f;
+            for (int i = 0; i < samples.Length; i++)
+            {
+                float sample = samples[i];
+                float magnitude = Mathf.Abs(sample);
+                if (magnitude > CompressionThreshold)
+                {
+                    magnitude = CompressionThreshold +
+                                (magnitude - CompressionThreshold) * CompressionRatio;
+                    sample = Mathf.Sign(sample) * magnitude;
+                    samples[i] = sample;
+                }
+                compressedPeak = Mathf.Max(compressedPeak, magnitude);
+            }
+
+            if (compressedPeak < 0.0001f) return;
+            float gain = Mathf.Min(CharacterVoicePeakWithHeadroom / compressedPeak, 4f);
+            for (int i = 0; i < samples.Length; i++)
+                samples[i] = Mathf.Clamp(samples[i] * gain, -1f, 1f);
+            clip.SetData(samples, 0);
         }
 
         void ReleaseClips()
