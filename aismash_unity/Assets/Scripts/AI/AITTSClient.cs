@@ -74,26 +74,36 @@ namespace PromptFighters.AI
 
         // キャラクター生成時に再利用可能なWAVを作る。試合中にAPIを呼ばず、保存済み音声を再生するための経路。
         public static Coroutine GenerateWav(MonoBehaviour runner, string text, string instructions, string voice,
-            CharacterVoiceBackend backend, Action<byte[]> onSuccess, Action<string> onError)
+            CharacterVoiceBackend backend, float maxDurationSeconds,
+            Action<byte[]> onSuccess, Action<string> onError)
         {
-            return runner.StartCoroutine(GenerateWavCoroutine(text, instructions, voice, backend, onSuccess, onError));
+            return runner.StartCoroutine(GenerateWavCoroutine(
+                text, instructions, voice, backend, maxDurationSeconds, onSuccess, onError));
         }
 
         // 保存用5台詞を1つのRealtimeセッションで生成し、同一人物の声色を保ったWAVセットとして返す。
         public static Coroutine GenerateRealtimeWavSet(MonoBehaviour runner, string[] texts, string[] instructions,
-            string voice, string model, Action<int> onProgress, Action<byte[][]> onSuccess, Action<string> onError)
+            string voice, string model, float[] maxDurationSeconds,
+            Action<int> onProgress, Action<byte[][]> onSuccess, Action<string> onError)
         {
             return runner.StartCoroutine(GenerateRealtimeWavSetCoroutine(
-                texts, instructions, voice, model, onProgress, onSuccess, onError));
+                texts, instructions, voice, model, maxDurationSeconds, onProgress, onSuccess, onError));
         }
 
         static IEnumerator GenerateRealtimeWavSetCoroutine(string[] texts, string[] instructions,
-            string voice, string model, Action<int> onProgress, Action<byte[][]> onSuccess, Action<string> onError)
+            string voice, string model, float[] maxDurationSeconds,
+            Action<int> onProgress, Action<byte[][]> onSuccess, Action<string> onError)
         {
             string key = AIImageClient.ApiKey;
             if (!AIImageClient.IsConfiguredApiKey(key))
             {
                 onError?.Invoke("APIキー未設定");
+                yield break;
+            }
+
+            if (texts == null || maxDurationSeconds == null || maxDurationSeconds.Length != texts.Length)
+            {
+                onError?.Invoke("台詞と最大音声尺の件数が不一致");
                 yield break;
             }
 
@@ -104,6 +114,7 @@ namespace PromptFighters.AI
                 AudioClip[] clips = null;
                 lastError = null;
                 byte[][] successfulWavs = null;
+                var preparedWavs = new byte[texts.Length][];
                 try
                 {
                     yield return RealtimeAudioClient.SynthesizeBatch(texts, instructions, key,
@@ -111,22 +122,33 @@ namespace PromptFighters.AI
                         onProgress,
                         error => lastError = error,
                         safeVoice,
-                        model);
+                        model,
+                        (index, clip) =>
+                        {
+                            preparedWavs[index] = PrepareCharacterVoiceWav(
+                                AudioClipToWav(clip), maxDurationSeconds[index], out float duration);
+                            if (preparedWavs[index] != null) return null;
+                            return duration > maxDurationSeconds[index]
+                                ? $"{duration:F2}秒（上限{maxDurationSeconds[index]:F1}秒）"
+                                : "WAV変換または完全性検証に失敗";
+                        },
+                        3);
 
                     if (clips != null)
                     {
-                        var wavs = new byte[clips.Length][];
                         bool valid = clips.Length == texts.Length;
                         if (valid)
                         {
                             for (int i = 0; i < clips.Length; i++)
                             {
-                                wavs[i] = AudioClipToWav(clips[i]);
-                                if (!IsWav(wavs[i])) valid = false;
+                                if (preparedWavs[i] != null) continue;
+                                valid = false;
+                                lastError = $"Realtime音声セット{i + 1}/{texts.Length}の検証済みWAVがありません";
+                                break;
                             }
                         }
-                        if (valid) successfulWavs = wavs;
-                        else lastError = "Realtime音声セットのWAV変換または完全性検証に失敗";
+                        if (valid) successfulWavs = preparedWavs;
+                        else lastError ??= "Realtime音声セットのWAV変換または完全性検証に失敗";
                     }
                 }
                 finally
@@ -150,7 +172,8 @@ namespace PromptFighters.AI
         }
 
         static IEnumerator GenerateWavCoroutine(string text, string instructions, string voice,
-            CharacterVoiceBackend backend, Action<byte[]> onSuccess, Action<string> onError)
+            CharacterVoiceBackend backend, float maxDurationSeconds,
+            Action<byte[]> onSuccess, Action<string> onError)
         {
             string key = AIImageClient.ApiKey;
             if (!AIImageClient.IsConfiguredApiKey(key))
@@ -218,7 +241,7 @@ namespace PromptFighters.AI
                           $"\"response_format\":\"wav\"}}"
                         : $"{{\"model\":\"{(highDefinition ? HighDefinitionModel : Model)}\",\"input\":\"{safeText}\"," +
                           $"\"voice\":\"{SanitizeLegacyVoice(safeVoice)}\"," +
-                          $"\"speed\":1.0,\"response_format\":\"wav\"}}";
+                          $"\"speed\":1.08,\"response_format\":\"wav\"}}";
                     for (int attempt = 1; attempt <= 2; attempt++)
                     {
                         using var req = BuildRequest(body, key);
@@ -242,9 +265,13 @@ namespace PromptFighters.AI
                 }
             }
 
-            if (!IsWav(wavData))
+            wavData = PrepareCharacterVoiceWav(wavData, maxDurationSeconds, out float durationSeconds);
+            if (wavData == null)
             {
-                onError?.Invoke(lastError ?? $"{backend}でキャラボイスWAV生成に失敗");
+                string durationError = durationSeconds > maxDurationSeconds
+                    ? $"{backend}の音声が長すぎます（{durationSeconds:F2}秒、上限{maxDurationSeconds:F1}秒）"
+                    : null;
+                onError?.Invoke(durationError ?? lastError ?? $"{backend}でキャラボイスWAV生成に失敗");
                 yield break;
             }
 
@@ -705,6 +732,84 @@ namespace PromptFighters.AI
             }
         }
 
+        // キャラボイスだけは前後の無音を詰め、短い戦闘台詞として許容する尺を超えた音声を採用しない。
+        // 長尺を途中で切断すると台詞が欠けるため、発話部分が上限を超える場合は失敗として再生成へ回す。
+        static byte[] PrepareCharacterVoiceWav(byte[] wav, float maxDurationSeconds,
+            out float durationSeconds)
+        {
+            durationSeconds = 0f;
+            AudioClip clip = WavToAudioClip(wav, "CharacterVoiceValidation");
+            if (clip == null) return null;
+
+            try
+            {
+                int channels = clip.channels;
+                int frames = clip.samples;
+                int sampleRate = clip.frequency;
+                if (channels <= 0 || frames <= 0 || sampleRate <= 0) return null;
+
+                var samples = new float[frames * channels];
+                if (!clip.GetData(samples, 0)) return null;
+
+                // 単発ノイズやクリックを発話開始と誤認しないよう、10ms窓のRMSで判定する。
+                var cumulativeEnergy = new double[frames + 1];
+                for (int frame = 0; frame < frames; frame++)
+                {
+                    double frameEnergy = 0d;
+                    int sampleStart = frame * channels;
+                    for (int channel = 0; channel < channels; channel++)
+                    {
+                        double sample = samples[sampleStart + channel];
+                        frameEnergy += sample * sample;
+                    }
+                    cumulativeEnergy[frame + 1] = cumulativeEnergy[frame] + frameEnergy / channels;
+                }
+                int windowFrames = Mathf.Max(1, Mathf.RoundToInt(sampleRate * 0.01f));
+                float peakRms = 0f;
+                for (int start = 0; start < frames; start += windowFrames)
+                {
+                    int end = Mathf.Min(frames, start + windowFrames);
+                    float rms = Mathf.Sqrt((float)((cumulativeEnergy[end] - cumulativeEnergy[start]) /
+                                                   Mathf.Max(1, end - start)));
+                    peakRms = Mathf.Max(peakRms, rms);
+                }
+                if (peakRms < 0.002f) return null;
+                float silenceThreshold = Mathf.Max(0.0025f, peakRms * 0.025f);
+
+                int firstActiveFrame = -1;
+                int lastActiveFrame = -1;
+                for (int start = 0; start < frames; start += windowFrames)
+                {
+                    int end = Mathf.Min(frames, start + windowFrames);
+                    float rms = Mathf.Sqrt((float)((cumulativeEnergy[end] - cumulativeEnergy[start]) /
+                                                   Mathf.Max(1, end - start)));
+                    if (rms < silenceThreshold) continue;
+                    if (firstActiveFrame < 0) firstActiveFrame = start;
+                    lastActiveFrame = end - 1;
+                }
+                if (firstActiveFrame < 0 || lastActiveFrame < firstActiveFrame) return null;
+
+                int leadingPad = Mathf.RoundToInt(sampleRate * 0.06f);
+                int trailingPad = Mathf.RoundToInt(sampleRate * 0.12f);
+                int startFrame = Mathf.Max(0, firstActiveFrame - leadingPad);
+                int endFrameExclusive = Mathf.Min(frames, lastActiveFrame + 1 + trailingPad);
+                int trimmedFrames = endFrameExclusive - startFrame;
+                durationSeconds = trimmedFrames / (float)sampleRate;
+                if (maxDurationSeconds > 0f && durationSeconds > maxDurationSeconds + 0.001f)
+                    return null;
+
+                var trimmed = new float[trimmedFrames * channels];
+                Array.Copy(samples, startFrame * channels, trimmed, 0, trimmed.Length);
+                NormalizeSamples(trimmed);
+                return SamplesToWav(trimmed, channels, sampleRate);
+            }
+            finally
+            {
+                if (Application.isPlaying) UnityEngine.Object.Destroy(clip);
+                else UnityEngine.Object.DestroyImmediate(clip);
+            }
+        }
+
         // Realtime APIが返したAudioClipを、保存・再利用できるPCM16 WAVへ変換する。
         static byte[] AudioClipToWav(AudioClip clip)
         {
@@ -715,36 +820,43 @@ namespace PromptFighters.AI
 
                 var samples = new float[clip.samples * clip.channels];
                 if (!clip.GetData(samples, 0)) return null;
-
-                int dataBytes = samples.Length * 2;
-                using var stream = new MemoryStream(44 + dataBytes);
-                using var writer = new BinaryWriter(stream, Encoding.UTF8, true);
-                writer.Write(Encoding.ASCII.GetBytes("RIFF"));
-                writer.Write(36 + dataBytes);
-                writer.Write(Encoding.ASCII.GetBytes("WAVE"));
-                writer.Write(Encoding.ASCII.GetBytes("fmt "));
-                writer.Write(16);
-                writer.Write((short)1);
-                writer.Write((short)clip.channels);
-                writer.Write(clip.frequency);
-                writer.Write(clip.frequency * clip.channels * 2);
-                writer.Write((short)(clip.channels * 2));
-                writer.Write((short)16);
-                writer.Write(Encoding.ASCII.GetBytes("data"));
-                writer.Write(dataBytes);
-                for (int i = 0; i < samples.Length; i++)
-                {
-                    float clamped = Mathf.Clamp(samples[i], -1f, 1f);
-                    writer.Write((short)Mathf.RoundToInt(clamped * 32767f));
-                }
-                writer.Flush();
-                return stream.ToArray();
+                return SamplesToWav(samples, clip.channels, clip.frequency);
             }
             catch (Exception e)
             {
                 Debug.LogWarning("[TTS] AudioClipのWAV変換失敗: " + e.Message);
                 return null;
             }
+        }
+
+        static byte[] SamplesToWav(float[] samples, int channels, int sampleRate)
+        {
+            if (samples == null || samples.Length == 0 || channels <= 0 || sampleRate <= 0 ||
+                samples.Length % channels != 0) return null;
+
+            int dataBytes = samples.Length * 2;
+            using var stream = new MemoryStream(44 + dataBytes);
+            using var writer = new BinaryWriter(stream, Encoding.UTF8, true);
+            writer.Write(Encoding.ASCII.GetBytes("RIFF"));
+            writer.Write(36 + dataBytes);
+            writer.Write(Encoding.ASCII.GetBytes("WAVE"));
+            writer.Write(Encoding.ASCII.GetBytes("fmt "));
+            writer.Write(16);
+            writer.Write((short)1);
+            writer.Write((short)channels);
+            writer.Write(sampleRate);
+            writer.Write(sampleRate * channels * 2);
+            writer.Write((short)(channels * 2));
+            writer.Write((short)16);
+            writer.Write(Encoding.ASCII.GetBytes("data"));
+            writer.Write(dataBytes);
+            for (int i = 0; i < samples.Length; i++)
+            {
+                float clamped = Mathf.Clamp(samples[i], -1f, 1f);
+                writer.Write((short)Mathf.RoundToInt(clamped * 32767f));
+            }
+            writer.Flush();
+            return stream.ToArray();
         }
 
         // AI音声の個体差で小さく聞こえる場合に備え、音割れを避けながら最大3倍まで持ち上げる。
@@ -776,12 +888,14 @@ namespace PromptFighters.AI
             AITTSClient.CharacterVoiceBackend.HighDefinitionSpeech,
             AITTSClient.CharacterVoiceBackend.StandardSpeech,
         };
+        // 前後無音を除いた採用上限。登場は少し間を許し、戦闘中の4台詞はテンポを優先する。
+        static readonly float[] VoiceDurationLimits = { 2.8f, 2.2f, 2.2f, 2.2f, 2.2f };
         static readonly object ActiveWorkDirectoryLock = new object();
         static readonly System.Collections.Generic.HashSet<string> ActiveWorkDirectories =
             new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
         public const string VoiceSwapMarkerFilename = "voices_swap_pending";
         const float PerVoiceRequestTimeoutSeconds = 130f;
-        // 1接続は8秒+設定8秒+5台詞×30秒。2試行を丸ごと行える予算を各Realtimeモデルへ渡す。
+        // 1本単位の再テイクを含めつつ、同モデルのセット再試行と最終標準音声の時間も残す安全期限。
         const float RealtimeSetRequestTimeoutSeconds = 340f;
         // 最後のtts-1（5件×最大約90秒）を必ず試せる時間を、上位モデルより先に予約する。
         const float FinalStandardReserveSeconds = 480f;
@@ -1047,12 +1161,16 @@ namespace PromptFighters.AI
             for (int i = 0; i < actingDirections.Length; i++)
             {
                 string momentDirection = i == 0
-                    ? "登場して相手と観客に存在感を示す瞬間。自信と覚悟を込め、台詞の後に余韻を残す。"
+                    ? "登場して相手と観客に存在感を示す瞬間。1.0〜2.0秒を目安に、自信と覚悟を込めて一息で言い切り、語尾は短く自然に抜く。"
                     : i == 4
-                        ? "必殺技を解き放つ最高潮の瞬間。腹から声を出し、全力の気迫と決着をつける覚悟を込める。"
-                        : "攻撃を繰り出す一瞬。戦闘中の呼吸と勢いを感じさせ、短く鋭く感情を爆発させる。";
+                        ? "必殺技を解き放つ最高潮の瞬間。0.8〜1.8秒を目安に、腹から声を出して一息で決める。全力の気迫は込めるが、母音を長く伸ばさない。"
+                        : "攻撃を繰り出す一瞬。0.6〜1.6秒を目安に、戦闘中の勢いを一息で短く鋭く出す。一音ずつ均一に叫ばず、自然な抑揚を作る。";
+                string timingDirection =
+                    "【収録尺・必須】すぐ発声し、前後の長い無音、長い溜め、過剰な間、母音や語尾の引き伸ばしを入れない。" +
+                    "短い台詞の中で、冒頭・核となる語・語尾へ自然な一つの感情曲線を作り、速度と声量を細かく変化させる。" +
+                    "棒読みと一本調子の絶叫を避け、プロ声優の生の反応として演じる。";
                 // 自由記述より後ろに構造化された話者特性を置き、全台詞で同じ人物を固定する。
-                actingDirections[i] = baseInstructions + " " + momentDirection + " " + identityInstruction;
+                actingDirections[i] = baseInstructions + " " + momentDirection + " " + timingDirection + " " + identityInstruction;
             }
 
             int succeeded = 0;
@@ -1085,7 +1203,7 @@ namespace PromptFighters.AI
                     try
                     {
                         realtimeCoroutine = AITTSClient.GenerateRealtimeWavSet(runner, lines, actingDirections,
-                            voicePreset, realtimeModel,
+                            voicePreset, realtimeModel, VoiceDurationLimits,
                             step =>
                             {
                                 if (step >= 0 && step < lines.Length)
@@ -1172,46 +1290,64 @@ namespace PromptFighters.AI
                         break;
                     }
 
-                    onProgress?.Invoke($"{BackendLabel(backend)}でボイス作成中 {i + 1}/{lines.Length}: {lines[i]}");
                     byte[] wav = null;
                     string error = null;
-                    bool done = false;
-                    Coroutine requestCoroutine = null;
-                    try
+                    const int maxTakes = 3;
+                    for (int take = 1; take <= maxTakes && wav == null; take++)
                     {
-                        requestCoroutine = AITTSClient.GenerateWav(runner, lines[i], actingDirections[i], voicePreset, backend,
-                            bytes => { wav = bytes; done = true; },
-                            err => { error = err; done = true; });
-                    }
-                    catch (Exception e)
-                    {
-                        error = "音声リクエスト開始失敗: " + e.Message;
-                        done = true;
-                    }
-
-                    float requestDeadline = Mathf.Min(
-                        Time.realtimeSinceStartup + PerVoiceRequestTimeoutSeconds,
-                        backendDeadline);
-                    try
-                    {
-                        while (!done && Time.realtimeSinceStartup < requestDeadline)
-                            yield return null;
-                    }
-                    finally
-                    {
-                        // セット生成自体が中断された場合も、下位のAPI通信だけが残らないようにする。
-                        if (!done && requestCoroutine != null)
-                            runner.StopCoroutine(requestCoroutine);
-                    }
-                    if (!done)
-                    {
-                        error = "音声リクエストが安全期限を超えました";
-                        done = true;
-                        if (Time.realtimeSinceStartup >= backendDeadline)
+                        string takeLabel = take > 1 ? $"（再テイク {take}/{maxTakes}）" : "";
+                        onProgress?.Invoke($"{BackendLabel(backend)}でボイス作成中 {i + 1}/{lines.Length}{takeLabel}: {lines[i]}");
+                        error = null;
+                        bool done = false;
+                        Coroutine requestCoroutine = null;
+                        try
                         {
-                            backendBudgetExhausted = true;
-                            if (finalStandardBackend) timedOut = true;
+                            string takeInstructions = take <= 1
+                                ? actingDirections[i]
+                                : actingDirections[i] +
+                                  " 【再テイク・最優先】必ずすぐ台詞を発声し、直前より溜めと語尾を短くして、感情を保ったまま一息で言い切る。";
+                            requestCoroutine = AITTSClient.GenerateWav(runner, lines[i], takeInstructions, voicePreset,
+                                backend, VoiceDurationLimits[i],
+                                bytes => { wav = bytes; done = true; },
+                                err => { error = err; done = true; });
                         }
+                        catch (Exception e)
+                        {
+                            error = "音声リクエスト開始失敗: " + e.Message;
+                            done = true;
+                        }
+
+                        float requestDeadline = Mathf.Min(
+                            Time.realtimeSinceStartup + PerVoiceRequestTimeoutSeconds,
+                            backendDeadline);
+                        try
+                        {
+                            while (!done && Time.realtimeSinceStartup < requestDeadline)
+                                yield return null;
+                        }
+                        finally
+                        {
+                            // セット生成自体が中断された場合も、下位のAPI通信だけが残らないようにする。
+                            if (!done && requestCoroutine != null)
+                                runner.StopCoroutine(requestCoroutine);
+                        }
+                        if (!done)
+                        {
+                            error = "音声リクエストが安全期限を超えました";
+                            if (Time.realtimeSinceStartup >= backendDeadline)
+                            {
+                                backendBudgetExhausted = true;
+                                if (finalStandardBackend) timedOut = true;
+                            }
+                        }
+
+                        if (wav != null || take >= maxTakes ||
+                            Time.realtimeSinceStartup >= backendDeadline ||
+                            !IsRetryableTakeError(error))
+                            break;
+
+                        Debug.LogWarning($"[CharacterVoice] {BackendLabel(backend)}の{Filenames[i]}を再テイクします: {error}");
+                        yield return new WaitForSecondsRealtime(0.25f);
                     }
 
                     if (wav == null)
@@ -1287,5 +1423,24 @@ namespace PromptFighters.AI
             AITTSClient.CharacterVoiceBackend.HighDefinitionSpeech => "高精細標準音声",
             _ => "標準音声",
         };
+
+        static bool IsRetryableTakeError(string error)
+        {
+            if (string.IsNullOrEmpty(error)) return false;
+            if (error.Contains("APIキー未設定") ||
+                error.Contains("このセッションで利用できません") ||
+                error.Contains("音声リクエスト開始失敗") ||
+                error.Contains("安全期限を超えました"))
+                return false;
+
+            // HTTPの恒久的な4xxだけは同じ要求を繰り返さない。408/409/429と、
+            // 成功応答後の長尺・無音・WAV/JSON不正は同じ高品質モデルで再テイクする。
+            int separator = error.IndexOf(' ');
+            if (separator > 0 && int.TryParse(error.Substring(0, separator), out int statusCode) &&
+                statusCode >= 400 && statusCode < 500 &&
+                statusCode != 408 && statusCode != 409 && statusCode != 425 && statusCode != 429)
+                return false;
+            return true;
+        }
     }
 }

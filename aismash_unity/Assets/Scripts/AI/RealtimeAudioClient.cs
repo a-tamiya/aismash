@@ -231,7 +231,8 @@ namespace PromptFighters.AI
         // voiceとセッションを固定することで、台詞ごとに接続し直す場合より人物の一貫性を高める。
         public static IEnumerator SynthesizeBatch(string[] texts, string[] styleInstructions, string apiKey,
             Action<AudioClip[]> onClips, Action<int> onProgress, Action<string> onErr,
-            string voice = MaleVoice, string model = RealtimeModel)
+            string voice = MaleVoice, string model = RealtimeModel,
+            Func<int, AudioClip, string> validateClip = null, int maxValidationAttempts = 1)
         {
             if (texts == null || texts.Length == 0)
             {
@@ -268,6 +269,7 @@ namespace PromptFighters.AI
                 $"\"instructions\":\"{JsonEscape(sessionStyle)}\"," +
                 "\"audio\":{\"output\":{" +
                 $"\"voice\":\"{JsonEscape(voice)}\"," +
+                "\"speed\":1.08," +
                 "\"format\":{\"type\":\"audio/pcm\",\"rate\":24000}}}}}";
             sock.SendJson(sessionJson);
 
@@ -297,68 +299,109 @@ namespace PromptFighters.AI
             {
                 for (int i = 0; i < texts.Length; i++)
                 {
-                    onProgress?.Invoke(i);
-                    string style = string.IsNullOrWhiteSpace(styleInstructions[i])
-                        ? "自然な日本語で読み上げる。"
-                        : styleInstructions[i];
-                    string ask = style + "\n次のセリフを一言一句そのまま日本語で読み上げる。" +
-                                 "前置き・相づち・言い直し・追加の言葉は一切入れない。セリフ：" + texts[i];
-                    sock.SendJson($"{{\"type\":\"response.create\",\"response\":{{\"instructions\":\"{JsonEscape(ask)}\"}}}}");
-
-                    using var pcmStream = new System.IO.MemoryStream();
-                    bool done = false;
-                    err = null;
-                    float deadline = Time.realtimeSinceStartup + 30f;
-                    while (Time.realtimeSinceStartup < deadline && !done && err == null)
+                    int takeLimit = Mathf.Clamp(maxValidationAttempts, 1, 3);
+                    string lastValidationError = null;
+                    for (int take = 1; take <= takeLimit; take++)
                     {
-                        while (sock.TryDequeue(out string msg))
+                        onProgress?.Invoke(i);
+                        string style = string.IsNullOrWhiteSpace(styleInstructions[i])
+                            ? "自然な日本語で読み上げる。"
+                            : styleInstructions[i];
+                        string retryDirection = take <= 1
+                            ? ""
+                            : "\n直前のテイクは採用基準を満たさなかった。今回は必ずすぐ台詞を発声し、溜めや語尾伸ばしをなくして、感情を保ったまま一息で短く言い切る。";
+                        string ask = style + retryDirection +
+                                     "\n次のセリフを一言一句そのまま日本語で読み上げる。" +
+                                     "前置き・相づち・言い直し・追加の言葉は一切入れない。セリフ：" + texts[i];
+                        sock.SendJson($"{{\"type\":\"response.create\",\"response\":{{\"instructions\":\"{JsonEscape(ask)}\"}}}}");
+
+                        using var pcmStream = new System.IO.MemoryStream();
+                        bool done = false;
+                        err = null;
+                        float deadline = Time.realtimeSinceStartup + 30f;
+                        while (Time.realtimeSinceStartup < deadline && !done && err == null)
                         {
-                            try
+                            while (sock.TryDequeue(out string msg))
                             {
-                                string type = EventType(msg);
-                                if (type == "response.output_audio.delta" || type == "response.audio.delta")
+                                try
                                 {
-                                    string b64 = JsonUtility.FromJson<EvtDelta>(msg)?.delta;
-                                    if (!string.IsNullOrEmpty(b64))
+                                    string type = EventType(msg);
+                                    if (type == "response.output_audio.delta" || type == "response.audio.delta")
                                     {
-                                        byte[] bytes = Convert.FromBase64String(b64);
-                                        pcmStream.Write(bytes, 0, bytes.Length);
+                                        string b64 = JsonUtility.FromJson<EvtDelta>(msg)?.delta;
+                                        if (!string.IsNullOrEmpty(b64))
+                                        {
+                                            byte[] bytes = Convert.FromBase64String(b64);
+                                            pcmStream.Write(bytes, 0, bytes.Length);
+                                        }
+                                    }
+                                    else if (type == "response.done")
+                                    {
+                                        string status = JsonUtility.FromJson<EvtResponseDone>(msg)?.response?.status;
+                                        if (status == "completed") done = true;
+                                        else err = "Realtime応答が完了しませんでした: " + (status ?? "status不明");
+                                        break;
+                                    }
+                                    else if (type == "error")
+                                    {
+                                        err = ErrorMessage(msg);
+                                        break;
                                     }
                                 }
-                                else if (type == "response.done")
+                                catch (Exception e)
                                 {
-                                    string status = JsonUtility.FromJson<EvtResponseDone>(msg)?.response?.status;
-                                    if (status == "completed") done = true;
-                                    else err = "Realtime応答が完了しませんでした: " + (status ?? "status不明");
-                                    break;
-                                }
-                                else if (type == "error")
-                                {
-                                    err = ErrorMessage(msg);
+                                    err = "Realtime音声イベント解析失敗: " + e.Message;
                                     break;
                                 }
                             }
-                            catch (Exception e)
-                            {
-                                err = "Realtime音声イベント解析失敗: " + e.Message;
-                                break;
-                            }
+                            if (sock.FatalError != null) err ??= sock.FatalError;
+                            yield return null;
                         }
-                        if (sock.FatalError != null) err ??= sock.FatalError;
-                        yield return null;
-                    }
 
-                    if (err != null || !done || pcmStream.Length < 2)
-                    {
-                        onErr?.Invoke($"Realtime音声セット{i + 1}/{texts.Length}生成失敗: " +
-                            (err ?? (done ? "音声なし" : "タイムアウト")));
-                        yield break;
-                    }
+                        if (err != null || !done)
+                        {
+                            onErr?.Invoke($"Realtime音声セット{i + 1}/{texts.Length}生成失敗: " +
+                                (err ?? "タイムアウト"));
+                            yield break;
+                        }
+                        if (pcmStream.Length < 2)
+                        {
+                            lastValidationError = "音声データなし";
+                            if (take < takeLimit) continue;
+                            onErr?.Invoke($"Realtime音声セット{i + 1}/{texts.Length}が{takeLimit}テイクとも不採用: " +
+                                lastValidationError);
+                            yield break;
+                        }
 
-                    clips[i] = Pcm16ToClip(pcmStream.ToArray(), InputRate, $"RealtimeTTS_{i}");
-                    if (clips[i] == null)
-                    {
-                        onErr?.Invoke($"Realtime音声セット{i + 1}/{texts.Length}のPCM変換失敗");
+                        AudioClip candidate = Pcm16ToClip(
+                            pcmStream.ToArray(), InputRate, $"RealtimeTTS_{i}_take{take}");
+                        if (candidate == null)
+                        {
+                            lastValidationError = "PCM変換または無音・異常尺検証に失敗";
+                            if (take < takeLimit) continue;
+                            onErr?.Invoke($"Realtime音声セット{i + 1}/{texts.Length}が{takeLimit}テイクとも不採用: " +
+                                lastValidationError);
+                            yield break;
+                        }
+
+                        string validationError = null;
+                        if (validateClip != null)
+                        {
+                            try { validationError = validateClip(i, candidate); }
+                            catch (Exception e) { validationError = "音声尺検証失敗: " + e.Message; }
+                        }
+                        if (string.IsNullOrEmpty(validationError))
+                        {
+                            clips[i] = candidate;
+                            break;
+                        }
+
+                        lastValidationError = validationError;
+                        UnityEngine.Object.Destroy(candidate);
+                        if (take < takeLimit) continue;
+
+                        onErr?.Invoke($"Realtime音声セット{i + 1}/{texts.Length}が{takeLimit}テイクとも不採用: " +
+                            lastValidationError);
                         yield break;
                     }
                 }

@@ -491,7 +491,7 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
 - 固有の技名・必殺技名が書かれていたら、その名前をそのまま skill_name に使う（必殺技は smash_side を優先）。挙動もその名前に合うように組む。
 - 数量・程度は数値に翻訳する。例:「3体の使い魔」→summonで複数/player_controlled、「二刀流」→2hitや多段、「最速」→移動stats上限付近、「超火力の一撃」→hit_count=1・damage大。
 - 口調・性格・世界観は catch_copy、各 description、voice_profile に反映する（戦闘挙動だけでなく雰囲気も「思い描いたキャラ」に寄せる）。
-- voice_profile は日本語の短い戦闘ボイスとして作る。intro_lineは登場台詞、skill_linesはattack_a/attack_b/attack_c/smash_sideの順で必ず4件。各台詞は2〜18文字程度で、技名を叫ぶだけでもよい。voice_genderはmale/female/neutral、voice_ageはchild/teen/young_adult/adult/senior/ageless、voice_pitchはlow/medium/high、voice_styleはheroic/fierce/cool/mysterious/cheerful/elegant/eccentric/ominousから、性格と世界観に最も合うものを選ぶ。特徴文に性別・年齢・声の高さが明示されていれば必ず一致させ、外見だけを根拠に変更しない。音声presetと個体差番号はコード側で決定するため出力しない。instructionsには性別・年齢・ピッチの再指定を入れず、キャラ固有の話速、感情、息遣い、間、声量変化、登場時と必殺技時の演技の方向性を具体的に含める。棒読みを指示してはならない。
+- voice_profile は日本語の短い戦闘ボイスとして作る。intro_lineは登場台詞、skill_linesはattack_a/attack_b/attack_c/smash_sideの順で必ず4件。各台詞は2〜12文字程度、一息で言い切れる長さとし、技名を叫ぶだけでもよい。voice_genderはmale/female/neutral、voice_ageはchild/teen/young_adult/adult/senior/ageless、voice_pitchはlow/medium/high、voice_styleはheroic/fierce/cool/mysterious/cheerful/elegant/eccentric/ominousから、性格と世界観に最も合うものを選ぶ。特徴文に性別・年齢・声の高さが明示されていれば必ず一致させ、外見だけを根拠に変更しない。音声presetと個体差番号はコード側で決定するため出力しない。instructionsには性別・年齢・ピッチの再指定を入れず、キャラ固有の話速、感情、息遣い、間、声量変化、登場時と必殺技時の演技の方向性を具体的に含める。棒読み・単調な絶叫・長い溜め・長い無音・母音の引き伸ばしは指示せず、短い台詞の中に自然な抑揚の山と速度・強弱の変化を作る。
 - 【連想拡張は補助】明示が薄い・短い入力のときだけ、その語から連想を広げて4枠を肉付けする。明示要素を上書きしてはならない。
 - 例:「炎の剣を振るう剣士」→近接斬撃(melee_hitbox)＋fire属性＋burn、技名に炎/剣の語。「狙撃手」→charge付きprojectile/beamで遠距離。「3匹の使い魔を操る」→summonで複数体やplayer_controlled。
 

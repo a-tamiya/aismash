@@ -609,7 +609,23 @@ namespace PromptFighters.Battle.Skills
             }
 
             if (dir.sqrMagnitude < 0.0001f) dir = fallback.sqrMagnitude > 0.0001f ? fallback : Vector2.right;
-            return RotateVector(dir.normalized, a.rotation_angle + extraAngle);
+
+            float angle = a.rotation_angle + extraAngle;
+            if (aim == "facing" || aim == "vector")
+            {
+                // facing/vectorの角度はキャラクター基準。Xだけでなく回転方向も鏡映しないと、
+                // 例: vector=(1,0.5), angle=26.565 が右では斜め上、左では真横になってしまう。
+                // 舞台端起点のfacingだけはキャラの向きではなく、内側へ向けた実方向を基準にする。
+                float mirrorSign;
+                bool edgeFacing = aim == "facing" &&
+                                  (a.spawn_origin == "left_edge" || a.spawn_origin == "right_edge");
+                if (edgeFacing && Mathf.Abs(dir.x) > 0.0001f)
+                    mirrorSign = Mathf.Sign(dir.x);
+                else
+                    mirrorSign = _fighter != null && _fighter.FacingRight ? 1f : -1f;
+                angle *= mirrorSign;
+            }
+            return RotateVector(dir.normalized, angle);
         }
 
         static Vector2 RotateVector(Vector2 vector, float degrees)

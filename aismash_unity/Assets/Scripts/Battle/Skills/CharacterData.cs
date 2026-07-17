@@ -73,7 +73,8 @@ namespace PromptFighters.Battle.Skills
     [System.Serializable]
     public class CharacterVoiceProfile
     {
-        public const int CurrentQualityVersion = 3;
+        public const int CurrentQualityVersion = 4;
+        public const int MaxLineTextElements = 12;
         public const string Male = "male";
         public const string Female = "female";
         public const string Neutral = "neutral";
@@ -87,7 +88,8 @@ namespace PromptFighters.Battle.Skills
         public const string StyleOminous = "ominous";
         public const string DefaultActingInstructions =
             "日本語の対戦アクションゲームに出演するプロ声優として、キャラクター本人になりきる。" +
-            "棒読みを避け、戦闘中の呼吸、感情の高まり、自然な間、声の強弱を使って臨場感豊かに演じる。";
+            "棒読みや単調な絶叫を避け、台詞の中に自然な抑揚の山、速度と声量の細かな変化、戦闘中の呼吸を作る。" +
+            "長い溜め、長い無音、母音の引き伸ばしはせず、一息で短く臨場感豊かに演じる。";
 
         static readonly string[] VoiceStyleOrder =
         {
@@ -168,10 +170,10 @@ namespace PromptFighters.Battle.Skills
             preset = ResolvePreset(voiceGender);
             if (string.IsNullOrWhiteSpace(instructions))
                 instructions = DefaultActingInstructions;
-            if (string.IsNullOrWhiteSpace(introLine))
-                introLine = !string.IsNullOrWhiteSpace(owner?.catchCopy)
-                    ? owner.catchCopy.Trim()
-                    : $"{owner?.characterName ?? "ファイター"}、参上！";
+            string introFallback = $"{owner?.characterName ?? "ファイター"}、参上！";
+            introLine = NormalizeBattleLine(
+                string.IsNullOrWhiteSpace(introLine) ? owner?.catchCopy : introLine,
+                introFallback);
 
             if (skillLines == null || skillLines.Length != 4)
             {
@@ -183,12 +185,34 @@ namespace PromptFighters.Battle.Skills
 
             for (int i = 0; i < skillLines.Length; i++)
             {
-                if (!string.IsNullOrWhiteSpace(skillLines[i])) continue;
                 string skillName = owner?.skills != null && i < owner.skills.Length
                     ? owner.skills[i]?.skill_name
                     : null;
-                skillLines[i] = string.IsNullOrWhiteSpace(skillName) ? "いくぞ！" : skillName;
+                skillLines[i] = NormalizeBattleLine(skillLines[i],
+                    string.IsNullOrWhiteSpace(skillName) ? "いくぞ！" : skillName);
             }
+        }
+
+        public static string NormalizeBattleLine(string value, string fallback = "いくぞ！")
+        {
+            string line = string.IsNullOrWhiteSpace(value) ? fallback : value;
+            line = string.Join(" ", (line ?? "").Replace('\r', ' ').Replace('\n', ' ')
+                .Split(new[] { ' ', '\t' }, System.StringSplitOptions.RemoveEmptyEntries)).Trim();
+            if (string.IsNullOrEmpty(line)) line = "いくぞ！";
+
+            // 長文が来ても、最初の自然な文末が短ければそこで言い切る。
+            int sentenceEnd = line.IndexOfAny(new[] { '。', '！', '!', '？', '?' });
+            if (sentenceEnd >= 0)
+            {
+                string sentence = line.Substring(0, sentenceEnd + 1).Trim();
+                if (new System.Globalization.StringInfo(sentence).LengthInTextElements <= MaxLineTextElements)
+                    line = sentence;
+            }
+
+            int[] elements = System.Globalization.StringInfo.ParseCombiningCharacters(line);
+            if (elements.Length > MaxLineTextElements)
+                line = line.Substring(0, elements[MaxLineTextElements]).TrimEnd(' ', '、', ',', '，', '・');
+            return string.IsNullOrWhiteSpace(line) ? "いくぞ！" : line;
         }
 
         public string BuildIdentityInstruction()
@@ -373,11 +397,11 @@ namespace PromptFighters.Battle.Skills
             {
                 StyleFierce => "密度のある荒々しい響き。語頭を鋭く立て、短い台詞へ爆発力と獣のような気迫を込める。喉は潰さない。",
                 StyleCool => "熱を内側へ抑えた硬質で端正な響き。無駄な揺れを抑え、静かな緊張と決め所の鋭さを出す。",
-                StyleMysterious => "丸みとほのかな息を含む神秘的な響き。意味のある間と滑らかな抑揚で、超然とした余韻を残す。",
+                StyleMysterious => "丸みとほのかな息を含む神秘的な響き。短い間と滑らかな抑揚で、語尾を自然に抜く。",
                 StyleCheerful => "前へよく抜ける明るい響き。軽快なテンポと弾む抑揚で、戦いを楽しむ生き生きした感情を出す。",
-                StyleElegant => "滑らかで磨かれた気品ある響き。明瞭な発音と優雅な間を保ち、力む瞬間も品格を失わない。",
-                StyleEccentric => "癖のある遊び心を持つ響き。予想外の間と抑揚の切り替えを使い、聞き取りやすさを保ったまま個性を際立たせる。",
-                StyleOminous => "陰影と圧のある重厚な響き。急がず言葉を置き、抑えた威圧から攻撃時だけ強烈な殺気を解放する。",
+                StyleElegant => "滑らかで磨かれた気品ある響き。明瞭な発音と短く優雅な間を保ち、力む瞬間も品格を失わない。",
+                StyleEccentric => "癖のある遊び心を持つ響き。ごく短いタイミング変化と抑揚の切り替えを使い、聞き取りやすさを保ったまま個性を際立たせる。",
+                StyleOminous => "陰影と圧のある重厚な響き。一息の中で抑えた威圧から強烈な殺気へ変化させ、長く引き伸ばさない。",
                 _ => "芯が通った開放的で勇壮な響き。明瞭な発音と大きな感情曲線で、覚悟と主人公らしい推進力を出す。",
             };
         }
@@ -397,11 +421,11 @@ namespace PromptFighters.Battle.Skills
                 0 => "子音を切れ味よく立てる",
                 1 => "母音を滑らかにつなぐ",
                 2 => "語尾を短く引き締める",
-                _ => "一語ごとの輪郭と余白を丁寧に作る",
+                _ => "一語ごとの輪郭を明瞭にし、語間は短く自然に保つ",
             };
             string dynamics = ((index / 16) % 4) switch
             {
-                0 => "静かな溜めから一気に解放する強弱",
+                0 => "短い緊張から即座に解放する強弱",
                 1 => "芯の強さを保ちながら段階的に熱量を上げる強弱",
                 2 => "短い台詞の中でも大胆に振幅する強弱",
                 _ => "抑えた緊張を保ち、最後の要語だけ強く打つ強弱",
