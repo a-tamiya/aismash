@@ -25,7 +25,7 @@ namespace PromptFighters.Battle
         public bool    IsWall { get; private set; }
 
         public const float MaxHP = 10f;
-        const int MaxPerOwner = 3; // 同一オーナーの同時召喚上限（無限展開の防止）
+        const int MaxPerOwner = 6; // 群れ技を表現できる上限。無限展開は防ぐ。
         float _hp = MaxHP;
 
         Rigidbody2D _rb;
@@ -71,7 +71,11 @@ namespace PromptFighters.Battle
             bool needsVerticalMotion = sourceAction != null && (
                 sourceAction.homing ||
                 sourceAction.direction == "diagonal" ||
-                sourceAction.direction == "hover");
+                sourceAction.direction == "diagonal_up" ||
+                sourceAction.direction == "diagonal_down" ||
+                sourceAction.direction == "hover" ||
+                sourceAction.direction == "up" || sourceAction.direction == "upward" ||
+                sourceAction.direction == "down" || sourceAction.direction == "downward");
 
             var rb = go.AddComponent<Rigidbody2D>();
             rb.gravityScale = 0f;
@@ -190,6 +194,7 @@ namespace PromptFighters.Battle
             _startX    = transform.position.x;
             _startY    = transform.position.y;
             _dir       = InitialDirection();
+            _vertDir   = InitialVerticalDirection();
             _baseScale = transform.localScale;
             if (_sr != null) _baseColor = _sr.color;
             if (IsWall) return;
@@ -257,6 +262,19 @@ namespace PromptFighters.Battle
                 return;
             }
 
+            // 落下召喚・地面からの突き上げ召喚。重力任せではなく速度を固定し、
+            // 象が頭上に停止する・虎が横へ出るといった方向の取り違えを防ぐ。
+            if (Direction == "down" || Direction == "downward")
+            {
+                _rb.linearVelocity = new Vector2(0f, -Speed);
+                return;
+            }
+            if (Direction == "up" || Direction == "upward")
+            {
+                _rb.linearVelocity = new Vector2(0f, Speed);
+                return;
+            }
+
             // 上下にホバリングしながら緩やかに横移動する（幽霊・浮遊物向け）。
             if (Direction == "hover")
             {
@@ -273,7 +291,7 @@ namespace PromptFighters.Battle
             }
 
             // 斜めに往復する（左右のパトロールに上下の往復を組み合わせる）。
-            if (Direction == "diagonal")
+            if (Direction == "diagonal" || Direction == "diagonal_up" || Direction == "diagonal_down")
             {
                 float distXDiag = transform.position.x - _startX;
                 if ((_dir > 0 && distXDiag > PatrolRange) || (_dir < 0 && distXDiag < -PatrolRange))
@@ -381,6 +399,12 @@ namespace PromptFighters.Battle
             if (Direction == "away_enemy" && Owner?.Opponent != null)
                 return -Mathf.Sign(Owner.Opponent.transform.position.x - transform.position.x);
             return Owner != null && !Owner.FacingRight ? -1f : 1f;
+        }
+
+        float InitialVerticalDirection()
+        {
+            if (Direction == "diagonal_down") return -1f;
+            return 1f;
         }
 
         Vector2 KnockbackVector(Fighter target)

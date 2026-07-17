@@ -610,7 +610,7 @@ namespace PromptFighters.AI
             bool vertical = PrefersVerticalEffect(skill);
             string shape =
                   HasAction(skill, "wall")        ? "solid destructible wall or block obstacle for a 2D fighting game, broad stable base, clear silhouette"
-                : HasAction(skill, "summon")      ? "summoned creature or minion sprite for a 2D fighting game skill, clear full body"
+                : HasAction(skill, "summon")      ? "one individual summoned creature or minion sprite for a 2D fighting game skill, clear full body, exactly one creature, no copies or flock"
                 : HasAction(skill, "beam")        ? "long horizontal 2D energy beam visual effect, bright core, no rectangular block"
                 : HasAction(skill, "gravity_well")? "large radial vortex and gravity well visual effect, deep spiral center with inward energy flow"
                 : HasAction(skill, "uppercut")    ? "tall rising uppercut streak effect, vertical swoosh with strong upward motion"

@@ -379,7 +379,7 @@ namespace PromptFighters.Battle.Skills
         static int PatternCountForTiming(SkillAction a)
         {
             if (a == null) return 1;
-            int maxCount = a.type == "projectile" ? 8 : 4;
+            int maxCount = a.type == "projectile" ? 10 : a.type == "summon" ? 6 : 4;
             int requested;
             if (a.pattern_count > 0) requested = a.pattern_count;
             else if ((a.type == "projectile" || a.type == "beam") && a.projectile_count > 1)
@@ -1977,19 +1977,28 @@ namespace PromptFighters.Battle.Skills
                 ? new Vector2(a.size_x > 0f ? a.size_x : 1.3f, a.size_y > 0f ? a.size_y : 1.7f)
                 : EstimateSummonSize(skill);
             Vector2 desiredSize = authoredSize * _sizeScale;
-            void SpawnNow()
+            int requestedCount = a.pattern_count > 0 ? a.pattern_count : 1;
+            bool hasSummonPattern = !string.IsNullOrEmpty(a.pattern) && a.pattern != "single";
+            var samples = hasSummonPattern || requestedCount > 1
+                ? BuildSpatialSamples(a, pos, new Vector2(dirSign, 0f), projectile: false, maxCount: 6)
+                : new List<SpatialSample> { new SpatialSample(pos, new Vector2(dirSign, 0f), 0f) };
+            float perSummonDamage = dmg / Mathf.Max(1, samples.Count);
+            foreach (var sample in samples)
             {
-                ShowImpactAtSpawn(skill);
-                SummonEntity.Spawn(_fighter, pos, speed, lifetime, dmg, kb, skill.element,
-                    a.hide_effect ? null : _fighter.GetEffectSprite(skill), desiredSize, a);
+                Vector2 summonPos = sample.position;
+                void SpawnNow()
+                {
+                    ShowImpactAtSpawn(skill);
+                    SummonEntity.Spawn(_fighter, summonPos, speed, lifetime, perSummonDamage, kb, skill.element,
+                        a.hide_effect ? null : _fighter.GetEffectSprite(skill), desiredSize, a);
+                }
+                bool remote = HasExplicitSpatialOrigin(a) && !string.IsNullOrEmpty(a.spawn_origin) && a.spawn_origin != "owner";
+                if (remote || a.telegraph_time > 0f)
+                    StartCoroutine(TelegraphThenSpawn(summonPos, desiredSize, sample.Angle, "box", skill.element,
+                        a.telegraph_time > 0f ? Mathf.Clamp(a.telegraph_time, 0.05f, 1.5f) : 0.4f, SpawnNow));
+                else
+                    SpawnNow();
             }
-
-            bool remoteOrigin = HasExplicitSpatialOrigin(a) && !string.IsNullOrEmpty(a.spawn_origin) && a.spawn_origin != "owner";
-            if (remoteOrigin || a.telegraph_time > 0f)
-                StartCoroutine(TelegraphThenSpawn(pos, desiredSize, 0f, "box", skill.element,
-                    a.telegraph_time > 0f ? Mathf.Clamp(a.telegraph_time, 0.05f, 1.5f) : 0.4f, SpawnNow));
-            else
-                SpawnNow();
         }
 
         // 旧JSONなどでsize_x/yが無い場合も、召喚物の名称・説明から体格を決める。

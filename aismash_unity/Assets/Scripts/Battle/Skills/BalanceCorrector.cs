@@ -268,7 +268,7 @@ namespace PromptFighters.Battle.Skills
                             a.status_duration = a.status == "stun"
                                 ? Mathf.Clamp(a.status_duration > 0f ? a.status_duration : 0.4f, 0.4f, 0.7f)
                                 : Mathf.Clamp(a.status_duration > 0f ? a.status_duration : 1.5f, 0.1f, 5f);
-                        if (a.power > 0f) a.power = Mathf.Clamp(a.power, 0.5f, 5f);
+                        if (a.power > 0f) a.power = Mathf.Clamp(a.power, 0.5f, 10f);
                         if (a.damage_override >= 0f)
                             a.damage_override = Mathf.Clamp(a.damage_override, 0f, totalMaxDmg * 0.6f);
                         // 召喚対象の体格を技ごとに表現する。極小使い魔〜大型獣まで許容しつつ、
@@ -384,7 +384,7 @@ namespace PromptFighters.Battle.Skills
                 a.aim_mode = "facing";
 
             a.rotation_angle = Mathf.Repeat(a.rotation_angle + 180f, 360f) - 180f;
-            int maxPatternCount = a.type == "projectile" ? 10 : 4;
+            int maxPatternCount = a.type == "projectile" ? 10 : a.type == "summon" ? 6 : 4;
             if (a.pattern_count != 0)
                 a.pattern_count = Mathf.Clamp(a.pattern_count, 1, maxPatternCount);
             if (a.pattern_spacing > 0f)

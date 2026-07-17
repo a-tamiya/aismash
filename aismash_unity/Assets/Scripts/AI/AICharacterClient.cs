@@ -605,7 +605,7 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
     ★ counter技のactionsにはcounterアクション1つだけを入れること。melee_hitboxやprojectileと混在させない（counterが反撃を自動処理するため不要）
   reflector: duration=反射受付秒(1.0〜3.0)。発動中は相手の飛び道具を速度・威力1.2倍で逆方向に反射する。攻撃判定は一切なし・反射のみ。ピンク色に光る。
     ★ reflector技のactionsにはreflectorアクション1つだけを入れること。melee_hitboxやprojectileと混在させない
-  summon: duration=召喚体の寿命(1〜6)、power=移動速度(0.5〜5)、spawn_x/y=出現位置、damage_override=接触ダメージ。size_xとsize_yは必須で、召喚物の実寸・当たり判定・表示サイズを同時に決める。小型使い魔/妖精/ドローン=0.55〜1.1×0.65〜1.4、通常の獣/兵士=1.2〜2.2×1.4〜2.8、大型獣/竜/ゴーレム=2.3〜4.0×2.8〜4.8。全召喚物を同じ大きさにしない。召喚するものの見た目はその技スロットのeffect画像として生成される前提で、skill_name/descriptionに召喚物の名前や形状を明確に含める。directionで移動方向を指定できる（forward/backward/left/right/toward_enemy/away_enemy/stationary/diagonal/hover）。diagonal=斜めに往復（跳ねる系・機動兵器向け）、hover=上下にホバリングしながら緩やかに横移動（幽霊・浮遊物向け）。player_controlled:trueならプレイヤーの左右入力で操縦。homing:trueなら敵を上下左右とも追尾する（鳥・使い魔・誘導ミサイル向け）。knockback_directionとstatus/status_duration/chanceも接触時に有効。recovery 0.10〜0.35（召喚直後すぐ動ける）
+  summon: duration=召喚体の寿命(1〜6)、power=移動速度(0.5〜10)、spawn_x/y=出現位置、damage_override=接触ダメージ。size_xとsize_yは必須で、召喚物の実寸・当たり判定・表示サイズを同時に決める。小型使い魔/妖精/ドローン=0.55〜1.1×0.65〜1.4、通常の獣/兵士=1.2〜2.2×1.4〜2.8、大型獣/竜/ゴーレム=2.3〜4.0×2.8〜4.8。全召喚物を同じ大きさにしない。召喚するものの見た目はその技スロットのeffect画像として生成される前提で、skill_name/descriptionに召喚物の名前や形状を明確に含める。画像は必ず「1体だけ」を描き、複数体・群れは実行時に複数エンティティとして生成する。directionで移動方向を指定できる（forward/backward/left/right/toward_enemy/away_enemy/stationary/diagonal/diagonal_up/diagonal_down/up/down/hover）。down=上空から真下へ落下、up=足元より下から真上へ突き上げ、diagonal_up/diagonal_down=前方へ斜め上/斜め下。player_controlled:trueならプレイヤーの左右入力で操縦。homing:trueなら敵を上下左右とも追尾する（鳥・使い魔・誘導ミサイル向け）。大量/群れ/複数/○頭はpatternとpattern_count(2〜6)を必ず指定し、実体をその数だけ出す。2体を交差させる時はsummon actionを2つ書き、片方direction:diagonal_up、もう片方direction:diagonal_down、spawn_yを正負に分ける。knockback_directionとstatus/status_duration/chanceも接触時に有効。recovery 0.10〜0.35（召喚直後すぐ動ける）
 - 【判定形状】shapeは判定とエフェクトの両方に同じ幾何形状として適用される:
   ""box""(四角/default)、""cone""(前方扇)、""ring""(塗りつぶし円)、""annulus""(ドーナツ。inner_radius=安全な内径)、""arc""(円弧。arc_angle=15〜330度)、""line""(方向つき直線)、""cross""(十字。inner_radius=腕の太さ)、""column""(縦柱)
   annulus/arcの外径はsize_x（なければrange）。見た目だけ広く判定だけ狭い指定は禁止。同じsize・回転で一致させること
@@ -628,6 +628,10 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
   斜めビーム→beam + aim_mode:""vector"", vector_x:1, vector_y:0.5。見た目と当たり判定も同じ角度になる
   画面端からの超巨大ビーム→smash_sideのbeam + spawn_origin:""left_edge""/""right_edge"", size_x/range:13〜16, telegraph_time:0.75〜1.1。画面を広く覆っても予告と後隙を必ず付ける
   前方に氷の壁→wall + spawn_anchor:""feet"", spawn_x:1.3, size_x:2.2, size_y:3.0, duration:4, power:24
+  大量の追尾カラス→summon + homing:true, pattern:""parallel"", pattern_count:6, size_x:0.7, size_y:0.8（カラスは画像で6羽描かず、実体を6体生成）
+  頭上から象を落とす→summon + spawn_origin:""enemy"", spawn_anchor:""head"", spawn_y:4, direction:""down"", power:8, size_x:3.2, size_y:3.8, telegraph_time:0.65
+  2頭のシロクマを上下から交差→summonを2 action。spawn_y:1.5+direction:""diagonal_down"" と spawn_y:-1.2+direction:""diagonal_up"" を同時刻に置く
+  下から上へ超巨大な虎→smash_sideのsummon + spawn_anchor:""feet"", spawn_y:-2, direction:""up"", power:9, size_x:3.8, size_y:4.6
   地面に順番に並ぶ罠→trap_hitbox + spawn_anchor:""feet"", pattern:""line"", pattern_count:4, pattern_spacing:1.2, burst_interval:0.12
 - 【派生技 follow_up_actions】必要な技だけスキルJSON最上位に追加:
   follow_up_actions: [...actionリスト...]  ← 同じボタンの追加入力で発動する派生アクション
