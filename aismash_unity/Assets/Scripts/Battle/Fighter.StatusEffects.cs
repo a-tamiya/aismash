@@ -39,10 +39,15 @@ namespace PromptFighters.Battle
             if (_guardDisabledTimer > 0f) outList.Add(new StatusChip("ガード封", _guardDisabledTimer, false));
             if (_sealedSlotTimer    > 0f) outList.Add(new StatusChip("技封印",   _sealedSlotTimer,    false));
             if (_chaosTimer         > 0f) outList.Add(new StatusChip("混乱",     _chaosTimer,         false));
+            if (_barrierReady)             outList.Add(new StatusChip("技無効", Mathf.Max(0f, _barrierExpireAt - Time.time), true));
         }
 
-        // バリアで吸収できる残りダメージ量（TakeDamage/TakeThrowで消費）。
-        float _barrierHP;
+        // バリアはHPを吸収する盾ではなく、次に受ける1つの技を完全に無効化する。
+        // 同一技の多段判定はSharedCast/Source IDで識別し、使った後もその技だけは無効化する。
+        bool _barrierReady;
+        int _barrierBlockedAttackId;
+        float _barrierBlockedUntil;
+        float _barrierExpireAt;
         Coroutine _barrierRoutine;
         GameObject _barrierAuraGo;
 
@@ -53,12 +58,15 @@ namespace PromptFighters.Battle
         {
             if (_barrierRoutine != null) StopCoroutine(_barrierRoutine);
             if (_barrierAuraGo != null) { Destroy(_barrierAuraGo); _barrierAuraGo = null; }
-            _barrierRoutine = StartCoroutine(BarrierRoutine(amount, duration));
+            _barrierReady = true;
+            _barrierBlockedAttackId = 0;
+            _barrierBlockedUntil = 0f;
+            _barrierExpireAt = Time.time + Mathf.Max(0.5f, duration);
+            _barrierRoutine = StartCoroutine(BarrierRoutine(duration));
         }
 
-        System.Collections.IEnumerator BarrierRoutine(float amount, float duration)
+        System.Collections.IEnumerator BarrierRoutine(float duration)
         {
-            _barrierHP = Mathf.Max(_barrierHP, amount);
             DamagePopup.SpawnText(transform.position + Vector3.up * 0.5f, "BARRIER!",
                 new Color(0.4f, 0.8f, 1f), 2.2f);
             BattleLogger.Instance?.LogEvent($"{PlayerLabel()}がバリア展開");
@@ -72,8 +80,8 @@ namespace PromptFighters.Battle
                 ? 1f / Mathf.Max(0.01f, auraSr.sprite.bounds.size.x)
                 : 1f;
             float elapsed = 0f;
-            // 効果中はオーラを表示。時間切れ or 吸収しきりで終了。
-            while (elapsed < duration && _barrierHP > 0f && State != FighterState.Dead)
+            // 効果中はオーラを表示。時間切れ・1技無効化・死亡で終了。
+            while (elapsed < duration && _barrierReady && State != FighterState.Dead)
             {
                 if (auraSr != null)
                 {
@@ -87,10 +95,28 @@ namespace PromptFighters.Battle
                 elapsed += Time.deltaTime;
                 yield return null;
             }
-            _barrierHP = 0f;
+            _barrierReady = false;
             if (aura != null) Destroy(aura);
             _barrierAuraGo = null;
             _barrierRoutine = null;
+        }
+
+        // trueならこの攻撃は完全に無効。技IDを渡すことで多段技・弾幕の残り判定も同じ技として消す。
+        bool TryNegateBarrierAttack(int attackId)
+        {
+            if (attackId != 0 && _barrierBlockedAttackId == attackId && Time.time <= _barrierBlockedUntil)
+                return true;
+            if (!_barrierReady) return false;
+
+            _barrierReady = false;
+            _barrierBlockedAttackId = attackId;
+            _barrierBlockedUntil = Time.time + 6f;
+            if (_barrierAuraGo != null) { Destroy(_barrierAuraGo); _barrierAuraGo = null; }
+            DamagePopup.SpawnText(transform.position + Vector3.up * 0.65f, "NULLIFY!",
+                new Color(0.4f, 0.9f, 1f), 2.0f);
+            SimpleFX.HitSpark(transform.position + Vector3.up * (0.9f * CurrentSizeScale), 0.9f);
+            BattleLogger.Instance?.LogEvent($"{PlayerLabel()}が技を無効化");
+            return true;
         }
 
         static Sprite _barrierAuraSprite;

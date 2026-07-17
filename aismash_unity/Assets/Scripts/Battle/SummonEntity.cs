@@ -22,6 +22,7 @@ namespace PromptFighters.Battle
         public StatusType Status = StatusType.None;
         public float   StatusDuration;
         public float   StatusChance = 1f;
+        public bool    IsWall { get; private set; }
 
         public const float MaxHP = 10f;
         const int MaxPerOwner = 3; // 同一オーナーの同時召喚上限（無限展開の防止）
@@ -128,6 +129,46 @@ namespace PromptFighters.Battle
             return s;
         }
 
+        // 地面に固定され、キャラや弾を遮る破壊可能な壁。寿命か耐久値で必ず消える。
+        public static SummonEntity SpawnWall(Fighter owner, Vector2 pos, float lifetime, float durability,
+                                             Sprite sprite = null, Vector2? desiredWorldSize = null)
+        {
+            var go = new GameObject("SkillWall");
+            go.transform.position = pos;
+            go.layer = owner.gameObject.layer;
+
+            var rb = go.AddComponent<Rigidbody2D>();
+            rb.bodyType = RigidbodyType2D.Static;
+            rb.simulated = true;
+
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = sprite != null ? sprite : RuntimeSprite.Square();
+            sr.color = sprite != null ? Color.white : new Color(0.55f, 0.78f, 1f, 0.92f);
+            sr.sortingOrder = 7;
+            Vector2 worldSize = desiredWorldSize ?? new Vector2(1.5f, 2.5f);
+            Vector2 spriteSize = sr.sprite != null
+                ? new Vector2(Mathf.Max(0.01f, sr.sprite.bounds.size.x), Mathf.Max(0.01f, sr.sprite.bounds.size.y))
+                : Vector2.one;
+            go.transform.localScale = new Vector3(worldSize.x / spriteSize.x, worldSize.y / spriteSize.y, 1f);
+
+            var col = go.AddComponent<BoxCollider2D>();
+            col.isTrigger = false;
+            col.size = spriteSize;
+            go.AddComponent<AngelWallPassable>(); // 回避中だけはすり抜け、閉じ込めを防ぐ。
+
+            var s = go.AddComponent<SummonEntity>();
+            s.Owner = owner;
+            s.IsWall = true;
+            s._hp = Mathf.Clamp(durability, 8f, 45f);
+            s._lifetime = Mathf.Clamp(lifetime, 1.2f, 7f);
+            s._baseScale = go.transform.localScale;
+            s._baseColor = sr.color;
+
+            s_active.RemoveAll(e => e == null);
+            s_active.Add(s);
+            return s;
+        }
+
         void Start()
         {
             _rb        = GetComponent<Rigidbody2D>();
@@ -137,6 +178,7 @@ namespace PromptFighters.Battle
             _dir       = InitialDirection();
             _baseScale = transform.localScale;
             if (_sr != null) _baseColor = _sr.color;
+            if (IsWall) return;
             _rb.linearVelocity = new Vector2(_dir * Speed, 0f);
         }
 
@@ -156,6 +198,8 @@ namespace PromptFighters.Battle
                 Destroy(gameObject);
                 return;
             }
+
+            if (IsWall) return;
 
             if (PlayerControlled && Owner != null)
             {
@@ -249,7 +293,7 @@ namespace PromptFighters.Battle
             float pop  = Mathf.Lerp(0.25f, 1f, 1f - (1f - popT) * (1f - popT));
 
             // 生き物らしいスクワッシュ＆ストレッチ（面積ほぼ一定の2D変形）
-            float wob = 0.04f * Mathf.Sin((_age + GetInstanceID() * 0.13f) * 7f);
+            float wob = IsWall ? 0f : 0.04f * Mathf.Sin((_age + GetInstanceID() * 0.13f) * 7f);
 
             // 寿命間際は縮みながらフェードアウト
             float outT   = Mathf.Clamp01((_lifetime - _age) / 0.35f);
@@ -263,7 +307,7 @@ namespace PromptFighters.Battle
             Color c = _baseColor;
             if (_flashTimer > 0f)
                 c = Color.Lerp(c, new Color(1f, 0.42f, 0.36f), Mathf.Clamp01(_flashTimer / 0.15f));
-            if (_hp <= MaxHP * 0.3f)
+            if (_hp <= (IsWall ? 45f : MaxHP) * 0.3f)
                 c.a *= 0.72f + 0.28f * Mathf.Sin(Time.time * 10f); // 破壊寸前の点滅
             c.a *= outT;
             _sr.color = c;
@@ -286,6 +330,7 @@ namespace PromptFighters.Battle
 
         void OnTriggerEnter2D(Collider2D other)
         {
+            if (IsWall) return;
             // ボイスボールへも攻撃を通す（陣営問わず誰でも殴れる中立物）。
             var voiceItem = other.GetComponentInParent<VoiceItem>();
             if (voiceItem != null)

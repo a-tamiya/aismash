@@ -12,7 +12,7 @@ namespace PromptFighters.Battle.Skills
         static readonly float[] MaxStartup    = { 0.12f, 0.18f, 0.22f, 0.32f };
         static readonly float[] MinRecovery   = { 0.10f, 0.16f, 0.24f, 0.18f };
         static readonly float[] MaxRecovery   = { 0.50f, 0.78f, 1.05f, 0.62f };
-        static readonly float[] MaxRange      = { 3.4f, 22f, 3.6f, 4.2f };
+        static readonly float[] MaxRange      = { 3.8f, 24f, 4.0f, 5.5f };
         static readonly float[] MinKnockback  = { 2.2f, 2.4f, 2.8f, 6f };  // 技ハメ防止のため最低限離す
         static readonly float[] MaxGuardDamage = { 2.0f, 2.6f, 2.8f, 5.0f };
 
@@ -112,7 +112,7 @@ namespace PromptFighters.Battle.Skills
 
             // 設置・召喚技: キャラのロックアウト時間はactive_timeを短く打ち切る
             // 実寿命は action.duration が担う
-            if (HasAction(skill, "trap_hitbox") || HasAction(skill, "summon"))
+            if (HasAction(skill, "trap_hitbox") || HasAction(skill, "summon") || HasAction(skill, "wall"))
                 p.active_time = Mathf.Min(p.active_time, 0.10f);
 
             // リフレクター技: startup+active+recovery=1.0秒ちょうどに固定し、
@@ -175,9 +175,9 @@ namespace PromptFighters.Battle.Skills
                     if (a.type == "melee_hitbox" || a.type == "body_hitbox" ||
                         a.type == "area_hitbox" || a.type == "trap_hitbox")
                     {
-                        a.range = Mathf.Clamp(a.range, 0f, 4.2f);
-                        if (a.size_x > 0f) a.size_x = Mathf.Clamp(a.size_x, 0.45f, 4.5f);
-                        if (a.size_y > 0f) a.size_y = Mathf.Clamp(a.size_y, 0.35f, 3.0f);
+                        a.range = Mathf.Clamp(a.range, 0f, 5.5f);
+                        if (a.size_x > 0f) a.size_x = Mathf.Clamp(a.size_x, 0.45f, 6.0f);
+                        if (a.size_y > 0f) a.size_y = Mathf.Clamp(a.size_y, 0.35f, 4.0f);
                     }
 
                     if (a.type == "projectile")
@@ -189,7 +189,7 @@ namespace PromptFighters.Battle.Skills
                         // 新フィールド
                         if (a.homing_strength != 0f) a.homing_strength = Mathf.Clamp01(a.homing_strength);
                         if (a.spread_angle > 0f)     a.spread_angle     = Mathf.Clamp(a.spread_angle, 5f, 60f);
-                        if (a.projectile_count > 5)  a.projectile_count = 5;
+                        if (a.projectile_count > 10) a.projectile_count = 10;
                         a.gravity_scale = Mathf.Clamp(a.gravity_scale, 0f, 3f);
                         // 拡張バリエーションのクランプ
                         a.explosion_radius = Mathf.Clamp(a.explosion_radius, 0f, 2.6f);
@@ -214,15 +214,26 @@ namespace PromptFighters.Battle.Skills
                             else
                                 p.damage = Mathf.Min(p.damage, perShotMax);
                         }
+                        if (a.projectile_count >= 6 || a.pattern_count >= 6)
+                        {
+                            p.recovery = Mathf.Max(p.recovery, 0.38f);
+                            a.homing_strength = Mathf.Min(a.homing_strength, 0.65f);
+                        }
                     }
 
                     if (a.type == "beam")
                     {
                         a.time = Mathf.Max(a.time, BeamStartupSeconds);
-                        if (a.size_x > 0f) a.size_x = Mathf.Clamp(a.size_x, 2f, 12f);
-                        if (a.size_y > 0f) a.size_y = Mathf.Clamp(a.size_y, 0.25f, 1.5f);
-                        a.range    = a.range > 0f ? Mathf.Clamp(a.range, 2f, 12f) : 0f;
+                        float maxBeamLength = skill.slot == SkillSlot.SmashSide ? 16f : 14f;
+                        if (a.size_x > 0f) a.size_x = Mathf.Clamp(a.size_x, 2f, maxBeamLength);
+                        if (a.size_y > 0f) a.size_y = Mathf.Clamp(a.size_y, 0.25f, 1.7f);
+                        a.range    = a.range > 0f ? Mathf.Clamp(a.range, 2f, maxBeamLength) : 0f;
                         a.duration = Mathf.Clamp(a.duration, 0f, 0.12f);
+                        if (a.size_x > 10f || a.range > 10f)
+                        {
+                            a.telegraph_time = Mathf.Max(a.telegraph_time, 0.75f);
+                            p.recovery = Mathf.Max(p.recovery, 0.45f);
+                        }
                     }
 
                     // dashのpowerに上限
@@ -265,7 +276,17 @@ namespace PromptFighters.Battle.Skills
                         if (a.size_y > 0f) a.size_y = Mathf.Clamp(a.size_y, 1.2f, 3.2f);
                     }
 
-                    // barrier: 吸収量・持続秒の上限。過大なシールドを防ぐ。
+                    // wall: 地面に固定する破壊可能な壁。powerは耐久、durationは寿命。
+                    if (a.type == "wall")
+                    {
+                        a.duration = Mathf.Clamp(a.duration > 0f ? a.duration : 3f, 1.2f, 7f);
+                        a.power = Mathf.Clamp(a.power > 0f ? a.power : 20f, 8f, 45f);
+                        a.size_x = Mathf.Clamp(a.size_x > 0f ? a.size_x : 1.6f, 0.8f, 4.8f);
+                        a.size_y = Mathf.Clamp(a.size_y > 0f ? a.size_y : 2.5f, 1.2f, 4.5f);
+                        if (string.IsNullOrEmpty(a.spawn_anchor)) a.spawn_anchor = "feet";
+                    }
+
+                    // barrier: 1技完全無効。powerは旧JSON互換のため残すが、耐久値には使わない。
                     if (a.type == "barrier")
                     {
                         if (a.power > 0f)    a.power    = Mathf.Clamp(a.power, 3f, 30f);
@@ -362,7 +383,7 @@ namespace PromptFighters.Battle.Skills
                 a.aim_mode = "facing";
 
             a.rotation_angle = Mathf.Repeat(a.rotation_angle + 180f, 360f) - 180f;
-            int maxPatternCount = a.type == "projectile" ? 8 : 4;
+            int maxPatternCount = a.type == "projectile" ? 10 : 4;
             if (a.pattern_count != 0)
                 a.pattern_count = Mathf.Clamp(a.pattern_count, 1, maxPatternCount);
             if (a.pattern_spacing > 0f)
@@ -398,7 +419,7 @@ namespace PromptFighters.Battle.Skills
         {
             return type == "melee_hitbox" || type == "body_hitbox" || type == "projectile" ||
                    type == "area_hitbox" || type == "trap_hitbox" || type == "beam" ||
-                   type == "lifesteal" || type == "summon";
+                   type == "lifesteal" || type == "summon" || type == "wall";
         }
 
         static string NormalizeToken(string value, HashSet<string> allowed)
@@ -475,7 +496,7 @@ namespace PromptFighters.Battle.Skills
         // 表記ヒット数まで当たり切らない。全段入る最低限の active_time を確保する。
         static void EnsureMultiHitActiveTime(SkillData skill)
         {
-            if (HasAction(skill, "trap_hitbox") || HasAction(skill, "summon")) return;
+            if (HasAction(skill, "trap_hitbox") || HasAction(skill, "summon") || HasAction(skill, "wall")) return;
             bool contact = HasAction(skill, "melee_hitbox") || HasAction(skill, "body_hitbox")
                         || HasAction(skill, "area_hitbox") || HasAction(skill, "jump_attack")
                         || HasAction(skill, "lifesteal") || HasAction(skill, "multi_hit")
@@ -592,6 +613,7 @@ namespace PromptFighters.Battle.Skills
                     case "beam":
                     case "jump_attack":
                     case "summon":
+                    case "wall":
                     case "counter":
                     case "reflector":
                     case "buff_self":

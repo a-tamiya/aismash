@@ -543,6 +543,8 @@ namespace PromptFighters.AI
                 action = "a committed forward-downward diving strike, entire body still safely inside frame";
             else if (HasAction(skill, "summon"))
                 action = "the completed summoning gesture, without drawing the summoned being or magic effect";
+            else if (HasAction(skill, "wall"))
+                action = "the completed groundward gesture that raises a physical wall, without drawing the wall itself";
             else if (HasAction(skill, "counter") || HasAction(skill, "reflector") || HasAction(skill, "barrier"))
                 action = "a strong completed defensive technique stance, without drawing a shield, aura, or barrier";
             else
@@ -569,6 +571,8 @@ namespace PromptFighters.AI
                 preparation = "aiming or gathering power before release, with the projectile or beam not created yet";
             else if (HasAction(skill, "summon"))
                 preparation = "beginning the summoning gesture before any creature or object appears";
+            else if (HasAction(skill, "wall"))
+                preparation = "planting their stance and directing power at the ground before a wall rises";
             else if (HasAction(skill, "counter") || HasAction(skill, "reflector") ||
                      HasAction(skill, "barrier") || HasAction(skill, "buff_self"))
                 preparation = "entering the technique stance before its defensive or empowering effect appears";
@@ -605,7 +609,8 @@ namespace PromptFighters.AI
         {
             bool vertical = PrefersVerticalEffect(skill);
             string shape =
-                  HasAction(skill, "summon")      ? "summoned creature or minion sprite for a 2D fighting game skill, clear full body"
+                  HasAction(skill, "wall")        ? "solid destructible wall or block obstacle for a 2D fighting game, broad stable base, clear silhouette"
+                : HasAction(skill, "summon")      ? "summoned creature or minion sprite for a 2D fighting game skill, clear full body"
                 : HasAction(skill, "beam")        ? "long horizontal 2D energy beam visual effect, bright core, no rectangular block"
                 : HasAction(skill, "gravity_well")? "large radial vortex and gravity well visual effect, deep spiral center with inward energy flow"
                 : HasAction(skill, "uppercut")    ? "tall rising uppercut streak effect, vertical swoosh with strong upward motion"
@@ -647,7 +652,7 @@ namespace PromptFighters.AI
         static bool ActionUsesSeparateEffect(SkillAction a)
         {
             if (a == null || a.hide_effect) return false;
-            return a.type == "projectile" || a.type == "area_hitbox" || a.type == "trap_hitbox" ||
+            return a.type == "projectile" || a.type == "area_hitbox" || a.type == "trap_hitbox" || a.type == "wall" ||
                    a.type == "summon" || a.type == "beam" || a.type == "melee_hitbox" ||
                    a.type == "jump_attack" || a.type == "dash+melee_hitbox" || a.type == "multi_hit" ||
                    a.type == "gravity_well" || a.type == "lifesteal" || a.type == "shockwave" ||

@@ -565,7 +565,7 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
 - range: 近距離hitbox 0.7〜3.6、遠距離弾 5〜22
 - knockback: attack_a/b 2〜10、attack_c 3〜12、smash_side 7〜16
 - guard_damage: attack_a 0.5〜2.0、attack_b 0.8〜2.6、attack_c 0.8〜2.8、smash_side 2.0〜5.0
-- action type: melee_hitbox/body_hitbox/projectile/area_hitbox/trap_hitbox/beam/dash/jump_attack/uppercut/dive_attack/push_enemy/pull_enemy/apply_status/buff_self/teleport/delay/summon/counter/reflector/command_throw/shockwave/gravity_well/lifesteal/heal_self/barrier
+- action type: melee_hitbox/body_hitbox/projectile/area_hitbox/trap_hitbox/beam/dash/jump_attack/uppercut/dive_attack/push_enemy/pull_enemy/apply_status/buff_self/teleport/delay/summon/wall/counter/reflector/command_throw/shockwave/gravity_well/lifesteal/heal_self/barrier
 - 各技のactionsは空にしない。attack_a/attack_b/attack_c/smash_sideは必ず1つ以上、実際に攻撃・接触・召喚・防御反応などゲーム内効果が起きるactionを入れる
 - delay単体、dash単体、teleport単体、apply_status単体、push_enemy単体、pull_enemy単体だけの技は禁止。使う場合はmelee_hitbox/body_hitbox/projectile/area_hitbox/trap_hitbox/beam/jump_attack/summon/counter/reflectorのいずれかと組み合わせる
 - body_hitbox: キャラ自身に判定。follow_owner/hide_effect自動。spawn_x=0でキャラ中心(スピン・全身)、spawn_x>0で前方張り出し。size_y 1.4〜2.2で全身カバー
@@ -581,7 +581,7 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
   projectile_angle: 発射角度(度数)。0=水平(default)、45=斜め上、-45=斜め下、90=真上(間欠泉)、-90=真下(落石・隕石)
   homing: true=追尾弾。homing_strength 0〜1（追尾の曲がりやすさ、default 0.5）
   boomerang: true=ブーメラン（中間点で折り返す）
-  projectile_count: 1〜5発（散弾・扇形）。spread_angle: 発射間の角度(5〜60、default 15)
+  projectile_count: 1〜10発（散弾・扇形）。6発以上は1発ごとの威力を低くし、recoveryを0.38以上にする。spread_angle: 発射間の角度(5〜60、default 15)
   gravity_scale: 0=無重力(default)、1〜2=重力あり（山なり弾・落下弾）
   explosion_radius: 0.8〜2.6=着弾点で爆発する範囲ダメージ弾（ミサイル・爆弾・砲撃向け。直撃ダメージは爆発に一本化される）
   bounce_count: 1〜4=地面や壁で跳ね返る跳弾（ボール・岩・ゴム系。gravity_scale 1〜2と相性が良い）
@@ -617,7 +617,7 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
   aim_mode:""vector""ではvector_x/vector_y(-1〜1)を必須。rotation_angle(-180〜180度)で判定・エフェクト・弾道をまとめて追加回転できる
 - 【配置パターン】projectile/area_hitbox/trap_hitbox/beamにpatternを使える:
   ""single""/""fan""(扇射)/""parallel""(平行)/""radial""(外向き円周)/""inward""(円周から中心へ)/""mirrored""(左右対称)/""line""(一直線に複数配置)
-  pattern_countはprojectileなら1〜8、area/trap/beamなら1〜4。pattern_spacing 0.2〜3、pattern_radius 0.5〜6、burst_interval 0〜0.5秒
+  pattern_countはprojectileなら1〜10、area/trap/beamなら1〜4。pattern_spacing 0.2〜3、pattern_radius 0.5〜6、burst_interval 0〜0.5秒
   複数配置は同じ1回の技として扱われ、重なった判定で同じ相手へ不自然な多重ヒットを起こさない。多段にしたい場合だけhit_countを使う
 - 【予告と公平性】enemy/midpoint/stage_center/edge起点の攻撃はtelegraph_timeを0.4〜1.2秒指定する。予告は実際の位置・形・角度・範囲と完全一致するため、広い技ほど長くする
 - 【空間技の作例】キャラ性に合うものだけ選び、4枠すべてを多発弾にしない:
@@ -626,6 +626,8 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
   四方から中心へ収束する弾→spawn_origin:""midpoint"", pattern:""inward"", pattern_count:4, pattern_radius:5, telegraph_time:0.6
   前後同時の斬撃→spawn_origin:""owner"", pattern:""mirrored"", spawn_anchor:""weapon_tip""
   斜めビーム→beam + aim_mode:""vector"", vector_x:1, vector_y:0.5。見た目と当たり判定も同じ角度になる
+  画面端からの超巨大ビーム→smash_sideのbeam + spawn_origin:""left_edge""/""right_edge"", size_x/range:13〜16, telegraph_time:0.75〜1.1。画面を広く覆っても予告と後隙を必ず付ける
+  前方に氷の壁→wall + spawn_anchor:""feet"", spawn_x:1.3, size_x:2.2, size_y:3.0, duration:4, power:24
   地面に順番に並ぶ罠→trap_hitbox + spawn_anchor:""feet"", pattern:""line"", pattern_count:4, pattern_spacing:1.2, burst_interval:0.12
 - 【派生技 follow_up_actions】必要な技だけスキルJSON最上位に追加:
   follow_up_actions: [...actionリスト...]  ← 同じボタンの追加入力で発動する派生アクション
@@ -649,7 +651,8 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
   gravity_well: 一定時間、指定地点へ相手を継続的に引き寄せる重力場（攻撃判定なし）。spawn_x/y=中心位置、range=引き寄せ半径(2.5〜5)、power=引き寄せ力(8〜30)、duration=持続(0.8〜2.0)。単体では削れないので、projectile/area_hitboxやcommand_throwと別スロットで組み合わせてコンボの起点にする。
   lifesteal: 与えたダメージの一部を自分のHPに回復する近接技。melee_hitboxと同じパラメータ＋lifesteal_ratio(0.2〜0.4、与ダメージの回復割合。未指定なら0.3)。吸血鬼・闇属性・持久キャラ向け。dark属性と相性良い。
   heal_self: 自分のHPを回復する。power=回復HP量(未指定なら最大HPの5%)。攻撃判定なし。持久・回復役キャラ向け。startup/recoveryは長めにして隙を作る。
-  barrier: 自己バフ。一定量のダメージを吸収するシールドを張る。power=吸収量(未指定10)、duration=持続秒(未指定3)。攻撃判定なし・発動後すぐ動ける防御技。recoveryは通常攻撃並み(0.12〜0.35)にして連発できないよう注意。防御・タンク型キャラ向け。
+  barrier: 自己バフ。持続中に受ける「次の1技」をダメージ・ノックバック・状態異常ごと完全に無効化する。HP吸収型ではない。多段技・弾幕は同じ技として残り判定も無効。powerは指定不要、duration=持続秒(未指定3)。攻撃判定なし・発動後すぐ動ける防御技。recoveryは通常攻撃並み(0.12〜0.35)にして連発できないよう注意。
+  wall: 地面に固定する物理的な壁・ブロック・氷山・岩壁。キャラと飛び道具を遮り、攻撃を受けると壊れる。duration=寿命(1.2〜7秒)、power=耐久(8〜45)、size_x=横幅(0.8〜4.8)、size_y=高さ(1.2〜4.5)、spawn_x/y=設置位置。壁そのものに即時ダメージ判定は付けない。遠隔設置はtelegraph_time 0.4以上。壁・ブロック・障害物・氷山・岩壁が特徴文に明記されたら、summon/trapへの置換は禁止しwallを必ず使う。
   uppercut: 昇竜系の対空技。power=上昇力(6〜12)。上昇しながら体に追従する判定で相手を巻き込み、真上へ打ち上げる（knockback_direction省略時""up""）。打ち上げからの追撃コンボの起点や、接近された時の切り返しに使う。startupは小さめ(0.04〜0.10)・外した時のrecoveryは長め(0.35〜0.55)にして昇竜らしいリスクリターンを作る。竜・拳法家・炎系と相性が良い。
   dive_attack: 急降下攻撃。power=降下力(6〜14)。斜め前下方向へ突っ込み、着地の瞬間に左右へ小さな衝撃波が出る。地上で使うと小さく跳び上がってから急降下する。鳥・隕石・ヒーロー着地・重量級の奇襲に使う。smash_sideに使ってもよい。
   ※ command_throw/heal_self/barrier/gravity_well は攻撃判定が無い/特殊なので、smash_sideには入れない（smash_sideは必ず直接攻撃技）。lifesteal/shockwave/uppercut/dive_attackはsmash_sideに使ってよい。

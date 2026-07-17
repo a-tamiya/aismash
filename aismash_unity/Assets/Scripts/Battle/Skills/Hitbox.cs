@@ -824,7 +824,8 @@ namespace PromptFighters.Battle.Skills
             }
             var kb = new Vector2(dir * KnockbackDir.x, KnockbackDir.y);
 
-            target.TakeDamage(Damage, Knockback, kb, StunTime, GuardDamage, !DamageIncludesOwnerBoost);
+            int attackId = SharedCastId != 0 ? SharedCastId : SharedSourceId;
+            target.TakeDamage(Damage, Knockback, kb, StunTime, GuardDamage, !DamageIncludesOwnerBoost, attackId);
             if (GroundBounce) target.StartGroundBounce(Knockback * 0.75f);
 
             // 属性色つきヒットスパークを「接触点」に出す（体の中心ではなく当たった場所で光らせる）

@@ -575,7 +575,7 @@ namespace PromptFighters.Battle
                 else if (_guardDisabled         )  c = Color.Lerp(GuardDisableColor,Color.white, (Mathf.Sin(Time.time * 10f) + 1f) * 0.3f);
                 else if (_sealedSlot >= 0       )  c = Color.Lerp(SealColor,        Color.white, (Mathf.Sin(Time.time * 8f)  + 1f) * 0.3f);
                 else if (_hpShareTimer     > 0f)   c = Color.Lerp(HPShareColor,     Color.white, (Mathf.Sin(Time.time * 6f)  + 1f) * 0.3f);
-                else if (_barrierHP        > 0f)   c = Color.Lerp(new Color(0.4f, 0.8f, 1f), Color.white, (Mathf.Sin(Time.time * 7f) + 1f) * 0.3f);
+                else if (_barrierReady)            c = Color.Lerp(new Color(0.4f, 0.8f, 1f), Color.white, (Mathf.Sin(Time.time * 7f) + 1f) * 0.3f);
             }
 
             _sprite.color = WithDebugAlpha(c);
@@ -741,13 +741,15 @@ namespace PromptFighters.Battle
         public void TakeDamage(float damage, float knockbackForce = 0f,
                                Vector2 knockbackDir = default, float stunDuration = 0f,
                                float guardDamage = 0f,
-                               bool applyOpponentDamageBoost = true)
+                               bool applyOpponentDamageBoost = true, int attackId = 0)
         {
             if (State == FighterState.Dead) return;
             if (IsDowned) return; // ダウン中は被ダメージ無効（復活待ち）
             if (State == FighterState.Dodging || _dodgeTimer > 0f) return;
             if (_grabbedBy != null) return;
             if (IsInvincible) return;
+
+            if (TryNegateBarrierAttack(attackId)) return;
 
             if (IsCountering && Opponent != null && !Opponent.IsCountering)
             {
@@ -772,7 +774,6 @@ namespace PromptFighters.Battle
             // 防御力バフ/デバフ：食らう攻撃を固定倍率で調整（0.7=防御up / 1.3=防御down）。
             damage *= DefenseMultiplier;
             float actual  = blocking ? Mathf.Max(0f, damage * guardDamageRatio) : damage;
-            actual        = AbsorbBarrier(actual);
             CurrentHP     = Mathf.Max(0f, CurrentHP - actual);
             OnHPChanged?.Invoke(CurrentHP, maxHP);
             // HP共有: 受けたダメージの50%を相手にも伝播（再帰防止）
@@ -885,12 +886,11 @@ namespace PromptFighters.Battle
         }
 
         // ガード不能の確定ダメージ（command_throw 用）。投げ扱いでガードを貫通する。
-        public void TakeThrow(float damage, float knockbackForce, Vector2 knockbackDir, float stun)
+        public void TakeThrow(float damage, float knockbackForce, Vector2 knockbackDir, float stun, int attackId = 0)
         {
             if (State == FighterState.Dead || State == FighterState.Dodging || _dodgeTimer > 0f) return;
             if (IsInvincible) return;
-
-            damage = AbsorbBarrier(damage);
+            if (TryNegateBarrierAttack(attackId)) return;
             CurrentHP = Mathf.Max(0f, CurrentHP - damage);
             OnHPChanged?.Invoke(CurrentHP, maxHP);
             if (State == FighterState.Guarding) State = FighterState.Idle;
@@ -913,15 +913,6 @@ namespace PromptFighters.Battle
             if (CurrentHP <= 0f) KillOrDown();
         }
 
-        // バリアでダメージを吸収し、残りダメージを返す。
-        float AbsorbBarrier(float dmg)
-        {
-            if (_barrierHP <= 0f || dmg <= 0f) return dmg;
-            float absorbed = Mathf.Min(_barrierHP, dmg);
-            _barrierHP -= absorbed;
-            DamagePopup.SpawnText(transform.position, "BARRIER", new Color(0.4f, 0.8f, 1f), 1.4f);
-            return dmg - absorbed;
-        }
 
         public void ShowSkillSprite(SkillSlot slot, float seconds)
         {

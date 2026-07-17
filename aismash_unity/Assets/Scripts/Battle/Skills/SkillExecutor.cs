@@ -840,7 +840,7 @@ namespace PromptFighters.Battle.Skills
                 : a.arc_angle > 0f ? Mathf.Clamp(a.arc_angle, 1f, 360f) : 90f;
             hb.SpatialCrossThickness = Mathf.Max(0f, a.inner_radius) * _sizeScale * HitboxVisualScale;
             hb.SharedCastId = castId;
-            hb.SharedSourceId = castId != 0 ? SkillCastHitRegistry.NextSourceId() : 0;
+            hb.SharedSourceId = SkillCastHitRegistry.NextSourceId();
             hb.SharedHitLockSeconds = PatternHitLockSeconds(a);
             hb.SpatialKnockbackMode = a.knockback_direction;
             hb.SpatialKnockbackOrigin = hb.transform.position;
@@ -893,6 +893,7 @@ namespace PromptFighters.Battle.Skills
                 ["reflector"]          = (skill, a, pm) => DoReflector(a),
                 ["counter"]            = (skill, a, pm) => DoCounter(a),
                 ["summon"]             = SpawnSummon,
+                ["wall"]               = SpawnWall,
                 ["apply_status"]       = (skill, a, pm) => ApplyOpponentStatus(a),
                 ["heal_self"]          = (skill, a, pm) => HealSelf(a),
                 ["barrier"]            = (skill, a, pm) => DoBarrier(a),
@@ -1561,7 +1562,7 @@ namespace PromptFighters.Battle.Skills
                 (a.size_y > 0f ? a.size_y : 1.05f) * HitboxVisualScale * _sizeScale);
             var (kbDir, kbFixed) = ComputeKnockback(a, 1f, 0.3f);
 
-            var samples = BuildSpatialSamples(a, spawn, baseDirection, projectile: true, maxCount: 8,
+            var samples = BuildSpatialSamples(a, spawn, baseDirection, projectile: true, maxCount: 10,
                 worldFootprint: desiredSize);
             int castId = CreatePatternCastId(a);
             for (int i = 0; i < samples.Count; i++)
@@ -1598,7 +1599,7 @@ namespace PromptFighters.Battle.Skills
                     p.SplitCount               = a.split_count;
                     p.SplitAngle               = a.split_angle > 0f ? a.split_angle : 30f;
                     p.SharedCastId             = castId;
-                    p.SharedSourceId           = castId != 0 ? SkillCastHitRegistry.NextSourceId() : 0;
+                    p.SharedSourceId           = SkillCastHitRegistry.NextSourceId();
                     p.SharedHitLockSeconds     = PatternHitLockSeconds(a);
                     p.SpatialKnockbackMode     = a.knockback_direction;
                     p.SpatialKnockbackOrigin   = sample.position;
@@ -1990,6 +1991,37 @@ namespace PromptFighters.Battle.Skills
                 SpawnNow();
         }
 
+        // wall: 通行を遮る、時間・耐久で消える設置壁。攻撃判定を持たないため理不尽な即時ダメージは発生しない。
+        void SpawnWall(SkillData skill, SkillAction a, float powerMultiplier)
+        {
+            float dirSign = _fighter.FacingRight ? 1f : -1f;
+            float width = (a.size_x > 0f ? a.size_x : 1.6f) * _sizeScale;
+            float height = (a.size_y > 0f ? a.size_y : 2.5f) * _sizeScale;
+            float offsetX = a.spawn_x > 0f ? a.spawn_x : 1.35f;
+            Vector2 pos = HasExplicitSpatialOrigin(a)
+                ? ResolveSpatialOrigin(skill, a)
+                : (Vector2)_fighter.transform.position + new Vector2(dirSign * offsetX * _sizeScale, 0f);
+            var bm = BattleManager.Instance;
+            float groundY = bm != null ? bm.StageGroundY : pos.y - height * 0.5f;
+            pos.y = groundY + height * 0.5f;
+            if (bm != null)
+                pos.x = Mathf.Clamp(pos.x, bm.StageMinX + width * 0.5f + 0.15f, bm.StageMaxX - width * 0.5f - 0.15f);
+            float lifetime = a.duration > 0f ? a.duration : 3f;
+            float durability = a.power > 0f ? a.power : 20f;
+            Vector2 size = new Vector2(width, height);
+            void SpawnNow()
+            {
+                ShowImpactAtSpawn(skill);
+                SummonEntity.SpawnWall(_fighter, pos, lifetime, durability,
+                    a.hide_effect ? null : _fighter.GetEffectSprite(skill), size);
+            }
+            bool remote = HasExplicitSpatialOrigin(a) && !string.IsNullOrEmpty(a.spawn_origin) && a.spawn_origin != "owner";
+            if (remote || a.telegraph_time > 0f)
+                StartCoroutine(TelegraphThenSpawn(pos, size, 0f, "box", skill.element,
+                    a.telegraph_time > 0f ? Mathf.Clamp(a.telegraph_time, 0.2f, 1.5f) : 0.45f, SpawnNow));
+            else SpawnNow();
+        }
+
         // heal_self: HP回復。power=回復量(HP)。未指定なら最大HPの5%。
         void HealSelf(SkillAction a)
         {
@@ -1997,13 +2029,12 @@ namespace PromptFighters.Battle.Skills
             _fighter.Heal(amount);
         }
 
-        // barrier: 自己バフ。一定量を吸収するシールドを張る。power=吸収量、duration=持続秒。
+        // barrier: 次に受ける1技を完全無効化する。powerは互換用に受け取るが耐久値には使わない。
         // コルーチンで張るだけなので発動者はすぐ動ける（後隙は技のrecoveryで制御）。
         void DoBarrier(SkillAction a)
         {
-            float amount   = a.power > 0f ? a.power : 10f;
             float duration = a.duration > 0f ? a.duration : 3f;
-            _fighter.StartBarrier(amount, duration);
+            _fighter.StartBarrier(1f, duration);
         }
 
         // command_throw: 範囲内の相手を掴み→引き寄せ→ガード不能の投げで締める（ワイヤー投げ）。

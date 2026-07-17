@@ -655,7 +655,7 @@ namespace PromptFighters.Battle.Skills
                 if (_boomerangHitSet == null) _boomerangHitSet = new HashSet<Fighter>();
                 if (_boomerangHitSet.Contains(target)) return;
                 _boomerangHitSet.Add(target);
-                target.TakeDamage(Damage, Knockback, kb, StunTime, GuardDamage, !DamageIncludesOwnerBoost);
+                target.TakeDamage(Damage, Knockback, kb, StunTime, GuardDamage, !DamageIncludesOwnerBoost, SharedCastId != 0 ? SharedCastId : SharedSourceId);
                 if (GroundBounce) target.StartGroundBounce(Knockback * 0.75f);
                 if (Status != StatusType.None && Random.value <= StatusChance)
                     target.ApplyStatus(Status, StatusDuration);
@@ -668,7 +668,7 @@ namespace PromptFighters.Battle.Skills
                 if (_boomerangHitSet == null) _boomerangHitSet = new HashSet<Fighter>();
                 if (_boomerangHitSet.Contains(target)) return;
                 _boomerangHitSet.Add(target);
-                target.TakeDamage(Damage, Knockback, kb, StunTime, GuardDamage, !DamageIncludesOwnerBoost);
+                target.TakeDamage(Damage, Knockback, kb, StunTime, GuardDamage, !DamageIncludesOwnerBoost, SharedCastId != 0 ? SharedCastId : SharedSourceId);
                 if (GroundBounce) target.StartGroundBounce(Knockback * 0.75f);
                 if (Status != StatusType.None && Random.value <= StatusChance)
                     target.ApplyStatus(Status, StatusDuration);
@@ -676,7 +676,7 @@ namespace PromptFighters.Battle.Skills
             }
             else
             {
-                target.TakeDamage(Damage, Knockback, kb, StunTime, GuardDamage, !DamageIncludesOwnerBoost);
+                target.TakeDamage(Damage, Knockback, kb, StunTime, GuardDamage, !DamageIncludesOwnerBoost, SharedCastId != 0 ? SharedCastId : SharedSourceId);
                 if (GroundBounce) target.StartGroundBounce(Knockback * 0.75f);
                 if (Status != StatusType.None && Random.value <= StatusChance)
                     target.ApplyStatus(Status, StatusDuration);
