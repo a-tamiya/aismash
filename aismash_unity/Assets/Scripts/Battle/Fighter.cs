@@ -273,22 +273,28 @@ namespace PromptFighters.Battle
             bool onGroundLayer = groundCheck != null &&
                 Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
             bool onPlatform = false;
+            bool onSkillWallTop = false;
             if (!onGroundLayer)
             {
-                // 台（ステージ固定）に加え、生成した足場（PlatformEffector2D=ワンウェイ）にも乗れるよう
-                // 上向き接触かつエフェクター利用コライダ全般を接地として扱う。
+                // 台（ステージ固定）に加え、生成した足場（PlatformEffector2D=ワンウェイ）や
+                // 技で生成したブロックの上面にも乗れるよう、上向き接触を接地として扱う。
                 var platCols = BattleManager.Instance?.PlatformSpawner?.GetColliders();
                 int cnt = _rb.GetContacts(_contactBuf);
-                for (int i = 0; i < cnt && !onPlatform; i++)
+                for (int i = 0; i < cnt && !onPlatform && !onSkillWallTop; i++)
                 {
                     if (_contactBuf[i].normal.y <= 0.5f) continue;
                     var c = _contactBuf[i].collider;
                     if (c == null) continue;
                     if (c.usedByEffector || (platCols != null && platCols.Contains(c)))
                         onPlatform = true;
+                    // SkillWallは通常の物理壁なので、groundLayerやPlatformEffectorには含まれない。
+                    // ただし上面からの接触だけを接地扱いにして、側面接触での空中ジャンプは防ぐ。
+                    var summon = c.GetComponentInParent<SummonEntity>();
+                    if (summon != null && summon.IsWall)
+                        onSkillWallTop = true;
                 }
             }
-            IsGrounded = (onGroundLayer || onPlatform) &&
+            IsGrounded = (onGroundLayer || onPlatform || onSkillWallTop) &&
                 _rb.linearVelocity.y <= 1.0f; // 上昇中は台をすり抜けるため接地判定しない
             if (!wasGrounded && IsGrounded && BattleManager.Instance != null && BattleManager.Instance.IsFighting)
             {

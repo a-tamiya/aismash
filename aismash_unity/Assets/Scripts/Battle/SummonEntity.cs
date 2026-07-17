@@ -45,6 +45,18 @@ namespace PromptFighters.Battle
 
         // 生存中の全召喚体（オーナーごとの数の上限管理用）
         static readonly List<SummonEntity> s_active = new List<SummonEntity>();
+        static PhysicsMaterial2D s_wallNoFriction;
+
+        static PhysicsMaterial2D WallNoFriction()
+        {
+            if (s_wallNoFriction != null) return s_wallNoFriction;
+            s_wallNoFriction = new PhysicsMaterial2D("SkillWallNoFriction")
+            {
+                friction = 0f,
+                bounciness = 0f,
+            };
+            return s_wallNoFriction;
+        }
 
         public static SummonEntity Spawn(Fighter owner, Vector2 pos, float speed, float lifetime,
                                          float damage, float knockback, Element element,
@@ -154,6 +166,8 @@ namespace PromptFighters.Battle
             var col = go.AddComponent<BoxCollider2D>();
             col.isTrigger = false;
             col.size = spriteSize;
+            // 横入力で壁に押し付けても摩擦で落下が止まらないようにする。
+            col.sharedMaterial = WallNoFriction();
             go.AddComponent<AngelWallPassable>(); // 回避中だけはすり抜け、閉じ込めを防ぐ。
 
             var s = go.AddComponent<SummonEntity>();
