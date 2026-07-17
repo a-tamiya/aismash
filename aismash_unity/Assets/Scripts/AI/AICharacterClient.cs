@@ -489,7 +489,7 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
 ■ 反映の鉄則
 - 【明示要素＝必須反映】特徴文に明示された武器・属性・戦法・固有技名・数量は、必ずいずれかの技/ステータスに反映する。省略・別物への置換は禁止（「弓使い」なのに全近接、「炎」なのにphysicalのみ、等は不可）。
 - 固有の技名・必殺技名が書かれていたら、その名前をそのまま skill_name に使う（必殺技は smash_side を優先）。挙動もその名前に合うように組む。
-- 数量・程度は数値に翻訳する。例:「3体の使い魔」→summonで複数/player_controlled、「二刀流」→2hitや多段、「最速」→移動stats上限付近、「超火力の一撃」→hit_count=1・damage大。
+- 数量・程度は数値に翻訳する。例:「3体の使い魔」→summonのpattern_count:3、「二刀流」→2hitや多段、「最速」→移動stats上限付近、「超火力の一撃」→hit_count=1・damage大。
 - 口調・性格・世界観は catch_copy、各 description、voice_profile に反映する（戦闘挙動だけでなく雰囲気も「思い描いたキャラ」に寄せる）。
 - voice_profile は日本語の短い戦闘ボイスとして作る。intro_lineは登場台詞、skill_linesはattack_a/attack_b/attack_c/smash_sideの順で必ず4件。各台詞は2〜12文字程度、一息で言い切れる長さとし、技名を叫ぶだけでもよい。voice_genderはmale/female/neutral、voice_ageはchild/teen/young_adult/adult/senior/ageless、voice_pitchはlow/medium/high、voice_styleはheroic/fierce/cool/mysterious/cheerful/elegant/eccentric/ominousから、性格と世界観に最も合うものを選ぶ。特徴文に性別・年齢・声の高さが明示されていれば必ず一致させ、外見だけを根拠に変更しない。音声presetと個体差番号はコード側で決定するため出力しない。instructionsには性別・年齢・ピッチの再指定を入れず、キャラ固有の話速、感情、息遣い、間、声量変化、登場時と必殺技時の演技の方向性を具体的に含める。棒読み・単調な絶叫・長い溜め・長い無音・母音の引き伸ばしは指示せず、短い台詞の中に自然な抑揚の山と速度・強弱の変化を作る。
 - 【連想拡張は補助】明示が薄い・短い入力のときだけ、その語から連想を広げて4枠を肉付けする。明示要素を上書きしてはならない。
@@ -529,7 +529,7 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
 - 下記のアーキタイプ例を参考に、特徴から最も近いものを選び、その骨格で組む（複数混合も可）。例に無い独自構成も歓迎:
   ・ラッシュ/連撃: 近接中心＋follow_up_actionsを1〜2枠
   ・カウンター/受け: counter or reflectorを1枠＋確定反撃用の近接技
-  ・召喚/使い魔: summonを1〜2枠（player_controlled/homing/direction:diagonal・hoverで軌道に個性付け）＋自衛の近接1枠
+  ・召喚/使い魔: 通常はsummonを1〜3枠（操作・追尾・編隊・周回・波状・落下で役割を分ける）。「全て召喚」「4技すべて召喚獣」等の明示があれば4枠すべて必ずsummonにし、近接等へ置換しない
   ・トリックスター/瞬間移動: teleport＋area_hitbox(ring)＋設置や攪乱
   ・砲撃/狙撃: charge付きprojectile/beam＋落下弾(spawn_y高め)＋牽制trap
   ・重量/パワー: 単発高威力body_hitbox/area_hitbox(cone)＋knockback大＋startup大
@@ -558,7 +558,7 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
 - キャラの個性に応じて積極的に新機能を使うこと: ブーメラン使い→boomerang:true、追尾魔法→homing:true、散弾銃→projectile_count:3、ビーム→beam、スパイクコンボ→knockback_direction:""spike""、ジャグル→knockback_direction:""up""
 - stats範囲: maxHP 250〜350(基準300。耐久型ほど高く、紙耐久・速攻型ほど低く)、groundMoveSpeed 2.5〜9.5、airMoveSpeed 2.0〜8.5、jumpForce 7〜19、airJumpHeightMultiplier 0.3〜0.6、walkSpeedRatio 0.2〜0.5、guardDurability 40〜90、lightness 0.45〜2.0、weight 0.45〜2.0、groundDodgeDistance 1.2〜3.8、airDodgeDistance 0.8〜3.2
 - damage範囲: attack_a/bは4〜12、attack_cは3〜10、smash_sideは14〜26。多段技は1hit1〜2程度で全段最大6
-- smash_side（横スマッシュ）は必ず攻撃技（melee_hitbox/body_hitbox/projectile/beam/jump_attack/uppercut/dive_attack/shockwave）にすること。counter/reflector/buff_self/summonをsmash_sideに入れない
+- smash_side（横スマッシュ）は必ず攻撃技（melee_hitbox/body_hitbox/projectile/beam/jump_attack/uppercut/dive_attack/shockwave、または接触ダメージを持つsummon）にすること。counter/reflector/buff_selfだけをsmash_sideに入れない。召喚特化キャラは巨大召喚獣・突進召喚・地面からの召喚をsmash_sideに使ってよい
 - startup範囲: attack_a 0.02〜0.12、attack_b 0.03〜0.18、attack_c 0.04〜0.22、smash_side 0.08〜0.32
 - recovery範囲: attack_a 0.10〜0.45、attack_b 0.12〜0.65、attack_c 0.12〜0.55、smash_side 0.18〜0.62。操作感が重すぎない範囲にする
 - trap_hitbox設置技のrecoveryは特に0.10〜0.35とし、極端な後隙を避ける
@@ -606,6 +606,8 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
   reflector: duration=反射受付秒(1.0〜3.0)。発動中は相手の飛び道具を速度・威力1.2倍で逆方向に反射する。攻撃判定は一切なし・反射のみ。ピンク色に光る。
     ★ reflector技のactionsにはreflectorアクション1つだけを入れること。melee_hitboxやprojectileと混在させない
   summon: duration=召喚体の寿命(1〜6)、power=移動速度(0.5〜10)、spawn_x/y=出現位置、damage_override=接触ダメージ。size_xとsize_yは必須で、召喚物の実寸・当たり判定・表示サイズを同時に決める。小型使い魔/妖精/ドローン=0.55〜1.1×0.65〜1.4、通常の獣/兵士=1.2〜2.2×1.4〜2.8、大型獣/竜/ゴーレム=2.3〜4.0×2.8〜4.8。全召喚物を同じ大きさにしない。召喚するものの見た目はその技スロットのeffect画像として生成される前提で、skill_name/descriptionに召喚物の名前や形状を明確に含める。画像は必ず「1体だけ」を描き、複数体・群れは実行時に複数エンティティとして生成する。directionで移動方向を指定できる（forward/backward/left/right/toward_enemy/away_enemy/stationary/diagonal/diagonal_up/diagonal_down/up/down/hover）。down=上空から真下へ落下、up=足元より下から真上へ突き上げ、diagonal_up/diagonal_down=前方へ斜め上/斜め下。player_controlled:trueならプレイヤーの左右入力で操縦。homing:trueなら敵を上下左右とも追尾する（鳥・使い魔・誘導ミサイル向け）。大量/群れ/複数/○頭はpatternとpattern_count(2〜6)を必ず指定し、実体をその数だけ出す。2体を交差させる時はsummon actionを2つ書き、片方direction:diagonal_up、もう片方direction:diagonal_down、spawn_yを正負に分ける。knockback_directionとstatus/status_duration/chanceも接触時に有効。recovery 0.10〜0.35（召喚直後すぐ動ける）
+  【召喚獣の自由軌道】summonにも空間指定を積極的に使う。aim_mode:""vector""+vector_x/yで任意方向、rotation_angleで追加回転。pattern:""fan""/""parallel""/""radial""/""inward""/""line""で扇状編隊・平行編隊・全方位・包囲突撃・隊列を作れる。wave_amplitude:0.3〜1.5で蛇行、boomerang:trueで途中反転、gravity_scale:0.5〜3で放物線・落下、orbit:true+range:0.8〜4で召喚者の周囲を周回する。orbitとhoming/gravityは併用しない。単なる横移動に偏らず、召喚物の生態・形・説明に合う軌道を選ぶ。
+  【召喚獣の役割】突撃獣=高速直進、護衛獣=orbit/hover、砲台・植物=stationary、鳥・精霊=homing/波状、岩・隕石・重量獣=gravity/down、蛇・魚=wave_amplitude、帰還する猟犬・鷹=boomerang、プレイヤーが操る兵器=player_controlled。status/status_duration/chance、knockback_direction、damage_overrideも役割に合わせ、同じ召喚挙動を4枠へ使い回さない。
 - 【判定形状】shapeは判定とエフェクトの両方に同じ幾何形状として適用される:
   ""box""(四角/default)、""cone""(前方扇)、""ring""(塗りつぶし円)、""annulus""(ドーナツ。inner_radius=安全な内径)、""arc""(円弧。arc_angle=15〜330度)、""line""(方向つき直線)、""cross""(十字。inner_radius=腕の太さ)、""column""(縦柱)
   annulus/arcの外径はsize_x（なければrange）。見た目だけ広く判定だけ狭い指定は禁止。同じsize・回転で一致させること
@@ -659,7 +661,7 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
   wall: 地面に固定する物理的な壁・ブロック・氷山・岩壁。キャラと飛び道具を遮り、攻撃を受けると壊れる。duration=寿命(1.2〜7秒)、power=耐久(8〜45)、size_x=横幅(0.8〜4.8)、size_y=高さ(1.2〜4.5)、spawn_x/y=設置位置。壁そのものに即時ダメージ判定は付けない。遠隔設置はtelegraph_time 0.4以上。壁・ブロック・障害物・氷山・岩壁が特徴文に明記されたら、summon/trapへの置換は禁止しwallを必ず使う。
   uppercut: 昇竜系の対空技。power=上昇力(6〜12)。上昇しながら体に追従する判定で相手を巻き込み、真上へ打ち上げる（knockback_direction省略時""up""）。打ち上げからの追撃コンボの起点や、接近された時の切り返しに使う。startupは小さめ(0.04〜0.10)・外した時のrecoveryは長め(0.35〜0.55)にして昇竜らしいリスクリターンを作る。竜・拳法家・炎系と相性が良い。
   dive_attack: 急降下攻撃。power=降下力(6〜14)。斜め前下方向へ突っ込み、着地の瞬間に左右へ小さな衝撃波が出る。地上で使うと小さく跳び上がってから急降下する。鳥・隕石・ヒーロー着地・重量級の奇襲に使う。smash_sideに使ってもよい。
-  ※ command_throw/heal_self/barrier/gravity_well は攻撃判定が無い/特殊なので、smash_sideには入れない（smash_sideは必ず直接攻撃技）。lifesteal/shockwave/uppercut/dive_attackはsmash_sideに使ってよい。
+  ※ command_throw/heal_self/barrier/gravity_well は攻撃判定が無い/特殊なので、smash_sideには入れない（smash_sideは必ず直接攻撃技）。lifesteal/shockwave/uppercut/dive_attackと、damage_overrideを持つ攻撃的summonはsmash_sideに使ってよい。
 
 {{
   ""character_name"": ""[ユーザー指定のキャラクター名をそのまま]"",

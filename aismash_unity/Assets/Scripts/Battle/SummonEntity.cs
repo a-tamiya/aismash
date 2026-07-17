@@ -23,6 +23,13 @@ namespace PromptFighters.Battle
         public float   StatusDuration;
         public float   StatusChance = 1f;
         public bool    IsWall { get; private set; }
+        public Vector2 MoveDirection = Vector2.right;
+        public bool    UseTrajectoryDirection;
+        public bool    Boomerang;
+        public bool    OrbitOwner;
+        public float   OrbitRadius;
+        public float   WaveAmplitude;
+        public float   GravityScale;
 
         public const float MaxHP = 10f;
         const int MaxPerOwner = 6; // 群れ技を表現できる上限。無限展開は防ぐ。
@@ -39,6 +46,7 @@ namespace PromptFighters.Battle
         float _lifetime = 3f;
         float _age;
         float _flashTimer;   // 被弾フラッシュの残り時間
+        bool _boomerangReturning;
         Vector3 _baseScale = Vector3.one;
         Color   _baseColor = Color.white;
         readonly HashSet<Fighter> _recentHits = new HashSet<Fighter>();
@@ -61,7 +69,9 @@ namespace PromptFighters.Battle
         public static SummonEntity Spawn(Fighter owner, Vector2 pos, float speed, float lifetime,
                                          float damage, float knockback, Element element,
                                          Sprite sprite = null, Vector2? desiredWorldSize = null,
-                                         SkillAction sourceAction = null)
+                                         SkillAction sourceAction = null,
+                                         Vector2? moveDirection = null,
+                                         bool useTrajectoryDirection = false)
         {
             var go = new GameObject("SummonEntity");
             go.transform.position = pos;
@@ -75,10 +85,13 @@ namespace PromptFighters.Battle
                 sourceAction.direction == "diagonal_down" ||
                 sourceAction.direction == "hover" ||
                 sourceAction.direction == "up" || sourceAction.direction == "upward" ||
-                sourceAction.direction == "down" || sourceAction.direction == "downward");
+                sourceAction.direction == "down" || sourceAction.direction == "downward" ||
+                sourceAction.gravity_scale > 0f || sourceAction.wave_amplitude > 0f || sourceAction.orbit ||
+                (!string.IsNullOrEmpty(sourceAction.aim_mode) && sourceAction.aim_mode != "facing") ||
+                (!string.IsNullOrEmpty(sourceAction.pattern) && sourceAction.pattern != "single"));
 
             var rb = go.AddComponent<Rigidbody2D>();
-            rb.gravityScale = 0f;
+            rb.gravityScale = sourceAction != null ? Mathf.Clamp(sourceAction.gravity_scale, 0f, 3f) : 0f;
             rb.constraints  = needsVerticalMotion
                 ? RigidbodyConstraints2D.FreezeRotation
                 : RigidbodyConstraints2D.FreezeRotation | RigidbodyConstraints2D.FreezePositionY;
@@ -114,6 +127,10 @@ namespace PromptFighters.Battle
             s.Knockback  = knockback;
             s.Element    = element;
             s._lifetime  = Mathf.Max(0.3f, lifetime);
+            s.MoveDirection = moveDirection.HasValue && moveDirection.Value.sqrMagnitude > 0.001f
+                ? moveDirection.Value.normalized
+                : Vector2.right;
+            s.UseTrajectoryDirection = useTrajectoryDirection;
             if (sourceAction != null)
             {
                 s.PlayerControlled   = sourceAction.player_controlled;
@@ -125,6 +142,11 @@ namespace PromptFighters.Battle
                     ? sourceAction.status_duration
                     : Mathf.Min(sourceAction.duration, 3f);
                 s.StatusChance       = Mathf.Clamp01(sourceAction.chance);
+                s.Boomerang          = sourceAction.boomerang;
+                s.OrbitOwner         = sourceAction.orbit;
+                s.OrbitRadius        = Mathf.Clamp(sourceAction.range > 0f ? sourceAction.range : 1.8f, 0.8f, 4f);
+                s.WaveAmplitude      = Mathf.Clamp(sourceAction.wave_amplitude, 0f, 1.5f);
+                s.GravityScale       = Mathf.Clamp(sourceAction.gravity_scale, 0f, 3f);
             }
 
             // 足元の影（接地感）
@@ -195,10 +217,14 @@ namespace PromptFighters.Battle
             _startY    = transform.position.y;
             _dir       = InitialDirection();
             _vertDir   = InitialVerticalDirection();
+            if (UseTrajectoryDirection && MoveDirection.sqrMagnitude > 0.001f)
+                _dir = Mathf.Approximately(MoveDirection.x, 0f) ? _dir : Mathf.Sign(MoveDirection.x);
             _baseScale = transform.localScale;
             if (_sr != null) _baseColor = _sr.color;
             if (IsWall) return;
-            _rb.linearVelocity = new Vector2(_dir * Speed, 0f);
+            _rb.linearVelocity = UseTrajectoryDirection
+                ? MoveDirection * Speed
+                : new Vector2(_dir * Speed, 0f);
         }
 
         void OnDestroy()
@@ -231,6 +257,20 @@ namespace PromptFighters.Battle
                     GetComponent<SpriteRenderer>().flipX = _dir < 0;
                     return;
                 }
+            }
+
+            // 召喚者の周囲を衛星のように周回。range=半径、power=周回速度。
+            if (OrbitOwner && Owner != null)
+            {
+                float sign = MoveDirection.y < 0f ? -1f : 1f;
+                float angle = (_age * Speed * 90f * sign + GetInstanceID() * 37f) * Mathf.Deg2Rad;
+                Vector2 target = (Vector2)Owner.transform.position +
+                                 new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * OrbitRadius;
+                _rb.gravityScale = 0f;
+                _rb.linearVelocity = Vector2.ClampMagnitude(
+                    (target - _rb.position) / Mathf.Max(0.01f, Time.deltaTime),
+                    Mathf.Max(8f, Speed * 3f));
+                return;
             }
 
             if (Homing && Owner != null)
@@ -272,6 +312,34 @@ namespace PromptFighters.Battle
             if (Direction == "up" || Direction == "upward")
             {
                 _rb.linearVelocity = new Vector2(0f, Speed);
+                return;
+            }
+
+            // 任意ベクトル・扇・放射などの空間指定を、召喚物の実移動方向にも反映する。
+            if (UseTrajectoryDirection)
+            {
+                Vector2 travelDir = _boomerangReturning ? -MoveDirection : MoveDirection;
+                if (Boomerang && !_boomerangReturning && _age >= _lifetime * 0.5f)
+                {
+                    _boomerangReturning = true;
+                    travelDir = -MoveDirection;
+                }
+                if (WaveAmplitude > 0f)
+                {
+                    Vector2 perp = new Vector2(-travelDir.y, travelDir.x);
+                    float waveVelocity = Mathf.Cos(_age * 7f) * WaveAmplitude * 7f;
+                    _rb.linearVelocity = travelDir * Speed + perp * waveVelocity;
+                }
+                else if (GravityScale > 0f)
+                {
+                    _rb.linearVelocity = new Vector2(travelDir.x * Speed, _rb.linearVelocity.y);
+                }
+                else
+                {
+                    _rb.linearVelocity = travelDir * Speed;
+                }
+                if (_sr != null && Mathf.Abs(_rb.linearVelocity.x) > 0.05f)
+                    _sr.flipX = _rb.linearVelocity.x < 0f;
                 return;
             }
 

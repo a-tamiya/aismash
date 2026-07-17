@@ -1977,11 +1977,12 @@ namespace PromptFighters.Battle.Skills
                 ? new Vector2(a.size_x > 0f ? a.size_x : 1.3f, a.size_y > 0f ? a.size_y : 1.7f)
                 : EstimateSummonSize(skill);
             Vector2 desiredSize = authoredSize * _sizeScale;
+            Vector2 baseMoveDirection = ResolveSummonMoveDirection(a, pos, dirSign);
             int requestedCount = a.pattern_count > 0 ? a.pattern_count : 1;
             bool hasSummonPattern = !string.IsNullOrEmpty(a.pattern) && a.pattern != "single";
             var samples = hasSummonPattern || requestedCount > 1
-                ? BuildSpatialSamples(a, pos, new Vector2(dirSign, 0f), projectile: false, maxCount: 6)
-                : new List<SpatialSample> { new SpatialSample(pos, new Vector2(dirSign, 0f), 0f) };
+                ? BuildSpatialSamples(a, pos, baseMoveDirection, projectile: false, maxCount: 6)
+                : new List<SpatialSample> { new SpatialSample(pos, baseMoveDirection, 0f) };
             float perSummonDamage = dmg / Mathf.Max(1, samples.Count);
             foreach (var sample in samples)
             {
@@ -1990,7 +1991,8 @@ namespace PromptFighters.Battle.Skills
                 {
                     ShowImpactAtSpawn(skill);
                     SummonEntity.Spawn(_fighter, summonPos, speed, lifetime, perSummonDamage, kb, skill.element,
-                        a.hide_effect ? null : _fighter.GetEffectSprite(skill), desiredSize, a);
+                        a.hide_effect ? null : _fighter.GetEffectSprite(skill), desiredSize, a,
+                        sample.direction, SummonUsesTrajectory(a));
                 }
                 bool remote = HasExplicitSpatialOrigin(a) && !string.IsNullOrEmpty(a.spawn_origin) && a.spawn_origin != "owner";
                 if (remote || a.telegraph_time > 0f)
@@ -1999,6 +2001,47 @@ namespace PromptFighters.Battle.Skills
                 else
                     SpawnNow();
             }
+        }
+
+        Vector2 ResolveSummonMoveDirection(SkillAction a, Vector2 from, float facing)
+        {
+            if (!string.IsNullOrEmpty(a.aim_mode) || !Mathf.Approximately(a.rotation_angle, 0f))
+                return ResolveAimDirection(a, from, new Vector2(facing, 0f));
+            return a.direction switch
+            {
+                "up" or "upward"               => Vector2.up,
+                "down" or "downward"           => Vector2.down,
+                "diagonal_up"                   => new Vector2(facing, 0.7f).normalized,
+                "diagonal_down"                 => new Vector2(facing, -0.7f).normalized,
+                "left"                          => Vector2.left,
+                "right"                         => Vector2.right,
+                "backward"                      => new Vector2(-facing, 0f),
+                "toward_enemy"                  => ResolveAimDirectionWithMode(a, from, new Vector2(facing, 0f), "enemy"),
+                "away_enemy"                    => ResolveAimDirectionWithMode(a, from, new Vector2(-facing, 0f), "away_enemy"),
+                _                                => new Vector2(facing, 0f),
+            };
+        }
+
+        Vector2 ResolveAimDirectionWithMode(SkillAction a, Vector2 from, Vector2 fallback, string mode)
+        {
+            string original = a.aim_mode;
+            a.aim_mode = mode;
+            Vector2 result = ResolveAimDirection(a, from, fallback);
+            a.aim_mode = original;
+            return result;
+        }
+
+        static bool SummonUsesTrajectory(SkillAction a)
+        {
+            if (a == null) return false;
+            if (a.homing || a.player_controlled || a.direction == "stationary" || a.direction == "hover") return false;
+            return !string.IsNullOrEmpty(a.aim_mode) || HasNewPattern(a) || a.boomerang || a.orbit ||
+                   a.wave_amplitude > 0f || a.gravity_scale > 0f ||
+                   a.direction == "up" || a.direction == "upward" ||
+                   a.direction == "down" || a.direction == "downward" ||
+                   a.direction == "diagonal_up" || a.direction == "diagonal_down" ||
+                   a.direction == "left" || a.direction == "right" ||
+                   a.direction == "backward" || a.direction == "toward_enemy" || a.direction == "away_enemy";
         }
 
         // 旧JSONなどでsize_x/yが無い場合も、召喚物の名称・説明から体格を決める。

@@ -275,6 +275,14 @@ namespace PromptFighters.Battle.Skills
                         // 画面を不当に塞ぐほどの巨大化は防ぐ。
                         if (a.size_x > 0f) a.size_x = Mathf.Clamp(a.size_x, 0.55f, 4.0f);
                         if (a.size_y > 0f) a.size_y = Mathf.Clamp(a.size_y, 0.65f, 4.8f);
+                        a.gravity_scale = Mathf.Clamp(a.gravity_scale, 0f, 3f);
+                        a.wave_amplitude = Mathf.Clamp(a.wave_amplitude, 0f, 1.5f);
+                        if (a.orbit)
+                        {
+                            a.range = Mathf.Clamp(a.range > 0f ? a.range : 1.8f, 0.8f, 4f);
+                            a.homing = false;
+                            a.gravity_scale = 0f;
+                        }
                     }
 
                     // wall: 地面に固定する破壊可能な壁。powerは耐久、durationは寿命。
@@ -435,7 +443,7 @@ namespace PromptFighters.Battle.Skills
         {
             "melee_hitbox", "body_hitbox", "projectile", "area_hitbox", "trap_hitbox", "beam",
             "jump_attack", "multi_hit", "dash+melee_hitbox", "shockwave", "lifesteal", "command_throw",
-            "uppercut", "dive_attack",
+            "uppercut", "dive_attack", "summon",
         };
 
         // counter / reflector / command_throw は発動後の処理を自前で完結するため、
