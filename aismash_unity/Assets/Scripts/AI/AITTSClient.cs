@@ -217,7 +217,7 @@ namespace PromptFighters.AI
                           $"\"voice\":\"{safeVoice}\",\"instructions\":\"{safeInstructions}\"," +
                           $"\"response_format\":\"wav\"}}"
                         : $"{{\"model\":\"{(highDefinition ? HighDefinitionModel : Model)}\",\"input\":\"{safeText}\"," +
-                          $"\"voice\":\"{safeVoice}\"," +
+                          $"\"voice\":\"{SanitizeLegacyVoice(safeVoice)}\"," +
                           $"\"speed\":1.0,\"response_format\":\"wav\"}}";
                     for (int attempt = 1; attempt <= 2; attempt++)
                     {
@@ -321,7 +321,7 @@ namespace PromptFighters.AI
             string standardBody =
                 $"{{\"model\":\"{Model}\"," +
                 $"\"input\":\"{safeText}\"," +
-                $"\"voice\":\"{SanitizeCharacterVoice(voice)}\"," +
+                $"\"voice\":\"{SanitizeLegacyVoice(voice)}\"," +
                 $"\"speed\":{clampedSpeed.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}," +
                 $"\"response_format\":\"wav\"}}";
 
@@ -514,6 +514,22 @@ namespace PromptFighters.AI
             }
         }
 
+        // このプロジェクトのtts-1/tts-1-hd権限ではcedar・marin等の新しい声が拒否される。
+        // 高品質モデルでは元の声を維持し、旧Speechモデルへ落ちた場合だけ同性寄りの対応声へ変換する。
+        static string SanitizeLegacyVoice(string voice)
+        {
+            switch (voice?.Trim().ToLowerInvariant())
+            {
+                case "cedar": return "ash";
+                case "marin": return "shimmer";
+                case "ballad": case "verse": return "alloy";
+                case "alloy": case "ash": case "coral": case "echo": case "fable":
+                case "onyx": case "nova": case "sage": case "shimmer":
+                    return voice.Trim().ToLowerInvariant();
+                default: return "alloy";
+            }
+        }
+
         static string EscapeJson(string value) => (value ?? "")
             .Replace("\\", "\\\\").Replace("\"", "\\\"")
             .Replace("\r\n", "\\n").Replace("\n", "\\n").Replace("\r", "\\n");
@@ -544,76 +560,141 @@ namespace PromptFighters.AI
             return Mathf.Min(Mathf.Pow(2f, attempt), 8f) + UnityEngine.Random.Range(0.1f, 0.6f);
         }
 
-        static bool IsWav(byte[] data)
+        struct PcmWavInfo
         {
+            public int channels;
+            public int sampleRate;
+            public int bitsPerSample;
+            public int blockAlign;
+            public int dataOffset;
+            public int dataLength;
+        }
+
+        static bool IsWav(byte[] data) => TryNormalizeAndParseWav(data, out _);
+
+        // 保存復旧側も生成側と同じ厳密な判定を使い、仕様ずれで正常な旧音声を捨てないようにする。
+        // streaming sentinelを持つ入力は、全検証に成功した場合だけ受信済み実長へ書き換える。
+        public static bool NormalizeAndValidateWav(byte[] data) => TryNormalizeAndParseWav(data, out _);
+
+        static bool TryNormalizeAndParseWav(byte[] data, out PcmWavInfo info)
+        {
+            info = default;
             if (data == null || data.Length <= 44 ||
                 data[0] != 'R' || data[1] != 'I' || data[2] != 'F' || data[3] != 'F' ||
                 data[8] != 'W' || data[9] != 'A' || data[10] != 'V' || data[11] != 'E') return false;
 
             uint declaredRiffSize = ReadUInt32LittleEndian(data, 4);
-            ulong declaredEnd = (ulong)declaredRiffSize + 8UL;
-            if (declaredRiffSize < 36 || declaredEnd > (ulong)data.Length) return false;
+            bool streamedRiff = declaredRiffSize == uint.MaxValue;
+            ulong declaredEnd = streamedRiff ? (ulong)data.Length : (ulong)declaredRiffSize + 8UL;
+            if (!streamedRiff && (declaredRiffSize < 36 || declaredEnd > (ulong)data.Length)) return false;
 
             bool hasFormat = false;
             bool hasAudioData = false;
+            int streamedDataSizeOffset = -1;
             ulong offset = 12;
             while (offset + 8UL <= declaredEnd)
             {
                 int index = (int)offset;
-                uint chunkSize = ReadUInt32LittleEndian(data, index + 4);
-                ulong chunkEnd = offset + 8UL + chunkSize;
-                if (chunkEnd > declaredEnd || chunkEnd > (ulong)data.Length) return false;
-
                 bool isFormat = data[index] == 'f' && data[index + 1] == 'm' &&
                                 data[index + 2] == 't' && data[index + 3] == ' ';
                 bool isData = data[index] == 'd' && data[index + 1] == 'a' &&
                               data[index + 2] == 't' && data[index + 3] == 'a';
-                if (isFormat && chunkSize >= 16) hasFormat = true;
-                if (isData && chunkSize > 0) hasAudioData = true;
-                offset = chunkEnd + (chunkSize & 1U);
+                uint chunkSize = ReadUInt32LittleEndian(data, index + 4);
+                bool streamedData = chunkSize == uint.MaxValue;
+                if (streamedData)
+                {
+                    // sentinelは、RIFFも不定長で、このdataが末尾まで続く場合だけ許容する。
+                    if (!streamedRiff || !isData || declaredEnd <= offset + 8UL ||
+                        declaredEnd - offset - 8UL > uint.MaxValue) return false;
+                    chunkSize = (uint)(declaredEnd - offset - 8UL);
+                    streamedDataSizeOffset = index + 4;
+                }
+
+                ulong chunkEnd = offset + 8UL + chunkSize;
+                if (chunkEnd > declaredEnd || chunkEnd > (ulong)data.Length) return false;
+
+                if (isFormat)
+                {
+                    if (hasFormat || streamedData || chunkSize < 16) return false;
+                    int payload = index + 8;
+                    int audioFormat = ReadUInt16LittleEndian(data, payload);
+                    int channels = ReadUInt16LittleEndian(data, payload + 2);
+                    uint sampleRate = ReadUInt32LittleEndian(data, payload + 4);
+                    uint byteRate = ReadUInt32LittleEndian(data, payload + 8);
+                    int blockAlign = ReadUInt16LittleEndian(data, payload + 12);
+                    int bitsPerSample = ReadUInt16LittleEndian(data, payload + 14);
+                    int bytesPerSample = bitsPerSample / 8;
+                    if (audioFormat != 1 || channels < 1 || channels > 8 ||
+                        sampleRate == 0 || sampleRate > 384000 ||
+                        (bitsPerSample != 8 && bitsPerSample != 16) ||
+                        blockAlign != channels * bytesPerSample ||
+                        byteRate != (ulong)sampleRate * (uint)blockAlign) return false;
+                    info.channels = channels;
+                    info.sampleRate = (int)sampleRate;
+                    info.bitsPerSample = bitsPerSample;
+                    info.blockAlign = blockAlign;
+                    hasFormat = true;
+                }
+                else if (isData)
+                {
+                    if (hasAudioData || chunkSize == 0 || chunkSize > int.MaxValue) return false;
+                    info.dataOffset = index + 8;
+                    info.dataLength = (int)chunkSize;
+                    hasAudioData = true;
+                }
+
+                offset = streamedData ? declaredEnd : chunkEnd + (chunkSize & 1U);
             }
-            return hasFormat && hasAudioData;
+
+            if (!hasFormat || !hasAudioData || offset != declaredEnd ||
+                info.dataLength % info.blockAlign != 0) return false;
+
+            // Speech APIのストリーミングWAVは、全受信後もRIFF/data長が0xFFFFFFFFのことがある。
+            // 新規保存時には通常WAVとして扱えるよう、検証完了後だけ実長で確定する。
+            if (streamedRiff)
+                WriteUInt32LittleEndian(data, 4, (uint)(data.Length - 8));
+            if (streamedDataSizeOffset >= 0)
+                WriteUInt32LittleEndian(data, streamedDataSizeOffset, (uint)info.dataLength);
+            return true;
         }
+
+        static int ReadUInt16LittleEndian(byte[] data, int offset) =>
+            data[offset] | (data[offset + 1] << 8);
 
         static uint ReadUInt32LittleEndian(byte[] data, int offset) =>
             (uint)(data[offset] | (data[offset + 1] << 8) |
                    (data[offset + 2] << 16) | (data[offset + 3] << 24));
+
+        static void WriteUInt32LittleEndian(byte[] data, int offset, uint value)
+        {
+            data[offset] = (byte)value;
+            data[offset + 1] = (byte)(value >> 8);
+            data[offset + 2] = (byte)(value >> 16);
+            data[offset + 3] = (byte)(value >> 24);
+        }
 
         // WAVバイト列（PCM16）を AudioClip に変換する
         public static AudioClip WavToAudioClip(byte[] wav, string clipName)
         {
             try
             {
-                int channels   = wav[22] | (wav[23] << 8);
-                int sampleRate = wav[24] | (wav[25] << 8) | (wav[26] << 16) | (wav[27] << 24);
-                int bitDepth   = wav[34] | (wav[35] << 8);
-
-                // "data" チャンクを探す
-                int dataStart = 44;
-                for (int i = 12; i < wav.Length - 4; i++)
-                {
-                    if (wav[i] == 'd' && wav[i+1] == 'a' && wav[i+2] == 't' && wav[i+3] == 'a')
-                    {
-                        dataStart = i + 8;
-                        break;
-                    }
-                }
-
-                int bytesPerSample = bitDepth / 8;
-                int sampleCount    = (wav.Length - dataStart) / bytesPerSample;
+                if (!TryNormalizeAndParseWav(wav, out PcmWavInfo info)) return null;
+                int bytesPerSample = info.bitsPerSample / 8;
+                int sampleCount = info.dataLength / bytesPerSample;
                 float[] samples    = new float[sampleCount];
 
                 for (int i = 0; i < sampleCount; i++)
                 {
-                    int idx = dataStart + i * bytesPerSample;
-                    samples[i] = bitDepth == 16
+                    int idx = info.dataOffset + i * bytesPerSample;
+                    samples[i] = info.bitsPerSample == 16
                         ? (short)(wav[idx] | (wav[idx + 1] << 8)) / 32768f
                         : (wav[idx] - 128) / 128f;
                 }
 
                 NormalizeSamples(samples);
 
-                var clip = AudioClip.Create(clipName, sampleCount / channels, channels, sampleRate, false);
+                var clip = AudioClip.Create(clipName, sampleCount / info.channels,
+                    info.channels, info.sampleRate, false);
                 clip.SetData(samples, 0);
                 return clip;
             }
@@ -800,6 +881,8 @@ namespace PromptFighters.AI
                 if (!generationDone && generationCoroutine != null)
                     runner.StopCoroutine(generationCoroutine);
                 SetWorkDirectoryActive(tempDir, false);
+                if (!generationDone)
+                    TryDeleteDirectory(tempDir);
             }
 
             if (generatedCount != Filenames.Length)
@@ -807,6 +890,7 @@ namespace PromptFighters.AI
                 TryDeleteDirectory(tempDir);
                 data.voiceProfile.generated = oldGenerated;
                 data.voiceProfile.qualityVersion = oldQualityVersion;
+                data.voiceProfile.generationId = oldGenerationId;
                 onComplete?.Invoke(false, generatedCount,
                     !generationDone
                         ? "ボイス生成が安全期限を超えました。以前の音声を維持しました"
@@ -1196,7 +1280,7 @@ namespace PromptFighters.AI
 
         static string BackendLabel(AITTSClient.CharacterVoiceBackend backend) => backend switch
         {
-            AITTSClient.CharacterVoiceBackend.Realtime => "Realtime 1.5最高品質音声",
+            AITTSClient.CharacterVoiceBackend.Realtime => "Realtime 2最高品質音声",
             AITTSClient.CharacterVoiceBackend.Realtime21 => "Realtime 2.1高品質音声",
             AITTSClient.CharacterVoiceBackend.PremiumAudio => "高品質音声",
             AITTSClient.CharacterVoiceBackend.ExpressiveSpeech => "表現付き音声",

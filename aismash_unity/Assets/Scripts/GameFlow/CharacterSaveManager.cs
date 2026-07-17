@@ -452,14 +452,9 @@ namespace PromptFighters.GameFlow
             try
             {
                 var info = new FileInfo(path);
-                if (!info.Exists || info.Length <= 44) return false;
-                using var stream = File.OpenRead(path);
-                var header = new byte[12];
-                if (stream.Read(header, 0, header.Length) != header.Length) return false;
-                if (header[0] != 'R' || header[1] != 'I' || header[2] != 'F' || header[3] != 'F' ||
-                    header[8] != 'W' || header[9] != 'A' || header[10] != 'V' || header[11] != 'E') return false;
-                uint declaredRiffSize = BitConverter.ToUInt32(header, 4);
-                return declaredRiffSize >= 36 && (ulong)declaredRiffSize + 8UL <= (ulong)info.Length;
+                // キャラ台詞は最大30秒想定。異常に大きいファイルを復旧検証で全読込しない。
+                if (!info.Exists || info.Length <= 44 || info.Length > 16 * 1024 * 1024) return false;
+                return AITTSClient.NormalizeAndValidateWav(File.ReadAllBytes(path));
             }
             catch { return false; }
         }

@@ -10,18 +10,18 @@ using UnityEngine;
 namespace PromptFighters.AI
 {
     // OpenAI Realtime API (WebSocket) を使った音声機能クライアント。
-    // OpenAIの現行Realtimeモデルを優先し、利用権限や一時障害時は呼び出し側で1.5へフォールバックする。
+    // OpenAIの現行Realtimeモデルを優先し、利用権限や一時障害時は呼び出し側で別モデルへフォールバックする。
     //  ・Transcribe : 録音済みWAVを送って文字起こし（whisper-1 RESTの代替）
     //  ・Synthesize : セリフを演技指示付きで読み上げてAudioClip化（表現付きTTSの代替）
     public static class RealtimeAudioClient
     {
         const string WsEndpoint = "wss://api.openai.com/v1/realtime";
-        // 公式が音声入出力の最高品質モデルとして案内している1.5を保存・即時音声の第一候補にする。
-        // 2.1は指示追従や雑音耐性に優れる第二候補として、同じvoiceを維持したまま使用する。
-        public const string RealtimeModel   = "gpt-realtime-1.5";
+        // このプロジェクトのAPIキーで利用でき、音声品質も高い2を保存・即時音声の第一候補にする。
+        // 2.1は利用権限がある環境向けの第二候補として、同じvoiceを維持したまま使用する。
+        public const string RealtimeModel   = "gpt-realtime-2";
         public const string RealtimeFallbackModel = "gpt-realtime-2.1";
         public const string TranscribeModel = "gpt-realtime-whisper";
-        // 文字起こし経路は既存動作を変えず、検証済みの1.5会話セッションを維持する。
+        // 文字起こしも利用可能な同じ会話セッションモデルを使用する。
         const string TranscriptionSessionModel = RealtimeModel;
         // 読み上げの声（Realtime世代で最も人間らしい2声）。
         //  ・cedar = 男性（実況用） / marin = 女性（ボイスボール用）
