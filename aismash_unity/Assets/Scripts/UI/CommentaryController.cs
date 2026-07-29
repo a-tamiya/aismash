@@ -142,11 +142,11 @@ namespace PromptFighters.UI
             plateRect.anchoredPosition = new Vector2(20f, 0f);
             plateRect.sizeDelta = new Vector2(184f, 50f);
             _livePlate = plateGo.AddComponent<Image>();
-            _livePlate.sprite = UITheme.ButtonFrame ?? UITheme.VGradient;
-            _livePlate.type = UITheme.ButtonFrame != null ? Image.Type.Sliced : Image.Type.Simple;
-            _livePlate.color = UITheme.Urgent;
+            _livePlate.sprite = UITheme.Solid;
+            _livePlate.type = Image.Type.Simple;
+            _livePlate.color = Color.Lerp(UITheme.SteelDark, UITheme.Urgent, 0.42f);
             _livePlate.raycastTarget = false;
-            UITheme.Skew(_livePlate, 12f);
+            UITheme.AddPremiumFrame(plateGo.transform, UITheme.Urgent);
 
             var plateLabelGo = new GameObject("LiveLabel");
             plateLabelGo.transform.SetParent(plateGo.transform, false);

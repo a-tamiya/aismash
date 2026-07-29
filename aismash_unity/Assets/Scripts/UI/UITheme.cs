@@ -8,8 +8,8 @@ namespace PromptFighters.UI
 {
     public static class UITheme
     {
-        // ── アーケード格ゲー調パレット ──────────────────────────────
-        // 暗いスチール地に、ネオン/ゴールドのアクセントを乗せる。
+        // ── eスポーツ放送調パレット ────────────────────────────────
+        // 背景は低彩度・低コントラスト、情報と操作箇所だけを高彩度にする。
         public static readonly Color Steel      = new Color(0.06f, 0.07f, 0.10f, 0.98f); // フレーム地
         public static readonly Color SteelDark  = new Color(0.02f, 0.025f, 0.04f, 1.00f); // バー溝
         public static readonly Color SteelLight = new Color(0.20f, 0.23f, 0.30f, 1.00f); // ベベル明部
@@ -29,18 +29,12 @@ namespace PromptFighters.UI
         static Sprite _vgrad;
         static Sprite _titleBackground;
         static Sprite _lobbyBackground;
-        static Sprite _panelFrame;
-        static Sprite _buttonFrame;
         static Sprite _damageBurst;
 
         public static Sprite TitleBackground =>
             _titleBackground ??= Resources.Load<Sprite>("UI/Premium/title_background");
         public static Sprite LobbyBackground =>
             _lobbyBackground ??= Resources.Load<Sprite>("UI/Premium/lobby_background");
-        public static Sprite PanelFrame =>
-            _panelFrame ??= Resources.Load<Sprite>("UI/Premium/panel_frame");
-        public static Sprite ButtonFrame =>
-            _buttonFrame ??= Resources.Load<Sprite>("UI/Premium/button_frame");
         public static Sprite DamageBurst =>
             _damageBurst ??= Resources.Load<Sprite>("UI/Premium/damage_burst");
 
@@ -85,6 +79,12 @@ namespace PromptFighters.UI
             if (style.HasValue) text.fontStyle = style.Value;
             text.enableAutoSizing = false;
             text.textWrappingMode = TextWrappingModes.Normal;
+            // 背景画像やキャラクターの色に文字が埋もれないよう、全テキストへ
+            // TMPマテリアルの初期化順に依存しない暗色シャドウを共通適用する。
+            var shadow = text.GetComponent<Shadow>() ?? text.gameObject.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.82f);
+            shadow.effectDistance = new Vector2(1.5f, -1.5f);
+            shadow.useGraphicAlpha = true;
         }
 
         public static void ApplyAllInScene()
@@ -95,7 +95,7 @@ namespace PromptFighters.UI
 
         // GPT生成の背景を画面いっぱいに適用する。素材が未取り込みでも既存背景を維持する。
         public static void ApplyPremiumBackdrop(Image image, Sprite background, Color? tint = null,
-            bool animate = true)
+            bool animate = false)
         {
             if (image == null || background == null) return;
             image.sprite = background;
@@ -107,52 +107,113 @@ namespace PromptFighters.UI
                 image.gameObject.AddComponent<PremiumBackdropMotion>();
         }
 
-        // 既存の暗いパネル地は残し、その上へ生成した9-slice金属枠だけを重ねる。
+        // 既存の暗いパネル地は残し、四辺へ細いeスポーツ放送調ラインを重ねる。
+        // 太い装飾フレームは情報量を増やしてしまうためUI本体には使用しない。
         public static Image AddPremiumFrame(Transform parent, Color? tint = null, float inset = 0f)
         {
-            if (parent == null || PanelFrame == null) return null;
-            var go = new GameObject("PremiumFrame");
-            go.layer = parent.gameObject.layer;
-            var rt = go.AddComponent<RectTransform>();
-            rt.SetParent(parent, false);
+            if (parent == null) return null;
+
+            Color accent = tint ?? new Color(0.52f, 0.66f, 0.82f, 0.62f);
+            var existing = parent.Find("EsportsFrame");
+            GameObject go;
+            RectTransform rt;
+            Image image;
+            if (existing != null)
+            {
+                go = existing.gameObject;
+                rt = existing as RectTransform;
+                image = go.GetComponent<Image>();
+            }
+            else
+            {
+                go = new GameObject("EsportsFrame");
+                go.layer = parent.gameObject.layer;
+                rt = go.AddComponent<RectTransform>();
+                rt.SetParent(parent, false);
+                image = go.AddComponent<Image>();
+                image.sprite = Solid;
+                image.color = Color.clear;
+                image.raycastTarget = false;
+            }
+
             rt.anchorMin = Vector2.zero;
             rt.anchorMax = Vector2.one;
             rt.offsetMin = new Vector2(inset, inset);
             rt.offsetMax = new Vector2(-inset, -inset);
-            var image = go.AddComponent<Image>();
-            image.sprite = PanelFrame;
-            image.type = Image.Type.Sliced;
-            image.color = tint ?? Color.white;
-            image.raycastTarget = false;
-            go.transform.SetAsFirstSibling();
+            AddFrameLine(go.transform, "Top", new Vector2(0f, 1f), new Vector2(1f, 1f),
+                new Vector2(0f, -1.5f), new Vector2(0f, 3f), accent);
+            AddFrameLine(go.transform, "Bottom", Vector2.zero, new Vector2(1f, 0f),
+                new Vector2(0f, 0.5f), new Vector2(0f, 1f), new Color(accent.r, accent.g, accent.b, accent.a * 0.55f));
+            AddFrameLine(go.transform, "Left", Vector2.zero, new Vector2(0f, 1f),
+                new Vector2(0.5f, 0f), new Vector2(1f, 0f), new Color(accent.r, accent.g, accent.b, accent.a * 0.55f));
+            AddFrameLine(go.transform, "Right", new Vector2(1f, 0f), Vector2.one,
+                new Vector2(-0.5f, 0f), new Vector2(1f, 0f), new Color(accent.r, accent.g, accent.b, accent.a * 0.55f));
+            go.transform.SetAsLastSibling();
             return image;
         }
 
-        // 全ボタン共通の高品質9-slice、押下レスポンス、影を適用する。
+        static void AddFrameLine(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax,
+            Vector2 position, Vector2 size, Color color)
+        {
+            var child = parent.Find(name);
+            GameObject go;
+            RectTransform rt;
+            Image image;
+            if (child != null)
+            {
+                go = child.gameObject;
+                rt = child as RectTransform;
+                image = go.GetComponent<Image>();
+            }
+            else
+            {
+                go = new GameObject(name);
+                go.layer = parent.gameObject.layer;
+                rt = go.AddComponent<RectTransform>();
+                rt.SetParent(parent, false);
+                image = go.AddComponent<Image>();
+                image.sprite = Solid;
+                image.raycastTarget = false;
+            }
+
+            rt.anchorMin = anchorMin;
+            rt.anchorMax = anchorMax;
+            rt.anchoredPosition = position;
+            rt.sizeDelta = size;
+            image.color = color;
+        }
+
+        // 全ボタン共通のフラットな面、明確なアクセント、押下レスポンスを適用する。
         public static void StylePremiumButton(Button button, Color baseColor)
         {
             if (button == null) return;
             var image = button.GetComponent<Image>();
-            if (image != null && ButtonFrame != null)
+            if (image != null)
             {
-                image.sprite = ButtonFrame;
-                image.type = Image.Type.Sliced;
-                image.color = baseColor;
+                image.sprite = Solid;
+                image.type = Image.Type.Simple;
+                image.color = Color.Lerp(SteelDark, baseColor, 0.38f);
             }
+
+            AddButtonAccent(button.transform, "AccentLeft", baseColor,
+                Vector2.zero, new Vector2(0f, 1f), new Vector2(0f, 0f), new Vector2(5f, 0f));
+            AddButtonAccent(button.transform, "AccentBottom",
+                new Color(baseColor.r, baseColor.g, baseColor.b, 0.72f),
+                Vector2.zero, new Vector2(1f, 0f), new Vector2(0f, 0f), new Vector2(0f, 3f));
 
             var colors = button.colors;
             colors.normalColor = Color.white;
-            colors.highlightedColor = new Color(1.14f, 1.14f, 1.14f, 1f);
+            colors.highlightedColor = new Color(1.28f, 1.28f, 1.28f, 1f);
             colors.selectedColor = colors.highlightedColor;
-            colors.pressedColor = new Color(0.72f, 0.72f, 0.72f, 1f);
+            colors.pressedColor = new Color(0.70f, 0.70f, 0.70f, 1f);
             colors.disabledColor = new Color(0.34f, 0.34f, 0.38f, 0.66f);
             colors.colorMultiplier = 1f;
             colors.fadeDuration = 0.08f;
             button.colors = colors;
 
             var shadow = button.GetComponent<Shadow>() ?? button.gameObject.AddComponent<Shadow>();
-            shadow.effectColor = new Color(0f, 0f, 0f, 0.76f);
-            shadow.effectDistance = new Vector2(0f, -5f);
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.52f);
+            shadow.effectDistance = new Vector2(0f, -2f);
             shadow.useGraphicAlpha = true;
 
             // タイトルの開始ボタンはPreBattlePanel側の常時パルスがscaleを管理する。
@@ -160,12 +221,45 @@ namespace PromptFighters.UI
                 button.gameObject.AddComponent<PremiumButtonMotion>();
         }
 
+        static void AddButtonAccent(Transform parent, string name, Color color,
+            Vector2 anchorMin, Vector2 anchorMax, Vector2 position, Vector2 size)
+        {
+            var child = parent.Find(name);
+            GameObject go;
+            RectTransform rt;
+            Image image;
+            if (child != null)
+            {
+                go = child.gameObject;
+                rt = child as RectTransform;
+                image = go.GetComponent<Image>();
+            }
+            else
+            {
+                go = new GameObject(name);
+                go.layer = parent.gameObject.layer;
+                rt = go.AddComponent<RectTransform>();
+                rt.SetParent(parent, false);
+                image = go.AddComponent<Image>();
+                image.sprite = Solid;
+                image.raycastTarget = false;
+                go.transform.SetAsFirstSibling();
+            }
+
+            rt.anchorMin = anchorMin;
+            rt.anchorMax = anchorMax;
+            rt.anchoredPosition = position;
+            rt.sizeDelta = size;
+            image.color = color;
+        }
+
         public static void StylePremiumField(Image image)
         {
-            if (image == null || ButtonFrame == null) return;
-            image.sprite = ButtonFrame;
-            image.type = Image.Type.Sliced;
-            image.color = new Color(0.48f, 0.54f, 0.66f, 0.92f);
+            if (image == null) return;
+            image.sprite = Solid;
+            image.type = Image.Type.Simple;
+            image.color = new Color(0.018f, 0.025f, 0.045f, 0.96f);
+            AddPremiumFrame(image.transform, new Color(0.34f, 0.50f, 0.70f, 0.62f));
         }
 
         // ── ランタイムスプライト ─────────────────────────────────────

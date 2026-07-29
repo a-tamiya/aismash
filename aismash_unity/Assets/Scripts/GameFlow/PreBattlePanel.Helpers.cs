@@ -296,20 +296,11 @@ namespace PromptFighters.GameFlow
             return img;
         }
 
-        // アーケード調: 既存ボタンをメタリック平行四辺形にスタイルする（ネオン縁付き）
+        // eスポーツ放送調: 既存ボタンをフラット面＋役割色アクセントに統一する。
         static void StyleArcadeButton(Button btn, Color baseColor, float slant)
         {
             if (btn == null) return;
             PromptFighters.UI.UITheme.StylePremiumButton(btn, baseColor);
-            var img = btn.GetComponent<Image>();
-            if (img != null)
-            {
-                img.sprite = PromptFighters.UI.UITheme.ButtonFrame ?? PromptFighters.UI.UITheme.VGradient;
-                img.type = PromptFighters.UI.UITheme.ButtonFrame != null ? Image.Type.Sliced : Image.Type.Simple;
-                img.color = baseColor;
-                // 生成枠自体に角度があるため、従来より控えめなシアーにする。
-                PromptFighters.UI.UITheme.Skew(img, slant * 0.28f);
-            }
         }
 
         static Image AddImage(GameObject go, Color color)

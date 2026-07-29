@@ -332,9 +332,9 @@ namespace PromptFighters.UI
             var barBg = MakeUI("BossBarBg", _bossBarRoot.transform);
             Anch(barBg, 0,0,1,1,  0,0,0,-NAME_H);
             var bossBarImage = barBg.AddComponent<Image>();
-            bossBarImage.sprite = UITheme.ButtonFrame ?? UITheme.VGradient;
-            bossBarImage.type = UITheme.ButtonFrame != null ? Image.Type.Sliced : Image.Type.Simple;
-            bossBarImage.color = new Color(0.52f, 0.24f, 0.25f, 1f);
+            bossBarImage.sprite = UITheme.Solid;
+            bossBarImage.type = Image.Type.Simple;
+            bossBarImage.color = new Color(0.12f, 0.025f, 0.035f, 0.96f);
 
             // 上端アクセント
             var accent = MakeUI("BossAccent", barBg.transform);
@@ -438,9 +438,9 @@ namespace PromptFighters.UI
             tcRt.sizeDelta = new Vector2(TIMER_W, TOTAL_H);
             tcRt.anchoredPosition = new Vector2(0f, -TOTAL_H * 0.5f);
             var timerBoxImage = tc.AddComponent<Image>();
-            timerBoxImage.sprite = UITheme.ButtonFrame ?? UITheme.VGradient;
-            timerBoxImage.type = UITheme.ButtonFrame != null ? Image.Type.Sliced : Image.Type.Simple;
-            timerBoxImage.color = new Color(0.72f, 0.58f, 0.27f, 1f);
+            timerBoxImage.sprite = UITheme.Solid;
+            timerBoxImage.type = Image.Type.Simple;
+            timerBoxImage.color = new Color(0.08f, 0.07f, 0.035f, 0.98f);
 
             // timer border lines (ゴールド枠 / 上下を2pxで強調)
             AddLine(tc.transform, "BdT", 0,1,1,1,   0,-2f,0,0,     TimerEdge);

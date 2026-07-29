@@ -153,11 +153,12 @@ namespace PromptFighters.GameFlow
                 _revealSkillRow[i] = rt;
 
                 var plate = rowGo.AddComponent<Image>();
-                plate.sprite = PromptFighters.UI.UITheme.ButtonFrame ?? PromptFighters.UI.UITheme.VGradient;
-                plate.type = PromptFighters.UI.UITheme.ButtonFrame != null
-                    ? Image.Type.Sliced : Image.Type.Simple;
-                plate.color = new Color(0.36f, 0.40f, 0.52f, 0.96f);
+                plate.sprite = PromptFighters.UI.UITheme.Solid;
+                plate.type = Image.Type.Simple;
+                plate.color = new Color(0.025f, 0.034f, 0.058f, 0.96f);
                 plate.raycastTarget = false;
+                PromptFighters.UI.UITheme.AddPremiumFrame(rowGo.transform,
+                    new Color(0.34f, 0.50f, 0.72f, 0.58f));
 
                 MakeSlantBar(rowGo.transform, "SlotPlate", new Vector2(-168f, 0f), new Vector2(74f, 66f),
                     PromptFighters.UI.UITheme.Gold, 12f);

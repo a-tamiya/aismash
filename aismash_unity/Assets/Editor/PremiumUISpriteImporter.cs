@@ -30,9 +30,6 @@ namespace PromptFighters.Editor
         {
             new ImportSpec("title_background.png", 100f, Vector4.zero, false),
             new ImportSpec("lobby_background.png", 100f, Vector4.zero, false),
-            // x=left, y=bottom, z=right, w=top
-            new ImportSpec("panel_frame.png", 100f, new Vector4(170f, 86f, 170f, 86f), true),
-            new ImportSpec("button_frame.png", 100f, new Vector4(165f, 92f, 165f, 92f), true),
             new ImportSpec("damage_burst.png", 256f, Vector4.zero, true),
         };
 
