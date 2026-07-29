@@ -21,6 +21,7 @@ namespace PromptFighters.GameFlow
         // 固定ボス専用: _presetsからは除外し（P1/P2選択に出さない）、ボス◀/▶セレクター専用のリストにだけ含める。
         const string FixedBossCharacterName = "冥王ゾルバイン";
         List<CharacterData> _bossPresets;
+        CharacterData _fixedBossPreset;
         int _builtInPresetCount = 0; // プリセット（初期キャラ）の件数。以降が生成済みキャラ。
         int _p1PresetIdx = 0;
         int _p2PresetIdx = 1;
@@ -46,10 +47,6 @@ namespace PromptFighters.GameFlow
         TextMeshProUGUI[] _p2StatValues;
         Image _p1PreviewImage;
         Image _p2PreviewImage;
-        CharacterData _p1PreviewData;
-        CharacterData _p2PreviewData;
-        float _previewIdleTimer;
-        int _previewIdleFrame;
         Button _p1DeleteButton;
         Button _p2DeleteButton;
         Button _p1VoiceRegenerateButton;
@@ -603,7 +600,6 @@ namespace PromptFighters.GameFlow
             if (_panel != null && _panel.activeSelf)
             {
                 RefreshGamepadLabels();
-                AnimatePreviewIdle();
                 var kb = UnityEngine.InputSystem.Keyboard.current;
                 if (_waitForMenuInputRelease)
                 {
@@ -2446,35 +2442,9 @@ namespace PromptFighters.GameFlow
 
             var data = _presets[idx];
             EnsurePreviewSprite(data);
-            EnsureSpriteSetDeferred(data); // 待機モーション用 Idle1/2/3。選択直後フレームから外して表示遅延を防ぐ
-
-            if (image == _p1PreviewImage) _p1PreviewData = data;
-            else if (image == _p2PreviewImage) _p2PreviewData = data;
 
             image.sprite = data.characterSprite;
             image.enabled = image.sprite != null;
-            _previewIdleTimer = 0f;
-            _previewIdleFrame = 0;
-        }
-
-        // ロビーのキャラプレビューを待機モーション（Idle1→2→3）でループ再生する。
-        void AnimatePreviewIdle()
-        {
-            _previewIdleTimer += Time.unscaledDeltaTime;
-            if (_previewIdleTimer < 0.3f) return;
-            _previewIdleTimer = 0f;
-            _previewIdleFrame = (_previewIdleFrame + 1) % 3;
-
-            ApplyIdleFrame(_p1PreviewImage, _p1PreviewData);
-            ApplyIdleFrame(_p2PreviewImage, _p2PreviewData);
-        }
-
-        void ApplyIdleFrame(Image image, CharacterData data)
-        {
-            if (image == null || data?.spriteSet == null) return;
-            var id = (CharacterSpriteId)((int)CharacterSpriteId.Idle1 + _previewIdleFrame);
-            var s = data.spriteSet.Get(id, data.characterSprite);
-            if (s != null) { image.sprite = s; image.enabled = true; }
         }
 
         void SetDetail(TextMeshProUGUI label, int idx)
@@ -2571,35 +2541,6 @@ namespace PromptFighters.GameFlow
             }
         }
 
-        readonly HashSet<CharacterData> _spriteSetLoading = new HashSet<CharacterData>();
-
-        // 選択画面のプレビューが使うのは idle1/2/3 のみ。pose/effect は戦闘開始時に
-        // ロードするため、ここでは待機モーション3枚だけを非同期で読み込む。
-        void EnsureSpriteSetDeferred(CharacterData data)
-        {
-            if (data == null) return;
-            if (HasIdleSprites(data.spriteSet)) return;
-            if (string.IsNullOrEmpty(data.spriteDir)) return;
-            if (!_spriteSetLoading.Add(data)) return;
-            StartCoroutine(LoadSpriteSetCo(data));
-        }
-
-        IEnumerator LoadSpriteSetCo(CharacterData data)
-        {
-            yield return null; // プレビュー表示(idle1)を先に出してからロード
-            // idle1/2/3 のみを1枚ずつフレーム分割で読み込み、選択時のヒッチを解消する。
-            yield return CharacterSaveManager.LoadSpriteSetAsync(data, idleOnly: true);
-            _spriteSetLoading.Remove(data);
-        }
-
-        // 待機モーション(idle2/idle3)が揃っているか。選択画面の遅延ロード判定用。
-        static bool HasIdleSprites(CharacterSpriteSet spriteSet)
-        {
-            if (spriteSet?.sprites == null || spriteSet.sprites.Length < 3) return false;
-            return spriteSet.sprites[(int)CharacterSpriteId.Idle2] != null
-                && spriteSet.sprites[(int)CharacterSpriteId.Idle3] != null;
-        }
-
         string GetPresetName(int idx)
         {
             if (_presets == null || idx < 0 || idx >= _presets.Count) return "---";
@@ -2610,6 +2551,7 @@ namespace PromptFighters.GameFlow
         void ExcludeFixedBossFromPresets()
         {
             if (_presets == null) return;
+            _fixedBossPreset = _presets.Find(c => c != null && c.characterName == FixedBossCharacterName);
             _presets.RemoveAll(c => c != null && c.characterName == FixedBossCharacterName);
         }
 
@@ -2618,8 +2560,7 @@ namespace PromptFighters.GameFlow
         void BuildBossPresets()
         {
             _bossPresets = new List<CharacterData>(_presets ?? new List<CharacterData>());
-            var fixedBoss = CharacterSaveManager.LoadByName(FixedBossCharacterName);
-            if (fixedBoss != null) _bossPresets.Insert(0, fixedBoss);
+            if (_fixedBossPreset != null) _bossPresets.Insert(0, _fixedBossPreset);
         }
 
         string GetBossPresetName(int idx)
@@ -3247,11 +3188,16 @@ namespace PromptFighters.GameFlow
             CharacterData selectedP1 = GetPreset(true);
             CharacterData selectedP2 = GetPreset(false);
             string bossName = GetBossPresetName(_bossPresetIdx);
+            List<CharacterData> previousPresets = _presets;
+            CharacterData previousFixedBoss = _fixedBossPreset;
 
             var builtIn = PresetCharacterLoader.LoadAll();
             _builtInPresetCount = builtIn.Count;
             _presets = new List<CharacterData>(builtIn);
-            _presets.AddRange(CharacterSaveManager.LoadAll());
+            // ロビー復帰時は保存キャラ全員の大きなPNGを同期デコードしない。
+            // 既に表示済みのIdle1だけを再利用し、新規キャラは表示対象になった時点で非同期ロードする。
+            _presets.AddRange(CharacterSaveManager.LoadAll(loadPreviewSprites: false));
+            ReuseLobbyPreviewSprites(previousPresets, previousFixedBoss, _presets);
             ExcludeFixedBossFromPresets();
             BuildBossPresets();
 
@@ -3271,6 +3217,34 @@ namespace PromptFighters.GameFlow
             UpdateCategoryLabels();
             RebuildIconGrids();
             RefreshCharacterPreview();
+        }
+
+        static void ReuseLobbyPreviewSprites(List<CharacterData> previousPresets,
+            CharacterData previousFixedBoss, List<CharacterData> refreshedPresets)
+        {
+            if (refreshedPresets == null) return;
+
+            var byDirectory = new Dictionary<string, Sprite>(System.StringComparer.OrdinalIgnoreCase);
+            void Remember(CharacterData data)
+            {
+                if (data == null || data.characterSprite == null || string.IsNullOrEmpty(data.spriteDir)) return;
+                byDirectory[data.spriteDir] = data.characterSprite;
+            }
+
+            if (previousPresets != null)
+                for (int i = 0; i < previousPresets.Count; i++)
+                    Remember(previousPresets[i]);
+            Remember(previousFixedBoss);
+
+            for (int i = 0; i < refreshedPresets.Count; i++)
+            {
+                CharacterData data = refreshedPresets[i];
+                if (data == null || data.characterSprite != null || string.IsNullOrEmpty(data.spriteDir)) continue;
+                if (!byDirectory.TryGetValue(data.spriteDir, out Sprite idle1) || idle1 == null) continue;
+                data.characterSprite = idle1;
+                data.spriteSet ??= new CharacterSpriteSet();
+                data.spriteSet.Set(CharacterSpriteId.Idle1, idle1);
+            }
         }
 
         int FindPresetIndex(CharacterData target)

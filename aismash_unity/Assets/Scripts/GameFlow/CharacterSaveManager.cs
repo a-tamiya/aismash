@@ -272,8 +272,9 @@ namespace PromptFighters.GameFlow
             }
         }
 
-        // 保存済みキャラを全件ロードする。Idle1プレビュー用スプライトも設定する。
-        public static List<CharacterData> LoadAll()
+        // 保存済みキャラを全件ロードする。通常はIdle1プレビューも読む。
+        // ロビー復帰時はloadPreviewSprites=falseで画像デコードを避け、呼び出し側が既存Idle1を再利用する。
+        public static List<CharacterData> LoadAll(bool loadPreviewSprites = true)
         {
             EnsureDefaultCharactersSeeded();
 
@@ -319,10 +320,21 @@ namespace PromptFighters.GameFlow
                         }
                     }
 
-                    // Idle1をプレビュー用にロード
+                    // Idle1の絶対パスは常に保持し、必要な画面だけ非同期ロードできるようにする。
                     string idle1 = Path.Combine(spriteDir, "idle1.png");
                     if (File.Exists(idle1))
+                    {
+                        data.spritePath = idle1;
+                    }
+                    if (loadPreviewSprites && File.Exists(idle1))
+                    {
                         data.characterSprite = SpriteLoader.LoadDirect(idle1);
+                        if (data.characterSprite != null)
+                        {
+                            data.spriteSet ??= new CharacterSpriteSet();
+                            data.spriteSet.Set(CharacterSpriteId.Idle1, data.characterSprite);
+                        }
+                    }
 
                     results.Add(data);
                 }
