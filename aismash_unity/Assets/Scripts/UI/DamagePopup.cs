@@ -67,8 +67,8 @@ namespace PromptFighters.UI
             var popup = go.AddComponent<DamagePopup>();
             popup._riseSpeed = blocked ? 0.55f : Mathf.Lerp(0.65f, 1.0f, Mathf.InverseLerp(0f, 35f, damage));
             popup._baseScale = blocked
-                ? 0.40f
-                : Mathf.Lerp(0.40f, 0.54f, Mathf.InverseLerp(0f, 35f, damage));
+                ? 0.48f
+                : Mathf.Lerp(0.48f, 0.65f, Mathf.InverseLerp(0f, 35f, damage));
             go.transform.localScale = Vector3.one * (popup._baseScale * 0.78f);
         }
 
@@ -91,7 +91,7 @@ namespace PromptFighters.UI
 
             var popup = go.AddComponent<DamagePopup>();
             popup._riseSpeed = 0.75f;
-            popup._baseScale = 0.40f;
+            popup._baseScale = 0.48f;
             go.transform.localScale = Vector3.one * (popup._baseScale * 0.78f);
         }
 
