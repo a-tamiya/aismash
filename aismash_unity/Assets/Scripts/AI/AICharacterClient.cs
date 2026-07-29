@@ -112,6 +112,8 @@ namespace PromptFighters.AI
         {
             public string character_name;
             public string features;
+            public string appearance_performance;
+            public string skill_details;
         }
 
         // name / features の入力状況で生成方向を切り替える（双方向対応）:
@@ -171,10 +173,17 @@ namespace PromptFighters.AI
                         string content = ParseContent(req.downloadHandler.text);
                         string json    = ExtractJsonBlock(content);
                         var concept = JsonUtility.FromJson<CharacterConcept>(json);
-                        if (concept == null || string.IsNullOrWhiteSpace(concept.features))
+                        if (concept == null)
                             throw new Exception("conceptが空です");
                         concept.character_name = (concept.character_name ?? "").Trim();
                         concept.features       = (concept.features ?? "").Trim();
+                        concept.appearance_performance = (concept.appearance_performance ?? "").Trim();
+                        concept.skill_details = (concept.skill_details ?? "").Trim();
+                        if (string.IsNullOrWhiteSpace(concept.features))
+                            concept.features = ComposeConceptFeatures(
+                                concept.appearance_performance, concept.skill_details);
+                        if (string.IsNullOrWhiteSpace(concept.features))
+                            throw new Exception("conceptが空です");
                         RememberConceptProfile(conceptPrompt.noveltyProfile);
                         onSuccess?.Invoke(concept);
                         yield break;
@@ -407,7 +416,8 @@ character_name と features を出力してください。テーマ種の語を�
         static string BuildConceptSystemPrompt() =>
 $@"あなたは2D格闘ゲームのキャラクター原案を生み出す、発想豊かなクリエイターです。JSONのみ出力（説明不要）。
 出力形式:
-{{ ""character_name"": ""..."", ""features"": ""..."" }}
+{{ ""character_name"": ""..."", ""features"": ""..."", ""appearance_performance"": ""..."", ""skill_details"": ""..."" }}
+上記4フィールドは必ずすべて出力し、featuresは後半2フィールドの内容を自然な紹介文として統合したものにする。
 
 - character_name: 声に出して読める固有名。読みやすさは保ちつつ、カタカナ名／和風名／二つ名・異名／モチーフ由来のニックネーム／英語風の通称を偏りなく使い分ける。日本人のありふれた姓＋名ばかりに偏らせない。難読漢字・無理な当て字・記号や奇抜な文字の詰め込みと、肩書きの盛りすぎは避ける。全体で4〜14字程度。
 - features: そのキャラを友達に紹介するような、平易で読みやすい日本語の文章（120〜210字程度）。**個性は『見た目』と『技・戦い方』だけで表現する**。後でこの文章を素材に技とステータスを自動生成するため、設定だけで終わらせず実際の立ち回りまで具体的に書く。
@@ -415,6 +425,8 @@ $@"あなたは2D格闘ゲームのキャラクター原案を生み出す、発
   ①モチーフ2つ・体格・配色・服装を示す見た目。②武器/攻撃手段と、`【近距離・ラッシュ型】`のような間合い＋戦闘型。③他キャラと差が出る固有ギミックと、その代償または弱点。④代表的な攻め方と、相手をどう崩すか。⑤その性能で生まれる操作感・読み合いの魅力。
   固有ギミックは、移動・攻撃・設置・召喚・防御・状態変化などゲーム内で技として表現できる内容にする。性能の傾向（速さ・重さ・耐久・パワーのトレードオフ）も②〜④のどこかで明確にする。
   技・戦い方には、発生位置、方向/軌道、個数/配置、時間差/反復、持続領域、地上/空中や間合いによる変化のうち最低2つを具体的に含める。「エネルギーを放つ」だけの曖昧な技説明を並べない。
+- appearance_performance: featuresから見た目、体格、配色、衣装、武器と、速さ・重さ・耐久等の性能傾向だけを抜き出した文章。
+- skill_details: featuresから技・戦い方だけを抜き出し、4技へ展開できるよう発生位置、方向、個数、軌道、時間差、範囲、効果を具体化した文章。featuresと矛盾させない。
 - **性格・口調・話し方・内面の描写は書かない**（例：『気取った話し方をする』『人を見下す』『冷酷な性格』などは不要）。
 - features の文章作法（重要。次の『悪い例』のような文体にしない）:
   ・難しい言葉・詩的/文学的/厨二的な言い回し・凝った比喩・古風で読みにくい語彙を避け、日常的で分かりやすい言葉で書く。
@@ -465,7 +477,17 @@ $@"あなたは2D格闘ゲームのキャラクター原案を生み出す、発
         static string BuildUserPrompt(string name, string features) =>
 $@"以下の名前と特徴でキャラクターJSONを生成してください。
 キャラクター名: {name}
-特徴（このテキストの語句を最大限拾って技に反映すること）: {features}";
+特徴（このテキストの語句を最大限拾って技に反映すること）: {features}
+入力に【見た目・性能】と【技の詳細】の見出しがある場合、前者は外見・ステータスへ、後者は4つの技構成へ優先して反映すること。両者が競合する場合、外見と性能は【見た目・性能】、技の挙動は【技の詳細】を正とする。";
+
+        static string ComposeConceptFeatures(string appearancePerformance, string skillDetails)
+        {
+            string appearance = (appearancePerformance ?? "").Trim();
+            string skills = (skillDetails ?? "").Trim();
+            if (appearance.Length == 0) return skills;
+            if (skills.Length == 0) return appearance;
+            return appearance + "\n\n" + skills;
+        }
 
         static string BuildSystemPrompt() =>
 $@"2D格闘ゲームのキャラクターJSONを生成してください。JSONのみ出力（説明不要）。

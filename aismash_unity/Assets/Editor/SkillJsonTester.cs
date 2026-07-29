@@ -1,7 +1,9 @@
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using PromptFighters.Battle.Skills;
 using PromptFighters.Battle.Skills.Json;
+using PromptFighters.GameFlow;
 
 // エディタメニュー Tools > Test Skill JSON でパーサーとバランス補正を動作確認できる。
 public static class SkillJsonTester
@@ -219,5 +221,28 @@ public static class SkillJsonTester
 
         if (ok) Debug.Log("[SkillDiversityTest] PASS: 新action・反復・条件分岐・配置・予測照準");
         else Debug.LogError("[SkillDiversityTest] FAIL: 技多様性拡張の正規化結果が不正");
+    }
+
+    [MenuItem("Tools/Test Character Prompt Input")]
+    static void RunCharacterPromptInput()
+    {
+        const BindingFlags flags = BindingFlags.Static | BindingFlags.NonPublic;
+        var panelType = typeof(PreBattlePanel);
+        var limitField = panelType.GetField("CharacterPromptCharacterLimit", flags);
+        var composeMethod = panelType.GetMethod("ComposeDetailedCharacterPrompt", flags);
+        int limit = limitField != null ? (int)limitField.GetRawConstantValue() : -1;
+        string prompt = composeMethod?.Invoke(null, new object[]
+        {
+            "銀髪で軽量。空中移動が速い。",
+            "技1は上空から氷柱を5本落とす。スマッシュは左右から挟撃する。"
+        }) as string;
+        bool ok = limit == 600 &&
+                  prompt != null &&
+                  prompt.Contains("【見た目・性能】") &&
+                  prompt.Contains("【技の詳細】") &&
+                  prompt.IndexOf("銀髪", System.StringComparison.Ordinal) <
+                  prompt.IndexOf("技1", System.StringComparison.Ordinal);
+        if (ok) Debug.Log("[CharacterPromptInputTest] PASS: 600字上限・項目別統合");
+        else Debug.LogError("[CharacterPromptInputTest] FAIL: 入力上限または項目別統合が不正");
     }
 }

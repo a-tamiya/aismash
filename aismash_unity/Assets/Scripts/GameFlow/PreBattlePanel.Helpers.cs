@@ -208,7 +208,7 @@ namespace PromptFighters.GameFlow
             input.lineType = multiline
                 ? TMP_InputField.LineType.MultiLineNewline
                 : TMP_InputField.LineType.SingleLine;
-            input.characterLimit = multiline ? 300 : 36;
+            input.characterLimit = multiline ? CharacterPromptCharacterLimit : 36;
             input.caretColor = Color.white;
             input.selectionColor = new Color(0.35f, 0.55f, 1f, 0.45f);
             return input;
