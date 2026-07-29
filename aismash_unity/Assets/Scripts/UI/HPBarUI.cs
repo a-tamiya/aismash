@@ -91,6 +91,10 @@ namespace PromptFighters.UI
 
             var frame = CreateImage("HP_Frame", transform, 0, new Color(0.01f, 0.014f, 0.026f, 0.90f));
             Stretch(frame.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            UITheme.AddPremiumFrame(frame.transform,
+                _isRightSide
+                    ? new Color(UITheme.P2Neon.r, UITheme.P2Neon.g, UITheme.P2Neon.b, 0.72f)
+                    : new Color(UITheme.P1Neon.r, UITheme.P1Neon.g, UITheme.P1Neon.b, 0.72f));
 
             var topLine = CreateImage("HP_TopLight", transform, 1,
                 _isRightSide ? new Color(1f, 0.34f, 0.22f, 0.9f) : new Color(0.25f, 0.85f, 1f, 0.9f));

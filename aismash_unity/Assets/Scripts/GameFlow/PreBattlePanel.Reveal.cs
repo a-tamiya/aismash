@@ -82,6 +82,9 @@ namespace PromptFighters.GameFlow
             var backdrop = _revealPanel.AddComponent<Image>();
             // Linearカラー空間ではα<1で裏の明るいUIが透けるため完全不透明にする
             backdrop.color = new Color(0.01f, 0.012f, 0.03f, 1f);
+            if (PromptFighters.UI.UITheme.TitleBackground != null)
+                PromptFighters.UI.UITheme.ApplyPremiumBackdrop(backdrop,
+                    PromptFighters.UI.UITheme.TitleBackground, new Color(0.58f, 0.61f, 0.72f, 1f));
 
             var t = _revealPanel.transform;
 
@@ -150,9 +153,10 @@ namespace PromptFighters.GameFlow
                 _revealSkillRow[i] = rt;
 
                 var plate = rowGo.AddComponent<Image>();
-                plate.sprite = PromptFighters.UI.UITheme.VGradient;
-                plate.type = Image.Type.Simple;
-                plate.color = new Color(0.06f, 0.07f, 0.11f, 0.9f);
+                plate.sprite = PromptFighters.UI.UITheme.ButtonFrame ?? PromptFighters.UI.UITheme.VGradient;
+                plate.type = PromptFighters.UI.UITheme.ButtonFrame != null
+                    ? Image.Type.Sliced : Image.Type.Simple;
+                plate.color = new Color(0.36f, 0.40f, 0.52f, 0.96f);
                 plate.raycastTarget = false;
 
                 MakeSlantBar(rowGo.transform, "SlotPlate", new Vector2(-168f, 0f), new Vector2(74f, 66f),

@@ -661,6 +661,7 @@ namespace PromptFighters.GameFlow
             finBg.sprite = PromptFighters.UI.UITheme.VGradient; finBg.type = Image.Type.Simple;
             finBg.color = new Color(0.02f, 0.025f, 0.05f, 0.92f);
             finBg.raycastTarget = false;
+            PromptFighters.UI.UITheme.AddPremiumFrame(finGo.transform);
             _tutFinish = MakeLabel(finGo.transform, "TutFinishText", "",
                 new Vector2(0f, 0f), new Vector2(1140f, 220f), 40f, PromptFighters.UI.UITheme.Gold);
             _tutFinish.fontStyle = FontStyles.Bold | FontStyles.Italic;
@@ -685,6 +686,8 @@ namespace PromptFighters.GameFlow
             var banner = MakePanel(t, "TutBanner", new Vector2(0f, 300f), new Vector2(640f, 150f),
                 new Color(0.02f, 0.025f, 0.05f, 0.85f));
             banner.raycastTarget = false;
+            PromptFighters.UI.UITheme.AddPremiumFrame(banner.transform,
+                new Color(pColor.r, pColor.g, pColor.b, 0.9f));
             MakeSlantBar(t, "TutTop", new Vector2(0f, 375f), new Vector2(640f, 5f), pColor, i == 0 ? 22f : -22f);
 
             MakeSlantBar(t, "TutBadgePlate", new Vector2(-280f, 345f), new Vector2(84f, 40f), pColor, i == 0 ? 12f : -12f);

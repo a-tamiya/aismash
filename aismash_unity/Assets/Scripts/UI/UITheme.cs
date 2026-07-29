@@ -27,6 +27,22 @@ namespace PromptFighters.UI
         static TMP_FontAsset _font;
         static Sprite _solid;
         static Sprite _vgrad;
+        static Sprite _titleBackground;
+        static Sprite _lobbyBackground;
+        static Sprite _panelFrame;
+        static Sprite _buttonFrame;
+        static Sprite _damageBurst;
+
+        public static Sprite TitleBackground =>
+            _titleBackground ??= Resources.Load<Sprite>("UI/Premium/title_background");
+        public static Sprite LobbyBackground =>
+            _lobbyBackground ??= Resources.Load<Sprite>("UI/Premium/lobby_background");
+        public static Sprite PanelFrame =>
+            _panelFrame ??= Resources.Load<Sprite>("UI/Premium/panel_frame");
+        public static Sprite ButtonFrame =>
+            _buttonFrame ??= Resources.Load<Sprite>("UI/Premium/button_frame");
+        public static Sprite DamageBurst =>
+            _damageBurst ??= Resources.Load<Sprite>("UI/Premium/damage_burst");
 
         public static TMP_FontAsset Font
         {
@@ -75,6 +91,81 @@ namespace PromptFighters.UI
         {
             foreach (var text in Object.FindObjectsByType<TMP_Text>())
                 Apply(text);
+        }
+
+        // GPT生成の背景を画面いっぱいに適用する。素材が未取り込みでも既存背景を維持する。
+        public static void ApplyPremiumBackdrop(Image image, Sprite background, Color? tint = null,
+            bool animate = true)
+        {
+            if (image == null || background == null) return;
+            image.sprite = background;
+            image.type = Image.Type.Simple;
+            image.preserveAspect = false;
+            image.color = tint ?? Color.white;
+            image.raycastTarget = true;
+            if (animate && image.GetComponent<PremiumBackdropMotion>() == null)
+                image.gameObject.AddComponent<PremiumBackdropMotion>();
+        }
+
+        // 既存の暗いパネル地は残し、その上へ生成した9-slice金属枠だけを重ねる。
+        public static Image AddPremiumFrame(Transform parent, Color? tint = null, float inset = 0f)
+        {
+            if (parent == null || PanelFrame == null) return null;
+            var go = new GameObject("PremiumFrame");
+            go.layer = parent.gameObject.layer;
+            var rt = go.AddComponent<RectTransform>();
+            rt.SetParent(parent, false);
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = new Vector2(inset, inset);
+            rt.offsetMax = new Vector2(-inset, -inset);
+            var image = go.AddComponent<Image>();
+            image.sprite = PanelFrame;
+            image.type = Image.Type.Sliced;
+            image.color = tint ?? Color.white;
+            image.raycastTarget = false;
+            go.transform.SetAsFirstSibling();
+            return image;
+        }
+
+        // 全ボタン共通の高品質9-slice、押下レスポンス、影を適用する。
+        public static void StylePremiumButton(Button button, Color baseColor)
+        {
+            if (button == null) return;
+            var image = button.GetComponent<Image>();
+            if (image != null && ButtonFrame != null)
+            {
+                image.sprite = ButtonFrame;
+                image.type = Image.Type.Sliced;
+                image.color = baseColor;
+            }
+
+            var colors = button.colors;
+            colors.normalColor = Color.white;
+            colors.highlightedColor = new Color(1.14f, 1.14f, 1.14f, 1f);
+            colors.selectedColor = colors.highlightedColor;
+            colors.pressedColor = new Color(0.72f, 0.72f, 0.72f, 1f);
+            colors.disabledColor = new Color(0.34f, 0.34f, 0.38f, 0.66f);
+            colors.colorMultiplier = 1f;
+            colors.fadeDuration = 0.08f;
+            button.colors = colors;
+
+            var shadow = button.GetComponent<Shadow>() ?? button.gameObject.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.76f);
+            shadow.effectDistance = new Vector2(0f, -5f);
+            shadow.useGraphicAlpha = true;
+
+            // タイトルの開始ボタンはPreBattlePanel側の常時パルスがscaleを管理する。
+            if (button.name != "GameStartBtn" && button.GetComponent<PremiumButtonMotion>() == null)
+                button.gameObject.AddComponent<PremiumButtonMotion>();
+        }
+
+        public static void StylePremiumField(Image image)
+        {
+            if (image == null || ButtonFrame == null) return;
+            image.sprite = ButtonFrame;
+            image.type = Image.Type.Sliced;
+            image.color = new Color(0.48f, 0.54f, 0.66f, 0.92f);
         }
 
         // ── ランタイムスプライト ─────────────────────────────────────

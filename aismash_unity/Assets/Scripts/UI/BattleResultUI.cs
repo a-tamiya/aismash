@@ -116,7 +116,11 @@ namespace PromptFighters.UI
             // ─ Overlay ──────────────────────────────────────────────
             _overlay = Make("ResultOverlay", root);
             StretchFill(_overlay.GetComponent<RectTransform>());
-            _overlay.AddComponent<Image>().color = BgOverlay;
+            var overlayImage = _overlay.AddComponent<Image>();
+            overlayImage.color = BgOverlay;
+            if (UITheme.TitleBackground != null)
+                UITheme.ApplyPremiumBackdrop(overlayImage, UITheme.TitleBackground,
+                    new Color(0.32f, 0.34f, 0.42f, 0.98f), animate: false);
 
             // ─ 左：立ち絵フレーム（バストアップ・下半身は枠外へクリップ） ─
             var frame = Make("PortraitFrame", _overlay.transform);
@@ -124,6 +128,7 @@ namespace PromptFighters.UI
             Anch(frame, 0f,0f, 0.58f,1f, 0,0,0,0);
             frame.AddComponent<Image>().color = UITheme.SteelDark;         // 地
             frame.AddComponent<RectMask2D>();                              // はみ出しをクリップ
+            UITheme.AddPremiumFrame(frame.transform);
             _portraitGroup = frame.AddComponent<CanvasGroup>();
             _portraitGroup.alpha = 0f;
 
@@ -160,6 +165,8 @@ namespace PromptFighters.UI
             Anch(right, 0.58f,0f, 1f,1f, 0,0,0,0);
             _rightGroup = right.AddComponent<CanvasGroup>();
             _rightGroup.alpha = 0f;
+            UITheme.AddPremiumFrame(right.transform,
+                new Color(UITheme.Gold.r, UITheme.Gold.g, UITheme.Gold.b, 0.42f), 18f);
 
             // 右背景に薄い勝者カラーの縦バンド
             var band = Make("RightBand", right.transform);

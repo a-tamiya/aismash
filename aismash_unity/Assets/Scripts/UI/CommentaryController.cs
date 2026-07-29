@@ -113,6 +113,8 @@ namespace PromptFighters.UI
             bg.type   = Image.Type.Simple;
             bg.color  = new Color(0.02f, 0.025f, 0.045f, 0.92f);
             bg.raycastTarget = false;
+            UITheme.AddPremiumFrame(panelGo.transform,
+                new Color(UITheme.Gold.r, UITheme.Gold.g, UITheme.Gold.b, 0.64f));
 
             // 上端ゴールドアクセントライン（斜め）
             var accentGo = new GameObject("Accent");
@@ -140,8 +142,8 @@ namespace PromptFighters.UI
             plateRect.anchoredPosition = new Vector2(20f, 0f);
             plateRect.sizeDelta = new Vector2(184f, 50f);
             _livePlate = plateGo.AddComponent<Image>();
-            _livePlate.sprite = UITheme.VGradient;
-            _livePlate.type = Image.Type.Simple;
+            _livePlate.sprite = UITheme.ButtonFrame ?? UITheme.VGradient;
+            _livePlate.type = UITheme.ButtonFrame != null ? Image.Type.Sliced : Image.Type.Simple;
             _livePlate.color = UITheme.Urgent;
             _livePlate.raycastTarget = false;
             UITheme.Skew(_livePlate, 12f);

@@ -658,12 +658,18 @@ namespace PromptFighters.GameFlow
             StretchFull(_titlePanel.GetComponent<RectTransform>());
 
             var bg = _titlePanel.AddComponent<Image>();
-            bg.sprite = CreateGradientSprite(
-                new Color(0.05f, 0.06f, 0.09f, 1f),
-                new Color(0.06f, 0.07f, 0.11f, 1f),
-                new Color(0.012f, 0.014f, 0.022f, 1f),
-                new Color(0.0f, 0.0f, 0.012f, 1f));
-            bg.type = Image.Type.Simple;
+            if (PromptFighters.UI.UITheme.TitleBackground != null)
+                PromptFighters.UI.UITheme.ApplyPremiumBackdrop(
+                    bg, PromptFighters.UI.UITheme.TitleBackground);
+            else
+            {
+                bg.sprite = CreateGradientSprite(
+                    new Color(0.05f, 0.06f, 0.09f, 1f),
+                    new Color(0.06f, 0.07f, 0.11f, 1f),
+                    new Color(0.012f, 0.014f, 0.022f, 1f),
+                    new Color(0.0f, 0.0f, 0.012f, 1f));
+                bg.type = Image.Type.Simple;
+            }
 
             var cg = _titlePanel.AddComponent<CanvasGroup>();
             cg.interactable = true;
@@ -672,29 +678,30 @@ namespace PromptFighters.GameFlow
             // ── 斜めのネオンサイドストライプ（1P青 / 2P赤） ──
             MakeSlantBar(_titlePanel.transform, "P1Stripe",
                 new Vector2(-820f, 0f), new Vector2(150f, 1100f),
-                new Color(PromptFighters.UI.UITheme.P1Neon.r, PromptFighters.UI.UITheme.P1Neon.g, PromptFighters.UI.UITheme.P1Neon.b, 0.10f), 110f);
+                new Color(PromptFighters.UI.UITheme.P1Neon.r, PromptFighters.UI.UITheme.P1Neon.g, PromptFighters.UI.UITheme.P1Neon.b, 0.025f), 110f);
             MakeSlantBar(_titlePanel.transform, "P1StripeThin",
                 new Vector2(-690f, 0f), new Vector2(26f, 1100f),
-                new Color(PromptFighters.UI.UITheme.P1Neon.r, PromptFighters.UI.UITheme.P1Neon.g, PromptFighters.UI.UITheme.P1Neon.b, 0.22f), 110f);
+                new Color(PromptFighters.UI.UITheme.P1Neon.r, PromptFighters.UI.UITheme.P1Neon.g, PromptFighters.UI.UITheme.P1Neon.b, 0.08f), 110f);
             MakeSlantBar(_titlePanel.transform, "P2Stripe",
                 new Vector2(820f, 0f), new Vector2(150f, 1100f),
-                new Color(PromptFighters.UI.UITheme.P2Neon.r, PromptFighters.UI.UITheme.P2Neon.g, PromptFighters.UI.UITheme.P2Neon.b, 0.10f), 110f);
+                new Color(PromptFighters.UI.UITheme.P2Neon.r, PromptFighters.UI.UITheme.P2Neon.g, PromptFighters.UI.UITheme.P2Neon.b, 0.025f), 110f);
             MakeSlantBar(_titlePanel.transform, "P2StripeThin",
                 new Vector2(690f, 0f), new Vector2(26f, 1100f),
-                new Color(PromptFighters.UI.UITheme.P2Neon.r, PromptFighters.UI.UITheme.P2Neon.g, PromptFighters.UI.UITheme.P2Neon.b, 0.22f), 110f);
+                new Color(PromptFighters.UI.UITheme.P2Neon.r, PromptFighters.UI.UITheme.P2Neon.g, PromptFighters.UI.UITheme.P2Neon.b, 0.08f), 110f);
 
             _titleTopGlow = MakePanel(_titlePanel.transform, "TopGlow",
-                new Vector2(0, 245), new Vector2(1000, 130),
-                new Color(PromptFighters.UI.UITheme.P1Neon.r, PromptFighters.UI.UITheme.P1Neon.g, PromptFighters.UI.UITheme.P1Neon.b, 0.16f));
+                new Vector2(0, 280), new Vector2(920, 4),
+                new Color(PromptFighters.UI.UITheme.P1Neon.r, PromptFighters.UI.UITheme.P1Neon.g, PromptFighters.UI.UITheme.P1Neon.b, 0.24f));
             _titleBottomGlow = MakePanel(_titlePanel.transform, "BottomGlow",
-                new Vector2(0, -245), new Vector2(1000, 150),
-                new Color(PromptFighters.UI.UITheme.P2Neon.r, PromptFighters.UI.UITheme.P2Neon.g, PromptFighters.UI.UITheme.P2Neon.b, 0.14f));
+                new Vector2(0, -245), new Vector2(920, 4),
+                new Color(PromptFighters.UI.UITheme.P2Neon.r, PromptFighters.UI.UITheme.P2Neon.g, PromptFighters.UI.UITheme.P2Neon.b, 0.22f));
 
             // ── センターフレーム（スチール地＋ゴールドの斜めエッジ） ──
             var frame = MakePanel(_titlePanel.transform, "CenterFrame",
                 new Vector2(0, 4), new Vector2(820, 400), PromptFighters.UI.UITheme.Steel);
             frame.sprite = PromptFighters.UI.UITheme.VGradient;
             frame.type = Image.Type.Simple;
+            PromptFighters.UI.UITheme.AddPremiumFrame(frame.transform);
             MakeSlantBar(_titlePanel.transform, "FrameTop", new Vector2(0, 206), new Vector2(820, 5),
                 PromptFighters.UI.UITheme.Gold, 22f);
             MakeSlantBar(_titlePanel.transform, "FrameBottom", new Vector2(0, -198), new Vector2(820, 5),
@@ -741,7 +748,7 @@ namespace PromptFighters.GameFlow
                 new Vector2(0, -110), new Vector2(400, 78), ShowCharacterSelect,
                 PromptFighters.UI.UITheme.Gold);
             StyleArcadeButton(startButton, PromptFighters.UI.UITheme.Gold, 18f);
-            SetButtonLabelStyle(startButton, 28f, FontStyles.Bold | FontStyles.Italic, new Color(0.12f, 0.08f, 0.0f));
+            SetButtonLabelStyle(startButton, 28f, FontStyles.Bold | FontStyles.Italic, Color.white);
             _startButtonRect = startButton.GetComponent<RectTransform>();
 
             // タイトルはロゴ＋ゲームスタートのみ。設定・操作説明・チュートリアルは
@@ -783,6 +790,7 @@ namespace PromptFighters.GameFlow
             var card = MakePanel(t, "CtrlCard", new Vector2(0f, 40f), new Vector2(760f, 540f),
                 new Color(0.012f, 0.014f, 0.024f, 0.95f));
             card.raycastTarget = false;
+            PromptFighters.UI.UITheme.AddPremiumFrame(card.transform);
             var body = MakeLabel(t, "CtrlBody", padText,
                 new Vector2(0f, 40f), new Vector2(680f, 480f), 24, PromptFighters.UI.UITheme.Ink);
             body.alignment = TextAlignmentOptions.TopLeft;
@@ -792,7 +800,7 @@ namespace PromptFighters.GameFlow
                 new Vector2(0, -320f), new Vector2(240f, 56f), HideControlsPanel,
                 PromptFighters.UI.UITheme.Gold);
             StyleArcadeButton(closeBtn, PromptFighters.UI.UITheme.Gold, 14f);
-            SetButtonLabelStyle(closeBtn, 22f, FontStyles.Bold | FontStyles.Italic, new Color(0.12f, 0.08f, 0f));
+            SetButtonLabelStyle(closeBtn, 22f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             _controlsPanel.SetActive(false);
         }
@@ -830,6 +838,7 @@ namespace PromptFighters.GameFlow
             boxImg.type = Image.Type.Simple;
             // Linearカラースペースではα0.99でも裏の明るいロゴが透けるため完全不透明にする
             boxImg.color = new Color(0.05f, 0.055f, 0.08f, 1f);
+            PromptFighters.UI.UITheme.AddPremiumFrame(box.transform);
 
             var t = box.transform;
             MakeSlantBar(t, "SetTop", new Vector2(0f, 498f), new Vector2(960f, 6f),
@@ -934,7 +943,7 @@ namespace PromptFighters.GameFlow
                 new Vector2(0f, -445f), new Vector2(260f, 64f), HideSettingsPanel,
                 PromptFighters.UI.UITheme.Gold);
             StyleArcadeButton(closeBtn, PromptFighters.UI.UITheme.Gold, 14f);
-            SetButtonLabelStyle(closeBtn, 22f, FontStyles.Bold | FontStyles.Italic, new Color(0.12f, 0.08f, 0f));
+            SetButtonLabelStyle(closeBtn, 22f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             RefreshToggleVisuals();
         }
@@ -1141,6 +1150,9 @@ namespace PromptFighters.GameFlow
             var bg = _stageSelectPanel.AddComponent<Image>();
             // Linearカラースペースではわずかなアルファ漏れでも裏の白文字が強く透けるため不透明にする
             bg.color = new Color(0.01f, 0.012f, 0.025f, 1f);
+            if (PromptFighters.UI.UITheme.TitleBackground != null)
+                PromptFighters.UI.UITheme.ApplyPremiumBackdrop(bg,
+                    PromptFighters.UI.UITheme.TitleBackground, new Color(0.62f, 0.64f, 0.72f, 1f));
 
             var titleShadow = MakeLabel(_stageSelectPanel.transform, "StageSelectTitleShadow",
                 "STAGE SELECT", new Vector2(4f, 446f), new Vector2(900f, 80f), 52f,
@@ -1323,8 +1335,8 @@ namespace PromptFighters.GameFlow
             bool coop = PromptFighters.Battle.BattleManager.RequestedMode == PromptFighters.Battle.BattleMode.CoopVsBoss;
             if (_modeVersusBg   != null) _modeVersusBg.color = coop ? ToggleOffColor : ToggleOnColor;
             if (_modeCoopBg     != null) _modeCoopBg.color   = coop ? ToggleOnColor  : ToggleOffColor;
-            if (_modeVersusLabel != null) _modeVersusLabel.color = coop ? PromptFighters.UI.UITheme.InkDim : new Color(0.12f, 0.08f, 0f);
-            if (_modeCoopLabel   != null) _modeCoopLabel.color   = coop ? new Color(0.12f, 0.08f, 0f) : PromptFighters.UI.UITheme.InkDim;
+            if (_modeVersusLabel != null) _modeVersusLabel.color = coop ? PromptFighters.UI.UITheme.InkDim : Color.white;
+            if (_modeCoopLabel   != null) _modeCoopLabel.color   = coop ? Color.white : PromptFighters.UI.UITheme.InkDim;
             if (_bossSelectorRoot != null) _bossSelectorRoot.SetActive(coop);
             if (coop)
             {
@@ -1343,12 +1355,18 @@ namespace PromptFighters.GameFlow
             StretchFull(_panel.GetComponent<RectTransform>());
 
             var bg = _panel.AddComponent<Image>();
-            bg.sprite = CreateGradientSprite(
-                new Color(0.05f, 0.06f, 0.09f, 1f),
-                new Color(0.06f, 0.07f, 0.11f, 1f),
-                new Color(0.012f, 0.014f, 0.022f, 1f),
-                new Color(0.0f, 0.0f, 0.012f, 1f));
-            bg.type = Image.Type.Simple;
+            if (PromptFighters.UI.UITheme.LobbyBackground != null)
+                PromptFighters.UI.UITheme.ApplyPremiumBackdrop(
+                    bg, PromptFighters.UI.UITheme.LobbyBackground, new Color(0.78f, 0.82f, 0.9f, 1f));
+            else
+            {
+                bg.sprite = CreateGradientSprite(
+                    new Color(0.05f, 0.06f, 0.09f, 1f),
+                    new Color(0.06f, 0.07f, 0.11f, 1f),
+                    new Color(0.012f, 0.014f, 0.022f, 1f),
+                    new Color(0.0f, 0.0f, 0.012f, 1f));
+                bg.type = Image.Type.Simple;
+            }
 
             var cg = _panel.AddComponent<CanvasGroup>();
             cg.interactable = true;
@@ -1398,7 +1416,7 @@ namespace PromptFighters.GameFlow
                 new Vector2(-330, -430), new Vector2(300, 72), OnStartPressed,
                 PromptFighters.UI.UITheme.Gold);
             StyleArcadeButton(startBtn, PromptFighters.UI.UITheme.Gold, 16f);
-            SetButtonLabelStyle(startBtn, 26f, FontStyles.Bold | FontStyles.Italic, new Color(0.12f, 0.08f, 0f));
+            SetButtonLabelStyle(startBtn, 26f, FontStyles.Bold | FontStyles.Italic, Color.white);
             _startBtnLabel = startBtn.GetComponentInChildren<TextMeshProUGUI>();
 
             var trainBtn = MakeButton(_panel.transform, "TrainingBtn", "トレーニング",
@@ -1490,6 +1508,8 @@ namespace PromptFighters.GameFlow
             cbImg.sprite = PromptFighters.UI.UITheme.VGradient;
             cbImg.type = Image.Type.Simple;
             cbImg.color = bgColor;
+            PromptFighters.UI.UITheme.AddPremiumFrame(colBg.transform,
+                new Color(pColor.r, pColor.g, pColor.b, 0.58f));
 
             // プレイヤーバッジ（斜めネオンプレート）— 左上に小さく
             MakeSlantBar(parent, isP1 ? "P1BadgePlate" : "P2BadgePlate",
@@ -1521,6 +1541,8 @@ namespace PromptFighters.GameFlow
             pfRt.sizeDelta = new Vector2(280f, 360f);
             var pfImg = AddImage(previewFrame, new Color(0.012f, 0.014f, 0.024f, 0.92f));
             pfImg.sprite = PromptFighters.UI.UITheme.VGradient; pfImg.type = Image.Type.Simple;
+            PromptFighters.UI.UITheme.AddPremiumFrame(previewFrame.transform,
+                new Color(pColor.r, pColor.g, pColor.b, 0.9f));
             MakeSlantBar(previewFrame.transform, "PreviewTop", new Vector2(0f, 178f), new Vector2(280f, 5f), pColor, slant);
             MakeSlantBar(previewFrame.transform, "PreviewBottom", new Vector2(0f, -178f), new Vector2(280f, 5f), pColor, slant);
 
@@ -1544,6 +1566,8 @@ namespace PromptFighters.GameFlow
             spRt.sizeDelta = new Vector2(330f, 360f);
             var spImg = AddImage(statPanel, new Color(0.012f, 0.014f, 0.024f, 0.92f));
             spImg.sprite = PromptFighters.UI.UITheme.VGradient; spImg.type = Image.Type.Simple;
+            PromptFighters.UI.UITheme.AddPremiumFrame(statPanel.transform,
+                new Color(pColor.r, pColor.g, pColor.b, 0.9f));
             MakeSlantBar(statPanel.transform, "StatTop", new Vector2(0f, 178f), new Vector2(330f, 5f), pColor, slant);
 
             MakeLabel(statPanel.transform, "StatHeader", "STATUS",
@@ -1652,6 +1676,9 @@ namespace PromptFighters.GameFlow
             frRt.sizeDelta = new Vector2(1480f, 232f);
             var frImg = AddImage(frame, new Color(0.012f, 0.014f, 0.024f, 0.92f));
             frImg.sprite = PromptFighters.UI.UITheme.VGradient; frImg.type = Image.Type.Simple;
+            PromptFighters.UI.UITheme.AddPremiumFrame(frame.transform,
+                new Color(PromptFighters.UI.UITheme.Gold.r, PromptFighters.UI.UITheme.Gold.g,
+                    PromptFighters.UI.UITheme.Gold.b, 0.72f));
             MakeSlantBar(frame.transform, "RosterTop", new Vector2(0f, 112f), new Vector2(1480f, 4f),
                 PromptFighters.UI.UITheme.Gold, 24f);
 
@@ -1941,11 +1968,15 @@ namespace PromptFighters.GameFlow
             _generationSetupPanel.SetActive(false);
 
             var bg = _generationSetupPanel.AddComponent<Image>();
-            bg.sprite = CreateGradientSprite(
-                new Color(0.05f, 0.06f, 0.09f, 1f),
-                new Color(0.06f, 0.07f, 0.11f, 1f),
-                new Color(0.012f, 0.014f, 0.022f, 1f),
-                new Color(0.0f, 0.0f, 0.012f, 1f));
+            if (PromptFighters.UI.UITheme.LobbyBackground != null)
+                PromptFighters.UI.UITheme.ApplyPremiumBackdrop(bg,
+                    PromptFighters.UI.UITheme.LobbyBackground, new Color(0.68f, 0.72f, 0.82f, 1f));
+            else
+                bg.sprite = CreateGradientSprite(
+                    new Color(0.05f, 0.06f, 0.09f, 1f),
+                    new Color(0.06f, 0.07f, 0.11f, 1f),
+                    new Color(0.012f, 0.014f, 0.022f, 1f),
+                    new Color(0.0f, 0.0f, 0.012f, 1f));
 
             MakeSlantBar(_generationSetupPanel.transform, "GenSlash", new Vector2(0f, 455f), new Vector2(520f, 52f),
                 new Color(PromptFighters.UI.UITheme.GoldDim.r, PromptFighters.UI.UITheme.GoldDim.g, PromptFighters.UI.UITheme.GoldDim.b, 0.30f), 24f);
@@ -1960,7 +1991,7 @@ namespace PromptFighters.GameFlow
                 new Vector2(-170f, -420f), new Vector2(260f, 64f), OnGeneratePressed,
                 PromptFighters.UI.UITheme.Gold);
             StyleArcadeButton(startGen, PromptFighters.UI.UITheme.Gold, 16f);
-            SetButtonLabelStyle(startGen, 23f, FontStyles.Bold | FontStyles.Italic, new Color(0.12f, 0.08f, 0f));
+            SetButtonLabelStyle(startGen, 23f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             var back = MakeButton(_generationSetupPanel.transform, "BackToSelectBtn", "戻る",
                 new Vector2(170f, -420f), new Vector2(220f, 64f), ShowCharacterSelect,
@@ -1997,6 +2028,8 @@ namespace PromptFighters.GameFlow
                 new Vector2(cx, 15f), new Vector2(610f, 720f),
                 new Color(pColorDark.r, pColorDark.g, pColorDark.b, 0.24f));
             genBg.sprite = PromptFighters.UI.UITheme.VGradient; genBg.type = Image.Type.Simple;
+            PromptFighters.UI.UITheme.AddPremiumFrame(genBg.transform,
+                new Color(pColor.r, pColor.g, pColor.b, 0.92f));
             MakeSlantBar(parent, isP1 ? "P1GenTop" : "P2GenTop",
                 new Vector2(cx, 372f), new Vector2(610f, 5f), pColor, slant);
             MakeSlantBar(parent, isP1 ? "P1GenBadgePlate" : "P2GenBadgePlate",
@@ -2125,6 +2158,15 @@ namespace PromptFighters.GameFlow
 
             var bg = _generatingPanel.AddComponent<Image>();
             bg.color = new Color(0f, 0f, 0f, 0.9f);
+            if (PromptFighters.UI.UITheme.TitleBackground != null)
+                PromptFighters.UI.UITheme.ApplyPremiumBackdrop(bg,
+                    PromptFighters.UI.UITheme.TitleBackground, new Color(0.34f, 0.36f, 0.42f, 1f));
+
+            var generatingCard = MakePanel(_generatingPanel.transform, "GeneratingCard",
+                new Vector2(0f, 5f), new Vector2(900f, 420f),
+                new Color(0.015f, 0.018f, 0.03f, 0.94f));
+            PromptFighters.UI.UITheme.AddPremiumFrame(generatingCard.transform);
+            generatingCard.transform.SetAsFirstSibling();
 
             MakeSlantBar(_generatingPanel.transform, "GenBar1",
                 new Vector2(0, 122), new Vector2(760, 70),
@@ -2157,9 +2199,13 @@ namespace PromptFighters.GameFlow
             _skillConfirmPanel.SetActive(false);
 
             var bg = _skillConfirmPanel.AddComponent<Image>();
-            bg.sprite = CreateGradientSprite(
-                new Color(0.05f, 0.06f, 0.09f, 1f), new Color(0.06f, 0.07f, 0.11f, 1f),
-                new Color(0.012f, 0.014f, 0.022f, 1f), new Color(0.0f, 0.0f, 0.012f, 1f));
+            if (PromptFighters.UI.UITheme.LobbyBackground != null)
+                PromptFighters.UI.UITheme.ApplyPremiumBackdrop(bg,
+                    PromptFighters.UI.UITheme.LobbyBackground, new Color(0.62f, 0.66f, 0.76f, 1f));
+            else
+                bg.sprite = CreateGradientSprite(
+                    new Color(0.05f, 0.06f, 0.09f, 1f), new Color(0.06f, 0.07f, 0.11f, 1f),
+                    new Color(0.012f, 0.014f, 0.022f, 1f), new Color(0.0f, 0.0f, 0.012f, 1f));
 
             MakeSlantBar(_skillConfirmPanel.transform, "ConfirmSlash", new Vector2(0, 492), new Vector2(420, 46),
                 new Color(PromptFighters.UI.UITheme.GoldDim.r, PromptFighters.UI.UITheme.GoldDim.g, PromptFighters.UI.UITheme.GoldDim.b, 0.30f), 22f);
@@ -2251,7 +2297,7 @@ namespace PromptFighters.GameFlow
                 new Vector2(0, -428), new Vector2(380, 62), OnSkillConfirmDonePressed,
                 PromptFighters.UI.UITheme.Gold);
             StyleArcadeButton(doneBtn, PromptFighters.UI.UITheme.Gold, 16f);
-            SetButtonLabelStyle(doneBtn, 23f, FontStyles.Bold | FontStyles.Italic, new Color(0.12f, 0.08f, 0f));
+            SetButtonLabelStyle(doneBtn, 23f, FontStyles.Bold | FontStyles.Italic, Color.white);
         }
 
         // 生成キャラ削除の確認モーダル（アーケード調・誤削除防止）。
@@ -2275,6 +2321,8 @@ namespace PromptFighters.GameFlow
             var boxImg = box.AddComponent<Image>();
             boxImg.sprite = PromptFighters.UI.UITheme.VGradient; boxImg.type = Image.Type.Simple;
             boxImg.color = new Color(0.05f, 0.055f, 0.08f, 0.99f);
+            PromptFighters.UI.UITheme.AddPremiumFrame(box.transform,
+                new Color(1f, 0.52f, 0.52f, 1f));
 
             // 上下のネオン縁（危険色）
             MakeSlantBar(box.transform, "DelTop", new Vector2(0f, 158f), new Vector2(620f, 6f),

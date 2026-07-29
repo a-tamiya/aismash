@@ -170,7 +170,7 @@ namespace PromptFighters.GameFlow
             rt.sizeDelta = size;
 
             var bg = go.AddComponent<Image>();
-            bg.color = UITheme.FieldBg;
+            UITheme.StylePremiumField(bg);
 
             var viewport = CreateUIObject("TextArea", go.transform);
             var vpRt = viewport.GetComponent<RectTransform>();
@@ -226,10 +226,7 @@ namespace PromptFighters.GameFlow
             img.color = bgColor ?? new Color(0.2f, 0.2f, 0.3f, 1f);
 
             var btn = go.AddComponent<Button>();
-            var cols = btn.colors;
-            cols.highlightedColor = new Color(0.4f, 0.4f, 0.6f);
-            cols.pressedColor     = new Color(0.1f, 0.1f, 0.1f);
-            btn.colors = cols;
+            UITheme.StylePremiumButton(btn, bgColor ?? new Color(0.2f, 0.2f, 0.3f, 1f));
             btn.onClick.AddListener(() =>
             {
                 PromptFighters.Audio.GameAudioManager.Instance?.PlayMenu();
@@ -255,6 +252,7 @@ namespace PromptFighters.GameFlow
             frt.anchoredPosition = pos;
             frt.sizeDelta = size;
             AddImage(frame, new Color(0.01f, 0.012f, 0.02f, 0.78f));
+            UITheme.AddPremiumFrame(frame.transform);
 
             var imageGo = CreateUIObject(name, frame.transform);
             var rt = imageGo.GetComponent<RectTransform>();
@@ -302,21 +300,16 @@ namespace PromptFighters.GameFlow
         static void StyleArcadeButton(Button btn, Color baseColor, float slant)
         {
             if (btn == null) return;
+            PromptFighters.UI.UITheme.StylePremiumButton(btn, baseColor);
             var img = btn.GetComponent<Image>();
             if (img != null)
             {
-                img.sprite = PromptFighters.UI.UITheme.VGradient;
-                img.type = Image.Type.Simple;
+                img.sprite = PromptFighters.UI.UITheme.ButtonFrame ?? PromptFighters.UI.UITheme.VGradient;
+                img.type = PromptFighters.UI.UITheme.ButtonFrame != null ? Image.Type.Sliced : Image.Type.Simple;
                 img.color = baseColor;
-                PromptFighters.UI.UITheme.Skew(img, slant);
+                // 生成枠自体に角度があるため、従来より控えめなシアーにする。
+                PromptFighters.UI.UITheme.Skew(img, slant * 0.28f);
             }
-            var rt = btn.GetComponent<RectTransform>();
-            // 下辺ネオンライン
-            var edge = MakeSlantBar(btn.transform, "BtnEdge",
-                new Vector2(0f, -rt.sizeDelta.y * 0.5f + 2f),
-                new Vector2(rt.sizeDelta.x, 4f),
-                new Color(1f, 1f, 1f, 0.85f), slant);
-            edge.transform.SetAsFirstSibling();
         }
 
         static Image AddImage(GameObject go, Color color)
