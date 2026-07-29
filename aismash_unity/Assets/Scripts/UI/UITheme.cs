@@ -29,14 +29,11 @@ namespace PromptFighters.UI
         static Sprite _vgrad;
         static Sprite _titleBackground;
         static Sprite _lobbyBackground;
-        static Sprite _damageBurst;
 
         public static Sprite TitleBackground =>
             _titleBackground ??= Resources.Load<Sprite>("UI/Premium/title_background");
         public static Sprite LobbyBackground =>
             _lobbyBackground ??= Resources.Load<Sprite>("UI/Premium/lobby_background");
-        public static Sprite DamageBurst =>
-            _damageBurst ??= Resources.Load<Sprite>("UI/Premium/damage_burst");
 
         public static TMP_FontAsset Font
         {

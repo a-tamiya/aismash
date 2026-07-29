@@ -30,7 +30,6 @@ namespace PromptFighters.Editor
         {
             new ImportSpec("title_background.png", 100f, Vector4.zero, false),
             new ImportSpec("lobby_background.png", 100f, Vector4.zero, false),
-            new ImportSpec("damage_burst.png", 256f, Vector4.zero, true),
         };
 
         static PremiumUISpriteImporter()
