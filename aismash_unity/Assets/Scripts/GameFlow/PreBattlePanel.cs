@@ -499,7 +499,7 @@ namespace PromptFighters.GameFlow
         void SetGenOverlayTitleDefault()
         {
             if (_genOverlayTitle == null) return;
-            _genOverlayTitle.text = "● 生成中…";
+            _genOverlayTitle.text = "● 生成中...";
             _genOverlayTitle.color = PromptFighters.UI.UITheme.Gold;
         }
 
@@ -1483,7 +1483,7 @@ namespace PromptFighters.GameFlow
             if (label == null) return;
             label.fontStyle = FontStyles.Bold | FontStyles.Italic;
             label.textWrappingMode = TextWrappingModes.NoWrap;
-            label.overflowMode = TextOverflowModes.Ellipsis;
+            label.overflowMode = TextOverflowModes.Truncate;
             label.enableAutoSizing = true;
             label.fontSizeMin = 16f;
             label.fontSizeMax = 28f;
@@ -1746,7 +1746,7 @@ namespace PromptFighters.GameFlow
                 new Vector2(0f, -21f), new Vector2(164f, 20f), 15f, Color.white);
             nm.fontStyle = FontStyles.Bold;
             nm.textWrappingMode = TextWrappingModes.NoWrap;
-            nm.overflowMode = TextOverflowModes.Ellipsis;
+            nm.overflowMode = TextOverflowModes.Truncate;
             nm.raycastTarget = false;
 
             // 新しく生成したキャラは枠を光らせて見分けやすくする。
@@ -3566,7 +3566,7 @@ namespace PromptFighters.GameFlow
                         int slash = progress?.IndexOf('/') ?? -1;
                         string count = slash > 0
                             ? progress.Substring(Mathf.Max(0, slash - 1), Mathf.Min(3, progress.Length - Mathf.Max(0, slash - 1)))
-                            : "…";
+                            : "...";
                         SetVoiceRegenerateButtonText(activeButton, "生成中 " + count);
                     },
                     () => CharacterSaveManager.Save(data),

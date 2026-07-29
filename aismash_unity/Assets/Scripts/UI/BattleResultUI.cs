@@ -209,7 +209,7 @@ namespace PromptFighters.UI
             _nameText.alignment = TextAlignmentOptions.Left;
             _nameText.color = TextWht;
             _nameText.textWrappingMode = TextWrappingModes.NoWrap;
-            _nameText.overflowMode = TextOverflowModes.Ellipsis;
+            _nameText.overflowMode = TextOverflowModes.Truncate;
             UITheme.Apply(_nameText);
 
             // キャッチコピー
@@ -221,7 +221,7 @@ namespace PromptFighters.UI
             _copyText.alignment = TextAlignmentOptions.Left;
             _copyText.color = UITheme.InkDim;
             _copyText.textWrappingMode = TextWrappingModes.NoWrap;
-            _copyText.overflowMode = TextOverflowModes.Ellipsis;
+            _copyText.overflowMode = TextOverflowModes.Truncate;
             UITheme.Apply(_copyText);
 
             // ラウンドドット（BO3）

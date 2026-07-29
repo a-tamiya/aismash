@@ -46,6 +46,7 @@ namespace PromptFighters.Battle
         float _lifetime = 3f;
         float _age;
         float _flashTimer;   // 被弾フラッシュの残り時間
+        int _phaseSeed;      // EntityIdの幅に依存しない、個体ごとの演出位相
         bool _boomerangReturning;
         Vector3 _baseScale = Vector3.one;
         Color   _baseColor = Color.white;
@@ -213,6 +214,7 @@ namespace PromptFighters.Battle
         {
             _rb        = GetComponent<Rigidbody2D>();
             _sr        = GetComponent<SpriteRenderer>();
+            _phaseSeed = GetEntityId().GetHashCode();
             _startX    = transform.position.x;
             _startY    = transform.position.y;
             _dir       = InitialDirection();
@@ -263,7 +265,7 @@ namespace PromptFighters.Battle
             if (OrbitOwner && Owner != null)
             {
                 float sign = MoveDirection.y < 0f ? -1f : 1f;
-                float angle = (_age * Speed * 90f * sign + GetInstanceID() * 37f) * Mathf.Deg2Rad;
+                float angle = (_age * Speed * 90f * sign + _phaseSeed * 37f) * Mathf.Deg2Rad;
                 Vector2 target = (Vector2)Owner.transform.position +
                                  new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * OrbitRadius;
                 _rb.gravityScale = 0f;
@@ -393,7 +395,7 @@ namespace PromptFighters.Battle
             float pop  = Mathf.Lerp(0.25f, 1f, 1f - (1f - popT) * (1f - popT));
 
             // 生き物らしいスクワッシュ＆ストレッチ（面積ほぼ一定の2D変形）
-            float wob = IsWall ? 0f : 0.04f * Mathf.Sin((_age + GetInstanceID() * 0.13f) * 7f);
+            float wob = IsWall ? 0f : 0.04f * Mathf.Sin((_age + _phaseSeed * 0.13f) * 7f);
 
             // 寿命間際は縮みながらフェードアウト
             float outT   = Mathf.Clamp01((_lifetime - _age) / 0.35f);

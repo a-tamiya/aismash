@@ -151,7 +151,7 @@ namespace PromptFighters.UI
             }
             else
             {
-                ShowBanner("[ ボイスボール出現！ ]", "攻撃して破壊すると…願いが叶う！");
+                ShowBanner("[ ボイスボール出現！ ]", "攻撃して破壊すると...願いが叶う！");
                 if (_busy == false) StartCoroutine(HideBannerAfter(2.4f));
             }
         }
@@ -289,9 +289,9 @@ namespace PromptFighters.UI
                 {
                     _listening = true;
                     _recordEndRealtime = Time.unscaledTime + recordSeconds;
-                    // 声が入るまでは認識結果を出さず「認識中…」とだけ表示する
+                    // 声が入るまでは認識結果を出さず「認識中...」とだけ表示する
                     // （無音をWhisperに送るとハルシネーションが出るため）。
-                    ShowSubtitle("認識中…");
+                    ShowSubtitle("認識中...");
                 },
                 // 録音中、実際に声が入った分だけ認識途中経過をリアルタイム表示する（確定前のプレビュー）。
                 onPartial: t => ShowSubtitle($"認識中: 「{t}」"));
@@ -328,7 +328,7 @@ namespace PromptFighters.UI
             }
             else
             {
-                ShowSubtitle("うまく聞き取れなかった…ランダム効果！");
+                ShowSubtitle("うまく聞き取れなかった...ランダム効果！");
                 yield return new WaitForSecondsRealtime(1.0f);
             }
 

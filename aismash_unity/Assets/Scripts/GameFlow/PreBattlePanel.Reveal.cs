@@ -136,7 +136,7 @@ namespace PromptFighters.GameFlow
                 new Vector2(0f, -300f), new Vector2(1200f, 70f), 46f, Color.white);
             _revealName.fontStyle = FontStyles.Bold | FontStyles.Italic;
             _revealName.textWrappingMode = TextWrappingModes.NoWrap;
-            _revealName.overflowMode = TextOverflowModes.Ellipsis;
+            _revealName.overflowMode = TextOverflowModes.Truncate;
 
             _revealCatch = MakeLabel(t, "RevealCatch", "",
                 new Vector2(0f, -352f), new Vector2(1100f, 40f), 24f, PromptFighters.UI.UITheme.Gold);
@@ -171,7 +171,7 @@ namespace PromptFighters.GameFlow
                 _revealSkillText[i].alignment = TextAlignmentOptions.Left;
                 _revealSkillText[i].fontStyle = FontStyles.Bold;
                 _revealSkillText[i].textWrappingMode = TextWrappingModes.NoWrap;
-                _revealSkillText[i].overflowMode = TextOverflowModes.Ellipsis;
+                _revealSkillText[i].overflowMode = TextOverflowModes.Truncate;
             }
 
             _revealPrompt = MakeLabel(t, "RevealPrompt", "▶ スペース / A で決定",

@@ -23,12 +23,12 @@ namespace PromptFighters.Battle.Skills
         const float AlphaThreshold255 = 64f; // これ以上の不透明度(0-255)をシルエットとみなす
         const int   TargetSamples     = 220; // 解析の目標解像度（縦方向サンプル数）
 
-        static readonly Dictionary<int, AttackAnchor> _cache = new Dictionary<int, AttackAnchor>();
+        static readonly Dictionary<EntityId, AttackAnchor> _cache = new Dictionary<EntityId, AttackAnchor>();
 
         public static AttackAnchor Get(Sprite sprite)
         {
             if (sprite == null || sprite.texture == null) return default;
-            int key = sprite.GetInstanceID();
+            EntityId key = sprite.GetEntityId();
             if (_cache.TryGetValue(key, out var cached)) return cached;
 
             AttackAnchor a = default;

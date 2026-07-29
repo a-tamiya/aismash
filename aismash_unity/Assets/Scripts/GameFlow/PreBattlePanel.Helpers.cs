@@ -187,7 +187,7 @@ namespace PromptFighters.GameFlow
             text.color = Color.white;
             text.alignment = multiline ? TextAlignmentOptions.TopLeft : TextAlignmentOptions.Left;
             text.textWrappingMode = multiline ? TextWrappingModes.Normal : TextWrappingModes.NoWrap;
-            text.overflowMode = multiline ? TextOverflowModes.Overflow : TextOverflowModes.Ellipsis;
+            text.overflowMode = multiline ? TextOverflowModes.Overflow : TextOverflowModes.Truncate;
             UITheme.Apply(text);
 
             var placeholderGo = CreateUIObject("Placeholder", viewport.transform);
@@ -198,7 +198,7 @@ namespace PromptFighters.GameFlow
             placeholderText.color = new Color(0.7f, 0.75f, 0.85f, 0.62f);
             placeholderText.alignment = text.alignment;
             placeholderText.textWrappingMode = text.textWrappingMode;
-            placeholderText.overflowMode = TextOverflowModes.Ellipsis;
+            placeholderText.overflowMode = TextOverflowModes.Truncate;
             UITheme.Apply(placeholderText);
 
             var input = go.AddComponent<TMP_InputField>();

@@ -35,17 +35,35 @@ namespace PromptFighters.Utils
                                                              float fadeRange = 0.10f)
         {
             var raw = new Texture2D(2, 2, TextureFormat.RGB24, false);
-            if (!ImageConversion.LoadImage(raw, bytes)) return null;
+            if (!ImageConversion.LoadImage(raw, bytes))
+            {
+                Object.Destroy(raw);
+                return null;
+            }
 
-            Texture2D processed = WhiteBackgroundRemover.Apply(raw, threshold, fadeRange);
-            Object.Destroy(raw);
+            Texture2D processed = null;
+            try
+            {
+                processed = WhiteBackgroundRemover.Apply(raw, threshold, fadeRange);
+                if (processed == null) return null;
 
-            return Sprite.Create(
-                processed,
-                new Rect(0, 0, processed.width, processed.height),
-                new Vector2(0.5f, 0f),
-                processed.height / 2f
-            );
+                return Sprite.Create(
+                    processed,
+                    new Rect(0, 0, processed.width, processed.height),
+                    new Vector2(0.5f, 0f),
+                    processed.height / 2f
+                );
+            }
+            catch (System.Exception e)
+            {
+                if (processed != null) Object.Destroy(processed);
+                Debug.LogWarning($"[SpriteLoader] 画像変換失敗: {e.Message}");
+                return null;
+            }
+            finally
+            {
+                Object.Destroy(raw);
+            }
         }
 
         // コルーチン版: File.ReadAllBytes をバックグラウンドスレッドで実行し、
@@ -71,13 +89,26 @@ namespace PromptFighters.Utils
         static Sprite BuildDirectSprite(byte[] bytes, bool centerPivot = false)
         {
             var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-            if (!ImageConversion.LoadImage(tex, bytes)) return null;
+            if (!ImageConversion.LoadImage(tex, bytes))
+            {
+                Object.Destroy(tex);
+                return null;
+            }
 
-            return Sprite.Create(
-                tex,
-                new Rect(0, 0, tex.width, tex.height),
-                centerPivot ? new Vector2(0.5f, 0.5f) : new Vector2(0.5f, 0f),
-                tex.height / 2f);
+            try
+            {
+                return Sprite.Create(
+                    tex,
+                    new Rect(0, 0, tex.width, tex.height),
+                    centerPivot ? new Vector2(0.5f, 0.5f) : new Vector2(0.5f, 0f),
+                    tex.height / 2f);
+            }
+            catch (System.Exception e)
+            {
+                Object.Destroy(tex);
+                Debug.LogWarning($"[SpriteLoader] Sprite生成失敗: {e.Message}");
+                return null;
+            }
         }
 
         static string ResolvePath(string path) => Path.IsPathRooted(path)
@@ -92,7 +123,15 @@ namespace PromptFighters.Utils
                 Debug.LogWarning($"[SpriteLoader] ファイルが見つかりません: {fullPath}");
                 return null;
             }
-            return File.ReadAllBytes(fullPath);
+            try
+            {
+                return File.ReadAllBytes(fullPath);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[SpriteLoader] 読み込み失敗: {fullPath} ({e.Message})");
+                return null;
+            }
         }
 
         // ディスク読み込みのみバックグラウンドスレッドへ逃がす。

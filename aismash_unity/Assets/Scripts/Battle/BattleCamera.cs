@@ -48,7 +48,7 @@ namespace PromptFighters.Battle
         void CacheStageBounds()
         {
             SpriteRenderer best = null;
-            var srs = FindObjectsByType<SpriteRenderer>(FindObjectsSortMode.None);
+            var srs = FindObjectsByType<SpriteRenderer>();
             foreach (var sr in srs)
             {
                 if (sr.sprite == null) continue;

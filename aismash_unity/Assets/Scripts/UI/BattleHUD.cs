@@ -522,7 +522,7 @@ namespace PromptFighters.UI
             nmTmp.alignment = isP1 ? TextAlignmentOptions.Left : TextAlignmentOptions.Right;
             nmTmp.color = pCol;
             nmTmp.textWrappingMode = TextWrappingModes.NoWrap;
-            nmTmp.overflowMode = TextOverflowModes.Ellipsis;
+            nmTmp.overflowMode = TextOverflowModes.Truncate;
             UITheme.Apply(nmTmp);
             nameLabel = nmTmp;
 

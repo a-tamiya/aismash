@@ -318,7 +318,7 @@ namespace PromptFighters.Battle
                         if (caster != null)
                             PromptFighters.UI.DamagePopup.SpawnText(
                                 caster.transform.position + Vector3.up * 1.2f,
-                                $"失敗…自分に {debuffName}",
+                                $"失敗...自分に {debuffName}",
                                 new Color(1f, 0.4f, 0.3f), 1.6f);
                     }
                     break;

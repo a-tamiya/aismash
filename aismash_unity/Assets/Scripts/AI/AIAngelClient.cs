@@ -116,7 +116,7 @@ namespace PromptFighters.AI
             target   = "weaker",
             value    = 0.15f,
             duration = 0f,
-            message  = "ちょっと退屈だから…HP少しあげる♪"
+            message  = "ちょっと退屈だから...HP少しあげる♪"
         };
 
         const string SpatialGimmickPrompt =

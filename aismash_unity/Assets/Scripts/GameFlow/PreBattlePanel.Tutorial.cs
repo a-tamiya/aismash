@@ -400,7 +400,7 @@ namespace PromptFighters.GameFlow
             if (f == null || _tutVoice[i] != null || _tutVoiceBroken[i] || _tutVoiceAcquiring[i]) return;
             if (_tutVoice[1 - i] != null || _tutVoiceAcquiring[1 - i])
             {
-                if (_tutHint[i] != null) _tutHint[i].text = "相手のボイスボールが終わるまで少し待とう…";
+                if (_tutHint[i] != null) _tutHint[i].text = "相手のボイスボールが終わるまで少し待とう...";
                 return;
             }
             float groundY = BattleManager.Instance != null ? BattleManager.Instance.StageGroundY : -2.3f;
@@ -611,7 +611,7 @@ namespace PromptFighters.GameFlow
             {
                 // 相手がまだ挑戦中なら「待っています」を出す
                 bool otherBusy = _tutStep[1 - i] < TutorialSteps.Length;
-                _tutHint[i].text = otherBusy ? "相手のクリアを待っています…" : "";
+                _tutHint[i].text = otherBusy ? "相手のクリアを待っています..." : "";
             }
             if (_tutProgress[i] != null) _tutProgress[i].text = "● ● ● ● ● ● ●";
         }

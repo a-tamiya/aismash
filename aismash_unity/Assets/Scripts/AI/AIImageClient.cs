@@ -947,10 +947,22 @@ namespace PromptFighters.AI
         {
             var raw = new Texture2D(2, 2, TextureFormat.RGBA32, false);
             if (!ImageConversion.LoadImage(raw, rawBytes))
+            {
+                UnityEngine.Object.Destroy(raw);
                 throw new Exception("Texture2D.LoadImage failed");
+            }
 
-            var processed = WhiteBackgroundRemover.ApplyChromaGreen(raw);
-            UnityEngine.Object.Destroy(raw);
+            Texture2D processed;
+            try
+            {
+                processed = WhiteBackgroundRemover.ApplyChromaGreen(raw);
+            }
+            finally
+            {
+                UnityEngine.Object.Destroy(raw);
+            }
+            if (processed == null)
+                throw new Exception("背景透過処理に失敗");
 
             return Sprite.Create(
                 processed,
