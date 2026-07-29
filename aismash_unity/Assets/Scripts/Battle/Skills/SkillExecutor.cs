@@ -1225,7 +1225,7 @@ namespace PromptFighters.Battle.Skills
             _activeTelegraphs.Add(go);
             go.transform.position = pos;
             var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite = RuntimeSprite.Glow();
+            sr.sprite = RuntimeSprite.TelegraphRadial();
             sr.sortingOrder = 6;
             Color c = SkillEnumParser.ElementColor(element);
             Vector2 ss = sr.sprite.bounds.size;
@@ -1262,7 +1262,9 @@ namespace PromptFighters.Battle.Skills
             if (!outlineShape)
             {
                 sr = go.AddComponent<SpriteRenderer>();
-                sr.sprite = RuntimeSprite.Square();
+                sr.sprite = shape == "line"
+                    ? RuntimeSprite.TelegraphLine()
+                    : RuntimeSprite.TelegraphBox();
                 sr.sortingOrder = 6;
                 Vector2 ss = sr.sprite.bounds.size;
                 if (ss.x > 0f && ss.y > 0f)
@@ -1320,7 +1322,12 @@ namespace PromptFighters.Battle.Skills
             {
                 Shader shader = Shader.Find("Sprites/Default");
                 if (shader != null)
+                {
                     s_telegraphLineMaterial = new Material(shader) { name = "SkillTelegraphOutline" };
+                    Sprite outlineSprite = RuntimeSprite.TelegraphLine();
+                    if (outlineSprite != null)
+                        s_telegraphLineMaterial.mainTexture = outlineSprite.texture;
+                }
             }
             var lineGo = new GameObject(objectName);
             lineGo.transform.SetParent(parent, false);
@@ -1328,6 +1335,7 @@ namespace PromptFighters.Battle.Skills
             line.useWorldSpace = false;
             line.loop = true;
             line.alignment = LineAlignment.View;
+            line.textureMode = LineTextureMode.Tile;
             line.sortingOrder = 6;
             line.startWidth = 0.065f;
             line.endWidth = 0.065f;
@@ -2195,7 +2203,7 @@ namespace PromptFighters.Battle.Skills
             var go = new GameObject("FieldVisual");
             go.transform.position = center;
             var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite = sprite != null ? sprite : RuntimeSprite.Circle();
+            sr.sprite = sprite != null ? sprite : RuntimeSprite.FallbackField();
             sr.sortingOrder = 9;
             Color c = SkillEnumParser.ElementColor(element);
             sr.color = new Color(c.r, c.g, c.b, 0.5f);

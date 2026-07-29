@@ -45,7 +45,7 @@ namespace PromptFighters.Battle
                 transform.rotation = Quaternion.Euler(0f, 0f,
                     Mathf.Atan2(_direction.y, _direction.x) * Mathf.Rad2Deg);
 
-            var sprite = circle ? RuntimeSprite.Circle() : RuntimeSprite.Square();
+            var sprite = circle ? RuntimeSprite.FallbackField() : RuntimeSprite.TelegraphBox();
             _renderer = gameObject.AddComponent<SpriteRenderer>();
             _renderer.sprite = sprite;
             _renderer.sortingOrder = 4;
@@ -221,10 +221,15 @@ namespace PromptFighters.Battle
             _color = color;
             _remaining = Mathf.Max(0.1f, duration);
             _renderer = gameObject.AddComponent<SpriteRenderer>();
-            _renderer.sprite = RuntimeSprite.Square();
+            _renderer.sprite = worldSize.x > worldSize.y * 1.8f
+                ? RuntimeSprite.TelegraphLine()
+                : RuntimeSprite.TelegraphBox();
             _renderer.color = color;
             _renderer.sortingOrder = 9;
-            transform.localScale = new Vector3(worldSize.x, worldSize.y, 1f);
+            Vector2 spriteSize = _renderer.sprite != null ? _renderer.sprite.bounds.size : Vector2.one;
+            transform.localScale = new Vector3(
+                worldSize.x / Mathf.Max(0.01f, spriteSize.x),
+                worldSize.y / Mathf.Max(0.01f, spriteSize.y), 1f);
         }
 
         void Update()

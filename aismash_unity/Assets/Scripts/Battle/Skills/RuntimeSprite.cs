@@ -9,6 +9,46 @@ namespace PromptFighters.Battle.Skills
         static Sprite _circle;
         static Sprite _glow;
         static Sprite _downArrow;
+        static Sprite _telegraphRadial;
+        static Sprite _telegraphLine;
+        static Sprite _telegraphBox;
+        static Sprite _fallbackProjectile;
+        static Sprite _fallbackImpact;
+        static Sprite _fallbackSummon;
+        static Sprite _fallbackWall;
+        static Sprite _fallbackField;
+
+        static Sprite LoadGenerated(ref Sprite cache, string resourcePath)
+        {
+            if (cache == null) cache = Resources.Load<Sprite>(resourcePath);
+            return cache;
+        }
+
+        // GPTで生成した、実戦表示用の高品質フォールバック素材。
+        // Resourcesが欠けた開発環境でもゲーム進行を止めないよう、最後だけ従来の図形へ戻す。
+        public static Sprite TelegraphRadial()
+            => LoadGenerated(ref _telegraphRadial, "Effects/Fallback/telegraph_radial") ?? Glow();
+
+        public static Sprite TelegraphLine()
+            => LoadGenerated(ref _telegraphLine, "Effects/Fallback/telegraph_line") ?? Square();
+
+        public static Sprite TelegraphBox()
+            => LoadGenerated(ref _telegraphBox, "Effects/Fallback/telegraph_box") ?? Square();
+
+        public static Sprite FallbackProjectile()
+            => LoadGenerated(ref _fallbackProjectile, "Effects/Fallback/fallback_projectile") ?? Glow();
+
+        public static Sprite FallbackImpact()
+            => LoadGenerated(ref _fallbackImpact, "Effects/Fallback/fallback_impact") ?? Glow();
+
+        public static Sprite FallbackSummon()
+            => LoadGenerated(ref _fallbackSummon, "Effects/Fallback/fallback_summon") ?? Glow();
+
+        public static Sprite FallbackWall()
+            => LoadGenerated(ref _fallbackWall, "Effects/Fallback/fallback_wall") ?? Square();
+
+        public static Sprite FallbackField()
+            => LoadGenerated(ref _fallbackField, "Effects/Fallback/fallback_field") ?? Circle();
 
         public static Sprite Square()
         {

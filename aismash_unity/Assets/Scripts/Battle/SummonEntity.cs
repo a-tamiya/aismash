@@ -98,7 +98,7 @@ namespace PromptFighters.Battle
             rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
 
             var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite = sprite != null ? sprite : RuntimeSprite.Glow();
+            sr.sprite = sprite != null ? sprite : RuntimeSprite.FallbackSummon();
             if (sprite == null)
             {
                 Color ec = SkillEnumParser.ElementColor(element);
@@ -180,7 +180,7 @@ namespace PromptFighters.Battle
             rb.simulated = true;
 
             var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite = sprite != null ? sprite : RuntimeSprite.Square();
+            sr.sprite = sprite != null ? sprite : RuntimeSprite.FallbackWall();
             sr.color = sprite != null ? Color.white : new Color(0.55f, 0.78f, 1f, 0.92f);
             sr.sortingOrder = 7;
             Vector2 worldSize = desiredWorldSize ?? new Vector2(1.5f, 2.5f);

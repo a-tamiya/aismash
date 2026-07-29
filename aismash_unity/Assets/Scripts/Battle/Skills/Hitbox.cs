@@ -264,10 +264,11 @@ namespace PromptFighters.Battle.Skills
             }
             else
             {
-                // 画像生成失敗時のフォールバック。四角ではなく属性色のエネルギー塊で表示する。
-                _sr.sprite  = RuntimeSprite.Glow();
+                // キャラ固有画像が無い場合も、GPT生成済みの汎用衝撃エフェクトを表示する。
+                _sr.sprite  = RuntimeSprite.FallbackImpact();
                 _sr.color   = new Color(ec.r, ec.g, ec.b, 0.85f);
                 _sr.flipX   = false;
+                FitColliderAndVisualToWorldSize(_sr);
                 _sr.enabled = true;
             }
 
@@ -421,7 +422,13 @@ namespace PromptFighters.Battle.Skills
             if (s_shapeLineMaterial == null)
             {
                 Shader shader = Shader.Find("Sprites/Default");
-                if (shader != null) s_shapeLineMaterial = new Material(shader) { name = "SkillShapeOutline" };
+                if (shader != null)
+                {
+                    s_shapeLineMaterial = new Material(shader) { name = "SkillShapeOutline" };
+                    Sprite outlineSprite = RuntimeSprite.TelegraphLine();
+                    if (outlineSprite != null)
+                        s_shapeLineMaterial.mainTexture = outlineSprite.texture;
+                }
             }
             if (_shapeOutlineA == null) _shapeOutlineA = CreateShapeOutline("ShapeOutlineA");
             if (_shapeOutlineB == null) _shapeOutlineB = CreateShapeOutline("ShapeOutlineB");

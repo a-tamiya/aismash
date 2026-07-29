@@ -239,8 +239,8 @@ namespace PromptFighters.Battle.Skills
             }
             else
             {
-                // 画像生成失敗時のフォールバック。四角ではなく属性色のエネルギー弾で表示する。
-                _sr.sprite = RuntimeSprite.Glow();
+                // キャラ固有画像が無い場合も、GPT生成済みの汎用エネルギー弾を表示する。
+                _sr.sprite = RuntimeSprite.FallbackProjectile();
                 _sr.color  = SkillEnumParser.ElementColor(Element);
                 FitColliderAndVisualToWorldSize(_sr);
                 _sr.enabled = true;
