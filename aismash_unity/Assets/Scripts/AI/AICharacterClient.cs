@@ -414,6 +414,7 @@ $@"あなたは2D格闘ゲームのキャラクター原案を生み出す、発
   空行で区切った**5段落**を、次の順序で出力する:
   ①モチーフ2つ・体格・配色・服装を示す見た目。②武器/攻撃手段と、`【近距離・ラッシュ型】`のような間合い＋戦闘型。③他キャラと差が出る固有ギミックと、その代償または弱点。④代表的な攻め方と、相手をどう崩すか。⑤その性能で生まれる操作感・読み合いの魅力。
   固有ギミックは、移動・攻撃・設置・召喚・防御・状態変化などゲーム内で技として表現できる内容にする。性能の傾向（速さ・重さ・耐久・パワーのトレードオフ）も②〜④のどこかで明確にする。
+  技・戦い方には、発生位置、方向/軌道、個数/配置、時間差/反復、持続領域、地上/空中や間合いによる変化のうち最低2つを具体的に含める。「エネルギーを放つ」だけの曖昧な技説明を並べない。
 - **性格・口調・話し方・内面の描写は書かない**（例：『気取った話し方をする』『人を見下す』『冷酷な性格』などは不要）。
 - features の文章作法（重要。次の『悪い例』のような文体にしない）:
   ・難しい言葉・詩的/文学的/厨二的な言い回し・凝った比喩・古風で読みにくい語彙を避け、日常的で分かりやすい言葉で書く。
@@ -481,6 +482,11 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
    - 戦法・間合い（近接/遠距離/設置/カウンター/召喚/機動/トリッキー など）
    - 固有の技名・必殺技名（「三日月斬り」「龍咆」など、文中の固有名詞）
    - 数量・程度（3体/二刀流/最速/超火力/連続/一撃 など数や強さの語）
+   - 発生位置（自分/相手/頭上/足元/画面端/周囲/二人の間）
+   - 軌道・方向（直進/追尾/落下/上昇/蛇行/螺旋/挟み撃ち/雨/格子）
+   - 時間構造（同時/順番/波状/繰り返し/遅れて発動/持続）
+   - 発動条件（地上/空中/近距離/遠距離/低HP/相手が上・下）
+   - 場の効果（ダメージ領域/風・引力/回復領域/位置交換）
    - 口調・性格・世界観（冷酷/陽気/騎士/忍者/機械 など）
    - モチーフとなる生物・職業・キャラ性
 2. 抜き出した明示要素を input_coverage 欄に列挙し、それぞれを「どの技/ステータスに反映するか」を先に決める。
@@ -490,6 +496,9 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
 - 【明示要素＝必須反映】特徴文に明示された武器・属性・戦法・固有技名・数量は、必ずいずれかの技/ステータスに反映する。省略・別物への置換は禁止（「弓使い」なのに全近接、「炎」なのにphysicalのみ、等は不可）。
 - 固有の技名・必殺技名が書かれていたら、その名前をそのまま skill_name に使う（必殺技は smash_side を優先）。挙動もその名前に合うように組む。
 - 数量・程度は数値に翻訳する。例:「3体の使い魔」→summonのpattern_count:3、「二刀流」→2hitや多段、「最速」→移動stats上限付近、「超火力の一撃」→hit_count=1・damage大。
+- 【文章を7軸へ分解】各技の文を「主体」「発生位置」「対象」「軌道/方向」「個数/配置」「時間構造」「命中後/場の効果」に分解し、actionsの別々のfieldへ写す。1枚絵やdescriptionだけで済ませない。
+- 「何度も/連続/波状/次々」はrepeat_count+repeat_interval、「雨のように/降り注ぐ」はpattern:""rain""、「螺旋/渦巻き」はpattern:""spiral""、「格子/盤面」はpattern:""grid""、「左右から挟む」はpattern:""pincer""へ翻訳する。
+- 「地上ではX、空中ではY」「近ければX、遠ければY」は、同じ技のactionsに相補的なconditionを付けて両方を実装する。一方だけ実装して文意を捨てない。
 - 口調・性格・世界観は catch_copy、各 description、voice_profile に反映する（戦闘挙動だけでなく雰囲気も「思い描いたキャラ」に寄せる）。
 - voice_profile は日本語の短い戦闘ボイスとして作る。intro_lineは登場台詞、skill_linesはattack_a/attack_b/attack_c/smash_sideの順で必ず4件。各台詞は2〜12文字程度、一息で言い切れる長さとし、技名を叫ぶだけでもよい。voice_genderはmale/female/neutral、voice_ageはchild/teen/young_adult/adult/senior/ageless、voice_pitchはlow/medium/high、voice_styleはheroic/fierce/cool/mysterious/cheerful/elegant/eccentric/ominousから、性格と世界観に最も合うものを選ぶ。特徴文に性別・年齢・声の高さが明示されていれば必ず一致させ、外見だけを根拠に変更しない。音声presetと個体差番号はコード側で決定するため出力しない。instructionsには性別・年齢・ピッチの再指定を入れず、キャラ固有の話速、感情、息遣い、間、声量変化、登場時と必殺技時の演技の方向性を具体的に含める。棒読み・単調な絶叫・長い溜め・長い無音・母音の引き伸ばしは指示せず、短い台詞の中に自然な抑揚の山と速度・強弱の変化を作る。
 - 【連想拡張は補助】明示が薄い・短い入力のときだけ、その語から連想を広げて4枠を肉付けする。明示要素を上書きしてはならない。
@@ -524,7 +533,7 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
 
 【多様性ルール（最重要・テンプレ固定化の防止）】
 テンプレートのactionは「穴埋め例」に過ぎない。特徴が違えば技構成も大きく変えること。
-- 4枠が「melee/melee/trap/dash+melee」のような無難な定番配置に毎回ならないようにする。特徴に少しでも合えば、summon/counter/reflector/beam/teleport/area_hitbox(cone/ring)/boomerang/homing/落下弾/多段持続 などの個性的な機構を最低1つは積極的に採用する。
+- 4枠が「melee/melee/trap/dash+melee」のような無難な定番配置に毎回ならないようにする。特徴に少しでも合えば、summon/counter/reflector/beam/teleport/area_hitbox(cone/ring)/hazard_field/force_field/healing_field/position_swap/条件分岐/boomerang/homing/落下弾/多段持続 などの個性的な機構を最低1つは積極的に採用する。
 - smash_sideも毎回「dash+melee_hitbox」にしない。遠距離キャラはcharge付きprojectile/beam、大型キャラは単発高威力のbody_hitbox/area_hitbox(cone)など、キャラに合った決め技にする。
 - 下記のアーキタイプ例を参考に、特徴から最も近いものを選び、その骨格で組む（複数混合も可）。例に無い独自構成も歓迎:
   ・ラッシュ/連撃: 近接中心＋follow_up_actionsを1〜2枠
@@ -538,7 +547,11 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
   ・急襲/ヒット&アウェイ: dive_attack（急降下攻撃）＋dash技で出入りする
   ・ビット/オールレンジ: orbit弾（周回する衛星弾）で身を守りつつ、別枠の攻め技で崩す
   ・花火/クラスター: split_count付き分裂弾で弾幕の面白さを出す
+  ・領域支配: hazard_field/force_fieldで移動先を限定し、別枠で追い込む
+  ・支援/聖域: healing_fieldを置き、領域を守る技と組み合わせる
+  ・空間操作: position_swapやpincer配置で相手の向き・位置を崩す
 - 【時間差・合体アクションを活用】1つの技のactionsに同種actionをtimeをずらして複数並べてよい。例: projectile3連射(time 0.1/0.25/0.4)、上空からの時間差落下弾の雨、teleport(behind_enemy)→melee_hitboxの奇襲、dash→uppercutの突進アッパー。「連射」「弾幕」「雨」「乱舞」などの語があれば積極的に使う
+- 【生成後の多様性自己監査】4技それぞれを「主action / origin / aim・軌道 / pattern・個数 / 単発・反復・持続 / condition」の6項目で比較し、全項目が同じ技を2枠作らない。明示指定がなければ4枠で最低3種類の主action系統を使う。「全て召喚」のような明示がある場合は主actionを揃えてよいが、4枠の軌道・配置・役割・大きさをそれぞれ変える。
 - element も physical に偏らせない。特徴に色（炎・氷・雷・闇・風）があれば対応する属性と状態異常・機構を必ず結びつける。
 - 技名・キャッチコピー・description はテンプレ語（「○○斬り」「○○弾」）の使い回しを避け、そのキャラ固有の語彙で命名する。
 
@@ -558,14 +571,14 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
 - キャラの個性に応じて積極的に新機能を使うこと: ブーメラン使い→boomerang:true、追尾魔法→homing:true、散弾銃→projectile_count:3、ビーム→beam、スパイクコンボ→knockback_direction:""spike""、ジャグル→knockback_direction:""up""
 - stats範囲: maxHP 250〜350(基準300。耐久型ほど高く、紙耐久・速攻型ほど低く)、groundMoveSpeed 2.5〜9.5、airMoveSpeed 2.0〜8.5、jumpForce 7〜19、airJumpHeightMultiplier 0.3〜0.6、walkSpeedRatio 0.2〜0.5、guardDurability 40〜90、lightness 0.45〜2.0、weight 0.45〜2.0、groundDodgeDistance 1.2〜3.8、airDodgeDistance 0.8〜3.2
 - damage範囲: attack_a/bは4〜12、attack_cは3〜10、smash_sideは14〜26。多段技は1hit1〜2程度で全段最大6
-- smash_side（横スマッシュ）は必ず攻撃技（melee_hitbox/body_hitbox/projectile/beam/jump_attack/uppercut/dive_attack/shockwave、または接触ダメージを持つsummon）にすること。counter/reflector/buff_selfだけをsmash_sideに入れない。召喚特化キャラは巨大召喚獣・突進召喚・地面からの召喚をsmash_sideに使ってよい
+- smash_side（横スマッシュ）は必ず攻撃技（melee_hitbox/body_hitbox/projectile/beam/jump_attack/uppercut/dive_attack/shockwave/hazard_field、または接触ダメージを持つsummon）にすること。counter/reflector/buff_selfだけをsmash_sideに入れない。召喚特化キャラは巨大召喚獣・突進召喚・地面からの召喚をsmash_sideに使ってよい
 - startup範囲: attack_a 0.02〜0.12、attack_b 0.03〜0.18、attack_c 0.04〜0.22、smash_side 0.08〜0.32
 - recovery範囲: attack_a 0.10〜0.45、attack_b 0.12〜0.65、attack_c 0.12〜0.55、smash_side 0.18〜0.62。操作感が重すぎない範囲にする
 - trap_hitbox設置技のrecoveryは特に0.10〜0.35とし、極端な後隙を避ける
 - range: 近距離hitbox 0.7〜3.6、遠距離弾 5〜22
 - knockback: attack_a/b 2〜10、attack_c 3〜12、smash_side 7〜16
 - guard_damage: attack_a 0.5〜2.0、attack_b 0.8〜2.6、attack_c 0.8〜2.8、smash_side 2.0〜5.0
-- action type: melee_hitbox/body_hitbox/projectile/area_hitbox/trap_hitbox/beam/dash/jump_attack/uppercut/dive_attack/push_enemy/pull_enemy/apply_status/buff_self/teleport/delay/summon/wall/counter/reflector/command_throw/shockwave/gravity_well/lifesteal/heal_self/barrier
+- action type: melee_hitbox/body_hitbox/projectile/area_hitbox/trap_hitbox/beam/dash/jump_attack/uppercut/dive_attack/push_enemy/pull_enemy/apply_status/buff_self/teleport/delay/summon/wall/counter/reflector/command_throw/shockwave/gravity_well/hazard_field/force_field/healing_field/position_swap/lifesteal/heal_self/barrier
 - 各技のactionsは空にしない。attack_a/attack_b/attack_c/smash_sideは必ず1つ以上、実際に攻撃・接触・召喚・防御反応などゲーム内効果が起きるactionを入れる
 - delay単体、dash単体、teleport単体、apply_status単体、push_enemy単体、pull_enemy単体だけの技は禁止。使う場合はmelee_hitbox/body_hitbox/projectile/area_hitbox/trap_hitbox/beam/jump_attack/summon/counter/reflectorのいずれかと組み合わせる
 - body_hitbox: キャラ自身に判定。follow_owner/hide_effect自動。spawn_x=0でキャラ中心(スピン・全身)、spawn_x>0で前方張り出し。size_y 1.4〜2.2で全身カバー
@@ -615,10 +628,10 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
   spawn_origin: ""owner""(自分/default)/""enemy""(相手)/""midpoint""(2人の中点)/""stage_center""/""left_edge""/""right_edge""
   spawn_anchor: ""auto""/""body""/""feet""/""head""/""weapon_tip""。剣・銃・杖から出す弾/斬撃はweapon_tip、地面技はfeetを優先
   spawn_x/spawn_y: origin+anchorからのローカルオフセット。spawn_originを指定した場合は負のspawn_xも有効（背後・左側を表現可能）
-  aim_mode: ""facing""(向いている方向/default)/""enemy""/""away_enemy""/""stage_center""/""vector""/""radial_out""/""radial_in""
+  aim_mode: ""facing""(向いている方向/default)/""enemy""/""predicted_enemy""(相手の移動先を予測)/""away_enemy""/""stage_center""/""vector""/""radial_out""/""radial_in""
   aim_mode:""vector""ではvector_x/vector_y(-1〜1)を必須。rotation_angle(-180〜180度)で判定・エフェクト・弾道をまとめて追加回転できる
-- 【配置パターン】projectile/area_hitbox/trap_hitbox/beamにpatternを使える:
-  ""single""/""fan""(扇射)/""parallel""(平行)/""radial""(外向き円周)/""inward""(円周から中心へ)/""mirrored""(左右対称)/""line""(一直線に複数配置)
+- 【配置パターン】projectile/area_hitbox/trap_hitbox/beam/summon/hazard_fieldにpatternを使える:
+  ""single""/""fan""(扇射)/""parallel""(平行)/""radial""(外向き円周)/""inward""(円周から中心へ)/""mirrored""(左右対称)/""line""(一直線)/""grid""(格子)/""rain""(横に並べ真下へ)/""spiral""(時間差の螺旋)/""pincer""(左右から中心へ挟撃)
   pattern_countはprojectileなら1〜10、area/trap/beamなら1〜4。pattern_spacing 0.2〜3、pattern_radius 0.5〜6、burst_interval 0〜0.5秒
   複数配置は同じ1回の技として扱われ、重なった判定で同じ相手へ不自然な多重ヒットを起こさない。多段にしたい場合だけhit_countを使う
 - 【予告と公平性】enemy/midpoint/stage_center/edge起点の攻撃はtelegraph_timeを0.4〜1.2秒指定する。予告は実際の位置・形・角度・範囲と完全一致するため、広い技ほど長くする
@@ -635,6 +648,12 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
   2頭のシロクマを上下から交差→summonを2 action。spawn_y:1.5+direction:""diagonal_down"" と spawn_y:-1.2+direction:""diagonal_up"" を同時刻に置く
   下から上へ超巨大な虎→smash_sideのsummon + spawn_anchor:""feet"", spawn_y:-2, direction:""up"", power:9, size_x:3.8, size_y:4.6
   地面に順番に並ぶ罠→trap_hitbox + spawn_anchor:""feet"", pattern:""line"", pattern_count:4, pattern_spacing:1.2, burst_interval:0.12
+  移動先を読む狙撃→projectile + aim_mode:""predicted_enemy"", projectile_speed:12〜18
+  上空から次々降る氷柱→projectile + spawn_origin:""enemy"", spawn_y:5, pattern:""rain"", pattern_count:5, repeat_count:2, repeat_interval:0.35, telegraph_time:0.55
+  螺旋状に広がる火球→projectile + pattern:""spiral"", pattern_count:6, pattern_radius:2.5, burst_interval:0.08
+  地上と空中で変わる技→grounded条件のshockwaveとairborne条件のdive_attackを同じactionsへ入れる
+- 【汎用反復】projectile/beam/melee_hitbox/body_hitbox/area_hitbox/trap_hitbox/summon/hazard_fieldはrepeat_count:1〜5、repeat_interval:0.08〜0.65で波状に繰り返せる。総威力はUnity側で回数按分する。「大量」はpattern_count、「何波も/次々/連続」はrepeat_countとして区別する。
+- 【状況分岐】conditionは""grounded""/""airborne""/""enemy_close""/""enemy_far""/""low_hp""/""high_hp""/""enemy_above""/""enemy_below""。condition_valueは距離、HP条件だけは0〜1の比率（30%なら0.3）。完全分岐はgrounded+airborne、enemy_close+enemy_far、low_hp+high_hpの相補ペアにし、どの状況でも技が完全不発にならないようにする。enemy_above/belowを使う場合は無条件actionも1つ残す。
 - 【派生技 follow_up_actions】必要な技だけスキルJSON最上位に追加:
   follow_up_actions: [...actionリスト...]  ← 同じボタンの追加入力で発動する派生アクション
   follow_up_window: 0.3〜1.0  ← 受付時間(秒)。迷う場合は0.6
@@ -655,13 +674,17 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
     ★ command_throwのactionsにはcommand_throw1つだけを入れ、melee_hitbox等と混在させない（範囲判定で自動的に掴み、投げまで自動処理する）。
   shockwave: 地面叩きつけで自分の左右両方に同時発生する衝撃波。range=中心から左右への距離(1.5〜3.5)、size_x=波の幅、size_y=高さ(0.6〜1.2)、spawn_y=地面からの高さ(0.2〜0.5)。範囲制圧・起き攻め向け。knockback_direction:""up""で打ち上げると映える。
   gravity_well: 一定時間、指定地点へ相手を継続的に引き寄せる重力場（攻撃判定なし）。spawn_x/y=中心位置、range=引き寄せ半径(2.5〜5)、power=引き寄せ力(8〜30)、duration=持続(0.8〜2.0)。単体では削れないので、projectile/area_hitboxやcommand_throwと別スロットで組み合わせてコンボの起点にする。
+  hazard_field: 炎上床・毒霧・吹雪・電撃檻など、触れている間に複数回攻撃する持続領域。duration=0.6〜4、range/size_x/y=実範囲、hit_count=2〜6。遠隔設置はtelegraph_time必須。通常の一瞬だけの爆発はarea_hitboxを使い分ける。
+  force_field: 風・磁力・潮流・上昇気流などの非ダメージ領域。range=半径、power=力、duration=持続。direction:""outward""/""inward""/""up""/""down""/""left""/""right""/""vector""/""facing""。攻撃へ吸い込む、崖から押し戻すなど位置関係を作る。
+  healing_field: 発生地点の中に自分が留まる間だけ分割回復する聖域。range=半径、power=領域全体の回復量4〜18、duration=1〜4。即時回復のheal_selfと使い分け、隙と領域争いを作る。
+  position_swap: 射程内の相手と位置を交換する。range=1.5〜6、telegraph_time=0.35以上。ダメージはなく、挟み撃ち回避・壁際入れ替え・設置領域へ誘導するトリック技。smash_side単独には使わない。
   lifesteal: 与えたダメージの一部を自分のHPに回復する近接技。melee_hitboxと同じパラメータ＋lifesteal_ratio(0.2〜0.4、与ダメージの回復割合。未指定なら0.3)。吸血鬼・闇属性・持久キャラ向け。dark属性と相性良い。
   heal_self: 自分のHPを回復する。power=回復HP量(未指定なら最大HPの5%)。攻撃判定なし。持久・回復役キャラ向け。startup/recoveryは長めにして隙を作る。
   barrier: 自己バフ。持続中に受ける「次の1技」をダメージ・ノックバック・状態異常ごと完全に無効化する。HP吸収型ではない。多段技・弾幕は同じ技として残り判定も無効。powerは指定不要、duration=持続秒(未指定3)。攻撃判定なし・発動後すぐ動ける防御技。recoveryは通常攻撃並み(0.12〜0.35)にして連発できないよう注意。
   wall: 地面に固定する物理的な壁・ブロック・氷山・岩壁。キャラと飛び道具を遮り、攻撃を受けると壊れる。duration=寿命(1.2〜7秒)、power=耐久(8〜45)、size_x=横幅(0.8〜4.8)、size_y=高さ(1.2〜4.5)、spawn_x/y=設置位置。壁そのものに即時ダメージ判定は付けない。遠隔設置はtelegraph_time 0.4以上。壁・ブロック・障害物・氷山・岩壁が特徴文に明記されたら、summon/trapへの置換は禁止しwallを必ず使う。
   uppercut: 昇竜系の対空技。power=上昇力(6〜12)。上昇しながら体に追従する判定で相手を巻き込み、真上へ打ち上げる（knockback_direction省略時""up""）。打ち上げからの追撃コンボの起点や、接近された時の切り返しに使う。startupは小さめ(0.04〜0.10)・外した時のrecoveryは長め(0.35〜0.55)にして昇竜らしいリスクリターンを作る。竜・拳法家・炎系と相性が良い。
   dive_attack: 急降下攻撃。power=降下力(6〜14)。斜め前下方向へ突っ込み、着地の瞬間に左右へ小さな衝撃波が出る。地上で使うと小さく跳び上がってから急降下する。鳥・隕石・ヒーロー着地・重量級の奇襲に使う。smash_sideに使ってもよい。
-  ※ command_throw/heal_self/barrier/gravity_well は攻撃判定が無い/特殊なので、smash_sideには入れない（smash_sideは必ず直接攻撃技）。lifesteal/shockwave/uppercut/dive_attackと、damage_overrideを持つ攻撃的summonはsmash_sideに使ってよい。
+  ※ command_throw/heal_self/barrier/gravity_well/force_field/healing_field/position_swap は攻撃判定が無い/特殊なので、smash_sideには単独で入れない（smash_sideは必ず直接攻撃技）。hazard_field/lifesteal/shockwave/uppercut/dive_attackと、damage_overrideを持つ攻撃的summonはsmash_sideに使ってよい。
 
 {{
   ""character_name"": ""[ユーザー指定のキャラクター名をそのまま]"",

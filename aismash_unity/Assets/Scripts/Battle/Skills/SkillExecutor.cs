@@ -164,7 +164,8 @@ namespace PromptFighters.Battle.Skills
                 if (a == null) { idx++; continue; }
                 if (Time.time - t0 >= a.time)
                 {
-                    ExecuteFollowUpAction(skill, a, pullForCombo);
+                    if (ActionConditionMet(a))
+                        ExecuteFollowUpAction(skill, a, pullForCombo);
                     idx++;
                 }
                 else yield return null;
@@ -323,9 +324,12 @@ namespace PromptFighters.Battle.Skills
                 var a = actions[actionIdx];
                 if (elapsed >= a.time)
                 {
-                    if (IsImpactAction(a) && !ActionDefersImpact(a))
-                        ShowImpactAtSpawn(skill);
-                    ExecuteAction(skill, a, powerMultiplier);
+                    if (ActionConditionMet(a))
+                    {
+                        if (IsImpactAction(a) && !ActionDefersImpact(a))
+                            ShowImpactAtSpawn(skill);
+                        ExecuteAction(skill, a, powerMultiplier);
+                    }
                     actionIdx++;
                 }
                 else
@@ -358,7 +362,9 @@ namespace PromptFighters.Battle.Skills
                    a.type == "multi_hit" || a.type == "summon" ||
                    a.type == "counter" || a.type == "reflector" ||
                    a.type == "command_throw" || a.type == "shockwave" ||
-                   a.type == "gravity_well" || a.type == "lifesteal";
+                   a.type == "gravity_well" || a.type == "hazard_field" ||
+                   a.type == "force_field" || a.type == "healing_field" ||
+                   a.type == "position_swap" || a.type == "lifesteal";
         }
 
         static bool ActionDefersImpact(SkillAction a)
@@ -367,7 +373,10 @@ namespace PromptFighters.Battle.Skills
             bool supportsTelegraph = a.type == "melee_hitbox" || a.type == "body_hitbox" ||
                                      a.type == "area_hitbox" || a.type == "trap_hitbox" ||
                                      a.type == "projectile" || a.type == "beam" ||
-                                     a.type == "lifesteal" || a.type == "summon";
+                                     a.type == "lifesteal" || a.type == "summon" ||
+                                     a.type == "hazard_field";
+            if ((a.type == "force_field" || a.type == "position_swap") && a.telegraph_time > 0f)
+                supportsTelegraph = true;
             if (supportsTelegraph && a.telegraph_time > 0f) return true;
             bool remoteOrigin = !string.IsNullOrEmpty(a.spawn_origin) && a.spawn_origin != "owner";
             if ((a.type == "melee_hitbox" || a.type == "body_hitbox" ||
@@ -392,6 +401,10 @@ namespace PromptFighters.Battle.Skills
                 "radial"   => 6,
                 "inward"   => 6,
                 "inward_ring" => 6,
+                "grid"     => 4,
+                "rain"     => 5,
+                "spiral"   => 6,
+                "pincer"   => 2,
                 _ => 1,
             };
             return Mathf.Clamp(requested, 1, maxCount);
@@ -404,7 +417,50 @@ namespace PromptFighters.Battle.Skills
                 delay = a.telegraph_time > 0f ? Mathf.Clamp(a.telegraph_time, 0.05f, 1.5f) : 0.4f;
             if (a != null && a.burst_interval > 0f)
                 delay += Mathf.Clamp(a.burst_interval, 0f, 0.5f) * Mathf.Max(0, PatternCountForTiming(a) - 1);
+            if (a != null && a.repeat_count > 1)
+                delay += Mathf.Clamp(a.repeat_interval, 0.08f, 0.65f) *
+                         (Mathf.Clamp(a.repeat_count, 1, 5) - 1);
             return delay;
+        }
+
+        bool ActionConditionMet(SkillAction a)
+        {
+            if (a == null || string.IsNullOrEmpty(a.condition)) return true;
+            Fighter enemy = _fighter?.Opponent;
+            float threshold;
+            switch (a.condition)
+            {
+                case "grounded":
+                    return _fighter != null && _fighter.IsGrounded;
+                case "airborne":
+                    return _fighter != null && !_fighter.IsGrounded;
+                case "enemy_close":
+                    if (enemy == null) return false;
+                    threshold = a.condition_value > 0f ? a.condition_value : 2.5f;
+                    return Vector2.Distance(_fighter.transform.position, enemy.transform.position) <= threshold;
+                case "enemy_far":
+                    if (enemy == null) return false;
+                    threshold = a.condition_value > 0f ? a.condition_value : 4f;
+                    return Vector2.Distance(_fighter.transform.position, enemy.transform.position) >= threshold;
+                case "low_hp":
+                    if (_fighter == null) return false;
+                    threshold = Mathf.Clamp01(a.condition_value > 0f ? a.condition_value : 0.35f);
+                    return _fighter.CurrentHP <= _fighter.MaxHP * threshold;
+                case "high_hp":
+                    if (_fighter == null) return false;
+                    threshold = Mathf.Clamp01(a.condition_value > 0f ? a.condition_value : 0.35f);
+                    return _fighter.CurrentHP > _fighter.MaxHP * threshold;
+                case "enemy_above":
+                    if (enemy == null) return false;
+                    threshold = a.condition_value > 0f ? a.condition_value : 0.75f;
+                    return enemy.transform.position.y - _fighter.transform.position.y >= threshold;
+                case "enemy_below":
+                    if (enemy == null) return false;
+                    threshold = a.condition_value > 0f ? a.condition_value : 0.75f;
+                    return _fighter.transform.position.y - enemy.transform.position.y >= threshold;
+                default:
+                    return true;
+            }
         }
 
         void ShowImpactAtSpawn(SkillData skill)
@@ -580,6 +636,21 @@ namespace PromptFighters.Battle.Skills
                 case "enemy":
                     dir = enemyCenter - from;
                     break;
+                case "predicted_enemy":
+                {
+                    Vector2 predicted = enemyCenter;
+                    var enemyBody = _fighter?.Opponent != null
+                        ? _fighter.Opponent.GetComponent<Rigidbody2D>()
+                        : null;
+                    if (enemyBody != null)
+                    {
+                        float speed = Mathf.Max(4f, a.projectile_speed);
+                        float lead = Mathf.Clamp(Vector2.Distance(from, enemyCenter) / speed, 0.08f, 0.65f);
+                        predicted += enemyBody.linearVelocity * lead;
+                    }
+                    dir = predicted - from;
+                    break;
+                }
                 case "away_enemy":
                     dir = from - enemyCenter;
                     break;
@@ -653,6 +724,10 @@ namespace PromptFighters.Battle.Skills
                 "inward"   => 6,
                 "parallel" => 3,
                 "line"     => 3,
+                "grid"     => 4,
+                "rain"     => 5,
+                "spiral"   => 6,
+                "pincer"   => 2,
                 _          => projectile && a.projectile_count > 1 ? a.projectile_count : 1,
             };
             int requested = a.pattern_count > 0 ? a.pattern_count
@@ -704,6 +779,34 @@ namespace PromptFighters.Battle.Skills
                     case "line":
                         position += direction * ((i - (count - 1) * 0.5f) * spacing);
                         break;
+                    case "grid":
+                    {
+                        int columns = Mathf.CeilToInt(Mathf.Sqrt(count));
+                        int rows = Mathf.CeilToInt(count / (float)columns);
+                        int column = i % columns;
+                        int row = i / columns;
+                        position += direction * ((column - (columns - 1) * 0.5f) * spacing);
+                        position += perpendicular * ((row - (rows - 1) * 0.5f) * spacing);
+                        break;
+                    }
+                    case "rain":
+                        position += Vector2.right * ((i - (count - 1) * 0.5f) * spacing);
+                        sampleDir = Vector2.down;
+                        break;
+                    case "spiral":
+                    {
+                        sampleDir = RotateVector(direction, 360f * i / count + i * 18f);
+                        float progress = count <= 1 ? 1f : i / (float)(count - 1);
+                        position += sampleDir * Mathf.Lerp(radius * 0.2f, radius, progress);
+                        break;
+                    }
+                    case "pincer":
+                    {
+                        float side = count <= 1 ? 1f : Mathf.Lerp(-1f, 1f, i / (float)(count - 1));
+                        position += Vector2.right * (side * radius);
+                        sampleDir = (center - position).normalized;
+                        break;
+                    }
                 }
                 bool duplicate = false;
                 Vector2 normalizedDir = sampleDir.sqrMagnitude > 0.0001f ? sampleDir.normalized : direction;
@@ -900,6 +1003,10 @@ namespace PromptFighters.Battle.Skills
                 ["command_throw"]      = DoCommandThrow,
                 ["shockwave"]          = SpawnShockwave,
                 ["gravity_well"]       = (skill, a, pm) => DoGravityWell(skill, a),
+                ["hazard_field"]       = SpawnHazardField,
+                ["force_field"]        = (skill, a, pm) => DoForceField(skill, a),
+                ["healing_field"]      = (skill, a, pm) => DoHealingField(skill, a),
+                ["position_swap"]      = (skill, a, pm) => DoPositionSwap(skill, a),
                 ["lifesteal"]          = (skill, a, pm) => { if (a.lifesteal_ratio <= 0f) a.lifesteal_ratio = 0.3f; SpawnMeleeHitbox(skill, a, pm); },
                 ["delay"]              = (skill, a, pm) => { /* no-op: time制御で表現 */ },
             };
@@ -909,7 +1016,20 @@ namespace PromptFighters.Battle.Skills
         {
             if (_actionHandlers == null) BuildActionHandlers();
             if (_actionHandlers.TryGetValue(a.type, out var handler))
-                handler(skill, a, powerMultiplier);
+            {
+                int repeats = Mathf.Clamp(a.repeat_count > 0 ? a.repeat_count : 1, 1, 5);
+                float repeatScale = powerMultiplier / repeats;
+                handler(skill, a, repeatScale);
+                for (int i = 1; i < repeats; i++)
+                {
+                    float delay = Mathf.Clamp(a.repeat_interval > 0f ? a.repeat_interval : 0.18f, 0.08f, 0.65f) * i;
+                    ScheduleSpatial(delay, () =>
+                    {
+                        if (ActionConditionMet(a))
+                            handler(skill, a, repeatScale);
+                    });
+                }
+            }
             else
                 Debug.LogWarning($"[Skill] Unknown action type: {a.type}");
         }
@@ -2176,6 +2296,150 @@ namespace PromptFighters.Battle.Skills
             hb.FlipEffectX    = side < 0f;
             hb.MaxHits        = a.hit_count > 0 ? a.hit_count : skill.parameters.hit_count;
             ApplyActionStatus(hb, a);
+        }
+
+        // hazard_field: 炎上床、毒霧、吹雪、電撃檻など、一定時間その場に残る多段領域。
+        // area_hitboxと同じ空間・形状・予告処理を共有し、見た目と実判定を一致させる。
+        void SpawnHazardField(SkillData skill, SkillAction a, float powerMultiplier)
+        {
+            if (a.duration <= 0f) a.duration = 2f;
+            if (a.hit_count <= 1) a.hit_count = 3;
+            if (a.range <= 0f) a.range = 2.4f;
+            if (a.size_x <= 0f) a.size_x = a.range;
+            if (a.size_y <= 0f) a.size_y = a.size_x;
+            if (string.IsNullOrEmpty(a.shape)) a.shape = "ring";
+            SpawnAreaHitbox(skill, a, powerMultiplier / Mathf.Max(1, a.hit_count));
+        }
+
+        // force_field: 風、磁力、潮流、上昇気流など、ダメージを与えず継続的に移動へ干渉する領域。
+        void DoForceField(SkillData skill, SkillAction a)
+        {
+            Vector2 center = ResolveFieldCenter(skill, a, 2.2f, 1.0f);
+            float radius = (a.range > 0f ? a.range : 3f) * _sizeScale;
+            float force = Mathf.Clamp(a.power > 0f ? a.power : 10f, 3f, 18f);
+            float duration = Mathf.Clamp(a.duration > 0f ? a.duration : 1.2f, 0.35f, 2.5f);
+
+            void StartField()
+            {
+                if (!a.hide_effect)
+                    SpawnFieldVisual(center, radius * 2f, _fighter.GetEffectSprite(skill), skill.element, duration);
+                StartCoroutine(ForceFieldRoutine(center, radius, force, duration, a));
+            }
+
+            if (a.telegraph_time > 0f)
+                StartCoroutine(TelegraphThenSpawn(center, radius * 2f, skill.element,
+                    Mathf.Clamp(a.telegraph_time, 0.2f, 1.5f), StartField));
+            else
+                StartField();
+        }
+
+        IEnumerator ForceFieldRoutine(Vector2 center, float radius, float force, float duration, SkillAction a)
+        {
+            float elapsed = 0f;
+            var fixedWait = new WaitForFixedUpdate();
+            while (elapsed < duration && _fighter != null && _fighter.State != FighterState.Dead)
+            {
+                elapsed += Time.fixedDeltaTime;
+                Fighter target = _fighter.Opponent;
+                if (target != null && target.State != FighterState.Dead)
+                {
+                    Vector2 delta = (Vector2)target.transform.position - center;
+                    if (delta.sqrMagnitude <= radius * radius)
+                    {
+                        Vector2 direction = a.direction switch
+                        {
+                            "inward" or "pull" => delta.sqrMagnitude > 0.001f ? -delta.normalized : Vector2.zero,
+                            "up"               => Vector2.up,
+                            "down"             => Vector2.down,
+                            "left"             => Vector2.left,
+                            "right"            => Vector2.right,
+                            "vector"            => new Vector2(a.vector_x, a.vector_y).normalized,
+                            "facing"            => _fighter.FacingRight ? Vector2.right : Vector2.left,
+                            _                   => delta.sqrMagnitude > 0.001f ? delta.normalized : Vector2.zero,
+                        };
+                        target.AddExternalForce(direction * force);
+                    }
+                }
+                yield return fixedWait;
+            }
+        }
+
+        // healing_field: その場に留まる判断を要求する回復領域。powerは領域全体の最大回復量。
+        void DoHealingField(SkillData skill, SkillAction a)
+        {
+            Vector2 center = ResolveFieldCenter(skill, a, 0.5f, 0.6f);
+            float radius = (a.range > 0f ? a.range : 2.2f) * _sizeScale;
+            float duration = Mathf.Clamp(a.duration > 0f ? a.duration : 2.5f, 1f, 4f);
+            float totalHeal = Mathf.Clamp(a.power > 0f ? a.power : 12f, 4f, 18f);
+            if (!a.hide_effect)
+                SpawnFieldVisual(center, radius * 2f, _fighter.GetEffectSprite(skill), Element.Wind, duration);
+            StartCoroutine(HealingFieldRoutine(center, radius, duration, totalHeal));
+        }
+
+        IEnumerator HealingFieldRoutine(Vector2 center, float radius, float duration, float totalHeal)
+        {
+            const float targetInterval = 0.65f;
+            int ticks = Mathf.Max(1, Mathf.CeilToInt(duration / targetInterval));
+            float interval = duration / ticks;
+            float healPerTick = totalHeal / ticks;
+            for (int i = 0; i < ticks && _fighter != null && _fighter.State != FighterState.Dead; i++)
+            {
+                yield return new WaitForSeconds(interval);
+                if (_fighter != null &&
+                    ((Vector2)_fighter.transform.position - center).sqrMagnitude <= radius * radius)
+                    _fighter.Heal(healPerTick);
+            }
+        }
+
+        // position_swap: 相手と位置を交換するトリック技。射程外、死亡中、予兆中の離脱は不発にする。
+        void DoPositionSwap(SkillData skill, SkillAction a)
+        {
+            if (_fighter?.Opponent == null) return;
+            float range = (a.range > 0f ? a.range : 4f) * _sizeScale;
+            StartCoroutine(PositionSwapRoutine(skill, a, range));
+        }
+
+        IEnumerator PositionSwapRoutine(SkillData skill, SkillAction a, float range)
+        {
+            Fighter enemy = _fighter.Opponent;
+            if (enemy == null) yield break;
+            Vector2 ownerStart = _fighter.transform.position;
+            Vector2 enemyStart = enemy.transform.position;
+            if (Vector2.Distance(ownerStart, enemyStart) > range) yield break;
+
+            float warning = Mathf.Clamp(a.telegraph_time > 0f ? a.telegraph_time : 0.35f, 0.35f, 1.2f);
+            // 位置交換は回避判断に必須なので、hide_effect指定でも予告だけは必ず表示する。
+            SpawnFieldVisual(ownerStart + Vector2.up * 0.8f, 1.1f,
+                _fighter.GetEffectSprite(skill), skill.element, warning);
+            SpawnFieldVisual(enemyStart + Vector2.up * 0.8f, 1.1f,
+                _fighter.GetEffectSprite(skill), skill.element, warning);
+            yield return new WaitForSeconds(warning);
+            if (_fighter == null || enemy == null ||
+                _fighter.State == FighterState.Dead || enemy.State == FighterState.Dead ||
+                Vector2.Distance(_fighter.transform.position, enemy.transform.position) > range)
+                yield break;
+
+            Vector3 ownerPos = _fighter.transform.position;
+            Vector3 enemyPos = enemy.transform.position;
+            var bm = BattleManager.Instance;
+            if (bm != null)
+            {
+                ownerPos.x = Mathf.Clamp(ownerPos.x, bm.StageMinX + 0.5f, bm.StageMaxX - 0.5f);
+                enemyPos.x = Mathf.Clamp(enemyPos.x, bm.StageMinX + 0.5f, bm.StageMaxX - 0.5f);
+            }
+            _fighter.transform.position = enemyPos;
+            enemy.transform.position = ownerPos;
+            GameAudioManager.Instance?.PlayTeleport();
+        }
+
+        Vector2 ResolveFieldCenter(SkillData skill, SkillAction a, float defaultSpawnX, float defaultSpawnY)
+        {
+            if (HasExplicitSpatialOrigin(a))
+                return ResolveSpatialOrigin(skill, a);
+            float facing = _fighter.FacingRight ? 1f : -1f;
+            float x = !Mathf.Approximately(a.spawn_x, 0f) ? a.spawn_x : defaultSpawnX;
+            float y = !Mathf.Approximately(a.spawn_y, 0f) ? a.spawn_y : defaultSpawnY;
+            return (Vector2)_fighter.transform.position + new Vector2(facing * x, y) * _sizeScale;
         }
 
         // gravity_well: 一定時間、相手を一点へ継続引き寄せ。引き寄せ半径＝表示ビジュアル径で一致させる。

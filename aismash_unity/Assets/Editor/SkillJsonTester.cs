@@ -157,4 +157,67 @@ public static class SkillJsonTester
                   $"kb={p.knockback} (max=15) | " +
                   $"range={p.range} (max=16)");
     }
+
+    [MenuItem("Tools/Test Skill Diversity Extensions")]
+    static void RunDiversityExtensions()
+    {
+        string json = @"{
+  ""character_name"": ""多様性テスター"",
+  ""skills"": [
+    {
+      ""slot"": ""attack_a"", ""skill_name"": ""連続危険領域"", ""element"": ""fire"",
+      ""parameters"": {""damage"":8,""range"":3,""startup"":0.08,""active_time"":0.2,""recovery"":0.3,""knockback"":4},
+      ""actions"": [{""type"":""hazard_field"",""time"":0.08,""duration"":9,""hit_count"":9,
+        ""pattern"":""rain"",""pattern_count"":9,""repeat_count"":9,""repeat_interval"":0.01}]
+    },
+    {
+      ""slot"": ""attack_b"", ""skill_name"": ""地空分岐"", ""element"": ""wind"",
+      ""parameters"": {""damage"":7,""range"":3,""startup"":0.1,""active_time"":0.2,""recovery"":0.4,""knockback"":5},
+      ""actions"": [
+        {""type"":""shockwave"",""time"":0.1,""condition"":""grounded""},
+        {""type"":""dive_attack"",""time"":0.1,""condition"":""airborne""}
+      ]
+    },
+    {
+      ""slot"": ""attack_c"", ""skill_name"": ""予測交換"", ""element"": ""dark"",
+      ""parameters"": {""damage"":0,""range"":4,""startup"":0.12,""active_time"":0.1,""recovery"":0.1,""knockback"":3},
+      ""actions"": [
+        {""type"":""position_swap"",""time"":0.12,""range"":99,""telegraph_time"":0},
+        {""type"":""force_field"",""time"":0.12,""spawn_origin"":""enemy"",""telegraph_time"":0,
+          ""condition"":""low_hp"",""condition_value"":30}
+      ]
+    },
+    {
+      ""slot"": ""smash_side"", ""skill_name"": ""螺旋砲"", ""element"": ""lightning"",
+      ""parameters"": {""damage"":24,""range"":12,""startup"":0.3,""active_time"":0.2,""recovery"":0.5,""knockback"":12},
+      ""actions"": [{""type"":""projectile"",""time"":0.3,""aim_mode"":""predicted_enemy"",
+        ""pattern"":""spiral"",""pattern_count"":8,""pattern_radius"":3,""projectile_speed"":14}]
+    }
+  ]
+}";
+        var data = SkillJsonParser.Parse(json);
+        bool ok = data != null;
+        if (ok)
+        {
+            var hazard = data.skills[0].actions[0];
+            ok &= hazard.type == "hazard_field" && hazard.duration <= 4f &&
+                  hazard.hit_count <= 6 && hazard.pattern == "rain" &&
+                  hazard.pattern_count <= 4 && hazard.repeat_count == 5 &&
+                  hazard.repeat_interval >= 0.08f;
+            var ground = data.skills[1].actions[0];
+            var air = data.skills[1].actions[1];
+            ok &= ground.condition == "grounded" && air.condition == "airborne";
+            var swap = data.skills[2].actions[0];
+            ok &= swap.type == "position_swap" && swap.range <= 6f &&
+                  swap.telegraph_time >= 0.35f && data.skills[2].parameters.recovery >= 0.38f;
+            var remoteForce = data.skills[2].actions[1];
+            ok &= remoteForce.type == "force_field" && remoteForce.telegraph_time >= 0.3f &&
+                  Mathf.Approximately(remoteForce.condition_value, 0.3f);
+            var spiral = data.skills[3].actions[0];
+            ok &= spiral.aim_mode == "predicted_enemy" && spiral.pattern == "spiral";
+        }
+
+        if (ok) Debug.Log("[SkillDiversityTest] PASS: 新action・反復・条件分岐・配置・予測照準");
+        else Debug.LogError("[SkillDiversityTest] FAIL: 技多様性拡張の正規化結果が不正");
+    }
 }

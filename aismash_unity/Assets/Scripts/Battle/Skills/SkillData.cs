@@ -49,7 +49,7 @@ namespace PromptFighters.Battle.Skills
     public class SkillAction
     {
         // 共通
-        public string type;       // "melee_hitbox" / "body_hitbox" / "projectile" / "area_hitbox" / "trap_hitbox" / "summon" / "wall" / "barrier" / "dash" / "teleport" / "apply_status" / "buff_self" / "delay"
+        public string type;       // 攻撃・移動・召喚・領域・防御などのaction識別子
         public float  time;       // 技開始からの時間オフセット
 
         // 共通オプション
@@ -67,17 +67,27 @@ namespace PromptFighters.Battle.Skills
         public float  knockback_y;
         public bool   hide_effect;
 
+        // 同じactionを時間差で繰り返す。弾幕、波状攻撃、連続落雷、召喚の増援などを
+        // JSONへ同じactionを何件も複製せず表現する。実行側で総威力を回数按分する。
+        public int    repeat_count;
+        public float  repeat_interval;
+
+        // 発動時の状況でactionを分岐する。同じ技ボタンでも地上/空中や間合いによって
+        // 異なる挙動を作れる。condition_valueは距離またはHP比率の閾値。
+        public string condition;  // grounded / airborne / enemy_close / enemy_far / low_hp / high_hp / enemy_above / enemy_below
+        public float  condition_value;
+
         // 空間指定（未指定なら従来挙動）。spawn_origin を指定した新形式では
         // spawn_x / spawn_y を符号付きの明示オフセットとして扱う。
         public string spawn_origin;   // "owner" / "enemy" / "midpoint" / "stage_center" / "left_edge" / "right_edge"
         public string spawn_anchor;   // "auto" / "body" / "feet" / "head" / "weapon_tip"
-        public string aim_mode;       // "facing" / "enemy" / "away_enemy" / "stage_center" / "vector" / "radial_out" / "radial_in"
+        public string aim_mode;       // facing / enemy / predicted_enemy / away_enemy / stage_center / vector / radial_out / radial_in
         public float  vector_x;       // aim_mode="vector" の方向ベクトル
         public float  vector_y;
         public float  rotation_angle; // 判定・エフェクトの追加回転（度）
 
         // 同じ action を規則的に展開する配置パターン。
-        public string pattern;        // "single" / "fan" / "parallel" / "radial" / "inward" / "mirrored" / "line"
+        public string pattern;        // single / fan / parallel / radial / inward / mirrored / line / grid / rain / spiral / pincer
         public int    pattern_count;   // 0=旧 projectile_count またはパターン既定値
         public float  pattern_spacing;
         public float  pattern_radius;

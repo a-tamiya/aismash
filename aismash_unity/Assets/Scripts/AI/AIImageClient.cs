@@ -545,6 +545,11 @@ namespace PromptFighters.AI
                 action = "the completed summoning gesture, without drawing the summoned being or magic effect";
             else if (HasAction(skill, "wall"))
                 action = "the completed groundward gesture that raises a physical wall, without drawing the wall itself";
+            else if (HasAction(skill, "hazard_field") || HasAction(skill, "force_field") ||
+                     HasAction(skill, "healing_field") || HasAction(skill, "gravity_well"))
+                action = "the completed gesture controlling a persistent area on the battlefield, without drawing the field or aura itself";
+            else if (HasAction(skill, "position_swap"))
+                action = "a sharp completed spatial manipulation gesture, without drawing a portal, duplicate, or aura";
             else if (HasAction(skill, "counter") || HasAction(skill, "reflector") || HasAction(skill, "barrier"))
                 action = "a strong completed defensive technique stance, without drawing a shield, aura, or barrier";
             else
@@ -573,6 +578,10 @@ namespace PromptFighters.AI
                 preparation = "beginning the summoning gesture before any creature or object appears";
             else if (HasAction(skill, "wall"))
                 preparation = "planting their stance and directing power at the ground before a wall rises";
+            else if (HasAction(skill, "hazard_field") || HasAction(skill, "force_field") ||
+                     HasAction(skill, "healing_field") || HasAction(skill, "gravity_well") ||
+                     HasAction(skill, "position_swap"))
+                preparation = "concentrating on a chosen battlefield position before the spatial effect appears";
             else if (HasAction(skill, "counter") || HasAction(skill, "reflector") ||
                      HasAction(skill, "barrier") || HasAction(skill, "buff_self"))
                 preparation = "entering the technique stance before its defensive or empowering effect appears";
@@ -613,6 +622,10 @@ namespace PromptFighters.AI
                 : HasAction(skill, "summon")      ? "one individual summoned creature or minion sprite for a 2D fighting game skill, clear full body, exactly one creature, no copies or flock"
                 : HasAction(skill, "beam")        ? "long horizontal 2D energy beam visual effect, bright core, no rectangular block"
                 : HasAction(skill, "gravity_well")? "large radial vortex and gravity well visual effect, deep spiral center with inward energy flow"
+                : HasAction(skill, "hazard_field")? "persistent circular battlefield hazard effect with a readable dangerous boundary and active interior"
+                : HasAction(skill, "force_field") ? "directional wind, magnetic, or current field effect with clearly readable flowing force lines"
+                : HasAction(skill, "healing_field")? "gentle circular healing sanctuary effect with a readable boundary and rising restorative particles"
+                : HasAction(skill, "position_swap")? "paired spatial portal and displacement ripple effect with a clean circular silhouette"
                 : HasAction(skill, "uppercut")    ? "tall rising uppercut streak effect, vertical swoosh with strong upward motion"
                 : HasAction(skill, "dive_attack") ? "ground impact shockwave effect bursting outward with dust and debris"
                 : HasAction(skill, "shockwave")   ? "low wide ground shockwave effect running along the floor"
@@ -656,6 +669,8 @@ namespace PromptFighters.AI
                    a.type == "summon" || a.type == "beam" || a.type == "melee_hitbox" ||
                    a.type == "jump_attack" || a.type == "dash+melee_hitbox" || a.type == "multi_hit" ||
                    a.type == "gravity_well" || a.type == "lifesteal" || a.type == "shockwave" ||
+                   a.type == "hazard_field" || a.type == "force_field" ||
+                   a.type == "healing_field" || a.type == "position_swap" ||
                    a.type == "uppercut" || a.type == "dive_attack";
         }
 

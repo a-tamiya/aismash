@@ -30,15 +30,20 @@ namespace PromptFighters.Battle.Skills
         };
         static readonly HashSet<string> AimModes = new HashSet<string>
         {
-            "facing", "enemy", "away_enemy", "stage_center", "vector", "radial_out", "radial_in",
+            "facing", "enemy", "predicted_enemy", "away_enemy", "stage_center", "vector", "radial_out", "radial_in",
         };
         static readonly HashSet<string> SpatialPatterns = new HashSet<string>
         {
             "single", "fan", "parallel", "radial", "inward", "inward_ring", "mirrored", "line",
+            "grid", "rain", "spiral", "pincer",
         };
         static readonly HashSet<string> HitboxShapes = new HashSet<string>
         {
             "box", "cone", "ring", "annulus", "arc", "line", "cross", "column",
+        };
+        static readonly HashSet<string> ActionConditions = new HashSet<string>
+        {
+            "grounded", "airborne", "enemy_close", "enemy_far", "low_hp", "high_hp", "enemy_above", "enemy_below",
         };
 
         public static void Apply(SkillData skill)
@@ -112,7 +117,9 @@ namespace PromptFighters.Battle.Skills
 
             // 設置・召喚技: キャラのロックアウト時間はactive_timeを短く打ち切る
             // 実寿命は action.duration が担う
-            if (HasAction(skill, "trap_hitbox") || HasAction(skill, "summon") || HasAction(skill, "wall"))
+            if (HasAction(skill, "trap_hitbox") || HasAction(skill, "summon") || HasAction(skill, "wall") ||
+                HasAction(skill, "hazard_field") || HasAction(skill, "force_field") ||
+                HasAction(skill, "healing_field"))
                 p.active_time = Mathf.Min(p.active_time, 0.10f);
 
             // リフレクター技: startup+active+recovery=1.0秒ちょうどに固定し、
@@ -316,6 +323,41 @@ namespace PromptFighters.Battle.Skills
                         a.duration = Mathf.Clamp(a.duration > 0f ? a.duration : 1.0f, 0.3f, 1.5f);
                     }
 
+                    // hazard_field: 長時間残る多段領域。総ヒット数と寿命を抑えて、
+                    // 一度触れただけでHPを奪い続ける理不尽な領域にしない。
+                    if (a.type == "hazard_field")
+                    {
+                        a.duration = Mathf.Clamp(a.duration > 0f ? a.duration : 2f, 0.6f, 4f);
+                        a.range = Mathf.Clamp(a.range > 0f ? a.range : 2.4f, 0.8f, 5f);
+                        a.size_x = Mathf.Clamp(a.size_x > 0f ? a.size_x : a.range, 0.8f, 6f);
+                        a.size_y = Mathf.Clamp(a.size_y > 0f ? a.size_y : a.size_x, 0.5f, 5f);
+                        a.hit_count = Mathf.Clamp(a.hit_count > 1 ? a.hit_count : 3, 2, 6);
+                    }
+
+                    // force_field: 押し流す/吸い込む/上昇気流などの非ダメージ領域。
+                    if (a.type == "force_field")
+                    {
+                        a.duration = Mathf.Clamp(a.duration > 0f ? a.duration : 1.2f, 0.35f, 2.5f);
+                        a.range = Mathf.Clamp(a.range > 0f ? a.range : 3f, 1f, 5f);
+                        a.power = Mathf.Clamp(a.power > 0f ? a.power : 10f, 3f, 18f);
+                    }
+
+                    // healing_field: 中に留まった時だけ回復する領域。powerは全回復量。
+                    if (a.type == "healing_field")
+                    {
+                        a.duration = Mathf.Clamp(a.duration > 0f ? a.duration : 2.5f, 1f, 4f);
+                        a.range = Mathf.Clamp(a.range > 0f ? a.range : 2.2f, 1f, 4f);
+                        a.power = Mathf.Clamp(a.power > 0f ? a.power : 12f, 4f, 18f);
+                    }
+
+                    // position_swap: 相手と位置を交換する攪乱技。届く距離と予兆を保証する。
+                    if (a.type == "position_swap")
+                    {
+                        a.range = Mathf.Clamp(a.range > 0f ? a.range : 4f, 1.5f, 6f);
+                        a.telegraph_time = Mathf.Max(a.telegraph_time, 0.35f);
+                        p.recovery = Mathf.Max(p.recovery, 0.38f);
+                    }
+
                     // command_throw: 掴み範囲・高さの上限（ワイヤー投げでも届きすぎ防止）。
                     if (a.type == "command_throw")
                     {
@@ -349,6 +391,10 @@ namespace PromptFighters.Battle.Skills
                 {
                     if (fa == null) continue;
                     NormalizeSpatialAction(fa);
+                    // 派生入力は最大3段の既存連携で回数を管理するため、action内repeatとの
+                    // 二重増殖を禁止する。
+                    fa.repeat_count = 1;
+                    fa.repeat_interval = 0f;
                     fa.hit_count = 1;
                     if (fa.damage_override >= 0f)
                         fa.damage_override = Mathf.Clamp(fa.damage_override, 0f, totalMaxDmg * 0.35f);
@@ -357,6 +403,7 @@ namespace PromptFighters.Battle.Skills
 
             // ── 一貫性の強制（プロンプト指示をコード側でも保証する）──
             EnforceExclusiveActions(skill);
+            EnsureConditionalCoverage(skill);
             EnsureSmashDirectAttack(skill);
             SyncStartupWithActions(skill, si);
             EnsureMultiHitActiveTime(skill);
@@ -385,6 +432,29 @@ namespace PromptFighters.Battle.Skills
             a.aim_mode     = NormalizeToken(a.aim_mode, AimModes);
             a.pattern      = NormalizeToken(a.pattern, SpatialPatterns);
             a.shape        = NormalizeToken(a.shape, HitboxShapes);
+            a.condition    = NormalizeToken(a.condition, ActionConditions);
+
+            bool repeatable = a.type == "projectile" || a.type == "beam" ||
+                              a.type == "melee_hitbox" || a.type == "body_hitbox" ||
+                              a.type == "area_hitbox" || a.type == "trap_hitbox" ||
+                              a.type == "summon" || a.type == "hazard_field";
+            a.repeat_count = repeatable ? Mathf.Clamp(a.repeat_count > 0 ? a.repeat_count : 1, 1, 5) : 1;
+            a.repeat_interval = a.repeat_count > 1
+                ? Mathf.Clamp(a.repeat_interval > 0f ? a.repeat_interval : 0.18f, 0.08f, 0.65f)
+                : 0f;
+            if (a.condition == "low_hp" || a.condition == "high_hp")
+            {
+                // 「HP30%」を30として出したJSONも、0.3の比率指定として解釈する。
+                if (a.condition_value > 1f && a.condition_value <= 100f)
+                    a.condition_value *= 0.01f;
+                a.condition_value = a.condition_value > 0f
+                    ? Mathf.Clamp(a.condition_value, 0.05f, 0.95f)
+                    : 0f;
+            }
+            else
+            {
+                a.condition_value = Mathf.Clamp(a.condition_value, 0f, 12f);
+            }
 
             a.vector_x = Mathf.Clamp(a.vector_x, -1f, 1f);
             a.vector_y = Mathf.Clamp(a.vector_y, -1f, 1f);
@@ -422,13 +492,16 @@ namespace PromptFighters.Battle.Skills
                                 a.spawn_origin == "left_edge" || a.spawn_origin == "right_edge";
             if (remoteOrigin && IsTelegraphedAttack(a.type))
                 a.telegraph_time = Mathf.Max(a.telegraph_time, 0.4f);
+            else if (remoteOrigin && a.type == "force_field")
+                a.telegraph_time = Mathf.Max(a.telegraph_time, 0.3f);
         }
 
         static bool IsTelegraphedAttack(string type)
         {
             return type == "melee_hitbox" || type == "body_hitbox" || type == "projectile" ||
                    type == "area_hitbox" || type == "trap_hitbox" || type == "beam" ||
-                   type == "lifesteal" || type == "summon" || type == "wall";
+                   type == "lifesteal" || type == "summon" || type == "wall" ||
+                   type == "hazard_field";
         }
 
         static string NormalizeToken(string value, HashSet<string> allowed)
@@ -438,12 +511,58 @@ namespace PromptFighters.Battle.Skills
             return allowed.Contains(token) ? token : null;
         }
 
+        // 条件付きactionだけで構成された技が特定状況で完全な空振り操作にならないよう、
+        // 地上/空中・近/遠・低/高HPの相補ペアだけを完全分岐として認める。
+        // 片側しか生成されなかった場合は最初のgameplay actionを無条件へ戻す。
+        static void EnsureConditionalCoverage(SkillData skill)
+        {
+            if (skill?.actions == null) return;
+            bool hasGameplay = false;
+            bool unconditional = false;
+            var conditions = new HashSet<string>();
+            SkillAction firstGameplay = null;
+            foreach (var a in skill.actions)
+            {
+                if (a == null || !IsGameplayActionType(a.type)) continue;
+                hasGameplay = true;
+                firstGameplay ??= a;
+                if (string.IsNullOrEmpty(a.condition)) unconditional = true;
+                else conditions.Add(a.condition);
+            }
+            if (!hasGameplay || unconditional) return;
+
+            bool covered = (conditions.Contains("grounded") && conditions.Contains("airborne")) ||
+                           (conditions.Contains("enemy_close") && conditions.Contains("enemy_far")) ||
+                           (conditions.Contains("low_hp") && conditions.Contains("high_hp"));
+            if (!covered && firstGameplay != null)
+            {
+                firstGameplay.condition = null;
+                firstGameplay.condition_value = 0f;
+            }
+        }
+
+        static bool IsGameplayActionType(string type)
+        {
+            switch (type)
+            {
+                case "melee_hitbox": case "body_hitbox": case "projectile": case "area_hitbox":
+                case "trap_hitbox": case "beam": case "jump_attack": case "summon": case "wall":
+                case "counter": case "reflector": case "buff_self": case "barrier": case "heal_self":
+                case "command_throw": case "shockwave": case "gravity_well": case "hazard_field":
+                case "force_field": case "healing_field": case "position_swap": case "lifesteal":
+                case "uppercut": case "dive_attack":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
         // 直接攻撃としてゲーム内で判定が出るaction種。
         static readonly HashSet<string> DirectAttackTypes = new HashSet<string>
         {
             "melee_hitbox", "body_hitbox", "projectile", "area_hitbox", "trap_hitbox", "beam",
             "jump_attack", "multi_hit", "dash+melee_hitbox", "shockwave", "lifesteal", "command_throw",
-            "uppercut", "dive_attack", "summon",
+            "uppercut", "dive_attack", "summon", "hazard_field",
         };
 
         // counter / reflector / command_throw は発動後の処理を自前で完結するため、
@@ -631,6 +750,10 @@ namespace PromptFighters.Battle.Skills
                     case "command_throw":
                     case "shockwave":
                     case "gravity_well":
+                    case "hazard_field":
+                    case "force_field":
+                    case "healing_field":
+                    case "position_swap":
                     case "lifesteal":
                     case "uppercut":
                     case "dive_attack":

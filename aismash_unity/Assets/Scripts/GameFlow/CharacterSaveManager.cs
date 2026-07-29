@@ -812,6 +812,10 @@ namespace PromptFighters.GameFlow
             if (a.follow_owner)                      sb.Append(",\"follow_owner\":true");
             if (a.player_controlled)                 sb.Append(",\"player_controlled\":true");
             if (a.hide_effect)                       sb.Append(",\"hide_effect\":true");
+            if (a.repeat_count > 1)                  sb.Append($",\"repeat_count\":{a.repeat_count}");
+            if (a.repeat_interval > 0f)              sb.Append($",\"repeat_interval\":{a.repeat_interval}");
+            if (!string.IsNullOrEmpty(a.condition))  sb.Append($",\"condition\":{Q(a.condition)}");
+            if (a.condition_value > 0f)              sb.Append($",\"condition_value\":{a.condition_value}");
             if (!Mathf.Approximately(a.knockback_x, 0f)) sb.Append($",\"knockback_x\":{a.knockback_x}");
             if (!Mathf.Approximately(a.knockback_y, 0f)) sb.Append($",\"knockback_y\":{a.knockback_y}");
             if (!string.IsNullOrEmpty(a.knockback_direction)) sb.Append($",\"knockback_direction\":{Q(a.knockback_direction)}");
