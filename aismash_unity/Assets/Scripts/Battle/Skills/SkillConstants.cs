@@ -23,5 +23,9 @@ namespace PromptFighters.Battle.Skills
 
         // スマッシュ判定とみなすパワー倍率の下限
         public const float SmashPowerThreshold = 1.8f;
+
+        // 近距離/遠距離の完全分岐で共用する標準境界。両条件が同じ値を使い、
+        // この距離以下を近距離、超過を遠距離として不発区間と二重発動を作らない。
+        public const float EnemyDistanceBranchThreshold = 3.25f;
     }
 }

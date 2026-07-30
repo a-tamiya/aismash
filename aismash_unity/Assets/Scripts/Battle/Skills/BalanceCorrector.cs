@@ -403,6 +403,7 @@ namespace PromptFighters.Battle.Skills
 
             // ── 一貫性の強制（プロンプト指示をコード側でも保証する）──
             EnforceExclusiveActions(skill);
+            NormalizeComplementaryConditionThresholds(skill);
             EnsureConditionalCoverage(skill);
             EnsureSmashDirectAttack(skill);
             SyncStartupWithActions(skill, si);
@@ -539,6 +540,38 @@ namespace PromptFighters.Battle.Skills
                 firstGameplay.condition = null;
                 firstGameplay.condition_value = 0f;
             }
+        }
+
+        // 近距離/遠距離を完全分岐として使う場合、両側の閾値を必ず1本へ統一する。
+        // AIが近距離2.5・遠距離4.0のように別値を返しても、その間で技が不発にならない。
+        static void NormalizeComplementaryConditionThresholds(SkillData skill)
+        {
+            if (skill?.actions == null) return;
+            bool hasClose = false;
+            bool hasFar = false;
+            float sum = 0f;
+            int count = 0;
+            foreach (var a in skill.actions)
+            {
+                if (a == null) continue;
+                if (a.condition == "enemy_close") hasClose = true;
+                else if (a.condition == "enemy_far") hasFar = true;
+                else continue;
+
+                if (a.condition_value > 0f)
+                {
+                    sum += a.condition_value;
+                    count++;
+                }
+            }
+            if (!hasClose || !hasFar) return;
+
+            float threshold = count > 0
+                ? Mathf.Clamp(sum / count, 1.25f, 8f)
+                : SkillConstants.EnemyDistanceBranchThreshold;
+            foreach (var a in skill.actions)
+                if (a != null && (a.condition == "enemy_close" || a.condition == "enemy_far"))
+                    a.condition_value = threshold;
         }
 
         static bool IsGameplayActionType(string type)

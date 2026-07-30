@@ -30,8 +30,10 @@ namespace PromptFighters.Battle.Skills
         bool _isExecuting;
         bool _currentSkillHit;
         // conditionは各actionの発生時ではなく、技ボタンを押した瞬間の状態で固定する。
-        // 地上側actionのjump/dashで空中へ移った後に、空中側まで誤発動するのを防ぐ。
+        // 地上側actionのjump/dashや近距離側の押し出し後に、反対側まで誤発動するのを防ぐ。
         bool _skillStartedGrounded;
+        bool _skillStartedWithEnemy;
+        float _skillStartedEnemyDistance;
         int _skillSerial;
         int _impactShownSerial = -1;
         float _currentSkillEndTime;
@@ -145,7 +147,7 @@ namespace PromptFighters.Battle.Skills
         IEnumerator ExecuteFollowUp(SkillData skill, int followUpCount)
         {
             _isExecuting = true;
-            _skillStartedGrounded = _fighter != null && _fighter.IsGrounded;
+            CaptureSkillStartConditions();
             _currentSkillHit = false;
             SubscribeCurrentSkillHit();
 
@@ -260,7 +262,7 @@ namespace PromptFighters.Battle.Skills
         IEnumerator ExecuteSkill(SkillData skill, float powerMultiplier)
         {
             _isExecuting = true;
-            _skillStartedGrounded = _fighter != null && _fighter.IsGrounded;
+            CaptureSkillStartConditions();
             _voicePlayer?.PlaySkill(skill.slot);
             OnSkillExecuted?.Invoke(skill.slot);
             int serial = ++_skillSerial;
@@ -440,13 +442,17 @@ namespace PromptFighters.Battle.Skills
                 case "airborne":
                     return GroundStateConditionMet(a.condition, _skillStartedGrounded);
                 case "enemy_close":
-                    if (enemy == null) return false;
-                    threshold = a.condition_value > 0f ? a.condition_value : 2.5f;
-                    return Vector2.Distance(_fighter.transform.position, enemy.transform.position) <= threshold;
+                    if (!_skillStartedWithEnemy) return false;
+                    threshold = a.condition_value > 0f
+                        ? a.condition_value
+                        : SkillConstants.EnemyDistanceBranchThreshold;
+                    return EnemyDistanceConditionMet(a.condition, _skillStartedEnemyDistance, threshold);
                 case "enemy_far":
-                    if (enemy == null) return false;
-                    threshold = a.condition_value > 0f ? a.condition_value : 4f;
-                    return Vector2.Distance(_fighter.transform.position, enemy.transform.position) >= threshold;
+                    if (!_skillStartedWithEnemy) return false;
+                    threshold = a.condition_value > 0f
+                        ? a.condition_value
+                        : SkillConstants.EnemyDistanceBranchThreshold;
+                    return EnemyDistanceConditionMet(a.condition, _skillStartedEnemyDistance, threshold);
                 case "low_hp":
                     if (_fighter == null) return false;
                     threshold = Mathf.Clamp01(a.condition_value > 0f ? a.condition_value : 0.35f);
@@ -466,6 +472,26 @@ namespace PromptFighters.Battle.Skills
                 default:
                     return true;
             }
+        }
+
+        void CaptureSkillStartConditions()
+        {
+            _skillStartedGrounded = _fighter != null && _fighter.IsGrounded;
+            Fighter enemy = _fighter?.Opponent;
+            _skillStartedWithEnemy = _fighter != null && enemy != null;
+            _skillStartedEnemyDistance = _skillStartedWithEnemy
+                ? Vector2.Distance(_fighter.transform.position, enemy.transform.position)
+                : float.PositiveInfinity;
+        }
+
+        static bool EnemyDistanceConditionMet(string condition, float distance, float threshold)
+        {
+            float boundary = threshold > 0f
+                ? threshold
+                : SkillConstants.EnemyDistanceBranchThreshold;
+            return condition == "enemy_close" ? distance <= boundary :
+                   condition == "enemy_far" ? distance > boundary :
+                   true;
         }
 
         static bool GroundStateConditionMet(string condition, bool startedGrounded)

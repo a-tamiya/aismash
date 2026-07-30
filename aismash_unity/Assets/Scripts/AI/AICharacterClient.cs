@@ -99,7 +99,8 @@ namespace PromptFighters.AI
                         lastError = "AI応答の解析に失敗: " + e.Message;
                         if (e.Message.StartsWith("技別入力の再現不足:", StringComparison.Ordinal))
                             correctionPrompt = e.Message +
-                                "\n該当スロットのactionsを作り直し、groundedとairborneを両方含む完全なJSONを再出力すること。";
+                                "\n該当スロットのactionsを作り直し、要求された相補condition" +
+                                "（grounded+airborne または enemy_close+enemy_far）を両方含む完全なJSONを再出力すること。";
                         Debug.LogWarning($"[AI] 解析エラー({model} {attempt}/{MaxGenerateAttempts}): {e.Message}\nレスポンス: {req.downloadHandler.text}");
                         parseFailed = true;
                     }
@@ -503,9 +504,11 @@ $@"あなたは2D格闘ゲームのキャラクター原案を生み出す、発
         static string BuildUserPrompt(string name, string features) =>
 $@"以下の名前と特徴でキャラクターJSONを生成してください。
 キャラクター名: {name}
-特徴（このテキストの語句を最大限拾って技に反映すること）: {features}
-入力に【見た目・性能】【技A】【技B】【技X】【SMASH】の見出しがある場合、各欄は変更不可の個別仕様である。順に外見・ステータス、attack_a、attack_b、attack_c、smash_sideへ一対一で反映し、別スロットへの移動・統合・交換・内容の補完による上書きを禁止する。
-同じ技欄に「地上」と「空中」の両方が書かれている場合、その1スロットのactionsへgrounded条件とairborne条件を両方出力する。片方を省略したり、別スロットへ分けたりしない。旧形式の【技の詳細】だけがある場合は、その内容を4つの技構成へ展開する。";
+ 特徴（このテキストの語句を最大限拾って技に反映すること）: {features}
+ 入力に【見た目・性能】【技A】【技B】【技X】【SMASH】の見出しがある場合、各欄は変更不可の個別仕様である。順に外見・ステータス、attack_a、attack_b、attack_c、smash_sideへ一対一で反映し、別スロットへの移動・統合・交換・内容の補完による上書きを禁止する。
+ 同じ技欄に「地上」と「空中」の両方が書かれている場合、その1スロットのactionsへgrounded条件とairborne条件を両方出力する。
+ 同じ技欄に「近距離」と「遠距離」の両方が書かれている場合、その1スロットのactionsへenemy_close条件とenemy_far条件を両方出力し、両方のcondition_valueを同じ距離（標準3.25）にする。
+ いずれも片方を省略したり、無条件actionにしたり、別スロットへ分けたりしない。旧形式の【技の詳細】だけがある場合は、その内容を4つの技構成へ展開する。";
 
         static bool ValidateDetailedPromptContract(
             string features, CharacterData data, out string error)
@@ -518,25 +521,45 @@ $@"以下の名前と特徴でキャラクターJSONを生成してください�
             for (int i = 0; i < headings.Length; i++)
             {
                 string section = ExtractDetailedPromptSection(features, headings[i]);
-                if (!RequestsGroundAirBranch(section))
+                bool requestsGroundAir = RequestsGroundAirBranch(section);
+                bool requestsNearFar = RequestsNearFarBranch(section);
+                if (!requestsGroundAir && !requestsNearFar)
                     continue;
 
                 if (i >= data.skills.Length || data.skills[i]?.actions == null)
                 {
-                    error = $"{slotNames[i]}技に地上・空中のactionsがありません";
+                    error = $"{slotNames[i]}技に条件分岐用のactionsがありません";
                     return false;
                 }
 
                 bool grounded = false;
                 bool airborne = false;
+                bool enemyClose = false;
+                bool enemyFar = false;
+                bool unconditional = false;
                 foreach (var action in data.skills[i].actions)
                 {
+                    if (action != null && !string.IsNullOrEmpty(action.type) &&
+                        string.IsNullOrEmpty(action.condition))
+                        unconditional = true;
                     if (action?.condition == "grounded") grounded = true;
                     if (action?.condition == "airborne") airborne = true;
+                    if (action?.condition == "enemy_close") enemyClose = true;
+                    if (action?.condition == "enemy_far") enemyFar = true;
                 }
-                if (!grounded || !airborne)
+                if (requestsGroundAir && (!grounded || !airborne))
                 {
                     error = $"{slotNames[i]}技は地上・空中の両分岐が必須です";
+                    return false;
+                }
+                if (requestsNearFar && (!enemyClose || !enemyFar))
+                {
+                    error = $"{slotNames[i]}技は近距離・遠距離の両分岐が必須です";
+                    return false;
+                }
+                if (unconditional)
+                {
+                    error = $"{slotNames[i]}技の条件分岐に無条件actionを混在できません";
                     return false;
                 }
             }
@@ -555,6 +578,25 @@ $@"以下の名前と特徴でキャラクターJSONを生成してください�
                 "地上では使用不可", "空中では使用不可", "地上では発動しない", "空中では発動しない",
                 "地上と空中で同じ", "地上・空中で同じ", "地上/空中で同じ",
                 "どちらでも同じ", "どちらも同じ"
+            };
+            foreach (string phrase in noBranchPhrases)
+                if (section.Contains(phrase)) return false;
+            return true;
+        }
+
+        static bool RequestsNearFarBranch(string section)
+        {
+            if (string.IsNullOrEmpty(section)) return false;
+            bool mentionsNear = section.Contains("近距離") || section.Contains("近く") ||
+                                section.Contains("接近時") || section.Contains("密着");
+            bool mentionsFar = section.Contains("遠距離") || section.Contains("遠く") ||
+                               section.Contains("離れて") || section.Contains("距離がある");
+            if (!mentionsNear || !mentionsFar) return false;
+
+            string[] noBranchPhrases =
+            {
+                "近距離と遠距離で同じ", "近距離・遠距離で同じ", "近距離/遠距離で同じ",
+                "近くても遠くても同じ", "距離に関係なく", "間合いに関係なく"
             };
             foreach (string phrase in noBranchPhrases)
                 if (section.Contains(phrase)) return false;
@@ -650,7 +692,8 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
 - 数量・程度は数値に翻訳する。例:「3体の使い魔」→summonのpattern_count:3、「二刀流」→2hitや多段、「最速」→移動stats上限付近、「超火力の一撃」→hit_count=1・damage大。
 - 【文章を7軸へ分解】各技の文を「主体」「発生位置」「対象」「軌道/方向」「個数/配置」「時間構造」「命中後/場の効果」に分解し、actionsの別々のfieldへ写す。1枚絵やdescriptionだけで済ませない。
 - 「何度も/連続/波状/次々」はrepeat_count+repeat_interval、「雨のように/降り注ぐ」はpattern:""rain""、「螺旋/渦巻き」はpattern:""spiral""、「格子/盤面」はpattern:""grid""、「左右から挟む」はpattern:""pincer""へ翻訳する。
-- 「地上ではX、空中ではY」は、同じ技のactionsにcondition:""grounded""とcondition:""airborne""を必ず1つ以上ずつ付ける。両actionのtimeは同じ発生基準にし、一方だけの実装、無条件actionへの置換、別スロットへの分割を禁止する。「近ければX、遠ければY」も同様に相補条件を使う。
+- 「地上ではX、空中ではY」は、同じ技のactionsにcondition:""grounded""とcondition:""airborne""を必ず1つ以上ずつ付ける。両actionのtimeは同じ発生基準にし、一方だけの実装、無条件actionへの置換、別スロットへの分割を禁止する。
+- 「近距離ではX、遠距離ではY」は、同じ技のactionsにcondition:""enemy_close""とcondition:""enemy_far""を必ず1つ以上ずつ付ける。両方のcondition_valueは同じ距離（標準3.25）にし、一方の省略、無条件actionへの置換、別スロットへの分割を禁止する。
 - 口調・性格・世界観は catch_copy、各 description、voice_profile に反映する（戦闘挙動だけでなく雰囲気も「思い描いたキャラ」に寄せる）。
 - voice_profile は日本語の短い戦闘ボイスとして作る。intro_lineは登場台詞、skill_linesはattack_a/attack_b/attack_c/smash_sideの順で必ず4件。各台詞は2〜12文字程度、一息で言い切れる長さとし、技名を叫ぶだけでもよい。voice_genderはmale/female/neutral、voice_ageはchild/teen/young_adult/adult/senior/ageless、voice_pitchはlow/medium/high、voice_styleはheroic/fierce/cool/mysterious/cheerful/elegant/eccentric/ominousから、性格と世界観に最も合うものを選ぶ。特徴文に性別・年齢・声の高さが明示されていれば必ず一致させ、外見だけを根拠に変更しない。音声presetと個体差番号はコード側で決定するため出力しない。instructionsには性別・年齢・ピッチの再指定を入れず、キャラ固有の話速、感情、息遣い、間、声量変化、登場時と必殺技時の演技の方向性を具体的に含める。棒読み・単調な絶叫・長い溜め・長い無音・母音の引き伸ばしは指示せず、短い台詞の中に自然な抑揚の山と速度・強弱の変化を作る。
 - 【連想拡張は補助】明示が薄い・短い入力のときだけ、その語から連想を広げて4枠を肉付けする。明示要素を上書きしてはならない。
@@ -804,6 +847,7 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
   上空から次々降る氷柱→projectile + spawn_origin:""enemy"", spawn_y:5, pattern:""rain"", pattern_count:5, repeat_count:2, repeat_interval:0.35, telegraph_time:0.55
   螺旋状に広がる火球→projectile + pattern:""spiral"", pattern_count:6, pattern_radius:2.5, burst_interval:0.08
   地上と空中で変わる技→grounded条件のshockwaveとairborne条件のdive_attackを同じactionsへ入れる
+  近距離と遠距離で変わる技→condition_value:3.25を共通にしてenemy_close条件のmelee_hitboxとenemy_far条件のprojectileを同じactionsへ入れる
 - 【汎用反復】projectile/beam/melee_hitbox/body_hitbox/area_hitbox/trap_hitbox/summon/hazard_fieldはrepeat_count:1〜5、repeat_interval:0.08〜0.65で波状に繰り返せる。総威力はUnity側で回数按分する。「大量」はpattern_count、「何波も/次々/連続」はrepeat_countとして区別する。
 - 【状況分岐】conditionは""grounded""/""airborne""/""enemy_close""/""enemy_far""/""low_hp""/""high_hp""/""enemy_above""/""enemy_below""。condition_valueは距離、HP条件だけは0〜1の比率（30%なら0.3）。完全分岐はgrounded+airborne、enemy_close+enemy_far、low_hp+high_hpの相補ペアにし、どの状況でも技が完全不発にならないようにする。enemy_above/belowを使う場合は無条件actionも1つ残す。
 - 【派生技 follow_up_actions】必要な技だけスキルJSON最上位に追加:
