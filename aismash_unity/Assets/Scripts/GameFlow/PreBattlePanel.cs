@@ -30,7 +30,7 @@ namespace PromptFighters.GameFlow
 
         // 共有ロスター（スマブラ風キャラ選択グリッド）
         const int RosterColumns = 8;
-        const int RosterRows = 3;
+        const int RosterRows = 4;
         Transform _rosterGrid;
         int _rosterPage = 0;
         int _displayedPage = -1;
@@ -57,6 +57,13 @@ namespace PromptFighters.GameFlow
         Button _p2VoiceGenderButton;
         Button _p1VoiceStyleButton;
         Button _p2VoiceStyleButton;
+        GameObject _characterSettingsPanel;
+        GameObject _p1CharacterSettingsContent;
+        GameObject _p2CharacterSettingsContent;
+        TextMeshProUGUI _p1CharacterSettingsName;
+        TextMeshProUGUI _p2CharacterSettingsName;
+        TextMeshProUGUI _p1CharacterSettingsHint;
+        TextMeshProUGUI _p2CharacterSettingsHint;
         Coroutine _voiceRegenerationCoroutine;
         TMP_InputField _p1NameInput;
         TMP_InputField _p1FeatureInput;
@@ -201,6 +208,7 @@ namespace PromptFighters.GameFlow
             if (_presets.Count < 2) _p2PresetIdx = 0;
             BuildTitlePanel();
             BuildPanel();
+            BuildCharacterSettingsPanel();
             BuildGenerationSetupPanel();
             BuildGeneratingPanel();
             BuildSkillConfirmPanel();
@@ -581,6 +589,13 @@ namespace PromptFighters.GameFlow
                 // （このモーダルは削除/キャンセルの押せるボタンを持ち、ゲームパッドはカーソル経由で操作する）。
                 if (WasKeyboardConfirmPressed()) ConfirmDeleteCharacter();
                 else if (WasKeyboardCancelPressed()) HideDeleteConfirm();
+                return;
+            }
+
+            // キャラ設定モーダルが開いている間は、ロスターや対戦開始へ入力を通さない。
+            if (_characterSettingsPanel != null && _characterSettingsPanel.activeSelf)
+            {
+                if (WasCancelPressed()) HideCharacterSettings();
                 return;
             }
 
@@ -1552,14 +1567,14 @@ namespace PromptFighters.GameFlow
             // ── 大きなキャラプレビュー（左） ──
             var previewFrame = CreateUIObject(isP1 ? "P1PreviewFrame" : "P2PreviewFrame", parent);
             var pfRt = previewFrame.GetComponent<RectTransform>();
-            pfRt.anchoredPosition = new Vector2(cx - 168f, 92f);
-            pfRt.sizeDelta = new Vector2(280f, 360f);
+            pfRt.anchoredPosition = new Vector2(cx - 168f, 124f);
+            pfRt.sizeDelta = new Vector2(280f, 350f);
             var pfImg = AddImage(previewFrame, new Color(0.012f, 0.014f, 0.024f, 0.92f));
             pfImg.sprite = PromptFighters.UI.UITheme.VGradient; pfImg.type = Image.Type.Simple;
             PromptFighters.UI.UITheme.AddPremiumFrame(previewFrame.transform,
                 new Color(pColor.r, pColor.g, pColor.b, 0.9f));
-            MakeSlantBar(previewFrame.transform, "PreviewTop", new Vector2(0f, 178f), new Vector2(280f, 5f), pColor, slant);
-            MakeSlantBar(previewFrame.transform, "PreviewBottom", new Vector2(0f, -178f), new Vector2(280f, 5f), pColor, slant);
+            MakeSlantBar(previewFrame.transform, "PreviewTop", new Vector2(0f, 173f), new Vector2(280f, 5f), pColor, slant);
+            MakeSlantBar(previewFrame.transform, "PreviewBottom", new Vector2(0f, -173f), new Vector2(280f, 5f), pColor, slant);
 
             var previewGo = CreateUIObject(isP1 ? "P1PreviewImage" : "P2PreviewImage", previewFrame.transform);
             var pvRt = previewGo.GetComponent<RectTransform>();
@@ -1577,13 +1592,13 @@ namespace PromptFighters.GameFlow
             // ── ステータスグラフ＋技（右パネル） ──
             var statPanel = CreateUIObject(isP1 ? "P1StatPanel" : "P2StatPanel", parent);
             var spRt = statPanel.GetComponent<RectTransform>();
-            spRt.anchoredPosition = new Vector2(cx + 168f, 92f);
-            spRt.sizeDelta = new Vector2(330f, 360f);
+            spRt.anchoredPosition = new Vector2(cx + 168f, 124f);
+            spRt.sizeDelta = new Vector2(330f, 350f);
             var spImg = AddImage(statPanel, new Color(0.012f, 0.014f, 0.024f, 0.92f));
             spImg.sprite = PromptFighters.UI.UITheme.VGradient; spImg.type = Image.Type.Simple;
             PromptFighters.UI.UITheme.AddPremiumFrame(statPanel.transform,
                 new Color(pColor.r, pColor.g, pColor.b, 0.9f));
-            MakeSlantBar(statPanel.transform, "StatTop", new Vector2(0f, 178f), new Vector2(330f, 5f), pColor, slant);
+            MakeSlantBar(statPanel.transform, "StatTop", new Vector2(0f, 173f), new Vector2(330f, 5f), pColor, slant);
 
             MakeLabel(statPanel.transform, "StatHeader", "STATUS",
                 new Vector2(0f, 152f), new Vector2(300f, 26f), 18f, PromptFighters.UI.UITheme.Gold)
@@ -1642,36 +1657,13 @@ namespace PromptFighters.GameFlow
             StyleArcadeButton(randomBtn, pColorDark, isP1 ? 12f : -12f);
             SetButtonLabelStyle(randomBtn, 17f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
-            // 生成キャラ削除（ランダムボタンの下。初期キャラ選択中は非表示）
-            var deleteBtn = MakeButton(parent, isP1 ? "P1DeleteGeneratedBtn" : "P2DeleteGeneratedBtn", "キャラ削除",
-                new Vector2(cx + 330f, 352f), new Vector2(150f, 34f), () => RequestDeleteCharacter(isP1),
-                PromptFighters.UI.UITheme.P2NeonDark);
-            SetButtonLabelStyle(deleteBtn, 14f, FontStyles.Bold, Color.white);
-            if (isP1) _p1DeleteButton = deleteBtn;
-            else _p2DeleteButton = deleteBtn;
-
-            // 旧品質の保存済みボイスも、キャラを削除せず安全に作り直せる。
-            var voiceBtn = MakeButton(parent, isP1 ? "P1VoiceRegenerateBtn" : "P2VoiceRegenerateBtn", "ボイス再生成",
-                new Vector2(cx + 330f, 312f), new Vector2(150f, 34f), () => RegenerateSelectedVoice(isP1),
-                PromptFighters.UI.UITheme.SteelLight);
-            SetButtonLabelStyle(voiceBtn, 14f, FontStyles.Bold, Color.white);
-            if (isP1) _p1VoiceRegenerateButton = voiceBtn;
-            else _p2VoiceRegenerateButton = voiceBtn;
-
-            // 既存の横幅内を性別と声質に分割し、下のステータス領域と重ねない。
-            var genderBtn = MakeButton(parent, isP1 ? "P1VoiceGenderBtn" : "P2VoiceGenderBtn", "性別:中",
-                new Vector2(cx + 290f, 272f), new Vector2(74f, 34f), () => CycleSelectedVoiceGender(isP1),
-                PromptFighters.UI.UITheme.SteelLight);
-            SetButtonLabelStyle(genderBtn, 12f, FontStyles.Bold, Color.white);
-            if (isP1) _p1VoiceGenderButton = genderBtn;
-            else _p2VoiceGenderButton = genderBtn;
-
-            var styleBtn = MakeButton(parent, isP1 ? "P1VoiceStyleBtn" : "P2VoiceStyleBtn", "声質:勇壮",
-                new Vector2(cx + 370f, 272f), new Vector2(74f, 34f), () => CycleSelectedVoiceStyle(isP1),
-                PromptFighters.UI.UITheme.SteelLight);
-            SetButtonLabelStyle(styleBtn, 12f, FontStyles.Bold, Color.white);
-            if (isP1) _p1VoiceStyleButton = styleBtn;
-            else _p2VoiceStyleButton = styleBtn;
+            // 削除・ボイス関連は専用モーダルへ集約し、選択画面の情報密度を抑える。
+            var characterSettingsBtn = MakeButton(parent,
+                isP1 ? "P1CharacterSettingsBtn" : "P2CharacterSettingsBtn", "キャラ設定",
+                new Vector2(cx + 330f, 350f), new Vector2(150f, 42f),
+                () => ShowCharacterSettings(isP1), PromptFighters.UI.UITheme.SteelLight);
+            StyleArcadeButton(characterSettingsBtn, pColorDark, isP1 ? 10f : -10f);
+            SetButtonLabelStyle(characterSettingsBtn, 16f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             // コントローラー接続状態（バッジ下）
             var gpLabel = MakeLabel(parent, isP1 ? "P1GpStatus" : "P2GpStatus",
@@ -1687,23 +1679,24 @@ namespace PromptFighters.GameFlow
         {
             var frame = CreateUIObject("RosterFrame", parent);
             var frRt = frame.GetComponent<RectTransform>();
-            frRt.anchoredPosition = new Vector2(0f, -230f);
-            frRt.sizeDelta = new Vector2(1480f, 232f);
+            frRt.anchoredPosition = new Vector2(0f, -214f);
+            frRt.sizeDelta = new Vector2(1560f, 340f);
             var frImg = AddImage(frame, new Color(0.012f, 0.014f, 0.024f, 0.92f));
             frImg.sprite = PromptFighters.UI.UITheme.VGradient; frImg.type = Image.Type.Simple;
             PromptFighters.UI.UITheme.AddPremiumFrame(frame.transform,
                 new Color(PromptFighters.UI.UITheme.Gold.r, PromptFighters.UI.UITheme.Gold.g,
                     PromptFighters.UI.UITheme.Gold.b, 0.72f));
-            MakeSlantBar(frame.transform, "RosterTop", new Vector2(0f, 112f), new Vector2(1480f, 4f),
+            MakeSlantBar(frame.transform, "RosterTop", new Vector2(0f, 168f), new Vector2(1560f, 4f),
                 PromptFighters.UI.UITheme.Gold, 24f);
 
             var grid = CreateUIObject("RosterGrid", frame.transform);
             var gRt = grid.GetComponent<RectTransform>();
             gRt.anchorMin = Vector2.zero; gRt.anchorMax = Vector2.one;
-            gRt.offsetMin = new Vector2(14f, 8f); gRt.offsetMax = new Vector2(-14f, -8f);
+            // 上部44pxは見出し専用。グリッドと見出しを物理的に分離して重なりを防ぐ。
+            gRt.offsetMin = new Vector2(54f, 8f); gRt.offsetMax = new Vector2(-54f, -44f);
             var layout = grid.AddComponent<GridLayoutGroup>();
-            layout.cellSize = new Vector2(168f, 64f);
-            layout.spacing = new Vector2(10f, 8f);
+            layout.cellSize = new Vector2(172f, 62f);
+            layout.spacing = new Vector2(7f, 6f);
             layout.padding = new RectOffset(6, 6, 4, 4);
             layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
             layout.constraintCount = RosterColumns;
@@ -1711,24 +1704,24 @@ namespace PromptFighters.GameFlow
             _rosterGrid = grid.transform;
 
             // ヘッダー: タイトルプレート＋ページ表示
-            MakeSlantBar(frame.transform, "RosterTitlePlate", new Vector2(-636f, 112f), new Vector2(232f, 30f),
-                new Color(PromptFighters.UI.UITheme.Gold.r, PromptFighters.UI.UITheme.Gold.g, PromptFighters.UI.UITheme.Gold.b, 0.20f), 16f);
+            MakeSlantBar(frame.transform, "RosterTitlePlate", new Vector2(-626f, 145f), new Vector2(300f, 34f),
+                new Color(PromptFighters.UI.UITheme.Gold.r, PromptFighters.UI.UITheme.Gold.g, PromptFighters.UI.UITheme.Gold.b, 0.28f), 16f);
             MakeLabel(frame.transform, "RosterTitle", "CHARACTER SELECT",
-                new Vector2(-636f, 112f), new Vector2(280f, 30f), 17f, PromptFighters.UI.UITheme.Gold)
+                new Vector2(-626f, 145f), new Vector2(300f, 32f), 19f, Color.white)
                 .fontStyle = FontStyles.Bold | FontStyles.Italic;
 
             _rosterPageLabel = MakeLabel(frame.transform, "RosterPage", "1 / 1",
-                new Vector2(0f, 112f), new Vector2(120f, 26f), 16f, PromptFighters.UI.UITheme.Ink);
+                new Vector2(0f, 145f), new Vector2(140f, 30f), 17f, PromptFighters.UI.UITheme.Gold);
             _rosterPageLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
             // ページ送り（ロスター左右に配置。1ページに収まらない場合のみ機能）
             var prevPage = MakeButton(frame.transform, "RosterPrev", "‹",
-                new Vector2(-748f, 0f), new Vector2(50f, 156f), () => ChangeRosterPage(-1),
+                new Vector2(-752f, -10f), new Vector2(44f, 260f), () => ChangeRosterPage(-1),
                 PromptFighters.UI.UITheme.P1Neon);
             StyleArcadeButton(prevPage, PromptFighters.UI.UITheme.P1NeonDark, 12f);
             SetButtonLabelStyle(prevPage, 40f, FontStyles.Bold, Color.white);
             var nextPage = MakeButton(frame.transform, "RosterNext", "›",
-                new Vector2(748f, 0f), new Vector2(50f, 156f), () => ChangeRosterPage(1),
+                new Vector2(752f, -10f), new Vector2(44f, 260f), () => ChangeRosterPage(1),
                 PromptFighters.UI.UITheme.P2Neon);
             StyleArcadeButton(nextPage, PromptFighters.UI.UITheme.P2NeonDark, -12f);
             SetButtonLabelStyle(nextPage, 40f, FontStyles.Bold, Color.white);
@@ -1747,18 +1740,42 @@ namespace PromptFighters.GameFlow
             bg.raycastTarget = false;
             _rosterCellBgs[idx] = bg;
 
-            var portraitGo = CreateUIObject("Portrait", cell.transform);
+            // 選択色は外周に残し、内側を暗くして顔と名前のコントラストを一定にする。
+            var surface = CreateUIObject("Surface", cell.transform);
+            var surfaceRt = surface.GetComponent<RectTransform>();
+            surfaceRt.anchorMin = Vector2.zero; surfaceRt.anchorMax = Vector2.one;
+            surfaceRt.offsetMin = new Vector2(3f, 3f); surfaceRt.offsetMax = new Vector2(-3f, -3f);
+            AddImage(surface, new Color(0.025f, 0.03f, 0.045f, 0.98f)).raycastTarget = false;
+
+            // 全身スプライトを大きくして上端だけマスクし、顔～胸元が見えるロスターポートレートにする。
+            var viewport = CreateUIObject("FaceViewport", cell.transform);
+            var viewportRt = viewport.GetComponent<RectTransform>();
+            viewportRt.anchorMin = new Vector2(0f, 0f); viewportRt.anchorMax = new Vector2(1f, 1f);
+            viewportRt.offsetMin = new Vector2(5f, 22f); viewportRt.offsetMax = new Vector2(-5f, -4f);
+            viewport.AddComponent<RectMask2D>();
+
+            var portraitGo = CreateUIObject("Portrait", viewport.transform);
             var pRt = portraitGo.GetComponent<RectTransform>();
-            pRt.anchorMin = new Vector2(0f, 0f); pRt.anchorMax = new Vector2(1f, 1f);
-            pRt.offsetMin = new Vector2(4f, 22f); pRt.offsetMax = new Vector2(-4f, -3f);
+            pRt.anchorMin = pRt.anchorMax = new Vector2(0.5f, 1f);
+            pRt.pivot = new Vector2(0.5f, 1f);
+            pRt.anchoredPosition = new Vector2(0f, 10f);
+            pRt.sizeDelta = new Vector2(164f, 158f);
             var pImg = portraitGo.AddComponent<Image>();
             pImg.sprite = data.characterSprite;
             pImg.preserveAspect = true;
             pImg.raycastTarget = false;
             pImg.color = data.characterSprite != null ? Color.white : new Color(0.35f, 0.38f, 0.45f);
 
-            var nm = MakeLabel(cell.transform, "Name", data.characterName,
-                new Vector2(0f, -21f), new Vector2(164f, 20f), 15f, Color.white);
+            var nameBand = CreateUIObject("NameBand", cell.transform);
+            var nbRt = nameBand.GetComponent<RectTransform>();
+            nbRt.anchorMin = new Vector2(0f, 0f); nbRt.anchorMax = new Vector2(1f, 0f);
+            nbRt.pivot = new Vector2(0.5f, 0f);
+            nbRt.anchoredPosition = new Vector2(0f, 3f);
+            nbRt.sizeDelta = new Vector2(-6f, 21f);
+            AddImage(nameBand, new Color(0.015f, 0.018f, 0.028f, 0.94f)).raycastTarget = false;
+
+            var nm = MakeLabel(nameBand.transform, "Name", data.characterName,
+                Vector2.zero, new Vector2(162f, 20f), 14f, Color.white);
             nm.fontStyle = FontStyles.Bold;
             nm.textWrappingMode = TextWrappingModes.NoWrap;
             nm.overflowMode = TextOverflowModes.Truncate;
@@ -2529,6 +2546,117 @@ namespace PromptFighters.GameFlow
                 PromptFighters.UI.UITheme.Gold);
             StyleArcadeButton(doneBtn, PromptFighters.UI.UITheme.Gold, 16f);
             SetButtonLabelStyle(doneBtn, 23f, FontStyles.Bold | FontStyles.Italic, Color.white);
+        }
+
+        // キャラ固有の管理操作を選択画面から分離した共用モーダル。
+        // 1P/2Pで同じレイアウトを使い、既存の各ボタン参照はボイス生成中の排他制御にも流用する。
+        void BuildCharacterSettingsPanel()
+        {
+            _characterSettingsPanel = CreateUIObject("CharacterSettingsOverlay", transform);
+            StretchFull(_characterSettingsPanel.GetComponent<RectTransform>());
+            _characterSettingsPanel.SetActive(false);
+
+            var dim = _characterSettingsPanel.AddComponent<Image>();
+            dim.color = new Color(0f, 0f, 0f, 0.76f);
+            var cg = _characterSettingsPanel.AddComponent<CanvasGroup>();
+            cg.interactable = true;
+            cg.blocksRaycasts = true;
+
+            _p1CharacterSettingsContent = BuildCharacterSettingsContent(_characterSettingsPanel.transform, true);
+            _p2CharacterSettingsContent = BuildCharacterSettingsContent(_characterSettingsPanel.transform, false);
+            _p1CharacterSettingsContent.SetActive(false);
+            _p2CharacterSettingsContent.SetActive(false);
+        }
+
+        GameObject BuildCharacterSettingsContent(Transform parent, bool isP1)
+        {
+            var pColor = isP1 ? PromptFighters.UI.UITheme.P1Neon : PromptFighters.UI.UITheme.P2Neon;
+            var pColorDark = isP1 ? PromptFighters.UI.UITheme.P1NeonDark : PromptFighters.UI.UITheme.P2NeonDark;
+            float slant = isP1 ? 18f : -18f;
+
+            var box = CreateUIObject(isP1 ? "P1CharacterSettingsBox" : "P2CharacterSettingsBox", parent);
+            var bRt = box.GetComponent<RectTransform>();
+            bRt.anchoredPosition = Vector2.zero;
+            bRt.sizeDelta = new Vector2(700f, 460f);
+            var boxImg = box.AddComponent<Image>();
+            boxImg.sprite = PromptFighters.UI.UITheme.VGradient;
+            boxImg.type = Image.Type.Simple;
+            boxImg.color = new Color(0.035f, 0.042f, 0.062f, 0.995f);
+            PromptFighters.UI.UITheme.AddPremiumFrame(box.transform,
+                new Color(pColor.r, pColor.g, pColor.b, 0.95f));
+            MakeSlantBar(box.transform, "SettingsTop", new Vector2(0f, 228f),
+                new Vector2(700f, 6f), pColor, slant);
+
+            MakeSlantBar(box.transform, "TitlePlate", new Vector2(0f, 178f),
+                new Vector2(380f, 52f), new Color(pColor.r, pColor.g, pColor.b, 0.24f), slant);
+            var title = MakeLabel(box.transform, "Title",
+                (isP1 ? "1P" : "2P") + "  キャラ設定",
+                new Vector2(0f, 178f), new Vector2(620f, 52f), 30f, Color.white);
+            title.fontStyle = FontStyles.Bold | FontStyles.Italic;
+
+            var name = MakeLabel(box.transform, "CharacterName", "",
+                new Vector2(0f, 124f), new Vector2(620f, 38f), 23f, PromptFighters.UI.UITheme.Gold);
+            name.fontStyle = FontStyles.Bold;
+            name.enableAutoSizing = true;
+            name.fontSizeMin = 15f;
+            name.fontSizeMax = 23f;
+            name.textWrappingMode = TextWrappingModes.NoWrap;
+            name.overflowMode = TextOverflowModes.Truncate;
+            if (isP1) _p1CharacterSettingsName = name;
+            else _p2CharacterSettingsName = name;
+
+            var hint = MakeLabel(box.transform, "Hint", "",
+                new Vector2(0f, 88f), new Vector2(620f, 30f), 14f, PromptFighters.UI.UITheme.InkDim);
+            hint.fontStyle = FontStyles.Bold;
+            if (isP1) _p1CharacterSettingsHint = hint;
+            else _p2CharacterSettingsHint = hint;
+
+            var genderBtn = MakeButton(box.transform,
+                isP1 ? "P1VoiceGenderBtn" : "P2VoiceGenderBtn", "性別：中性",
+                new Vector2(-145f, 34f), new Vector2(270f, 58f),
+                () => CycleSelectedVoiceGender(isP1), PromptFighters.UI.UITheme.SteelLight);
+            StyleArcadeButton(genderBtn, pColorDark, slant * 0.55f);
+            SetButtonLabelStyle(genderBtn, 18f, FontStyles.Bold, Color.white);
+            if (isP1) _p1VoiceGenderButton = genderBtn;
+            else _p2VoiceGenderButton = genderBtn;
+
+            var styleBtn = MakeButton(box.transform,
+                isP1 ? "P1VoiceStyleBtn" : "P2VoiceStyleBtn", "声質：勇壮",
+                new Vector2(145f, 34f), new Vector2(270f, 58f),
+                () => CycleSelectedVoiceStyle(isP1), PromptFighters.UI.UITheme.SteelLight);
+            StyleArcadeButton(styleBtn, pColorDark, -slant * 0.55f);
+            SetButtonLabelStyle(styleBtn, 18f, FontStyles.Bold, Color.white);
+            if (isP1) _p1VoiceStyleButton = styleBtn;
+            else _p2VoiceStyleButton = styleBtn;
+
+            var voiceBtn = MakeButton(box.transform,
+                isP1 ? "P1VoiceRegenerateBtn" : "P2VoiceRegenerateBtn", "ボイス再生成",
+                new Vector2(0f, -42f), new Vector2(560f, 60f),
+                () => RegenerateSelectedVoice(isP1), pColorDark);
+            StyleArcadeButton(voiceBtn, pColorDark, slant * 0.4f);
+            SetButtonLabelStyle(voiceBtn, 19f, FontStyles.Bold | FontStyles.Italic, Color.white);
+            if (isP1) _p1VoiceRegenerateButton = voiceBtn;
+            else _p2VoiceRegenerateButton = voiceBtn;
+
+            var deleteBtn = MakeButton(box.transform,
+                isP1 ? "P1DeleteGeneratedBtn" : "P2DeleteGeneratedBtn", "キャラ削除",
+                new Vector2(-145f, -126f), new Vector2(270f, 60f),
+                () => RequestDeleteCharacter(isP1), PromptFighters.UI.UITheme.Urgent);
+            StyleArcadeButton(deleteBtn, PromptFighters.UI.UITheme.Urgent, slant * 0.55f);
+            SetButtonLabelStyle(deleteBtn, 18f, FontStyles.Bold | FontStyles.Italic, Color.white);
+            if (isP1) _p1DeleteButton = deleteBtn;
+            else _p2DeleteButton = deleteBtn;
+
+            var closeBtn = MakeButton(box.transform,
+                isP1 ? "P1CharacterSettingsClose" : "P2CharacterSettingsClose", "閉じる",
+                new Vector2(145f, -126f), new Vector2(270f, 60f),
+                HideCharacterSettings, PromptFighters.UI.UITheme.SteelLight);
+            StyleArcadeButton(closeBtn, PromptFighters.UI.UITheme.SteelLight, -slant * 0.55f);
+            SetButtonLabelStyle(closeBtn, 18f, FontStyles.Bold | FontStyles.Italic, Color.white);
+
+            MakeLabel(box.transform, "KeyHint", "Esc / B：閉じる",
+                new Vector2(0f, -196f), new Vector2(620f, 24f), 13f, PromptFighters.UI.UITheme.InkDim);
+            return box;
         }
 
         // 生成キャラ削除の確認モーダル（アーケード調・誤削除防止）。
@@ -3455,6 +3583,7 @@ namespace PromptFighters.GameFlow
             RefreshPresets();
             if (_trainingPanel != null) _trainingPanel.SetActive(false);
             if (_panel != null) _panel.SetActive(true);
+            HideCharacterSettings();
             if (_titlePanel != null) _titlePanel.SetActive(false);
             if (_generationSetupPanel != null) _generationSetupPanel.SetActive(false);
             if (_settingsPanel != null) _settingsPanel.SetActive(false);
@@ -3556,6 +3685,8 @@ namespace PromptFighters.GameFlow
 
         void UpdateCategoryLabels()
         {
+            UpdateCharacterSettingsSummary(true);
+            UpdateCharacterSettingsSummary(false);
             if (_p1DeleteButton != null)
                 _p1DeleteButton.gameObject.SetActive(_p1PresetIdx >= _builtInPresetCount);
             if (_p2DeleteButton != null)
@@ -3594,6 +3725,27 @@ namespace PromptFighters.GameFlow
             }
         }
 
+        void UpdateCharacterSettingsSummary(bool isP1)
+        {
+            int idx = isP1 ? _p1PresetIdx : _p2PresetIdx;
+            CharacterData data = _presets != null && idx >= 0 && idx < _presets.Count
+                ? _presets[idx]
+                : null;
+            var name = isP1 ? _p1CharacterSettingsName : _p2CharacterSettingsName;
+            var hint = isP1 ? _p1CharacterSettingsHint : _p2CharacterSettingsHint;
+            if (name != null) name.text = data?.characterName ?? "---";
+            if (hint != null)
+            {
+                bool editable = data != null && idx >= _builtInPresetCount;
+                hint.text = editable
+                    ? "性別・声質の変更後は、ボイスを再生成すると音声へ反映されます"
+                    : "初期キャラクターの削除・ボイス設定変更はできません";
+                hint.color = editable
+                    ? PromptFighters.UI.UITheme.InkDim
+                    : PromptFighters.UI.UITheme.Gold;
+            }
+        }
+
         void ShowTrainingPanel()
         {
             // チュートリアル中は通常のトレーニング説明を出さない（チュートリアルUIに一本化）
@@ -3607,6 +3759,7 @@ namespace PromptFighters.GameFlow
         {
             if (_titlePanel != null) _titlePanel.SetActive(true);
             if (_panel != null) _panel.SetActive(false);
+            HideCharacterSettings();
             if (_generationSetupPanel != null) _generationSetupPanel.SetActive(false);
             if (_trainingPanel != null) _trainingPanel.SetActive(false);
             if (_settingsPanel != null) _settingsPanel.SetActive(false);
@@ -3616,6 +3769,7 @@ namespace PromptFighters.GameFlow
         {
             if (_titlePanel != null) _titlePanel.SetActive(false);
             if (_panel != null) _panel.SetActive(true);
+            HideCharacterSettings();
             if (_generationSetupPanel != null) _generationSetupPanel.SetActive(false);
             if (_trainingPanel != null) _trainingPanel.SetActive(false);
             if (_generatingPanel != null) _generatingPanel.SetActive(false);
@@ -3634,11 +3788,26 @@ namespace PromptFighters.GameFlow
             }
             if (_titlePanel != null) _titlePanel.SetActive(false);
             if (_panel != null) _panel.SetActive(false);
+            HideCharacterSettings();
             if (_generationSetupPanel != null) _generationSetupPanel.SetActive(true);
             if (_trainingPanel != null) _trainingPanel.SetActive(false);
             if (_generatingPanel != null) _generatingPanel.SetActive(false);
             if (_skillConfirmPanel != null) _skillConfirmPanel.SetActive(false);
             if (_settingsPanel != null) _settingsPanel.SetActive(false);
+        }
+
+        void ShowCharacterSettings(bool isP1)
+        {
+            if (_characterSettingsPanel == null) return;
+            UpdateCategoryLabels();
+            _characterSettingsPanel.SetActive(true);
+            if (_p1CharacterSettingsContent != null) _p1CharacterSettingsContent.SetActive(isP1);
+            if (_p2CharacterSettingsContent != null) _p2CharacterSettingsContent.SetActive(!isP1);
+        }
+
+        void HideCharacterSettings()
+        {
+            if (_characterSettingsPanel != null) _characterSettingsPanel.SetActive(false);
         }
 
         void ShowGeneratingPanel()
@@ -3727,7 +3896,7 @@ namespace PromptFighters.GameFlow
                 CharacterVoiceProfile.Female => "女性",
                 _ => "中性",
             };
-            SetVoiceRegenerateButtonText(button, "性別:" + gender);
+            SetVoiceRegenerateButtonText(button, "性別：" + gender);
         }
 
         void CycleSelectedVoiceStyle(bool isP1)
@@ -3760,7 +3929,7 @@ namespace PromptFighters.GameFlow
             if (button == null) return;
             data?.voiceProfile?.FillDefaults(data);
             SetVoiceRegenerateButtonText(button,
-                "声質:" + CharacterVoiceProfile.GetVoiceStyleLabel(data?.voiceProfile?.voiceStyle));
+                "声質：" + CharacterVoiceProfile.GetVoiceStyleLabel(data?.voiceProfile?.voiceStyle));
         }
 
         static void UpdateVoiceRegenerateButtonText(Button button, CharacterData data)
