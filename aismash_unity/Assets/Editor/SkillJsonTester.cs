@@ -234,15 +234,27 @@ public static class SkillJsonTester
         string prompt = composeMethod?.Invoke(null, new object[]
         {
             "銀髪で軽量。空中移動が速い。",
-            "技1は上空から氷柱を5本落とす。スマッシュは左右から挟撃する。"
+            "上空から氷柱を5本落とす。",
+            "前方へ氷の壁を作る。",
+            "相手の背後へ瞬間移動する。",
+            "左右から巨大な氷竜で挟撃する。"
         }) as string;
         bool ok = limit == 600 &&
                   prompt != null &&
                   prompt.Contains("【見た目・性能】") &&
-                  prompt.Contains("【技の詳細】") &&
+                  prompt.Contains("【技A】") &&
+                  prompt.Contains("【技B】") &&
+                  prompt.Contains("【技X】") &&
+                  prompt.Contains("【SMASH】") &&
                   prompt.IndexOf("銀髪", System.StringComparison.Ordinal) <
-                  prompt.IndexOf("技1", System.StringComparison.Ordinal);
-        if (ok) Debug.Log("[CharacterPromptInputTest] PASS: 600字上限・項目別統合");
-        else Debug.LogError("[CharacterPromptInputTest] FAIL: 入力上限または項目別統合が不正");
+                  prompt.IndexOf("氷柱", System.StringComparison.Ordinal) &&
+                  prompt.IndexOf("氷柱", System.StringComparison.Ordinal) <
+                  prompt.IndexOf("氷の壁", System.StringComparison.Ordinal) &&
+                  prompt.IndexOf("氷の壁", System.StringComparison.Ordinal) <
+                  prompt.IndexOf("瞬間移動", System.StringComparison.Ordinal) &&
+                  prompt.IndexOf("瞬間移動", System.StringComparison.Ordinal) <
+                  prompt.IndexOf("氷竜", System.StringComparison.Ordinal);
+        if (ok) Debug.Log("[CharacterPromptInputTest] PASS: 600字上限・A/B/X/SMASH分割");
+        else Debug.LogError("[CharacterPromptInputTest] FAIL: 入力上限または技別統合が不正");
     }
 }

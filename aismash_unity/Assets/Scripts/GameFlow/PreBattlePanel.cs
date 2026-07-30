@@ -61,13 +61,17 @@ namespace PromptFighters.GameFlow
         TMP_InputField _p1NameInput;
         TMP_InputField _p1FeatureInput;
         TMP_InputField _p1AppearancePerformanceInput;
-        TMP_InputField _p1SkillDetailsInput;
+        readonly TMP_InputField[] _p1SkillInputs = new TMP_InputField[4];
         TMP_InputField _p2NameInput;
         TMP_InputField _p2FeatureInput;
         TMP_InputField _p2AppearancePerformanceInput;
-        TMP_InputField _p2SkillDetailsInput;
+        readonly TMP_InputField[] _p2SkillInputs = new TMP_InputField[4];
+        GameObject _p1DetailedInputGroup;
+        GameObject _p2DetailedInputGroup;
         Button _p1InputModeButton;
         Button _p2InputModeButton;
+        TextMeshProUGUI _p1PromptCountLabel;
+        TextMeshProUGUI _p2PromptCountLabel;
         bool _p1DetailedInputMode;
         bool _p2DetailedInputMode;
         bool _enforcingDetailedPromptLimit;
@@ -1989,23 +1993,23 @@ namespace PromptFighters.GameFlow
                     new Color(0.012f, 0.014f, 0.022f, 1f),
                     new Color(0.0f, 0.0f, 0.012f, 1f));
 
-            MakeSlantBar(_generationSetupPanel.transform, "GenSlash", new Vector2(0f, 455f), new Vector2(520f, 52f),
+            MakeSlantBar(_generationSetupPanel.transform, "GenSlash", new Vector2(0f, 495f), new Vector2(620f, 52f),
                 new Color(PromptFighters.UI.UITheme.GoldDim.r, PromptFighters.UI.UITheme.GoldDim.g, PromptFighters.UI.UITheme.GoldDim.b, 0.30f), 24f);
             MakeLabel(_generationSetupPanel.transform, "GenSetupTitle", "新規キャラクター生成",
-                new Vector2(0f, 455f), new Vector2(760f, 56f), 32f, PromptFighters.UI.UITheme.Gold)
+                new Vector2(0f, 495f), new Vector2(860f, 56f), 34f, PromptFighters.UI.UITheme.Gold)
                 .fontStyle = FontStyles.Bold | FontStyles.Italic;
 
             BuildGenerationColumn(_generationSetupPanel.transform, true);
             BuildGenerationColumn(_generationSetupPanel.transform, false);
 
             var startGen = MakeButton(_generationSetupPanel.transform, "StartGenerateBtn", "生成開始",
-                new Vector2(-170f, -420f), new Vector2(260f, 64f), OnGeneratePressed,
+                new Vector2(-180f, -485f), new Vector2(280f, 64f), OnGeneratePressed,
                 PromptFighters.UI.UITheme.Gold);
             StyleArcadeButton(startGen, PromptFighters.UI.UITheme.Gold, 16f);
             SetButtonLabelStyle(startGen, 23f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             var back = MakeButton(_generationSetupPanel.transform, "BackToSelectBtn", "戻る",
-                new Vector2(170f, -420f), new Vector2(220f, 64f), ShowCharacterSelect,
+                new Vector2(180f, -485f), new Vector2(240f, 64f), ShowCharacterSelect,
                 PromptFighters.UI.UITheme.SteelLight);
             StyleArcadeButton(back, PromptFighters.UI.UITheme.SteelLight, 16f);
             SetButtonLabelStyle(back, 20f, FontStyles.Bold | FontStyles.Italic, Color.white);
@@ -2030,80 +2034,119 @@ namespace PromptFighters.GameFlow
 
         void BuildGenerationColumn(Transform parent, bool isP1)
         {
-            float cx = isP1 ? -325f : 325f;
+            float cx = isP1 ? -450f : 450f;
             var pColor = isP1 ? PromptFighters.UI.UITheme.P1Neon : PromptFighters.UI.UITheme.P2Neon;
             var pColorDark = isP1 ? PromptFighters.UI.UITheme.P1NeonDark : PromptFighters.UI.UITheme.P2NeonDark;
             float slant = isP1 ? 16f : -16f;
 
             var genBg = MakePanel(parent, isP1 ? "P1GenBg" : "P2GenBg",
-                new Vector2(cx, 15f), new Vector2(610f, 720f),
+                new Vector2(cx, 0f), new Vector2(850f, 870f),
                 new Color(pColorDark.r, pColorDark.g, pColorDark.b, 0.24f));
             genBg.sprite = PromptFighters.UI.UITheme.VGradient; genBg.type = Image.Type.Simple;
             PromptFighters.UI.UITheme.AddPremiumFrame(genBg.transform,
                 new Color(pColor.r, pColor.g, pColor.b, 0.92f));
             MakeSlantBar(parent, isP1 ? "P1GenTop" : "P2GenTop",
-                new Vector2(cx, 372f), new Vector2(610f, 5f), pColor, slant);
+                new Vector2(cx, 435f), new Vector2(850f, 5f), pColor, slant);
             MakeSlantBar(parent, isP1 ? "P1GenBadgePlate" : "P2GenBadgePlate",
-                new Vector2(cx, 338f), new Vector2(120f, 46f), pColor, slant);
+                new Vector2(cx, 399f), new Vector2(140f, 46f), pColor, slant);
             MakeLabel(parent, isP1 ? "P1GenBadge" : "P2GenBadge", isP1 ? "1P" : "2P",
-                new Vector2(cx, 338f), new Vector2(120f, 46f), 28f, Color.white)
+                new Vector2(cx, 399f), new Vector2(140f, 46f), 28f, Color.white)
                 .fontStyle = FontStyles.Bold | FontStyles.Italic;
             MakeSlantBar(parent, isP1 ? "P1GenLine" : "P2GenLine",
-                new Vector2(cx, 305f), new Vector2(440f, 3f), pColor, slant);
+                new Vector2(cx, 362f), new Vector2(700f, 3f), pColor, slant);
 
             // 入力文字が読みやすいよう、欄もフォントも大きめにする
             var nameInput = MakeInputField(parent, isP1 ? "P1GenerateNameInput" : "P2GenerateNameInput",
-                "キャラクター名（空欄なら選択中のキャラを使用）", new Vector2(cx, 245f), new Vector2(550f, 58f), false, 24f);
+                "キャラクター名（空欄なら選択中のキャラを使用）",
+                new Vector2(cx, 318f), new Vector2(790f, 54f), false, 23f);
             var inputModeButton = MakeButton(parent, isP1 ? "P1InputModeBtn" : "P2InputModeBtn",
-                "入力形式：まとめて入力", new Vector2(cx, 190f), new Vector2(280f, 38f),
+                "入力形式：まとめて入力", new Vector2(cx - 70f, 267f), new Vector2(360f, 40f),
                 () => ToggleCharacterInputMode(isP1), PromptFighters.UI.UITheme.SteelLight);
             StyleArcadeButton(inputModeButton, PromptFighters.UI.UITheme.SteelLight, slant * 0.5f);
-            SetButtonLabelStyle(inputModeButton, 15f, FontStyles.Bold, Color.white);
+            SetButtonLabelStyle(inputModeButton, 17f, FontStyles.Bold, Color.white);
+            var promptCountLabel = MakeLabel(parent, isP1 ? "P1PromptCount" : "P2PromptCount",
+                "0 / 600字", new Vector2(cx + 300f, 267f), new Vector2(170f, 34f),
+                16f, PromptFighters.UI.UITheme.InkDim);
+            promptCountLabel.alignment = TextAlignmentOptions.Right;
 
             // 従来の1欄形式。文字数上限は従来300字から600字へ拡張。
             var featureInput = MakeInputField(parent, isP1 ? "P1GenerateFeatureInput" : "P2GenerateFeatureInput",
                 "特徴・見た目・性能・技をまとめて入力（最大600字）\n例: 雷をまとった小柄な剣士。素早く跳び回り、遠距離から雷を飛ばす。",
-                new Vector2(cx, 15f), new Vector2(550f, 300f), true, 20f);
+                new Vector2(cx, 15f), new Vector2(790f, 440f), true, 21f);
+            featureInput.onValueChanged.AddListener(_ => RefreshPromptCount(isP1));
 
-            // 項目別形式。同じ生成処理へ明示的な見出し付きで統合して渡す。
-            var appearanceInput = MakeInputField(parent,
+            // 項目別形式。見た目・性能と4技を独立した欄で編集する。
+            var detailedGroup = CreateUIObject(isP1 ? "P1DetailedInputGroup" : "P2DetailedInputGroup", parent);
+            StretchFull(detailedGroup.GetComponent<RectTransform>());
+
+            MakeLabel(detailedGroup.transform, isP1 ? "P1AppearanceLabel" : "P2AppearanceLabel",
+                "見た目・性能", new Vector2(cx, 228f), new Vector2(790f, 28f), 19f, pColor)
+                .fontStyle = FontStyles.Bold;
+            var appearanceInput = MakeInputField(detailedGroup.transform,
                 isP1 ? "P1AppearancePerformanceInput" : "P2AppearancePerformanceInput",
-                "見た目 / 性能（2欄合計で最大600字）\n体格、配色、衣装、武器、速さ、重さ、耐久など",
-                new Vector2(cx, 88f), new Vector2(550f, 142f), true, 18f);
-            var skillDetailsInput = MakeInputField(parent,
-                isP1 ? "P1SkillDetailsInput" : "P2SkillDetailsInput",
-                "技の詳細（2欄合計で最大600字）\n技1・技2・技3・スマッシュの発生位置、方向、個数、動き、効果など",
-                new Vector2(cx, -65f), new Vector2(550f, 142f), true, 18f);
+                "体格、配色、衣装、武器、速さ、重さ、耐久、得意な間合いなど",
+                new Vector2(cx, 170f), new Vector2(790f, 100f), true, 18f);
+
+            string[] skillLabels = { "A  通常技1", "B  通常技2", "X  特殊技", "SMASH  必殺技" };
+            string[] skillNames = { "SkillAInput", "SkillBInput", "SkillXInput", "SkillSmashInput" };
+            string[] skillHints =
+            {
+                "発生位置、方向、個数、軌道、当たり方を入力",
+                "Aと異なる役割・間合い・動きを入力",
+                "移動、設置、召喚、防御、変則効果なども入力可能",
+                "強力な見た目と発動方法、範囲、方向、リスクを入力"
+            };
+            var skillInputs = new TMP_InputField[4];
+            for (int i = 0; i < skillInputs.Length; i++)
+            {
+                bool left = i % 2 == 0;
+                bool topRow = i < 2;
+                float sx = cx + (left ? -200f : 200f);
+                float labelY = topRow ? 105f : -55f;
+                float inputY = topRow ? 35f : -125f;
+                MakeLabel(detailedGroup.transform,
+                    (isP1 ? "P1" : "P2") + skillNames[i] + "Label",
+                    skillLabels[i], new Vector2(sx, labelY), new Vector2(380f, 28f), 19f, pColor)
+                    .fontStyle = FontStyles.Bold;
+                skillInputs[i] = MakeInputField(detailedGroup.transform,
+                    (isP1 ? "P1" : "P2") + skillNames[i],
+                    skillHints[i], new Vector2(sx, inputY), new Vector2(380f, 124f), true, 17f);
+            }
             appearanceInput.onValueChanged.AddListener(_ => EnforceDetailedPromptLimit(isP1, appearanceInput));
-            skillDetailsInput.onValueChanged.AddListener(_ => EnforceDetailedPromptLimit(isP1, skillDetailsInput));
-            appearanceInput.gameObject.SetActive(false);
-            skillDetailsInput.gameObject.SetActive(false);
+            foreach (var skillInput in skillInputs)
+            {
+                var captured = skillInput;
+                captured.onValueChanged.AddListener(_ => EnforceDetailedPromptLimit(isP1, captured));
+            }
+            detailedGroup.SetActive(false);
 
             // AIに名前・特徴を考えてもらうボタン（人間が後で編集・確認できる）
             float btnSlant = isP1 ? 14f : -14f;
             var conceptBtn = MakeButton(parent, isP1 ? "P1ConceptBtn" : "P2ConceptBtn",
-                "AIで名前・特徴を考える", new Vector2(cx - 75f, -205f), new Vector2(340f, 56f),
+                "AIで名前・設定を考える", new Vector2(cx - 100f, -260f), new Vector2(430f, 54f),
                 () => OnConceptGeneratePressed(isP1), pColor);
             StyleArcadeButton(conceptBtn, pColor, btnSlant);
             SetButtonLabelStyle(conceptBtn, 19f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             // 名前・特徴をクリアするリセットボタン
             var resetBtn = MakeButton(parent, isP1 ? "P1ResetBtn" : "P2ResetBtn",
-                "リセット", new Vector2(cx + 175f, -205f), new Vector2(130f, 56f),
+                "リセット", new Vector2(cx + 250f, -260f), new Vector2(150f, 54f),
                 () => OnResetConceptPressed(isP1), PromptFighters.UI.UITheme.SteelLight);
             StyleArcadeButton(resetBtn, PromptFighters.UI.UITheme.SteelLight, btnSlant);
             SetButtonLabelStyle(resetBtn, 17f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             var conceptStatus = MakeLabel(parent, isP1 ? "P1ConceptStatus" : "P2ConceptStatus",
-                "", new Vector2(cx, -262f), new Vector2(550f, 30f), 15f, new Color(0.72f, 0.82f, 0.95f));
+                "", new Vector2(cx, -310f), new Vector2(790f, 30f), 15f, new Color(0.72f, 0.82f, 0.95f));
 
             if (isP1)
             {
                 _p1NameInput = nameInput;
                 _p1FeatureInput = featureInput;
                 _p1AppearancePerformanceInput = appearanceInput;
-                _p1SkillDetailsInput = skillDetailsInput;
+                for (int i = 0; i < skillInputs.Length; i++) _p1SkillInputs[i] = skillInputs[i];
+                _p1DetailedInputGroup = detailedGroup;
                 _p1InputModeButton = inputModeButton;
+                _p1PromptCountLabel = promptCountLabel;
                 _p1ConceptButton = conceptBtn;
                 _p1ConceptStatus = conceptStatus;
             }
@@ -2112,11 +2155,14 @@ namespace PromptFighters.GameFlow
                 _p2NameInput = nameInput;
                 _p2FeatureInput = featureInput;
                 _p2AppearancePerformanceInput = appearanceInput;
-                _p2SkillDetailsInput = skillDetailsInput;
+                for (int i = 0; i < skillInputs.Length; i++) _p2SkillInputs[i] = skillInputs[i];
+                _p2DetailedInputGroup = detailedGroup;
                 _p2InputModeButton = inputModeButton;
+                _p2PromptCountLabel = promptCountLabel;
                 _p2ConceptButton = conceptBtn;
                 _p2ConceptStatus = conceptStatus;
             }
+            RefreshPromptCount(isP1);
         }
 
         void ToggleCharacterInputMode(bool isP1)
@@ -2131,52 +2177,90 @@ namespace PromptFighters.GameFlow
         {
             bool detailed = isP1 ? _p1DetailedInputMode : _p2DetailedInputMode;
             var combined = isP1 ? _p1FeatureInput : _p2FeatureInput;
-            var appearance = isP1 ? _p1AppearancePerformanceInput : _p2AppearancePerformanceInput;
-            var skills = isP1 ? _p1SkillDetailsInput : _p2SkillDetailsInput;
+            var detailedGroup = isP1 ? _p1DetailedInputGroup : _p2DetailedInputGroup;
             var button = isP1 ? _p1InputModeButton : _p2InputModeButton;
             if (combined != null) combined.gameObject.SetActive(!detailed);
-            if (appearance != null) appearance.gameObject.SetActive(detailed);
-            if (skills != null) skills.gameObject.SetActive(detailed);
+            if (detailedGroup != null) detailedGroup.SetActive(detailed);
             var label = button != null ? button.GetComponentInChildren<TextMeshProUGUI>() : null;
             if (label != null)
-                label.text = detailed ? "入力形式：項目別（合計600字）" : "入力形式：まとめて入力";
+                label.text = detailed ? "入力形式：技ごとに入力" : "入力形式：まとめて入力";
+            RefreshPromptCount(isP1);
         }
 
         void EnforceDetailedPromptLimit(bool isP1, TMP_InputField edited)
         {
             if (_enforcingDetailedPromptLimit || edited == null) return;
             var appearance = isP1 ? _p1AppearancePerformanceInput : _p2AppearancePerformanceInput;
-            var skills = isP1 ? _p1SkillDetailsInput : _p2SkillDetailsInput;
-            var other = edited == appearance ? skills : appearance;
-            int otherLength = other?.text?.Length ?? 0;
+            var skillInputs = isP1 ? _p1SkillInputs : _p2SkillInputs;
+            int otherLength = edited == appearance ? 0 : appearance?.text?.Length ?? 0;
+            foreach (var input in skillInputs)
+            {
+                if (input != null && input != edited)
+                    otherLength += input.text?.Length ?? 0;
+            }
             int allowed = Mathf.Max(0, CharacterPromptCharacterLimit - otherLength);
-            if ((edited.text?.Length ?? 0) <= allowed) return;
-
-            _enforcingDetailedPromptLimit = true;
-            try
+            if ((edited.text?.Length ?? 0) > allowed)
             {
-                edited.SetTextWithoutNotify(edited.text.Substring(0, allowed));
-                edited.caretPosition = edited.text.Length;
+                _enforcingDetailedPromptLimit = true;
+                try
+                {
+                    edited.SetTextWithoutNotify(edited.text.Substring(0, allowed));
+                    edited.caretPosition = edited.text.Length;
+                }
+                finally
+                {
+                    _enforcingDetailedPromptLimit = false;
+                }
             }
-            finally
-            {
-                _enforcingDetailedPromptLimit = false;
-            }
+            RefreshPromptCount(isP1);
         }
 
-        static string ComposeDetailedCharacterPrompt(string appearancePerformance, string skillDetails)
+        void RefreshPromptCount(bool isP1)
         {
-            string appearance = (appearancePerformance ?? "").Trim();
-            string skills = (skillDetails ?? "").Trim();
-            if (appearance.Length == 0 && skills.Length == 0) return string.Empty;
+            bool detailed = isP1 ? _p1DetailedInputMode : _p2DetailedInputMode;
+            int count;
+            if (detailed)
+            {
+                var appearance = isP1 ? _p1AppearancePerformanceInput : _p2AppearancePerformanceInput;
+                var skillInputs = isP1 ? _p1SkillInputs : _p2SkillInputs;
+                count = appearance?.text?.Length ?? 0;
+                foreach (var input in skillInputs)
+                    count += input?.text?.Length ?? 0;
+            }
+            else
+            {
+                count = (isP1 ? _p1FeatureInput : _p2FeatureInput)?.text?.Length ?? 0;
+            }
+
+            var label = isP1 ? _p1PromptCountLabel : _p2PromptCountLabel;
+            if (label == null) return;
+            label.text = $"{count} / {CharacterPromptCharacterLimit}字";
+            label.color = count >= 570
+                ? new Color(1f, 0.45f, 0.38f)
+                : count >= 480
+                    ? new Color(1f, 0.78f, 0.28f)
+                    : new Color(0.72f, 0.82f, 0.95f);
+        }
+
+        static string ComposeDetailedCharacterPrompt(
+            string appearancePerformance, string skillA, string skillB, string skillX, string skillSmash)
+        {
+            string[] headings = { "【見た目・性能】", "【技A】", "【技B】", "【技X】", "【SMASH】" };
+            string[] values =
+            {
+                (appearancePerformance ?? "").Trim(),
+                (skillA ?? "").Trim(),
+                (skillB ?? "").Trim(),
+                (skillX ?? "").Trim(),
+                (skillSmash ?? "").Trim()
+            };
 
             var sb = new System.Text.StringBuilder();
-            if (appearance.Length > 0)
-                sb.Append("【見た目・性能】\n").Append(appearance);
-            if (skills.Length > 0)
+            for (int i = 0; i < values.Length; i++)
             {
+                if (values[i].Length == 0) continue;
                 if (sb.Length > 0) sb.Append("\n\n");
-                sb.Append("【技の詳細】\n").Append(skills);
+                sb.Append(headings[i]).Append('\n').Append(values[i]);
             }
             return sb.ToString();
         }
@@ -2186,9 +2270,10 @@ namespace PromptFighters.GameFlow
             bool detailed = isP1 ? _p1DetailedInputMode : _p2DetailedInputMode;
             if (!detailed)
                 return (isP1 ? _p1FeatureInput : _p2FeatureInput)?.text ?? string.Empty;
+            var skillInputs = isP1 ? _p1SkillInputs : _p2SkillInputs;
             return ComposeDetailedCharacterPrompt(
                 (isP1 ? _p1AppearancePerformanceInput : _p2AppearancePerformanceInput)?.text,
-                (isP1 ? _p1SkillDetailsInput : _p2SkillDetailsInput)?.text);
+                skillInputs[0]?.text, skillInputs[1]?.text, skillInputs[2]?.text, skillInputs[3]?.text);
         }
 
         // 「AIで名前・特徴を考える」ボタン。AIが原案を出し、入力欄へ流し込む（人間が編集・確認可能）。
@@ -2200,7 +2285,7 @@ namespace PromptFighters.GameFlow
             var nameInput    = isP1 ? _p1NameInput    : _p2NameInput;
             var featureInput = isP1 ? _p1FeatureInput : _p2FeatureInput;
             var appearanceInput = isP1 ? _p1AppearancePerformanceInput : _p2AppearancePerformanceInput;
-            var skillDetailsInput = isP1 ? _p1SkillDetailsInput : _p2SkillDetailsInput;
+            var skillInputs = isP1 ? _p1SkillInputs : _p2SkillInputs;
             var statusLabel  = isP1 ? _p1ConceptStatus : _p2ConceptStatus;
             var button       = isP1 ? _p1ConceptButton : _p2ConceptButton;
             bool detailed = isP1 ? _p1DetailedInputMode : _p2DetailedInputMode;
@@ -2236,8 +2321,19 @@ namespace PromptFighters.GameFlow
                             appearanceInput.text = !string.IsNullOrWhiteSpace(concept.appearance_performance)
                                 ? concept.appearance_performance
                                 : concept.features;
-                        if (skillDetailsInput != null)
-                            skillDetailsInput.text = concept.skill_details ?? "";
+                        string[] generatedSkills =
+                        {
+                            concept.skill_a, concept.skill_b, concept.skill_x, concept.skill_smash
+                        };
+                        bool hasSeparatedSkills = System.Array.Exists(
+                            generatedSkills, value => !string.IsNullOrWhiteSpace(value));
+                        for (int i = 0; i < skillInputs.Length; i++)
+                        {
+                            if (skillInputs[i] == null) continue;
+                            skillInputs[i].text = hasSeparatedSkills
+                                ? generatedSkills[i] ?? ""
+                                : i == 0 ? concept.skill_details ?? "" : "";
+                        }
                     }
                     if (statusLabel != null)
                     {
@@ -2266,14 +2362,16 @@ namespace PromptFighters.GameFlow
             var nameInput    = isP1 ? _p1NameInput    : _p2NameInput;
             var featureInput = isP1 ? _p1FeatureInput : _p2FeatureInput;
             var appearanceInput = isP1 ? _p1AppearancePerformanceInput : _p2AppearancePerformanceInput;
-            var skillDetailsInput = isP1 ? _p1SkillDetailsInput : _p2SkillDetailsInput;
+            var skillInputs = isP1 ? _p1SkillInputs : _p2SkillInputs;
             var statusLabel  = isP1 ? _p1ConceptStatus : _p2ConceptStatus;
 
             if (nameInput != null) nameInput.text = "";
             if (featureInput != null) featureInput.text = "";
             if (appearanceInput != null) appearanceInput.text = "";
-            if (skillDetailsInput != null) skillDetailsInput.text = "";
+            foreach (var skillInput in skillInputs)
+                if (skillInput != null) skillInput.text = "";
             if (statusLabel != null) statusLabel.text = "";
+            RefreshPromptCount(isP1);
         }
 
         void BuildGeneratingPanel()
