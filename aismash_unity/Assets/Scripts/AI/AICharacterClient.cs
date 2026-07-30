@@ -156,15 +156,19 @@ namespace PromptFighters.AI
             var conceptPrompt   = BuildConceptUserPrompt(name, features);
             string userPrompt   = conceptPrompt.text;
             string lastError = null;
+            string correctionPrompt = null;
             // 主モデルが全滅した場合は軽量モデルでも試す
             string[] models = { Model, LightModel };
 
             foreach (string model in models)
             {
-                string body = OpenAIRequest.BuildChatBody(model, systemPrompt, userPrompt, jsonMode: true);
-
                 for (int attempt = 1; attempt <= MaxGenerateAttempts; attempt++)
                 {
+                    string requestPrompt = string.IsNullOrEmpty(correctionPrompt)
+                        ? userPrompt
+                        : userPrompt + "\n\n【前回出力の修正必須】\n" + correctionPrompt;
+                    string body = OpenAIRequest.BuildChatBody(
+                        model, systemPrompt, requestPrompt, jsonMode: true);
                     using var req = new UnityWebRequest(Endpoint, "POST");
                     req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
                     req.downloadHandler = new DownloadHandlerBuffer();
@@ -198,6 +202,8 @@ namespace PromptFighters.AI
                         concept.skill_b = LimitConceptText(concept.skill_b, 45);
                         concept.skill_x = LimitConceptText(concept.skill_x, 45);
                         concept.skill_smash = LimitConceptText(concept.skill_smash, 45);
+                        if (!ValidateConceptSkillVariety(concept, features, out string varietyError))
+                            throw new Exception("技案の多様性不足: " + varietyError);
                         concept.skill_details = (concept.skill_details ?? "").Trim();
                         if (string.IsNullOrWhiteSpace(concept.skill_details))
                             concept.skill_details = ComposeConceptSkills(
@@ -218,6 +224,9 @@ namespace PromptFighters.AI
                     catch (Exception e)
                     {
                         lastError = "AI応答の解析に失敗: " + e.Message;
+                        if (e.Message.StartsWith("技案の多様性不足:", StringComparison.Ordinal))
+                            correctionPrompt = e.Message +
+                                "\nA/B/X/SMASHをすべて埋め、4技の主要な仕組み・発生位置・軌道・時間構造が重複しないJSONを再出力すること。";
                         Debug.LogWarning($"[AI] アイデア解析エラー({model} {attempt}/{MaxGenerateAttempts}): {e.Message}\nレスポンス: {req.downloadHandler.text}");
                         parseFailed = true;
                     }
@@ -305,6 +314,62 @@ namespace PromptFighters.AI
             "リズムや回転をためてから強い一撃を出す", "地面や壁を使って軌道を変える",
             "一度離れてから戻る道具で挟み込む", "守りの動作を攻めにつなげる"
         };
+        // AI原案の4技を「前へ攻撃を出す」だけに寄せないためのスロット別構造種。
+        // モチーフは固定せず、発生位置・軌道・時間構造だけを指定してキャラ設定と合成させる。
+        static readonly string[] ConceptSkillAStructures =
+        {
+            "短く踏み込みながら近距離を連続攻撃する",
+            "自分の足元から斜め上へ対空攻撃を伸ばす",
+            "自分の周囲へ一瞬だけ放射状の攻撃を広げる",
+            "弧を描いて飛び、戻ってくる攻撃を放つ",
+            "地面を這って進む低い攻撃を前方へ放つ",
+            "相手を掴み、背後か上方へ投げる",
+            "空中から急降下し、着地地点にも衝撃を残す",
+            "武器の反動で後退しながら前方を攻撃する"
+        };
+        static readonly string[] ConceptSkillBStructures =
+        {
+            "相手の頭上に予告を出し、上から複数回落とす",
+            "前方の上下または左右から交差するように挟む",
+            "別々に追尾する複数の召喚物を時間差で放つ",
+            "壁や地面で一度跳ね返る飛び道具を放つ",
+            "ステージ端から遅れて横切る長い攻撃を発生させる",
+            "自分と相手の中間地点から攻撃を広げる",
+            "相手を引き寄せた後、近くで追撃を発生させる",
+            "自分の周囲を回る物体を作り、順番に射出する"
+        };
+        static readonly string[] ConceptSkillXStructures =
+        {
+            "時間経過か耐久値で消える壁を狙った位置に作る",
+            "踏むか一定時間で作動する罠を地面に設置する",
+            "少しの間だけ残り、範囲内へ影響する領域を作る",
+            "次に受ける攻撃を一度だけ防いで反撃する",
+            "相手の背後へ移動し、元の位置と交差攻撃する",
+            "吸引と押し出しを段階的に切り替える場を作る",
+            "囮となる召喚物を置き、遅れて攻撃させる",
+            "離した入力方向で発生位置と攻撃方向を変える"
+        };
+        static readonly string[] ConceptSkillSmashStructures =
+        {
+            "超巨大な召喚物を地面の下から上へ突き上げる",
+            "相手の頭上から巨大な物体を落下させる",
+            "ステージ中央から外側へ何段階も攻撃を広げる",
+            "ステージ端から長い攻撃を回転させて薙ぎ払う",
+            "外周から中心へ複数の攻撃を一斉に収束させる",
+            "地面を端から端まで順番に隆起させる",
+            "相手を運ぶ突進から、その場の大爆発へつなぐ",
+            "巨大な召喚物を左右から衝突させて挟み込む"
+        };
+        static readonly string[] ConceptSkillBranchStructures =
+        {
+            "分岐指定なし。4技の空間構造を優先する",
+            "Aは近距離と遠距離で別の攻撃にする",
+            "Bは地上と空中で別の攻撃にする",
+            "Xは近距離と遠距離で別の攻撃にする",
+            "Aは地上と空中で別の攻撃にする",
+            "Bは近距離と遠距離で別の攻撃にする",
+            "Xは地上と空中で別の攻撃にする"
+        };
 
         static readonly System.Random ConceptRng = new System.Random();
         static readonly ShuffleDeck MotifDeck = new ShuffleDeck(ConceptMotifs);
@@ -316,6 +381,11 @@ namespace PromptFighters.AI
         static readonly ShuffleDeck NameStyleDeck = new ShuffleDeck(ConceptNameStyles);
         static readonly ShuffleDeck VisualDirectionDeck = new ShuffleDeck(ConceptVisualDirections);
         static readonly ShuffleDeck CombatHookDeck = new ShuffleDeck(ConceptCombatHooks);
+        static readonly ShuffleDeck SkillAStructureDeck = new ShuffleDeck(ConceptSkillAStructures);
+        static readonly ShuffleDeck SkillBStructureDeck = new ShuffleDeck(ConceptSkillBStructures);
+        static readonly ShuffleDeck SkillXStructureDeck = new ShuffleDeck(ConceptSkillXStructures);
+        static readonly ShuffleDeck SkillSmashStructureDeck = new ShuffleDeck(ConceptSkillSmashStructures);
+        static readonly ShuffleDeck SkillBranchStructureDeck = new ShuffleDeck(ConceptSkillBranchStructures);
         static readonly Queue<string> RecentConceptProfiles = new Queue<string>();
         const int RecentConceptProfileLimit = 8;
 
@@ -323,6 +393,12 @@ namespace PromptFighters.AI
         {
             public string text;
             public string noveltyProfile;
+        }
+
+        sealed class ConceptSkillPlan
+        {
+            public string prompt;
+            public string profile;
         }
 
         sealed class ShuffleDeck
@@ -355,39 +431,49 @@ namespace PromptFighters.AI
             bool hasF = f.Length > 0;
             int nonce = ConceptRng.Next(100000, 999999);
             string nameStyle = NameStyleDeck.Next();
+            ConceptSkillPlan skillPlan = BuildConceptSkillPlan();
+            string recentAvoidance = BuildRecentAvoidance();
 
             // 名前のみ → 名前から特徴を発案（名前は変えずにそのまま使う）
             if (hasN && !hasF)
             {
-                return new ConceptPrompt { text =
+                return new ConceptPrompt { noveltyProfile = skillPlan.profile, text =
 $@"キャラクター名「{n}」だけが与えられています。
 この名前から連想されるキャラクターを想像し、features を作ってください。
 features には ①見た目（体格・色・服装・モチーフ） ②武器・攻撃手段 ③戦い方（間合い・戦術） ④性能の傾向（速さ・重さ・耐久などのトレードオフ）の4要素を必ず入れる。
 - character_name は「{n}」を**そのまま**使う（変更しない）。
 - 個性は『見た目』と『技・戦い方』で表現する。性格・口調・話し方は書かない。
+{skillPlan.prompt}
+{recentAvoidance}
 バリエーション種: {nonce}" };
             }
 
             // 特徴のみ → 特徴に合う名前を発案（特徴は意味を変えず自然に整える）
             if (!hasN && hasF)
             {
-                return new ConceptPrompt { text =
+                return new ConceptPrompt { noveltyProfile = skillPlan.profile, text =
 $@"次のキャラクター特徴だけが与えられています:
 「{f}」
 この特徴に合う固有のキャラクター名を character_name として考えてください。
 - 名前の作り方: {nameStyle}。読みやすさを保ち、ありふれた日本人の姓名には寄せない。
 - features はこの内容を尊重し、意味を大きく変えずに自然で読みやすい文章へ整えて返す（性格・口調・話し方は書かず、見た目と技で個性を出す）。
+明記済みの技内容は変更せず、空欄または未指定の技だけを次の構造種で補完してください。
+{skillPlan.prompt}
+{recentAvoidance}
 バリエーション種: {nonce}" };
             }
 
             // 両方あり → 素材として尊重しつつ、技生成に使いやすい魅力的な原案へ整える
             if (hasN && hasF)
             {
-                return new ConceptPrompt { text =
+                return new ConceptPrompt { noveltyProfile = skillPlan.profile, text =
 $@"プレイヤーが次の素材を入力しました。これを最優先で尊重し、より魅力的で技生成に使いやすい原案へ整えてください。
 - 名前: {n}
 - 特徴: {f}
 名前の意図は保ちつつ、features を自然で読みやすい紹介文に磨いてください（性格・口調・話し方は書かず、見た目と技で個性を出す）。
+明記済みの技内容は変更せず、空欄または未指定の技だけを次の構造種で補完してください。
+{skillPlan.prompt}
+{recentAvoidance}
 バリエーション種: {nonce}" };
             }
 
@@ -402,8 +488,7 @@ $@"プレイヤーが次の素材を入力しました。これを最優先で�
             string statBias  = StatBiasDeck.Next();
             string visualDirection = VisualDirectionDeck.Next();
             string combatHook = CombatHookDeck.Next();
-            string recentAvoidance = BuildRecentAvoidance();
-            string profile = $"モチーフ={motif}/{motif2}; 役割={archetype}; 武器={weapon}; 体格={build}; 戦法={style}; 性能={statBias}";
+            string profile = $"モチーフ={motif}/{motif2}; 役割={archetype}; 武器={weapon}; 体格={build}; 戦法={style}; 性能={statBias}; {skillPlan.profile}";
 
             return new ConceptPrompt { noveltyProfile = profile, text =
 $@"個性的な2D格闘ゲームのキャラクターを1体、新しく考案してください。
@@ -417,12 +502,35 @@ $@"個性的な2D格闘ゲームのキャラクターを1体、新しく考案�
 - 見た目の方向: {visualDirection}
 - 戦闘上の仕掛け: {combatHook}
 - 名前の作り方: {nameStyle}（このタイプの名前にする。読みやすさは保つ）
+{skillPlan.prompt}
 バリエーション種: {nonce}
 {recentAvoidance}
 
 個性は『見た目』と『技・戦い方』で出す（性格・口調・話し方は書かない）。
 features には見た目・武器・戦い方・性能の傾向の4要素を必ず入れること。
 character_name と features を出力してください。テーマ種の語をそのまま列挙せず、自然な紹介文に統合してください。" };
+        }
+
+        static ConceptSkillPlan BuildConceptSkillPlan()
+        {
+            string skillA = SkillAStructureDeck.Next();
+            string skillB = SkillBStructureDeck.Next();
+            string skillX = SkillXStructureDeck.Next();
+            string smash = SkillSmashStructureDeck.Next();
+            string branch = SkillBranchStructureDeck.Next();
+            return new ConceptSkillPlan
+            {
+                profile = $"技構造=A:{skillA}/B:{skillB}/X:{skillX}/SMASH:{smash}/分岐:{branch}",
+                prompt =
+$@"【4技の構造種】
+- A: {skillA}
+- B: {skillB}
+- X: {skillX}
+- SMASH: {smash}
+- 状況分岐: {branch}
+キャラのモチーフへ自然に置き換えつつ、発生位置・方向・軌道・個数・時間差・残留の違いは維持する。
+4技の主要な仕組みを重複させず、単純な前方直進弾と正面近接はそれぞれ最大1技までにする。"
+            };
         }
 
         static string BuildRecentAvoidance()
@@ -454,6 +562,9 @@ $@"あなたは2D格闘ゲームのキャラクター原案を生み出す、発
 - skill_x: Xの通常技3。20〜45字の1文で、何がどこからどう動くかを書く。
 - skill_smash: SMASHの必殺技。20〜45字の1文で、強力な挙動を簡潔に書く。
 - 4技はすべて空欄にせず、featuresと矛盾させない。それぞれ独立した入力欄へ入るため、他の技を参照しない単独で理解できる文章にする。
+- ユーザーメッセージの「4技の構造種」は技名の案ではなく、ゲーム内挙動の必須設計である。キャラの武器・属性・召喚物へ置き換えて4技へ一対一で反映する。
+- 4技は主要な仕組みを重複させない。発生位置（自分/相手/中間/ステージ端）、方向（前後/上下/挟み込み/放射）、軌道（直進/追尾/反射/往復/収束）、個数、時間差、残留のうち複数を変える。
+- 近接、飛び道具、召喚、設置物・壁・罠・領域、投げ、ガード・反撃、移動攻撃から構造種に合うものを使い、単純な正面攻撃4種にしない。分岐指定があれば「近距離では〜、遠距離では〜」または「地上では〜、空中では〜」を1文内へ明記する。
 - **性格・口調・話し方・内面の描写は書かない**（例：『気取った話し方をする』『人を見下す』『冷酷な性格』などは不要）。
 - 全文章の作法:
   ・難しい言葉・詩的/文学的/厨二的な言い回し・凝った比喩・古風で読みにくい語彙を避け、日常的で分かりやすい言葉で書く。
@@ -625,6 +736,122 @@ $@"以下の名前と特徴でキャラクターJSONを生成してください�
                 sb.Append(labels[i]).Append(": ").Append(value);
             }
             return sb.ToString();
+        }
+
+        static bool ValidateConceptSkillVariety(
+            CharacterConcept concept, string sourceFeatures, out string error)
+        {
+            error = null;
+            if (concept == null)
+            {
+                error = "技案がありません";
+                return false;
+            }
+
+            string[] skills =
+            {
+                concept.skill_a, concept.skill_b, concept.skill_x, concept.skill_smash
+            };
+            string[] headings = { "【技A】", "【技B】", "【技X】", "【SMASH】" };
+            string[] labels = { "A", "B", "X", "SMASH" };
+            var generatedSkills = new List<string>();
+            var normalized = new HashSet<string>();
+            for (int i = 0; i < skills.Length; i++)
+            {
+                string value = (skills[i] ?? "").Trim();
+                if (value.Length == 0)
+                {
+                    error = $"{labels[i]}技が空欄です";
+                    return false;
+                }
+
+                // ユーザーが明記済みの欄は多様化のために書き換えない。
+                // AIへ任せた欄だけを重複検証の対象にする。
+                bool explicitlySpecified =
+                    !string.IsNullOrEmpty(sourceFeatures) &&
+                    !string.IsNullOrEmpty(ExtractDetailedPromptSection(sourceFeatures, headings[i]));
+                if (explicitlySpecified) continue;
+
+                string key = NormalizeConceptSkillForComparison(value);
+                if (key.Length < 6)
+                {
+                    error = $"{labels[i]}技の内容が短すぎます";
+                    return false;
+                }
+                if (!normalized.Add(key))
+                {
+                    error = $"{labels[i]}技が別の技と重複しています";
+                    return false;
+                }
+                generatedSkills.Add(value);
+            }
+
+            if (generatedSkills.Count <= 1) return true;
+            int mechanicMask = 0;
+            foreach (string skill in generatedSkills)
+                mechanicMask |= ConceptSkillMechanicMask(skill);
+            int requiredMechanics = Mathf.Min(3, generatedSkills.Count);
+            if (CountSetBits(mechanicMask) < requiredMechanics)
+            {
+                error = "近接・飛び道具・召喚・設置・防御・移動・空間配置などの仕組みが似すぎています";
+                return false;
+            }
+            return true;
+        }
+
+        static string NormalizeConceptSkillForComparison(string value)
+        {
+            var sb = new StringBuilder();
+            foreach (char c in value ?? "")
+                if (char.IsLetterOrDigit(c))
+                    sb.Append(char.ToLowerInvariant(c));
+            return sb.ToString();
+        }
+
+        static int ConceptSkillMechanicMask(string skill)
+        {
+            string value = skill ?? "";
+            int mask = 0;
+            if (ContainsAny(value, "近距離", "斬", "殴", "蹴", "打撃", "突き", "叩"))
+                mask |= 1 << 0;
+            if (ContainsAny(value, "飛ば", "放つ", "発射", "弾", "ビーム", "光線", "射出"))
+                mask |= 1 << 1;
+            if (ContainsAny(value, "召喚", "使い魔", "呼び出", "生み出"))
+                mask |= 1 << 2;
+            if (ContainsAny(value, "設置", "罠", "地雷", "壁", "領域", "足場", "残る", "場を作"))
+                mask |= 1 << 3;
+            if (ContainsAny(value, "防ぐ", "防御", "反撃", "受け止", "バリア", "カウンター", "無効"))
+                mask |= 1 << 4;
+            if (ContainsAny(value, "移動", "瞬間移動", "ワープ", "急降下", "踏み込", "突進", "後退", "跳び"))
+                mask |= 1 << 5;
+            if (ContainsAny(value, "頭上", "足元", "上空", "下から", "左右", "上下", "周囲",
+                            "中間", "ステージ端", "前方", "背後", "地面", "外周", "中心",
+                            "狙った位置", "挟", "放射", "収束", "交差"))
+                mask |= 1 << 6;
+            if (ContainsAny(value, "複数", "連続", "時間差", "順番", "雨", "回転", "追尾",
+                            "跳ね返", "戻って", "何度", "段階", "遅れて", "一斉", "横切", "隆起"))
+                mask |= 1 << 7;
+            if (ContainsAny(value, "引き寄せ", "押し出", "吸引", "掴", "投げ", "運ぶ"))
+                mask |= 1 << 8;
+            return mask;
+        }
+
+        static bool ContainsAny(string value, params string[] terms)
+        {
+            foreach (string term in terms)
+                if (value.Contains(term)) return true;
+            return false;
+        }
+
+        static int CountSetBits(int value)
+        {
+            int count = 0;
+            while (value != 0)
+            {
+                value &= value - 1;
+                count++;
+            }
+            return count;
         }
 
         static string LimitConceptText(string value, int maxLength)
