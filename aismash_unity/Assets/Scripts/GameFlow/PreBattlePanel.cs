@@ -30,7 +30,7 @@ namespace PromptFighters.GameFlow
 
         // 共有ロスター（スマブラ風キャラ選択グリッド）
         const int RosterColumns = 8;
-        const int RosterRows = 4;
+        const int RosterRows = 3;
         Transform _rosterGrid;
         int _rosterPage = 0;
         int _displayedPage = -1;
@@ -1443,20 +1443,20 @@ namespace PromptFighters.GameFlow
 
             // ── フッター: ボタン ──
             var startBtn = MakeButton(_panel.transform, "StartBtn", "バトル開始",
-                new Vector2(-330, -430), new Vector2(300, 72), OnStartPressed,
+                new Vector2(-330, -476), new Vector2(300, 72), OnStartPressed,
                 PromptFighters.UI.UITheme.Gold);
             StyleArcadeButton(startBtn, PromptFighters.UI.UITheme.Gold, 16f);
             SetButtonLabelStyle(startBtn, 26f, FontStyles.Bold | FontStyles.Italic, Color.white);
             _startBtnLabel = startBtn.GetComponentInChildren<TextMeshProUGUI>();
 
             var trainBtn = MakeButton(_panel.transform, "TrainingBtn", "トレーニング",
-                new Vector2(0, -430), new Vector2(300, 72), OnTrainingPressed,
+                new Vector2(0, -476), new Vector2(300, 72), OnTrainingPressed,
                 PromptFighters.UI.UITheme.P1Neon);
             StyleArcadeButton(trainBtn, PromptFighters.UI.UITheme.P1Neon, 16f);
             SetButtonLabelStyle(trainBtn, 26f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             var genBtn = MakeButton(_panel.transform, "GenerateBtn", "キャラ生成",
-                new Vector2(330, -430), new Vector2(300, 72), ShowGenerationSetupPanel,
+                new Vector2(330, -476), new Vector2(300, 72), ShowGenerationSetupPanel,
                 PromptFighters.UI.UITheme.P2Neon);
             StyleArcadeButton(genBtn, PromptFighters.UI.UITheme.P2Neon, 16f);
             SetButtonLabelStyle(genBtn, 26f, FontStyles.Bold | FontStyles.Italic, Color.white);
@@ -1567,7 +1567,7 @@ namespace PromptFighters.GameFlow
             // ── 大きなキャラプレビュー（左） ──
             var previewFrame = CreateUIObject(isP1 ? "P1PreviewFrame" : "P2PreviewFrame", parent);
             var pfRt = previewFrame.GetComponent<RectTransform>();
-            pfRt.anchoredPosition = new Vector2(cx - 168f, 124f);
+            pfRt.anchoredPosition = new Vector2(cx - 168f, 174f);
             pfRt.sizeDelta = new Vector2(280f, 350f);
             var pfImg = AddImage(previewFrame, new Color(0.012f, 0.014f, 0.024f, 0.92f));
             pfImg.sprite = PromptFighters.UI.UITheme.VGradient; pfImg.type = Image.Type.Simple;
@@ -1592,7 +1592,7 @@ namespace PromptFighters.GameFlow
             // ── ステータスグラフ＋技（右パネル） ──
             var statPanel = CreateUIObject(isP1 ? "P1StatPanel" : "P2StatPanel", parent);
             var spRt = statPanel.GetComponent<RectTransform>();
-            spRt.anchoredPosition = new Vector2(cx + 168f, 124f);
+            spRt.anchoredPosition = new Vector2(cx + 168f, 174f);
             spRt.sizeDelta = new Vector2(330f, 350f);
             var spImg = AddImage(statPanel, new Color(0.012f, 0.014f, 0.024f, 0.92f));
             spImg.sprite = PromptFighters.UI.UITheme.VGradient; spImg.type = Image.Type.Simple;
@@ -1651,19 +1651,20 @@ namespace PromptFighters.GameFlow
             if (isP1) _p1DetailText = detailText;
             else _p2DetailText = detailText;
 
-            // ランダム選択（キャラ名行の右）
+            // ランダムとキャラ設定は左右それぞれの外端へ置き、キャラ名直下をプレビュー専用にする。
+            float sideButtonX = isP1 ? -890f : 890f;
             var randomBtn = MakeButton(parent, isP1 ? "P1RandomBtn" : "P2RandomBtn", "ランダム",
-                new Vector2(cx + 330f, 404f), new Vector2(150f, 44f), () => SelectRandomPreset(isP1), pColorDark);
+                new Vector2(sideButtonX, 330f), new Vector2(126f, 46f), () => SelectRandomPreset(isP1), pColorDark);
             StyleArcadeButton(randomBtn, pColorDark, isP1 ? 12f : -12f);
-            SetButtonLabelStyle(randomBtn, 17f, FontStyles.Bold | FontStyles.Italic, Color.white);
+            SetButtonLabelStyle(randomBtn, 15f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             // 削除・ボイス関連は専用モーダルへ集約し、選択画面の情報密度を抑える。
             var characterSettingsBtn = MakeButton(parent,
                 isP1 ? "P1CharacterSettingsBtn" : "P2CharacterSettingsBtn", "キャラ設定",
-                new Vector2(cx + 330f, 350f), new Vector2(150f, 42f),
+                new Vector2(sideButtonX, 276f), new Vector2(126f, 46f),
                 () => ShowCharacterSettings(isP1), PromptFighters.UI.UITheme.SteelLight);
             StyleArcadeButton(characterSettingsBtn, pColorDark, isP1 ? 10f : -10f);
-            SetButtonLabelStyle(characterSettingsBtn, 16f, FontStyles.Bold | FontStyles.Italic, Color.white);
+            SetButtonLabelStyle(characterSettingsBtn, 15f, FontStyles.Bold | FontStyles.Italic, Color.white);
 
             // コントローラー接続状態（バッジ下）
             var gpLabel = MakeLabel(parent, isP1 ? "P1GpStatus" : "P2GpStatus",
@@ -1679,14 +1680,14 @@ namespace PromptFighters.GameFlow
         {
             var frame = CreateUIObject("RosterFrame", parent);
             var frRt = frame.GetComponent<RectTransform>();
-            frRt.anchoredPosition = new Vector2(0f, -214f);
-            frRt.sizeDelta = new Vector2(1560f, 340f);
+            frRt.anchoredPosition = new Vector2(0f, -215f);
+            frRt.sizeDelta = new Vector2(1560f, 390f);
             var frImg = AddImage(frame, new Color(0.012f, 0.014f, 0.024f, 0.92f));
             frImg.sprite = PromptFighters.UI.UITheme.VGradient; frImg.type = Image.Type.Simple;
             PromptFighters.UI.UITheme.AddPremiumFrame(frame.transform,
                 new Color(PromptFighters.UI.UITheme.Gold.r, PromptFighters.UI.UITheme.Gold.g,
                     PromptFighters.UI.UITheme.Gold.b, 0.72f));
-            MakeSlantBar(frame.transform, "RosterTop", new Vector2(0f, 168f), new Vector2(1560f, 4f),
+            MakeSlantBar(frame.transform, "RosterTop", new Vector2(0f, 193f), new Vector2(1560f, 4f),
                 PromptFighters.UI.UITheme.Gold, 24f);
 
             var grid = CreateUIObject("RosterGrid", frame.transform);
@@ -1695,8 +1696,8 @@ namespace PromptFighters.GameFlow
             // 上部44pxは見出し専用。グリッドと見出しを物理的に分離して重なりを防ぐ。
             gRt.offsetMin = new Vector2(54f, 8f); gRt.offsetMax = new Vector2(-54f, -44f);
             var layout = grid.AddComponent<GridLayoutGroup>();
-            layout.cellSize = new Vector2(172f, 62f);
-            layout.spacing = new Vector2(7f, 6f);
+            layout.cellSize = new Vector2(172f, 102f);
+            layout.spacing = new Vector2(7f, 7f);
             layout.padding = new RectOffset(6, 6, 4, 4);
             layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
             layout.constraintCount = RosterColumns;
@@ -1704,24 +1705,24 @@ namespace PromptFighters.GameFlow
             _rosterGrid = grid.transform;
 
             // ヘッダー: タイトルプレート＋ページ表示
-            MakeSlantBar(frame.transform, "RosterTitlePlate", new Vector2(-626f, 145f), new Vector2(300f, 34f),
+            MakeSlantBar(frame.transform, "RosterTitlePlate", new Vector2(-626f, 170f), new Vector2(300f, 34f),
                 new Color(PromptFighters.UI.UITheme.Gold.r, PromptFighters.UI.UITheme.Gold.g, PromptFighters.UI.UITheme.Gold.b, 0.28f), 16f);
             MakeLabel(frame.transform, "RosterTitle", "CHARACTER SELECT",
-                new Vector2(-626f, 145f), new Vector2(300f, 32f), 19f, Color.white)
+                new Vector2(-626f, 170f), new Vector2(300f, 32f), 19f, Color.white)
                 .fontStyle = FontStyles.Bold | FontStyles.Italic;
 
             _rosterPageLabel = MakeLabel(frame.transform, "RosterPage", "1 / 1",
-                new Vector2(0f, 145f), new Vector2(140f, 30f), 17f, PromptFighters.UI.UITheme.Gold);
+                new Vector2(0f, 170f), new Vector2(140f, 30f), 17f, PromptFighters.UI.UITheme.Gold);
             _rosterPageLabel.fontStyle = FontStyles.Bold | FontStyles.Italic;
 
             // ページ送り（ロスター左右に配置。1ページに収まらない場合のみ機能）
             var prevPage = MakeButton(frame.transform, "RosterPrev", "‹",
-                new Vector2(-752f, -10f), new Vector2(44f, 260f), () => ChangeRosterPage(-1),
+                new Vector2(-752f, -12f), new Vector2(44f, 310f), () => ChangeRosterPage(-1),
                 PromptFighters.UI.UITheme.P1Neon);
             StyleArcadeButton(prevPage, PromptFighters.UI.UITheme.P1NeonDark, 12f);
             SetButtonLabelStyle(prevPage, 40f, FontStyles.Bold, Color.white);
             var nextPage = MakeButton(frame.transform, "RosterNext", "›",
-                new Vector2(752f, -10f), new Vector2(44f, 260f), () => ChangeRosterPage(1),
+                new Vector2(752f, -12f), new Vector2(44f, 310f), () => ChangeRosterPage(1),
                 PromptFighters.UI.UITheme.P2Neon);
             StyleArcadeButton(nextPage, PromptFighters.UI.UITheme.P2NeonDark, -12f);
             SetButtonLabelStyle(nextPage, 40f, FontStyles.Bold, Color.white);
@@ -1751,15 +1752,15 @@ namespace PromptFighters.GameFlow
             var viewport = CreateUIObject("FaceViewport", cell.transform);
             var viewportRt = viewport.GetComponent<RectTransform>();
             viewportRt.anchorMin = new Vector2(0f, 0f); viewportRt.anchorMax = new Vector2(1f, 1f);
-            viewportRt.offsetMin = new Vector2(5f, 22f); viewportRt.offsetMax = new Vector2(-5f, -4f);
+            viewportRt.offsetMin = new Vector2(5f, 27f); viewportRt.offsetMax = new Vector2(-5f, -5f);
             viewport.AddComponent<RectMask2D>();
 
             var portraitGo = CreateUIObject("Portrait", viewport.transform);
             var pRt = portraitGo.GetComponent<RectTransform>();
             pRt.anchorMin = pRt.anchorMax = new Vector2(0.5f, 1f);
             pRt.pivot = new Vector2(0.5f, 1f);
-            pRt.anchoredPosition = new Vector2(0f, 10f);
-            pRt.sizeDelta = new Vector2(164f, 158f);
+            pRt.anchoredPosition = new Vector2(0f, 4f);
+            pRt.sizeDelta = new Vector2(168f, 168f);
             var pImg = portraitGo.AddComponent<Image>();
             pImg.sprite = data.characterSprite;
             pImg.preserveAspect = true;
@@ -1771,11 +1772,11 @@ namespace PromptFighters.GameFlow
             nbRt.anchorMin = new Vector2(0f, 0f); nbRt.anchorMax = new Vector2(1f, 0f);
             nbRt.pivot = new Vector2(0.5f, 0f);
             nbRt.anchoredPosition = new Vector2(0f, 3f);
-            nbRt.sizeDelta = new Vector2(-6f, 21f);
+            nbRt.sizeDelta = new Vector2(-6f, 26f);
             AddImage(nameBand, new Color(0.015f, 0.018f, 0.028f, 0.94f)).raycastTarget = false;
 
             var nm = MakeLabel(nameBand.transform, "Name", data.characterName,
-                Vector2.zero, new Vector2(162f, 20f), 14f, Color.white);
+                Vector2.zero, new Vector2(162f, 24f), 15f, Color.white);
             nm.fontStyle = FontStyles.Bold;
             nm.textWrappingMode = TextWrappingModes.NoWrap;
             nm.overflowMode = TextOverflowModes.Truncate;
