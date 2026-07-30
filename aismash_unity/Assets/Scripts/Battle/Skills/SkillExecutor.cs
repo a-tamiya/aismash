@@ -29,6 +29,9 @@ namespace PromptFighters.Battle.Skills
             _baseSizeScale * (_fighter != null ? _fighter.PermSizeMult : 1f), 0.3f, 2.5f);
         bool _isExecuting;
         bool _currentSkillHit;
+        // conditionは各actionの発生時ではなく、技ボタンを押した瞬間の状態で固定する。
+        // 地上側actionのjump/dashで空中へ移った後に、空中側まで誤発動するのを防ぐ。
+        bool _skillStartedGrounded;
         int _skillSerial;
         int _impactShownSerial = -1;
         float _currentSkillEndTime;
@@ -142,6 +145,7 @@ namespace PromptFighters.Battle.Skills
         IEnumerator ExecuteFollowUp(SkillData skill, int followUpCount)
         {
             _isExecuting = true;
+            _skillStartedGrounded = _fighter != null && _fighter.IsGrounded;
             _currentSkillHit = false;
             SubscribeCurrentSkillHit();
 
@@ -256,6 +260,7 @@ namespace PromptFighters.Battle.Skills
         IEnumerator ExecuteSkill(SkillData skill, float powerMultiplier)
         {
             _isExecuting = true;
+            _skillStartedGrounded = _fighter != null && _fighter.IsGrounded;
             _voicePlayer?.PlaySkill(skill.slot);
             OnSkillExecuted?.Invoke(skill.slot);
             int serial = ++_skillSerial;
@@ -431,9 +436,9 @@ namespace PromptFighters.Battle.Skills
             switch (a.condition)
             {
                 case "grounded":
-                    return _fighter != null && _fighter.IsGrounded;
+                    return GroundStateConditionMet(a.condition, _skillStartedGrounded);
                 case "airborne":
-                    return _fighter != null && !_fighter.IsGrounded;
+                    return GroundStateConditionMet(a.condition, _skillStartedGrounded);
                 case "enemy_close":
                     if (enemy == null) return false;
                     threshold = a.condition_value > 0f ? a.condition_value : 2.5f;
@@ -461,6 +466,13 @@ namespace PromptFighters.Battle.Skills
                 default:
                     return true;
             }
+        }
+
+        static bool GroundStateConditionMet(string condition, bool startedGrounded)
+        {
+            return condition == "grounded" ? startedGrounded :
+                   condition == "airborne" ? !startedGrounded :
+                   true;
         }
 
         void ShowImpactAtSpawn(SkillData skill)

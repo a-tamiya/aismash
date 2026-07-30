@@ -1,6 +1,7 @@
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
+using PromptFighters.AI;
 using PromptFighters.Battle.Skills;
 using PromptFighters.Battle.Skills.Json;
 using PromptFighters.GameFlow;
@@ -176,7 +177,7 @@ public static class SkillJsonTester
       ""slot"": ""attack_b"", ""skill_name"": ""地空分岐"", ""element"": ""wind"",
       ""parameters"": {""damage"":7,""range"":3,""startup"":0.1,""active_time"":0.2,""recovery"":0.4,""knockback"":5},
       ""actions"": [
-        {""type"":""shockwave"",""time"":0.1,""condition"":""grounded""},
+        {""type"":""counter"",""time"":0.1,""duration"":1.2,""condition"":""grounded""},
         {""type"":""dive_attack"",""time"":0.1,""condition"":""airborne""}
       ]
     },
@@ -208,7 +209,8 @@ public static class SkillJsonTester
                   hazard.repeat_interval >= 0.08f;
             var ground = data.skills[1].actions[0];
             var air = data.skills[1].actions[1];
-            ok &= ground.condition == "grounded" && air.condition == "airborne";
+            ok &= ground.type == "counter" && ground.condition == "grounded" &&
+                  air.type == "dive_attack" && air.condition == "airborne";
             var swap = data.skills[2].actions[0];
             ok &= swap.type == "position_swap" && swap.range <= 6f &&
                   swap.telegraph_time >= 0.35f && data.skills[2].parameters.recovery >= 0.38f;
@@ -230,15 +232,44 @@ public static class SkillJsonTester
         var panelType = typeof(PreBattlePanel);
         var limitField = panelType.GetField("CharacterPromptCharacterLimit", flags);
         var composeMethod = panelType.GetMethod("ComposeDetailedCharacterPrompt", flags);
+        var validateMethod = typeof(AICharacterClient).GetMethod(
+            "ValidateDetailedPromptContract", flags);
+        var limitTextMethod = typeof(AICharacterClient).GetMethod("LimitConceptText", flags);
+        var branchRequestMethod = typeof(AICharacterClient).GetMethod(
+            "RequestsGroundAirBranch", flags);
+        var groundConditionMethod = typeof(SkillExecutor).GetMethod(
+            "GroundStateConditionMet", flags);
         int limit = limitField != null ? (int)limitField.GetRawConstantValue() : -1;
         string prompt = composeMethod?.Invoke(null, new object[]
         {
             "銀髪で軽量。空中移動が速い。",
             "上空から氷柱を5本落とす。",
             "前方へ氷の壁を作る。",
-            "相手の背後へ瞬間移動する。",
+            "地上は突進し、空中は急降下する。",
             "左右から巨大な氷竜で挟撃する。"
         }) as string;
+        var branchData = new CharacterData();
+        for (int i = 0; i < branchData.skills.Length; i++)
+            branchData.skills[i] = new SkillData();
+        branchData.skills[2].actions.Add(new SkillAction { type = "dash", condition = "grounded" });
+        branchData.skills[2].actions.Add(new SkillAction { type = "dive_attack", condition = "airborne" });
+        object[] validArgs = { prompt, branchData, null };
+        bool validBranch = validateMethod != null && (bool)validateMethod.Invoke(null, validArgs);
+        branchData.skills[2].actions.RemoveAt(1);
+        object[] invalidArgs = { prompt, branchData, null };
+        bool rejectedMissingBranch =
+            validateMethod != null && !(bool)validateMethod.Invoke(null, invalidArgs);
+        string concise = limitTextMethod?.Invoke(
+            null, new object[] { new string('長', 80), 45 }) as string;
+        bool fixedGroundState =
+            groundConditionMethod != null &&
+            (bool)groundConditionMethod.Invoke(null, new object[] { "grounded", true }) &&
+            !(bool)groundConditionMethod.Invoke(null, new object[] { "airborne", true }) &&
+            (bool)groundConditionMethod.Invoke(null, new object[] { "airborne", false });
+        bool distinguishesGroundOnly =
+            branchRequestMethod != null &&
+            !(bool)branchRequestMethod.Invoke(
+                null, new object[] { "地上のみで発動し、空中では使えない。" });
         bool ok = limit == 600 &&
                   prompt != null &&
                   prompt.Contains("【見た目・性能】") &&
@@ -251,10 +282,13 @@ public static class SkillJsonTester
                   prompt.IndexOf("氷柱", System.StringComparison.Ordinal) <
                   prompt.IndexOf("氷の壁", System.StringComparison.Ordinal) &&
                   prompt.IndexOf("氷の壁", System.StringComparison.Ordinal) <
-                  prompt.IndexOf("瞬間移動", System.StringComparison.Ordinal) &&
-                  prompt.IndexOf("瞬間移動", System.StringComparison.Ordinal) <
+                  prompt.IndexOf("急降下", System.StringComparison.Ordinal) &&
+                  prompt.IndexOf("急降下", System.StringComparison.Ordinal) <
                   prompt.IndexOf("氷竜", System.StringComparison.Ordinal);
-        if (ok) Debug.Log("[CharacterPromptInputTest] PASS: 600字上限・A/B/X/SMASH分割");
+        ok &= validBranch && rejectedMissingBranch &&
+              concise != null && concise.Length <= 45 &&
+              fixedGroundState && distinguishesGroundOnly;
+        if (ok) Debug.Log("[CharacterPromptInputTest] PASS: 技別固定・簡潔原案・発動時の地空分岐");
         else Debug.LogError("[CharacterPromptInputTest] FAIL: 入力上限または技別統合が不正");
     }
 }

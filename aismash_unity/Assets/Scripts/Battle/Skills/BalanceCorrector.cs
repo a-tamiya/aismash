@@ -565,16 +565,28 @@ namespace PromptFighters.Battle.Skills
             "uppercut", "dive_attack", "summon", "hazard_field",
         };
 
-        // counter / reflector / command_throw は発動後の処理を自前で完結するため、
-        // 他の攻撃判定と混在させない（二重判定・自動処理との競合を防ぐ）。
+        // counter / reflector / command_throw は同じ発動条件内では他の攻撃判定と混在させない。
+        // ただし「地上はcounter、空中はdive_attack」のような完全分岐では、別条件側の
+        // actionを消さず、1つの技ボタンで状況別の挙動を維持する。
         static void EnforceExclusiveActions(SkillData skill)
         {
             foreach (string type in new[] { "counter", "reflector", "command_throw" })
             {
-                if (!HasAction(skill, type)) continue;
+                var exclusiveActions = skill.actions.FindAll(a => a != null && a.type == type);
+                if (exclusiveActions.Count == 0) continue;
                 string t = type;
-                skill.actions.RemoveAll(a => a == null || a.type != t);
-                return;
+                if (exclusiveActions.Exists(a => string.IsNullOrEmpty(a.condition)))
+                {
+                    skill.actions.RemoveAll(a => a == null || a.type != t);
+                    return;
+                }
+
+                foreach (var exclusive in exclusiveActions)
+                {
+                    string condition = exclusive.condition;
+                    skill.actions.RemoveAll(a =>
+                        a == null || (a.type != t && a.condition == condition));
+                }
             }
         }
 

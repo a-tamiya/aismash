@@ -2087,14 +2087,14 @@ namespace PromptFighters.GameFlow
                 "体格、配色、衣装、武器、速さ、重さ、耐久、得意な間合いなど",
                 new Vector2(cx, 170f), new Vector2(790f, 100f), true, 18f);
 
-            string[] skillLabels = { "A  通常技1", "B  通常技2", "X  特殊技", "SMASH  必殺技" };
+            string[] skillLabels = { "A  通常技1", "B  通常技2", "X  通常技3", "SMASH  必殺技" };
             string[] skillNames = { "SkillAInput", "SkillBInput", "SkillXInput", "SkillSmashInput" };
             string[] skillHints =
             {
-                "発生位置、方向、個数、軌道、当たり方を入力",
-                "Aと異なる役割・間合い・動きを入力",
-                "移動、設置、召喚、防御、変則効果なども入力可能",
-                "強力な見た目と発動方法、範囲、方向、リスクを入力"
+                "A技の特徴を入力　例：前方へ炎の剣を振る",
+                "B技の特徴を入力　例：頭上から氷柱を落とす",
+                "X技の特徴を入力　例：地上は突進、空中は急降下",
+                "SMASH技の特徴を入力　例：巨大な竜を召喚"
             };
             var skillInputs = new TMP_InputField[4];
             for (int i = 0; i < skillInputs.Length; i++)
@@ -2296,6 +2296,10 @@ namespace PromptFighters.GameFlow
             bool hadName = !string.IsNullOrWhiteSpace(nameHint);
             bool hadFeat = !string.IsNullOrWhiteSpace(featHint);
             bool oneSided = hadName ^ hadFeat; // 片方だけ入力 → 入力済みの側は尊重して上書きしない
+            bool hadAppearance = !string.IsNullOrWhiteSpace(appearanceInput?.text);
+            bool[] hadSkills = new bool[skillInputs.Length];
+            for (int i = 0; i < skillInputs.Length; i++)
+                hadSkills[i] = !string.IsNullOrWhiteSpace(skillInputs[i]?.text);
 
             if (isP1) _p1ConceptBusy = true; else _p2ConceptBusy = true;
             if (button != null) button.interactable = false;
@@ -2315,9 +2319,11 @@ namespace PromptFighters.GameFlow
                     if (featureInput != null && !string.IsNullOrWhiteSpace(concept.features)
                         && !(oneSided && hadFeat) && !detailed)
                         featureInput.text = concept.features;
-                    if (detailed && !(oneSided && hadFeat))
+                    if (detailed)
                     {
-                        if (appearanceInput != null)
+                        // 技別入力は5欄を個別に扱い、ユーザーが書いた欄は保持して空欄だけ補完する。
+                        if (appearanceInput != null && !hadAppearance &&
+                            string.IsNullOrWhiteSpace(appearanceInput.text))
                             appearanceInput.text = !string.IsNullOrWhiteSpace(concept.appearance_performance)
                                 ? concept.appearance_performance
                                 : concept.features;
@@ -2329,7 +2335,8 @@ namespace PromptFighters.GameFlow
                             generatedSkills, value => !string.IsNullOrWhiteSpace(value));
                         for (int i = 0; i < skillInputs.Length; i++)
                         {
-                            if (skillInputs[i] == null) continue;
+                            if (skillInputs[i] == null || hadSkills[i] ||
+                                !string.IsNullOrWhiteSpace(skillInputs[i].text)) continue;
                             skillInputs[i].text = hasSeparatedSkills
                                 ? generatedSkills[i] ?? ""
                                 : i == 0 ? concept.skill_details ?? "" : "";

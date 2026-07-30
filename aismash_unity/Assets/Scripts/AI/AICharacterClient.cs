@@ -44,15 +44,19 @@ namespace PromptFighters.AI
             string systemPrompt = BuildSystemPrompt();
             string userPrompt   = BuildUserPrompt(characterName, features);
             string lastError = null;
+            string correctionPrompt = null;
             // 主モデルが全滅した場合は軽量モデルでも試す（キャラ生成を失敗で終わらせない）
             string[] models = { Model, LightModel };
 
             foreach (string model in models)
             {
-                string body = OpenAIRequest.BuildChatBody(model, systemPrompt, userPrompt, jsonMode: true);
-
                 for (int attempt = 1; attempt <= MaxGenerateAttempts; attempt++)
                 {
+                    string requestPrompt = string.IsNullOrEmpty(correctionPrompt)
+                        ? userPrompt
+                        : userPrompt + "\n\n【前回出力の修正必須】\n" + correctionPrompt;
+                    string body = OpenAIRequest.BuildChatBody(
+                        model, systemPrompt, requestPrompt, jsonMode: true);
                     using var req = new UnityWebRequest(Endpoint, "POST");
                     req.uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
                     req.downloadHandler = new DownloadHandlerBuffer();
@@ -79,6 +83,8 @@ namespace PromptFighters.AI
                         string content = ParseContent(req.downloadHandler.text);
                         string json    = ExtractJsonBlock(content);
                         var data = SkillJsonParser.ParseOrFallback(json, characterName);
+                        if (!ValidateDetailedPromptContract(features, data, out string contractError))
+                            throw new Exception("技別入力の再現不足: " + contractError);
                         if (string.IsNullOrEmpty(data.characterName)) data.characterName = characterName;
                         // 保存する根拠はAIが言い換えたinput_featuresではなく、ユーザーが入力した原文にする。
                         if (!string.IsNullOrWhiteSpace(features)) data.inputFeatures = features;
@@ -91,6 +97,9 @@ namespace PromptFighters.AI
                     catch (Exception e)
                     {
                         lastError = "AI応答の解析に失敗: " + e.Message;
+                        if (e.Message.StartsWith("技別入力の再現不足:", StringComparison.Ordinal))
+                            correctionPrompt = e.Message +
+                                "\n該当スロットのactionsを作り直し、groundedとairborneを両方含む完全なJSONを再出力すること。";
                         Debug.LogWarning($"[AI] 解析エラー({model} {attempt}/{MaxGenerateAttempts}): {e.Message}\nレスポンス: {req.downloadHandler.text}");
                         parseFailed = true;
                     }
@@ -181,21 +190,24 @@ namespace PromptFighters.AI
                         if (concept == null)
                             throw new Exception("conceptが空です");
                         concept.character_name = (concept.character_name ?? "").Trim();
-                        concept.features       = (concept.features ?? "").Trim();
-                        concept.appearance_performance = (concept.appearance_performance ?? "").Trim();
-                        concept.skill_a = (concept.skill_a ?? "").Trim();
-                        concept.skill_b = (concept.skill_b ?? "").Trim();
-                        concept.skill_x = (concept.skill_x ?? "").Trim();
-                        concept.skill_smash = (concept.skill_smash ?? "").Trim();
+                        concept.features = LimitConceptText(concept.features, 120);
+                        concept.appearance_performance =
+                            LimitConceptText(concept.appearance_performance, 55);
+                        concept.skill_a = LimitConceptText(concept.skill_a, 45);
+                        concept.skill_b = LimitConceptText(concept.skill_b, 45);
+                        concept.skill_x = LimitConceptText(concept.skill_x, 45);
+                        concept.skill_smash = LimitConceptText(concept.skill_smash, 45);
                         concept.skill_details = (concept.skill_details ?? "").Trim();
                         if (string.IsNullOrWhiteSpace(concept.skill_details))
                             concept.skill_details = ComposeConceptSkills(
                                 concept.skill_a, concept.skill_b, concept.skill_x, concept.skill_smash);
                         if (string.IsNullOrWhiteSpace(concept.features))
-                            concept.features = ComposeConceptFeatures(
-                                concept.appearance_performance,
-                                concept.skill_a, concept.skill_b, concept.skill_x, concept.skill_smash,
-                                concept.skill_details);
+                            concept.features = LimitConceptText(
+                                ComposeConceptFeatures(
+                                    concept.appearance_performance,
+                                    concept.skill_a, concept.skill_b, concept.skill_x, concept.skill_smash,
+                                    concept.skill_details),
+                                120);
                         if (string.IsNullOrWhiteSpace(concept.features))
                             throw new Exception("conceptが空です");
                         RememberConceptProfile(conceptPrompt.noveltyProfile);
@@ -434,22 +446,18 @@ $@"あなたは2D格闘ゲームのキャラクター原案を生み出す、発
 上記7フィールドは必ずすべて出力し、featuresは見た目・性能と4技の内容を自然な紹介文として統合したものにする。
 
 - character_name: 声に出して読める固有名。読みやすさは保ちつつ、カタカナ名／和風名／二つ名・異名／モチーフ由来のニックネーム／英語風の通称を偏りなく使い分ける。日本人のありふれた姓＋名ばかりに偏らせない。難読漢字・無理な当て字・記号や奇抜な文字の詰め込みと、肩書きの盛りすぎは避ける。全体で4〜14字程度。
-- features: そのキャラを友達に紹介するような、平易で読みやすい日本語の文章（120〜210字程度）。**個性は『見た目』と『技・戦い方』だけで表現する**。後でこの文章を素材に技とステータスを自動生成するため、設定だけで終わらせず実際の立ち回りまで具体的に書く。
-  空行で区切った**5段落**を、次の順序で出力する:
-  ①モチーフ2つ・体格・配色・服装を示す見た目。②武器/攻撃手段と、`【近距離・ラッシュ型】`のような間合い＋戦闘型。③他キャラと差が出る固有ギミックと、その代償または弱点。④代表的な攻め方と、相手をどう崩すか。⑤その性能で生まれる操作感・読み合いの魅力。
-  固有ギミックは、移動・攻撃・設置・召喚・防御・状態変化などゲーム内で技として表現できる内容にする。性能の傾向（速さ・重さ・耐久・パワーのトレードオフ）も②〜④のどこかで明確にする。
-  技・戦い方には、発生位置、方向/軌道、個数/配置、時間差/反復、持続領域、地上/空中や間合いによる変化のうち最低2つを具体的に含める。「エネルギーを放つ」だけの曖昧な技説明を並べない。
-- appearance_performance: featuresから見た目、体格、配色、衣装、武器と、速さ・重さ・耐久等の性能傾向だけを抜き出した文章。
-- skill_a: Aボタンで出す通常技1。発生位置、方向、個数、軌道、範囲、効果を具体化する。
-- skill_b: Bボタンで出す通常技2。skill_aと役割や挙動が重ならない技にする。
-- skill_x: Xボタンで出す特殊技。移動、設置、召喚、防御、状態変化など固有の遊びが出る技を優先する。
-- skill_smash: SMASHボタンで出す必殺技。キャラの核を最大限に見せる強力な技にする。
+- features: 見た目・性能・戦い方をまとめた平易な紹介文。70〜120字、1〜2文で簡潔にする。
+- appearance_performance: 見た目、体格、配色、衣装、武器、性能傾向を25〜55字の1文で書く。
+- skill_a: Aの通常技1。20〜45字の1文で、何がどこからどう動くかを書く。
+- skill_b: Bの通常技2。20〜45字の1文で、Aと異なる技を書く。
+- skill_x: Xの通常技3。20〜45字の1文で、何がどこからどう動くかを書く。
+- skill_smash: SMASHの必殺技。20〜45字の1文で、強力な挙動を簡潔に書く。
 - 4技はすべて空欄にせず、featuresと矛盾させない。それぞれ独立した入力欄へ入るため、他の技を参照しない単独で理解できる文章にする。
 - **性格・口調・話し方・内面の描写は書かない**（例：『気取った話し方をする』『人を見下す』『冷酷な性格』などは不要）。
-- features の文章作法（重要。次の『悪い例』のような文体にしない）:
+- 全文章の作法:
   ・難しい言葉・詩的/文学的/厨二的な言い回し・凝った比喩・古風で読みにくい語彙を避け、日常的で分かりやすい言葉で書く。
-  ・1段落は1〜2文にし、1文に情報を詰め込みすぎない。読点でだらだらと長くつながない。
-  ・『見た目：』のようなラベル列挙や箇条書きにしない。5段落の普通の紹介文にする。
+  ・同じ内容の言い換え、背景設定、感想、操作感の解説を足さない。
+  ・1文を読点で長くつながず、指定字数を超えない。
   ・文体は常体（〜だ／〜する／〜型）で統一する。です・ます調は使わない。
   ・同じ語尾の繰り返しや、指示文・入力に出てくる語（戦法名・ステータス表現・テーマ種など）をそのまま貼り付けるのを避ける。
   ・固定の例文・固有名・モチーフを繰り返し使わない。与えられたテーマ種から毎回新しい紹介文を組み立てる。
@@ -496,7 +504,71 @@ $@"あなたは2D格闘ゲームのキャラクター原案を生み出す、発
 $@"以下の名前と特徴でキャラクターJSONを生成してください。
 キャラクター名: {name}
 特徴（このテキストの語句を最大限拾って技に反映すること）: {features}
-入力に【見た目・性能】【技A】【技B】【技X】【SMASH】の見出しがある場合、各内容を外見・ステータス、attack_a、attack_b、attack_c、smash_sideへ一対一で反映すること。明示された技を別スロットへ移動、統合、交換しない。旧形式の【技の詳細】だけがある場合は、その内容を4つの技構成へ展開する。";
+入力に【見た目・性能】【技A】【技B】【技X】【SMASH】の見出しがある場合、各欄は変更不可の個別仕様である。順に外見・ステータス、attack_a、attack_b、attack_c、smash_sideへ一対一で反映し、別スロットへの移動・統合・交換・内容の補完による上書きを禁止する。
+同じ技欄に「地上」と「空中」の両方が書かれている場合、その1スロットのactionsへgrounded条件とairborne条件を両方出力する。片方を省略したり、別スロットへ分けたりしない。旧形式の【技の詳細】だけがある場合は、その内容を4つの技構成へ展開する。";
+
+        static bool ValidateDetailedPromptContract(
+            string features, CharacterData data, out string error)
+        {
+            error = null;
+            if (string.IsNullOrEmpty(features) || data?.skills == null) return true;
+
+            string[] headings = { "【技A】", "【技B】", "【技X】", "【SMASH】" };
+            string[] slotNames = { "A", "B", "X", "SMASH" };
+            for (int i = 0; i < headings.Length; i++)
+            {
+                string section = ExtractDetailedPromptSection(features, headings[i]);
+                if (!RequestsGroundAirBranch(section))
+                    continue;
+
+                if (i >= data.skills.Length || data.skills[i]?.actions == null)
+                {
+                    error = $"{slotNames[i]}技に地上・空中のactionsがありません";
+                    return false;
+                }
+
+                bool grounded = false;
+                bool airborne = false;
+                foreach (var action in data.skills[i].actions)
+                {
+                    if (action?.condition == "grounded") grounded = true;
+                    if (action?.condition == "airborne") airborne = true;
+                }
+                if (!grounded || !airborne)
+                {
+                    error = $"{slotNames[i]}技は地上・空中の両分岐が必須です";
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        static bool RequestsGroundAirBranch(string section)
+        {
+            if (string.IsNullOrEmpty(section) ||
+                !section.Contains("地上") || !section.Contains("空中"))
+                return false;
+
+            string[] noBranchPhrases =
+            {
+                "地上のみ", "空中のみ", "地上では使えない", "空中では使えない",
+                "地上では使用不可", "空中では使用不可", "地上では発動しない", "空中では発動しない",
+                "地上と空中で同じ", "地上・空中で同じ", "地上/空中で同じ",
+                "どちらでも同じ", "どちらも同じ"
+            };
+            foreach (string phrase in noBranchPhrases)
+                if (section.Contains(phrase)) return false;
+            return true;
+        }
+
+        static string ExtractDetailedPromptSection(string features, string heading)
+        {
+            int start = features.IndexOf(heading, StringComparison.Ordinal);
+            if (start < 0) return null;
+            start += heading.Length;
+            int end = features.IndexOf('【', start);
+            return (end >= 0 ? features.Substring(start, end - start) : features.Substring(start)).Trim();
+        }
 
         static string ComposeConceptSkills(string skillA, string skillB, string skillX, string skillSmash)
         {
@@ -511,6 +583,26 @@ $@"以下の名前と特徴でキャラクターJSONを生成してください�
                 sb.Append(labels[i]).Append(": ").Append(value);
             }
             return sb.ToString();
+        }
+
+        static string LimitConceptText(string value, int maxLength)
+        {
+            string text = (value ?? "").Trim();
+            if (text.Length <= maxLength) return text;
+
+            int sentenceEnd = -1;
+            int searchLength = Mathf.Min(text.Length, maxLength);
+            for (int i = 0; i < searchLength; i++)
+            {
+                char c = text[i];
+                if (c == '。' || c == '！' || c == '？')
+                    sentenceEnd = i;
+            }
+            if (sentenceEnd >= maxLength / 2)
+                return text.Substring(0, sentenceEnd + 1).Trim();
+
+            return text.Substring(0, Mathf.Max(0, maxLength - 1))
+                .TrimEnd('、', ' ', '\n', '\r') + "。";
         }
 
         static string ComposeConceptFeatures(
@@ -552,12 +644,13 @@ $@"2D格闘ゲームのキャラクターJSONを生成してください。JSON�
 
 ■ 反映の鉄則
 - 入力に【技A】【技B】【技X】【SMASH】の見出しがある場合、順にattack_a、attack_b、attack_c、smash_sideへ固定する。別スロットへの移動・統合・交換は禁止。
+- 技別入力の各欄は、そのスロットだけの独立した必須仕様として読む。他欄の内容を混ぜず、短い入力でも勝手に別技へ置き換えない。
 - 【明示要素＝必須反映】特徴文に明示された武器・属性・戦法・固有技名・数量は、必ずいずれかの技/ステータスに反映する。省略・別物への置換は禁止（「弓使い」なのに全近接、「炎」なのにphysicalのみ、等は不可）。
 - 固有の技名・必殺技名が書かれていたら、その名前をそのまま skill_name に使う（必殺技は smash_side を優先）。挙動もその名前に合うように組む。
 - 数量・程度は数値に翻訳する。例:「3体の使い魔」→summonのpattern_count:3、「二刀流」→2hitや多段、「最速」→移動stats上限付近、「超火力の一撃」→hit_count=1・damage大。
 - 【文章を7軸へ分解】各技の文を「主体」「発生位置」「対象」「軌道/方向」「個数/配置」「時間構造」「命中後/場の効果」に分解し、actionsの別々のfieldへ写す。1枚絵やdescriptionだけで済ませない。
 - 「何度も/連続/波状/次々」はrepeat_count+repeat_interval、「雨のように/降り注ぐ」はpattern:""rain""、「螺旋/渦巻き」はpattern:""spiral""、「格子/盤面」はpattern:""grid""、「左右から挟む」はpattern:""pincer""へ翻訳する。
-- 「地上ではX、空中ではY」「近ければX、遠ければY」は、同じ技のactionsに相補的なconditionを付けて両方を実装する。一方だけ実装して文意を捨てない。
+- 「地上ではX、空中ではY」は、同じ技のactionsにcondition:""grounded""とcondition:""airborne""を必ず1つ以上ずつ付ける。両actionのtimeは同じ発生基準にし、一方だけの実装、無条件actionへの置換、別スロットへの分割を禁止する。「近ければX、遠ければY」も同様に相補条件を使う。
 - 口調・性格・世界観は catch_copy、各 description、voice_profile に反映する（戦闘挙動だけでなく雰囲気も「思い描いたキャラ」に寄せる）。
 - voice_profile は日本語の短い戦闘ボイスとして作る。intro_lineは登場台詞、skill_linesはattack_a/attack_b/attack_c/smash_sideの順で必ず4件。各台詞は2〜12文字程度、一息で言い切れる長さとし、技名を叫ぶだけでもよい。voice_genderはmale/female/neutral、voice_ageはchild/teen/young_adult/adult/senior/ageless、voice_pitchはlow/medium/high、voice_styleはheroic/fierce/cool/mysterious/cheerful/elegant/eccentric/ominousから、性格と世界観に最も合うものを選ぶ。特徴文に性別・年齢・声の高さが明示されていれば必ず一致させ、外見だけを根拠に変更しない。音声presetと個体差番号はコード側で決定するため出力しない。instructionsには性別・年齢・ピッチの再指定を入れず、キャラ固有の話速、感情、息遣い、間、声量変化、登場時と必殺技時の演技の方向性を具体的に含める。棒読み・単調な絶叫・長い溜め・長い無音・母音の引き伸ばしは指示せず、短い台詞の中に自然な抑揚の山と速度・強弱の変化を作る。
 - 【連想拡張は補助】明示が薄い・短い入力のときだけ、その語から連想を広げて4枠を肉付けする。明示要素を上書きしてはならない。
